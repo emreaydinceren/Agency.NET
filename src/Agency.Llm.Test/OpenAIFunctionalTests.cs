@@ -10,6 +10,7 @@ namespace Agency.Llm.Test;
 public sealed class OpenAIFunctionalTests
 {
     private const string Model = "qwen/qwen3-coder-next";
+    private const string SystemPrompt = "You are a concise assistant.";
 
     private static readonly Agency.Llm.OpenAI.OpenAIClient Client = new(
         Microsoft.Extensions.Options.Options.Create(new Agency.Llm.OpenAI.OpenAIClientOptions
@@ -21,7 +22,12 @@ public sealed class OpenAIFunctionalTests
     [Fact]
     public async Task SendAsync_ReturnsWithoutError()
     {
-        await Client.SendAsync(Model, "Reply with one word: hello");
+        var response = await Client.SendAsync(Model, SystemPrompt, "Reply with one word: hello");
+
+        Assert.False(string.IsNullOrWhiteSpace(response.Message));
+        Assert.True(System.Enum.IsDefined(response.FinishReason));
+        Assert.True(response.Usage.InputTokens >= 0);
+        Assert.True(response.Usage.OutputTokens >= 0);
     }
 
     [Fact]
@@ -29,9 +35,12 @@ public sealed class OpenAIFunctionalTests
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in Client.StreamAsync(Model, "Reply with one word: hello"))
+        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
         {
-            chunks.Add(chunk);
+            if (chunk.Text is not null)
+            {
+                chunks.Add(chunk.Text);
+            }
         }
 
         Assert.NotEmpty(chunks);
@@ -42,9 +51,12 @@ public sealed class OpenAIFunctionalTests
     {
         var sb = new System.Text.StringBuilder();
 
-        await foreach (var chunk in Client.StreamAsync(Model, "What is 2 + 2? Reply with just the number."))
+        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "What is 2 + 2? Reply with just the number."))
         {
-            sb.Append(chunk);
+            if (chunk.Text is not null)
+            {
+                sb.Append(chunk.Text);
+            }
         }
 
         Assert.False(string.IsNullOrWhiteSpace(sb.ToString()));
@@ -56,20 +68,46 @@ public sealed class OpenAIFunctionalTests
         const string prompt = "Reply with exactly: streaming works";
 
         var streamed = new System.Text.StringBuilder();
-        await foreach (var chunk in Client.StreamAsync(Model, prompt))
+        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, prompt))
         {
-            streamed.Append(chunk);
+            if (chunk.Text is not null)
+            {
+                streamed.Append(chunk.Text);
+            }
         }
 
-        await Client.SendAsync(Model, prompt);
+        var response = await Client.SendAsync(Model, SystemPrompt, prompt);
 
         Assert.False(string.IsNullOrWhiteSpace(streamed.ToString()));
+        Assert.False(string.IsNullOrWhiteSpace(response.Message));
+    }
+
+    [Fact]
+    public async Task StreamAsync_TerminalChunkHasUsageAndFinishReason()
+    {
+        Agency.Llm.Abstractions.LlmStreamChunk? terminal = null;
+
+        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
+        {
+            terminal = chunk;
+        }
+
+        Assert.NotNull(terminal);
+        Assert.Null(terminal.Text);
+        Assert.NotNull(terminal.Usage);
+        Assert.True(terminal.Usage.TotalTokens > 0);
+        Assert.NotNull(terminal.StopReason);
+        Assert.True(System.Enum.IsDefined(terminal.StopReason.Value));
     }
 
     [Fact]
     public async Task SendAsync_WithTemperature_ReturnsWithoutError()
     {
-        await Client.SendAsync(Model, "Reply with one word: hello", temperature: 0.7f);
+        var response = await Client.SendAsync(Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f);
+
+        Assert.False(string.IsNullOrWhiteSpace(response.Message));
+        Assert.True(System.Enum.IsDefined(response.FinishReason));
+        Assert.True(response.Usage.TotalTokens >= 0);
     }
 
     [Fact]
@@ -77,9 +115,12 @@ public sealed class OpenAIFunctionalTests
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in Client.StreamAsync(Model, "Reply with one word: hello", temperature: 0.7f))
+        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f))
         {
-            chunks.Add(chunk);
+            if (chunk.Text is not null)
+            {
+                chunks.Add(chunk.Text);
+            }
         }
 
         Assert.NotEmpty(chunks);

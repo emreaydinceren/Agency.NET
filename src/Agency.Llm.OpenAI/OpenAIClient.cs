@@ -9,6 +9,7 @@ using System.ClientModel;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 
@@ -68,9 +69,10 @@ public class OpenAIClient : ILlmClient
         this._client = new global::OpenAI.OpenAIClient(new ApiKeyCredential(apiKey));
     }
 
-    public async Task SendAsync(
+    public async Task<LlmResponse> SendAsync(
         string model,
-        string content,
+        string systemPrompt,
+        string userPrompt,
         long? maxTokens = 1024,
         float? temperature = null,
         CancellationToken cancellationToken = default)
@@ -96,7 +98,7 @@ public class OpenAIClient : ILlmClient
             };
 
             var result = await chatClient.CompleteChatAsync(
-                [new UserChatMessage(content)],
+                [new SystemChatMessage(systemPrompt), new UserChatMessage(userPrompt)],
                 chatOptions,
                 cancellationToken);
 
@@ -114,6 +116,12 @@ public class OpenAIClient : ILlmClient
             _logger.LogInformation(
                 "OpenAI request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
                 model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
+
+            var messageText = string.Concat(result.Value.Content.Select(static part => part.Text ?? string.Empty));
+            return new LlmResponse(
+                messageText,
+                FinishReasonConverter.ToStopReason(result.Value.FinishReason.ToString()),
+                new LlmTokenUsage(inputTokens, outputTokens));
         }
         catch (Exception ex)
         {
@@ -126,9 +134,10 @@ public class OpenAIClient : ILlmClient
         }
     }
 
-    public async IAsyncEnumerable<string> StreamAsync(
+    public async IAsyncEnumerable<LlmStreamChunk> StreamAsync(
         string model,
-        string content,
+        string systemPrompt,
+        string userPrompt,
         long? maxTokens = 1024,
         float? temperature = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -153,12 +162,13 @@ public class OpenAIClient : ILlmClient
 
         int inputTokens = 0;
         int outputTokens = 0;
+        StopReason? stopReason = null;
         Exception? streamError = null;
 
         // Drive the enumerator manually: yield is inside try-finally (no catch) ✓
         // MoveNextAsync exceptions are caught in the inner try-catch (no yield inside) ✓
         var enumerator = chatClient
-            .CompleteChatStreamingAsync([new UserChatMessage(content)], chatOptions, cancellationToken)
+            .CompleteChatStreamingAsync([new SystemChatMessage(systemPrompt), new UserChatMessage(userPrompt)], chatOptions, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
 
         try
@@ -177,7 +187,9 @@ public class OpenAIClient : ILlmClient
                 }
 
                 if (!moved)
+                {
                     break;
+                }
 
                 var update = enumerator.Current;
 
@@ -187,10 +199,17 @@ public class OpenAIClient : ILlmClient
                     outputTokens = update.Usage.OutputTokenCount;
                 }
 
+                if (update.FinishReason is not null)
+                {
+                    stopReason = FinishReasonConverter.ToStopReason(update.FinishReason.ToString());
+                }
+
                 foreach (var part in update.ContentUpdate)
                 {
                     if (!string.IsNullOrEmpty(part.Text))
-                        yield return part.Text;
+                    {
+                        yield return new LlmStreamChunk(part.Text, null, null);
+                    }
                 }
             }
         }
@@ -220,7 +239,11 @@ public class OpenAIClient : ILlmClient
         }
 
         if (streamError is not null)
+        {
             ExceptionDispatchInfo.Capture(streamError).Throw();
+        }
+
+        yield return new LlmStreamChunk(null, stopReason ?? StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
 }
 

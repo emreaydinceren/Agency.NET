@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 
@@ -73,9 +74,10 @@ public class ClaudeClient : ILlmClient
         this._client = new AnthropicClient();
     }
 
-    public async Task SendAsync(
+    public async Task<LlmResponse> SendAsync(
         string model,
-        string content,
+        string systemPrompt,
+        string userPrompt,
         long? maxTokens = 1024,
         float? temperature = null,
         CancellationToken cancellationToken = default)
@@ -96,12 +98,13 @@ public class ClaudeClient : ILlmClient
             {
                 MaxTokens = maxTokens ?? 1024,
                 Model = model,
+                System = systemPrompt,
                 Temperature = temperature,
                 Messages = [
                     new()
                     {
                         Role = Role.User,
-                        Content = content
+                        Content = userPrompt
                     },
                 ],
             };
@@ -124,6 +127,12 @@ public class ClaudeClient : ILlmClient
             _logger.LogInformation(
                 "Claude request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
                 model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
+
+            var messageText = string.Concat(message.Content.Select(static block => ExtractBlockText(block)));
+            return new LlmResponse(
+                messageText,
+                FinishReasonConverter.ToStopReason(message.StopReason?.ToString()),
+                new LlmTokenUsage(inputTokens, outputTokens));
         }
         catch (Exception ex)
         {
@@ -136,9 +145,32 @@ public class ClaudeClient : ILlmClient
         }
     }
 
-    public async IAsyncEnumerable<string> StreamAsync(
+    private static string ExtractBlockText(object? block)
+    {
+        if (block is null)
+        {
+            return string.Empty;
+        }
+
+        var blockType = block.GetType();
+        if (blockType.GetProperty("Text")?.GetValue(block) is string text)
+        {
+            return text;
+        }
+
+        var value = blockType.GetProperty("Value")?.GetValue(block);
+        if (value is null)
+        {
+            return string.Empty;
+        }
+
+        return value.GetType().GetProperty("Text")?.GetValue(value) as string ?? string.Empty;
+    }
+
+    public async IAsyncEnumerable<LlmStreamChunk> StreamAsync(
         string model,
-        string content,
+        string systemPrompt,
+        string userPrompt,
         long? maxTokens = 1024,
         float? temperature = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -157,18 +189,20 @@ public class ClaudeClient : ILlmClient
         {
             MaxTokens = maxTokens ?? 1024,
             Model = model,
+            System = systemPrompt,
             Temperature = temperature,
             Messages = [
                 new()
                 {
                     Role = Role.User,
-                    Content = content
+                    Content = userPrompt
                 },
             ],
         };
 
         long inputTokens = 0;
         long outputTokens = 0;
+        Agency.Llm.Abstractions.StopReason? stopReason = null;
         Exception? streamError = null;
 
         // Drive the enumerator manually: yield is inside try-finally (no catch) ✓
@@ -193,17 +227,26 @@ public class ClaudeClient : ILlmClient
                 }
 
                 if (!moved)
+                {
                     break;
+                }
 
                 var e = enumerator.Current;
 
                 if (e.Value is RawMessageStartEvent startEvent)
+                {
                     inputTokens = startEvent.Message.Usage.InputTokens;
+                }
                 else if (e.Value is RawMessageDeltaEvent deltaUsageEvent)
+                {
                     outputTokens = deltaUsageEvent.Usage.OutputTokens;
+                    stopReason = FinishReasonConverter.ToNullableStopReason(deltaUsageEvent.Delta.StopReason?.ToString());
+                }
                 else if (e.Value is RawContentBlockDeltaEvent contentDeltaEvent &&
                          contentDeltaEvent.Delta.Value is TextDelta textDelta)
-                    yield return textDelta.Text;
+                {
+                    yield return new LlmStreamChunk(textDelta.Text, null, null);
+                }
             }
         }
         finally
@@ -232,7 +275,11 @@ public class ClaudeClient : ILlmClient
         }
 
         if (streamError is not null)
+        {
             ExceptionDispatchInfo.Capture(streamError).Throw();
+        }
+
+        yield return new LlmStreamChunk(null, stopReason ?? Agency.Llm.Abstractions.StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
 }
 

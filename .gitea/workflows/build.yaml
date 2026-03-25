@@ -1,0 +1,18 @@
+name: .NET 10 CI
+on: [push]
+
+jobs:
+  build:
+    runs-on: dotnet-10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Solution
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Tests
+        run: dotnet test --configuration Release --no-build --verbosity normal

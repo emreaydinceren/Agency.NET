@@ -19,7 +19,7 @@ dotnet test src/Agency.slnx --filter "Category!=Functional"
 dotnet test src/Agency.Embeddings.Test/Agency.Embeddings.Test.csproj
 dotnet test src/Agency.Llm.Test/Agency.Llm.Test.csproj
 
-# Run functional tests (requires LM Studio running at http://localhost:1234)
+# Run functional tests (requires LM Studio running at http://llm-host.example:1234)
 dotnet test src/Agency.Llm.Test --filter "Category=Functional"
 
 # Start local infrastructure (PostgreSQL + pgvector)
@@ -71,7 +71,7 @@ SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
 
 - PostgreSQL 18 + pgvector extension via Docker (`src/docker-compose.yml`)
 - Credentials: `dev_user` / `dev_password`, database: `dev_db`, port `5432`
-- Functional LLM tests target LM Studio at `http://localhost:1234`
+- Functional LLM tests target LM Studio at `http://llm-host.example:1234`
 
 ### Global Build Config
 

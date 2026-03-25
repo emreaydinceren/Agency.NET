@@ -4,7 +4,7 @@ namespace Agency.Llm.Test;
 /// Functional tests for <see cref="Agency.Llm.OpenAI.OpenAIClient"/> using LM Studio.
 /// Run with:  dotnet test --filter "Category=Functional"
 /// Skip with: dotnet test --filter "Category!=Functional"
-/// Requires LM Studio running with qwen/qwen3-coder-next loaded at http://localhost:1234
+/// Requires LM Studio running with qwen/qwen3-coder-next loaded at http://llm-host.example:1234
 /// </summary>
 [Trait("Category", "Functional")]
 /// <summary>
@@ -19,7 +19,7 @@ public sealed class OpenAIFunctionalTests
         Microsoft.Extensions.Options.Options.Create(new Agency.Llm.OpenAI.OpenAIClientOptions
         {
             ApiKey = "lm-studio",
-            BaseUrl = "http://localhost:1234/v1",
+            BaseUrl = "http://llm-host.example:1234/v1",
         }));
 
     /// <summary>

@@ -537,7 +537,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public sealed class VectorFixture : IAsyncLifetime
     {
         private const string ConnectionString =
-            "Host=localhost;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db";
+            "Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db";
 
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 

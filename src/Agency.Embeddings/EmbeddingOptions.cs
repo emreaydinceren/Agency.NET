@@ -34,7 +34,7 @@ public sealed class EmbeddingOptions
     /// </summary>
     public static EmbeddingOptions LMStudioDefaults => new EmbeddingOptions
     {
-        BaseUrl = "http://127.0.0.1:1234/v1",
+        BaseUrl = "http://llm-host.example:1234/v1",
         ModelId = "text-embedding-qwen3-embedding-8b",
         ApiKey = "lmstudio"
     };

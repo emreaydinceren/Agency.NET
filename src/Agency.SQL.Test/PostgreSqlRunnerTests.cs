@@ -5,7 +5,7 @@ namespace Agency.SQL.Test;
 /// <summary>
 /// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml.
 /// Requires the container to be running: docker compose up -d
-/// Connection: Host=localhost;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
+/// Connection: Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
 /// Run with:  dotnet test --filter "Category=Functional"
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
@@ -221,7 +221,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     public sealed class DatabaseFixture : IAsyncLifetime
     {
         private const string ConnectionString =
-            "Host=localhost;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db";
+            "Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db";
 
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 

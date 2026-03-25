@@ -52,7 +52,7 @@ public sealed class EmbeddingGeneratorTests
     {
         var custom = new EmbeddingOptions
         {
-            BaseUrl = "http://localhost:9999/v1",
+            BaseUrl = "http://llm-host.example:9999/v1",
             ModelId = "custom-model",
             ApiKey = "test-key",
         };

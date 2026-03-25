@@ -98,4 +98,6 @@ public enum StopReason
     ToolCalls,
     FunctionCall,
     ContentFilter,
+    Refusal,    // Added for Claude 3.5+ and OpenAI O1
+    PauseTurn   // Added for 2026 Server-Side Tool Loops
 }

@@ -15,6 +15,7 @@ public static class FinishReasonConverter
             return StopReason.Unknown;
         }
 
+        // Normalizing to alphanumeric lowercase to catch 'end_turn', 'end-turn', etc.
         var normalized = finishReason
             .Trim()
             .Replace("_", string.Empty, StringComparison.Ordinal)
@@ -33,6 +34,8 @@ public static class FinishReasonConverter
             "toolcalls" => StopReason.ToolCalls,
             "functioncall" => StopReason.FunctionCall,
             "contentfilter" => StopReason.ContentFilter,
+            "refusal" => StopReason.Refusal,      // Critical for safety/policy hits
+            "pauseturn" => StopReason.PauseTurn,  // Critical for 2026 Agentic loops
             _ => StopReason.Unknown,
         };
     }

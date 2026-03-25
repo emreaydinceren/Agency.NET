@@ -1,0 +1,8 @@
+docker run -d \
+  --name gitea-runner \
+  -e GITEA_INSTANCE_URL=http://gitea-host.example:3000 \
+  -e GITEA_RUNNER_REGISTRATION_TOKEN= \
+  -e GITEA_RUNNER_NAME=gitea-dotnet-runner \
+  -e GITEA_RUNNER_LABELS="dotnet-10:docker://catthehacker/ubuntu:act-latest" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitea/act_runner:latest

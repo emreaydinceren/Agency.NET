@@ -17,7 +17,14 @@ namespace Agency.Embeddings;
 /// </summary>
 public sealed class EmbeddingGenerator : IEmbeddingGenerator
 {
+    /// <summary>
+    /// The activity source name used for embedding telemetry.
+    /// </summary>
     public static readonly string ActivitySourceName = "Agency.Embeddings";
+
+    /// <summary>
+    /// The meter name used for embedding telemetry.
+    /// </summary>
     public static readonly string MeterName = "Agency.Embeddings";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);

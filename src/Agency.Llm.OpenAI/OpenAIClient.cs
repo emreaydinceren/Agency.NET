@@ -18,7 +18,14 @@ using System.Runtime.ExceptionServices;
 /// </summary>
 public class OpenAIClient : ILlmClient
 {
+    /// <summary>
+    /// The activity source name used for OpenAI telemetry.
+    /// </summary>
     public static readonly string ActivitySourceName = "Agency.Llm.OpenAI";
+
+    /// <summary>
+    /// The meter name used for OpenAI telemetry.
+    /// </summary>
     public static readonly string MeterName = "Agency.Llm.OpenAI";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
@@ -45,6 +52,9 @@ public class OpenAIClient : ILlmClient
 
     private readonly ILogger<OpenAIClient> _logger;
 
+    /// <summary>
+    /// Creates a client from configured options.
+    /// </summary>
     public OpenAIClient(IOptions<OpenAIClientOptions> options, ILogger<OpenAIClient>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -62,6 +72,9 @@ public class OpenAIClient : ILlmClient
         this._client = new global::OpenAI.OpenAIClient(credential, clientOptions);
     }
 
+    /// <summary>
+    /// Creates a client using the <c>OPENAI_API_KEY</c> environment variable.
+    /// </summary>
     public OpenAIClient(ILogger<OpenAIClient>? logger = null)
     {
         _logger = logger ?? NullLogger<OpenAIClient>.Instance;
@@ -69,6 +82,9 @@ public class OpenAIClient : ILlmClient
         this._client = new global::OpenAI.OpenAIClient(new ApiKeyCredential(apiKey));
     }
 
+    /// <summary>
+    /// Sends a completion request to OpenAI.
+    /// </summary>
     public async Task<LlmResponse> SendAsync(
         string model,
         string systemPrompt,
@@ -134,6 +150,9 @@ public class OpenAIClient : ILlmClient
         }
     }
 
+    /// <summary>
+    /// Streams a completion response from OpenAI.
+    /// </summary>
     public async IAsyncEnumerable<LlmStreamChunk> StreamAsync(
         string model,
         string systemPrompt,
@@ -247,21 +266,36 @@ public class OpenAIClient : ILlmClient
     }
 }
 
+/// <summary>
+/// Options for configuring the OpenAI client.
+/// </summary>
 public class OpenAIClientOptions
 {
+    /// <summary>
+    /// Gets or sets the OpenAI API key.
+    /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the API base URL.
+    /// </summary>
     public string? BaseUrl { get; set; }
 
     /// <summary>
     /// The maximum number of times to retry failed requests.
     /// Defaults to null (uses SDK default).
     /// </summary>
+    /// <summary>
+    /// Gets or sets the retry count.
+    /// </summary>
     public int? MaxRetries { get; set; } = null;
 
     /// <summary>
     /// Sets the maximum time allowed for a complete HTTP call, not including retries.
     /// Defaults to null (uses SDK default).
+    /// </summary>
+    /// <summary>
+    /// Gets or sets the request timeout.
     /// </summary>
     public TimeSpan? Timeout { get; set; } = null;
 }

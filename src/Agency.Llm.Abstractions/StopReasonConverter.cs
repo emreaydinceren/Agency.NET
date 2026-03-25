@@ -1,7 +1,13 @@
 namespace Agency.Llm.Abstractions;
 
+/// <summary>
+/// Converts provider finish-reason values into the shared stop-reason enum.
+/// </summary>
 public static class FinishReasonConverter
 {
+    /// <summary>
+    /// Converts a provider finish-reason string to <see cref="StopReason"/>.
+    /// </summary>
     public static StopReason ToStopReason(string? finishReason)
     {
         if (string.IsNullOrWhiteSpace(finishReason))
@@ -31,6 +37,9 @@ public static class FinishReasonConverter
         };
     }
 
+    /// <summary>
+    /// Converts a provider finish-reason string to a nullable <see cref="StopReason"/>.
+    /// </summary>
     public static StopReason? ToNullableStopReason(string? finishReason)
     {
         return string.IsNullOrWhiteSpace(finishReason) ? null : ToStopReason(finishReason);

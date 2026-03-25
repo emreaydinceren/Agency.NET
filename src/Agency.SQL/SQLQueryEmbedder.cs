@@ -5,6 +5,9 @@ using System.Text.RegularExpressions;
 
 namespace Agency.SQL;
 
+/// <summary>
+/// Replaces vectorize(...) calls in SQL text with generated vector literals.
+/// </summary>
 public partial class SQLQueryEmbedder
 {
     [GeneratedRegex(@"vectorize\(\s*'(?<text>(?:''|[^'])*)'\s*\)", RegexOptions.IgnoreCase)]
@@ -12,12 +15,17 @@ public partial class SQLQueryEmbedder
 
     private readonly IEmbeddingGenerator _embeddingGenerator;
 
+    /// <summary>
+    /// Creates a new SQL query embedder.
+    /// </summary>
     public SQLQueryEmbedder(IEmbeddingGenerator embeddingGenerator)
     {
         _embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
     }
 
-    // Replaces vectorize('<text>') with generated embedding literal
+    /// <summary>
+    /// Replaces <c>vectorize(&lt;text&gt;)</c> calls with generated embedding literals.
+    /// </summary>
     public async Task<string> EmbedVectorsInQueryAsync(string sqlQuery, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sqlQuery))

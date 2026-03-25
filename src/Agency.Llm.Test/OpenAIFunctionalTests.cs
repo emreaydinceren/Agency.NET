@@ -7,6 +7,9 @@ namespace Agency.Llm.Test;
 /// Requires LM Studio running with qwen/qwen3-coder-next loaded at http://localhost:1234
 /// </summary>
 [Trait("Category", "Functional")]
+/// <summary>
+/// Functional tests for <see cref="Agency.Llm.OpenAI.OpenAIClient"/>.
+/// </summary>
 public sealed class OpenAIFunctionalTests
 {
     private const string Model = "qwen/qwen3-coder-next";
@@ -19,6 +22,9 @@ public sealed class OpenAIFunctionalTests
             BaseUrl = "http://localhost:1234/v1",
         }));
 
+    /// <summary>
+    /// Verifies that <see cref="Agency.Llm.OpenAI.OpenAIClient.SendAsync"/> returns a response without error.
+    /// </summary>
     [Fact]
     public async Task SendAsync_ReturnsWithoutError()
     {
@@ -30,6 +36,9 @@ public sealed class OpenAIFunctionalTests
         Assert.True(response.Usage.OutputTokens >= 0);
     }
 
+    /// <summary>
+    /// Verifies that streaming returns at least one text chunk.
+    /// </summary>
     [Fact]
     public async Task StreamAsync_YieldsAtLeastOneChunk()
     {
@@ -46,6 +55,9 @@ public sealed class OpenAIFunctionalTests
         Assert.NotEmpty(chunks);
     }
 
+    /// <summary>
+    /// Verifies that streamed chunks combine into a non-empty response.
+    /// </summary>
     [Fact]
     public async Task StreamAsync_JoinedChunksFormNonEmptyResponse()
     {
@@ -62,6 +74,9 @@ public sealed class OpenAIFunctionalTests
         Assert.False(string.IsNullOrWhiteSpace(sb.ToString()));
     }
 
+    /// <summary>
+    /// Verifies that streaming and non-streaming responses are both produced for the same prompt.
+    /// </summary>
     [Fact]
     public async Task StreamAsync_ChunksAreConsistentWithSendAsync()
     {
@@ -82,6 +97,9 @@ public sealed class OpenAIFunctionalTests
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
     }
 
+    /// <summary>
+    /// Verifies that the terminal streamed chunk contains usage and stop-reason data.
+    /// </summary>
     [Fact]
     public async Task StreamAsync_TerminalChunkHasUsageAndFinishReason()
     {
@@ -100,6 +118,9 @@ public sealed class OpenAIFunctionalTests
         Assert.True(System.Enum.IsDefined(terminal.StopReason.Value));
     }
 
+    /// <summary>
+    /// Verifies that temperature can be supplied to the completion request.
+    /// </summary>
     [Fact]
     public async Task SendAsync_WithTemperature_ReturnsWithoutError()
     {
@@ -110,6 +131,9 @@ public sealed class OpenAIFunctionalTests
         Assert.True(response.Usage.TotalTokens >= 0);
     }
 
+    /// <summary>
+    /// Verifies that streaming with temperature returns at least one text chunk.
+    /// </summary>
     [Fact]
     public async Task StreamAsync_WithTemperature_YieldsAtLeastOneChunk()
     {

@@ -12,9 +12,16 @@ namespace Agency.SQL;
 /// <summary>
 /// Runs raw SQL statements and queries against a PostgreSQL instance.
 /// </summary>
-public sealed class PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null)
+public sealed class PostgreSqlRunner
 {
+    /// <summary>
+    /// The activity source name used for SQL telemetry.
+    /// </summary>
     public static readonly string ActivitySourceName = "Agency.SQL";
+
+    /// <summary>
+    /// The meter name used for SQL telemetry.
+    /// </summary>
     public static readonly string MeterName = "Agency.SQL";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
@@ -26,11 +33,20 @@ public sealed class PostgreSqlRunner(string connectionString, ILogger<PostgreSql
     private static readonly Histogram<double> _executionDuration =
         _meter.CreateHistogram<double>("postgresql.duration", unit: "ms", description: "Duration of SQL operations in milliseconds.");
 
-    private readonly ILogger<PostgreSqlRunner> _logger = logger ?? NullLogger<PostgreSqlRunner>.Instance;
+    private readonly ILogger<PostgreSqlRunner> _logger;
 
-    private readonly string _connectionString = !string.IsNullOrWhiteSpace(connectionString)
-        ? connectionString
-        : throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
+    private readonly string _connectionString;
+
+    /// <summary>
+    /// Creates a new PostgreSQL runner for the provided connection string.
+    /// </summary>
+    public PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null)
+    {
+        _logger = logger ?? NullLogger<PostgreSqlRunner>.Instance;
+        _connectionString = !string.IsNullOrWhiteSpace(connectionString)
+            ? connectionString
+            : throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
+    }
 
     /// <summary>
     /// Executes a non-query SQL statement (DDL or DML) and returns the number of rows affected.

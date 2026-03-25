@@ -10,10 +10,16 @@ namespace Agency.SQL.Test;
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
+/// <summary>
+/// Functional tests for <see cref="Agency.SQL.PostgreSqlRunner"/>.
+/// </summary>
 public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.DatabaseFixture>
 {
     private readonly DatabaseFixture _fixture;
 
+    /// <summary>
+    /// Creates the test class with its shared database fixture.
+    /// </summary>
     public PostgreSqlRunnerTests(DatabaseFixture fixture)
     {
         _fixture = fixture;
@@ -21,6 +27,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Constructor validation ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that an invalid connection string is rejected.
+    /// </summary>
     [Fact]
     public void Constructor_NullOrWhitespaceConnectionString_ThrowsArgumentException()
     {
@@ -30,6 +39,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── ExecuteAsync validation ─────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that SQL validation rejects empty statements for ExecuteAsync.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_NullOrWhitespaceSql_ThrowsArgumentException()
     {
@@ -39,6 +51,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── QueryAsync validation ───────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that SQL validation rejects empty statements for QueryAsync.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_NullOrWhitespaceSql_ThrowsArgumentException()
     {
@@ -48,6 +63,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: DDL ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that DDL can create and drop a table.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_CreateAndDropTable_Succeeds()
     {
@@ -75,6 +93,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: INSERT and row-count ───────────────────────────────────
 
+    /// <summary>
+    /// Verifies that INSERT statements report the affected row count.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_InsertRows_ReturnsRowsAffected()
     {
@@ -88,6 +109,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: SELECT all rows ────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that inserted rows can be queried back.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_AfterInsert_ReturnsExpectedRows()
     {
@@ -106,6 +130,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: SELECT with named parameter ─────────────────────────────
 
+    /// <summary>
+    /// Verifies that named parameters filter rows correctly.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_WithParameter_FiltersCorrectly()
     {
@@ -124,6 +151,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: NULL round-trip ────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that NULL values round-trip as null.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_NullColumnValue_ReturnedAsNull()
     {
@@ -141,6 +171,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: empty result set ───────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that no matching rows produces an empty result set.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_NoMatchingRows_ReturnsEmptyList()
     {
@@ -153,6 +186,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
     // ── Functional: UPDATE ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that UPDATE statements report the correct row count.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_Update_ReturnsCorrectRowCount()
     {
@@ -179,6 +215,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     /// Creates a dedicated test table before the test class runs and drops it afterwards.
     /// Each test run uses a unique table name to support parallel CI execution.
     /// </summary>
+    /// <summary>
+    /// Shared database fixture for PostgreSQL integration tests.
+    /// </summary>
     public sealed class DatabaseFixture : IAsyncLifetime
     {
         private const string ConnectionString =
@@ -186,6 +225,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
+        /// <summary>
+        /// Gets the shared PostgreSQL runner.
+        /// </summary>
         public PostgreSqlRunner Runner { get; } = new(ConnectionString);
 
         /// <summary>Fully-qualified table name used by the shared test data table.</summary>
@@ -194,6 +236,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
         /// <summary>Returns a unique table name scoped to this test run.</summary>
         public string UniqueName(string prefix) => $"{prefix}_{_runId}";
 
+        /// <summary>
+        /// Creates the dedicated test table.
+        /// </summary>
         public async Task InitializeAsync()
         {
             Table = UniqueName("runner_tests");
@@ -207,6 +252,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
                 """);
         }
 
+        /// <summary>
+        /// Drops the dedicated test table.
+        /// </summary>
         public async Task DisposeAsync()
         {
             await Runner.ExecuteAsync($"DROP TABLE IF EXISTS {Table}");

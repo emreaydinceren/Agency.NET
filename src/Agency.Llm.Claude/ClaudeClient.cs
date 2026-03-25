@@ -20,7 +20,14 @@ using System.Runtime.ExceptionServices;
 /// </summary>
 public class ClaudeClient : ILlmClient
 {
+    /// <summary>
+    /// The activity source name used for Claude telemetry.
+    /// </summary>
     public static readonly string ActivitySourceName = "Agency.Llm.Claude";
+
+    /// <summary>
+    /// The meter name used for Claude telemetry.
+    /// </summary>
     public static readonly string MeterName = "Agency.Llm.Claude";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
@@ -47,6 +54,9 @@ public class ClaudeClient : ILlmClient
 
     private readonly ILogger<ClaudeClient> _logger;
 
+    /// <summary>
+    /// Creates a client from configured options.
+    /// </summary>
     public ClaudeClient(IOptions<ClaudeClientOptions> options, ILogger<ClaudeClient>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -68,12 +78,18 @@ public class ClaudeClient : ILlmClient
         this._client = new AnthropicClient(co);
     }
 
+    /// <summary>
+    /// Creates a client using the default Anthropic client configuration.
+    /// </summary>
     public ClaudeClient(ILogger<ClaudeClient>? logger = null)
     {
         _logger = logger ?? NullLogger<ClaudeClient>.Instance;
         this._client = new AnthropicClient();
     }
 
+    /// <summary>
+    /// Sends a completion request to Claude.
+    /// </summary>
     public async Task<LlmResponse> SendAsync(
         string model,
         string systemPrompt,
@@ -167,6 +183,9 @@ public class ClaudeClient : ILlmClient
         return value.GetType().GetProperty("Text")?.GetValue(value) as string ?? string.Empty;
     }
 
+    /// <summary>
+    /// Streams a completion response from Claude.
+    /// </summary>
     public async IAsyncEnumerable<LlmStreamChunk> StreamAsync(
         string model,
         string systemPrompt,
@@ -283,10 +302,19 @@ public class ClaudeClient : ILlmClient
     }
 }
 
+/// <summary>
+/// Options for configuring the Claude client.
+/// </summary>
 public class ClaudeClientOptions
 {
+    /// <summary>
+    /// Gets or sets the Anthropic API key.
+    /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the API base URL.
+    /// </summary>
     public string? BaseUrl { get; set; }
 
     /// <summary>
@@ -308,6 +336,9 @@ public class ClaudeClientOptions
     /// <para>Defaults to 2 when null. Set to 0 to
     /// disable retries, which also ignores API instructions to retry.</para>
     /// </summary>
+    /// <summary>
+    /// Gets or sets the retry count.
+    /// </summary>
     public int? MaxRetries { get; set; } = null;
 
     /// <summary>
@@ -317,6 +348,9 @@ public class ClaudeClientOptions
     /// well as reading the response body.</para>
     ///
     /// <para>Defaults to <c>TimeSpan.FromMinutes(10)</c> when null.</para>
+    /// </summary>
+    /// <summary>
+    /// Gets or sets the request timeout.
     /// </summary>
     public TimeSpan? Timeout { get; set; } = null;
 }

@@ -10,6 +10,9 @@ public sealed class EmbeddingGeneratorTests
     // Constructor
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that constructing with null options throws.
+    /// </summary>
     [Fact]
     public void Constructor_NullOptions_ThrowsArgumentNullException()
     {
@@ -17,6 +20,9 @@ public sealed class EmbeddingGeneratorTests
             new EmbeddingGenerator((EmbeddingOptions)null!));
     }
 
+    /// <summary>
+    /// Verifies that constructing with direct options succeeds.
+    /// </summary>
     [Fact]
     public void Constructor_WithValidOptions_DoesNotThrow()
     {
@@ -25,6 +31,9 @@ public sealed class EmbeddingGeneratorTests
         Assert.Null(exception);
     }
 
+    /// <summary>
+    /// Verifies that constructing through <see cref="IOptions{TOptions}"/> succeeds.
+    /// </summary>
     [Fact]
     public void Constructor_WithIOptions_DoesNotThrow()
     {
@@ -35,6 +44,9 @@ public sealed class EmbeddingGeneratorTests
         Assert.Null(exception);
     }
 
+    /// <summary>
+    /// Verifies that the options wrapper value is used during construction.
+    /// </summary>
     [Fact]
     public void Constructor_WithIOptions_UsesOptionsValue()
     {
@@ -56,6 +68,9 @@ public sealed class EmbeddingGeneratorTests
     // GenerateEmbeddingAsync
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that a valid input returns the expected embedding vector.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingAsync_ValidInput_ReturnsExpectedVector()
     {
@@ -72,6 +87,9 @@ public sealed class EmbeddingGeneratorTests
         }
     }
 
+    /// <summary>
+    /// Verifies that larger vectors are returned with the expected dimensionality.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingAsync_LargerVector_ReturnsAllDimensions()
     {
@@ -84,6 +102,9 @@ public sealed class EmbeddingGeneratorTests
         Assert.Equal(128, result.Length);
     }
 
+    /// <summary>
+    /// Verifies that cancellation is honored for single-embedding generation.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingAsync_CancelledToken_ThrowsOperationCanceledException()
     {
@@ -101,6 +122,9 @@ public sealed class EmbeddingGeneratorTests
     // GenerateEmbeddingsAsync
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that batch generation returns two vectors for two inputs.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingsAsync_TwoInputs_ReturnsTwoVectors()
     {
@@ -114,6 +138,9 @@ public sealed class EmbeddingGeneratorTests
         Assert.Equal(2, results.Count);
     }
 
+    /// <summary>
+    /// Verifies that batch generation returns the expected vector values.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingsAsync_TwoInputs_ReturnsCorrectVectorValues()
     {
@@ -133,6 +160,9 @@ public sealed class EmbeddingGeneratorTests
         Assert.Equal(second[2], results[1].Span[2], precision: 5);
     }
 
+    /// <summary>
+    /// Verifies that batch generation returns a single vector for a single input.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingsAsync_SingleInput_ReturnsListWithOneVector()
     {
@@ -146,6 +176,9 @@ public sealed class EmbeddingGeneratorTests
         Assert.Equal(expected.Length, results[0].Length);
     }
 
+    /// <summary>
+    /// Verifies that cancellation is honored for batch embedding generation.
+    /// </summary>
     [Fact]
     public async Task GenerateEmbeddingsAsync_CancelledToken_ThrowsOperationCanceledException()
     {

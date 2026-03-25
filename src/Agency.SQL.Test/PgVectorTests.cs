@@ -17,6 +17,9 @@ namespace Agency.SQL.Test;
 ///   "apricot" → [0.707, 0.707, 0]   ≈ normalised midpoint of apple + banana
 /// </summary>
 [Trait("Category", "Functional")]
+/// <summary>
+/// Functional tests for pgvector operations against PostgreSQL.
+/// </summary>
 public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 {
     private const double Tolerance = 1e-4;
@@ -30,6 +33,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Extension presence ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that the pgvector extension is installed.
+    /// </summary>
     [Fact]
     public async Task PgVector_ExtensionIsInstalled()
     {
@@ -45,6 +51,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── DDL ─────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that the vector column is created with the expected dimension.
+    /// </summary>
     [Fact]
     public async Task VectorColumn_IsCreatedWithCorrectDimension()
     {
@@ -64,6 +73,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Round-trip ───────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that vector values round-trip through text serialization.
+    /// </summary>
     [Fact]
     public async Task VectorColumn_RoundTrip_PreservesComponents()
     {
@@ -88,6 +100,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── L2 distance (<->) ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that the same vector has zero L2 distance.
+    /// </summary>
     [Fact]
     public async Task L2Distance_SameVector_IsZero()
     {
@@ -101,6 +116,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal(0.0, dist, Tolerance);
     }
 
+    /// <summary>
+    /// Verifies that orthogonal unit vectors have L2 distance of square root two.
+    /// </summary>
     [Fact]
     public async Task L2Distance_OrthogonalUnitVectors_IsSqrtTwo()
     {
@@ -117,6 +135,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Cosine distance (<=>) ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that cosine distance for the same vector is zero.
+    /// </summary>
     [Fact]
     public async Task CosineDistance_SameVector_IsZero()
     {
@@ -130,6 +151,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal(0.0, dist, Tolerance);
     }
 
+    /// <summary>
+    /// Verifies that orthogonal vectors have cosine distance of one.
+    /// </summary>
     [Fact]
     public async Task CosineDistance_OrthogonalVectors_IsOne()
     {
@@ -144,6 +168,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal(1.0, dist, Tolerance);
     }
 
+    /// <summary>
+    /// Verifies the expected cosine distance for the diagonal vector.
+    /// </summary>
     [Fact]
     public async Task CosineDistance_DiagonalVector_IsExpectedValue()
     {
@@ -161,6 +188,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Inner product (<#>) ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that the negative inner product of a vector with itself is -1.
+    /// </summary>
     [Fact]
     public async Task InnerProduct_SameUnitVector_IsNegativeOne()
     {
@@ -176,6 +206,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal(-1.0, negDot, Tolerance);
     }
 
+    /// <summary>
+    /// Verifies that orthogonal vectors have a zero negative inner product.
+    /// </summary>
     [Fact]
     public async Task InnerProduct_OrthogonalVectors_IsZero()
     {
@@ -191,6 +224,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Nearest-neighbour ORDER BY ────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that a nearest-neighbour query returns the exact match.
+    /// </summary>
     [Fact]
     public async Task NearestNeighbour_CosineTopOne_ReturnsExactMatch()
     {
@@ -205,6 +241,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal("apple", ds["name", 0]);
     }
 
+    /// <summary>
+    /// Verifies that the two nearest neighbours are returned in the expected order.
+    /// </summary>
     [Fact]
     public async Task NearestNeighbour_L2TopTwo_ReturnsAppleAndApricot()
     {
@@ -222,6 +261,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal("apricot", ds["name", 1]);
     }
 
+    /// <summary>
+    /// Verifies that a distance threshold excludes distant rows.
+    /// </summary>
     [Fact]
     public async Task NearestNeighbour_WithDistanceThreshold_ExcludesDistantRows()
     {
@@ -240,6 +282,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Parameterised ExecuteAsync ────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that parameterized inserts add a new row.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_WithParameters_InsertsNewRow()
     {
@@ -266,6 +311,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         }
     }
 
+    /// <summary>
+    /// Verifies that parameterized updates modify the stored embedding.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_WithParameters_UpdatesEmbedding()
     {
@@ -302,6 +350,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Parameterised QueryAsync ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that a named parameter returns the expected vector.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_WithNameParameter_ReturnsMatchingVector()
     {
@@ -316,6 +367,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal(1f, components[2], precision: 4);
     }
 
+    /// <summary>
+    /// Verifies that a vector parameter computes the expected L2 distance.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_WithVectorParameter_ComputesL2Distance()
     {
@@ -329,6 +383,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal(0.0, dist, Tolerance);
     }
 
+    /// <summary>
+    /// Verifies that a distance threshold parameter filters rows correctly.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_WithDistanceThresholdParameter_FiltersRows()
     {
@@ -342,6 +399,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         Assert.Equal("apricot", ds["name", 1]);
     }
 
+    /// <summary>
+    /// Verifies that vector and limit parameters return the expected nearest neighbours.
+    /// </summary>
     [Fact]
     public async Task QueryAsync_WithVectorAndLimitParameters_ReturnsTopKNeighbours()
     {
@@ -357,6 +417,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Indexes ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that an HNSW index can be created and queried.
+    /// </summary>
     [Fact]
     public async Task HnswIndex_CosineOps_CanBeCreatedAndQueried()
     {
@@ -411,6 +474,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         }
     }
 
+    /// <summary>
+    /// Verifies that an IVFFlat index can be created and queried.
+    /// </summary>
     [Fact]
     public async Task IvfflatIndex_L2Ops_CanBeCreatedAndQueried()
     {
@@ -465,6 +531,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     // ── Fixture ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Shared database fixture for pgvector integration tests.
+    /// </summary>
     public sealed class VectorFixture : IAsyncLifetime
     {
         private const string ConnectionString =
@@ -472,12 +541,24 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
+        /// <summary>
+        /// Gets the shared PostgreSQL runner.
+        /// </summary>
         public PostgreSqlRunner Runner { get; } = new(ConnectionString);
 
+        /// <summary>
+        /// Gets the dedicated test table name.
+        /// </summary>
         public string Table { get; private set; } = default!;
 
+        /// <summary>
+        /// Returns a unique name scoped to the current test run.
+        /// </summary>
         public string UniqueName(string prefix) => $"{prefix}_{_runId}";
 
+        /// <summary>
+        /// Creates the extension, test table, and seed rows.
+        /// </summary>
         public async Task InitializeAsync()
         {
             await Runner.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS vector");
@@ -502,6 +583,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 """);
         }
 
+        /// <summary>
+        /// Drops the dedicated test table.
+        /// </summary>
         public async Task DisposeAsync()
         {
             await Runner.ExecuteAsync($"DROP TABLE IF EXISTS {Table}");

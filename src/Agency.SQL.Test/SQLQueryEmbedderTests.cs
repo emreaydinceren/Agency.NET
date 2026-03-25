@@ -2,14 +2,23 @@ using Agency.Common;
 
 namespace Agency.SQL.Test;
 
+/// <summary>
+/// Tests for <see cref="Agency.SQL.SQLQueryEmbedder"/>.
+/// </summary>
 public sealed class SQLQueryEmbedderTests
 {
+    /// <summary>
+    /// Verifies that constructing with a null embedding generator throws.
+    /// </summary>
     [Fact]
     public void Constructor_NullEmbeddingGenerator_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() => new SQLQueryEmbedder(null!));
     }
 
+    /// <summary>
+    /// Verifies that blank SQL input is rejected.
+    /// </summary>
     [Fact]
     public async Task EmbedVectorsInQueryAsync_NullOrWhitespace_ThrowsArgumentException()
     {
@@ -19,6 +28,9 @@ public sealed class SQLQueryEmbedderTests
         await Assert.ThrowsAsync<ArgumentException>(() => embedder.EmbedVectorsInQueryAsync("   "));
     }
 
+    /// <summary>
+    /// Verifies that SQL without vectorize calls is returned unchanged.
+    /// </summary>
     [Fact]
     public async Task EmbedVectorsInQueryAsync_NoVectorizeCall_ReturnsOriginalQuery()
     {
@@ -32,6 +44,9 @@ public sealed class SQLQueryEmbedderTests
         Assert.Empty(generator.CapturedInputs);
     }
 
+    /// <summary>
+    /// Verifies that a single vectorize call is replaced with a vector literal.
+    /// </summary>
     [Fact]
     public async Task EmbedVectorsInQueryAsync_SingleVectorize_ReplacesWithVectorLiteral()
     {
@@ -48,6 +63,9 @@ public sealed class SQLQueryEmbedderTests
         Assert.Equal("hello", generator.CapturedInputs[0]);
     }
 
+    /// <summary>
+    /// Verifies that escaped quotes are unescaped before embedding generation.
+    /// </summary>
     [Fact]
     public async Task EmbedVectorsInQueryAsync_EscapedQuoteInput_UnescapesBeforeGeneration()
     {
@@ -64,6 +82,9 @@ public sealed class SQLQueryEmbedderTests
         Assert.Equal("O'Reilly", generator.CapturedInputs[0]);
     }
 
+    /// <summary>
+    /// Verifies that multiple vectorize calls are all replaced.
+    /// </summary>
     [Fact]
     public async Task EmbedVectorsInQueryAsync_MultipleVectorizeCalls_ReplacesAllMatches()
     {
@@ -82,6 +103,9 @@ public sealed class SQLQueryEmbedderTests
         Assert.Equal("first", generator.CapturedInputs[1]);
     }
 
+    /// <summary>
+    /// Verifies that the cancellation token is forwarded to the embedding generator.
+    /// </summary>
     [Fact]
     public async Task EmbedVectorsInQueryAsync_PassesCancellationTokenToGenerator()
     {

@@ -10,6 +10,9 @@ namespace Agency.Embeddings.Test;
 internal sealed class StubHttpMessageHandler(string responseJson, HttpStatusCode statusCode = HttpStatusCode.OK)
     : HttpMessageHandler
 {
+    /// <summary>
+    /// Returns the preset response body for any request.
+    /// </summary>
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)

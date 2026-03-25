@@ -7,6 +7,9 @@ namespace Agency.Embeddings.Test;
 /// Requires LM Studio running with text-embedding-qwen3-embedding-8b loaded.
 /// </summary>
 [Trait("Category", "Functional")]
+/// <summary>
+/// Functional tests for <see cref="Agency.Embeddings.EmbeddingGenerator"/>.
+/// </summary>
 public sealed class EmbeddingGeneratorFunctionalTests
 {
     private static readonly EmbeddingGenerator Generator = new(EmbeddingOptions.LMStudioDefaults);
@@ -15,6 +18,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
     // Different texts produce different vectors
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that unrelated texts produce different embedding vectors.
+    /// </summary>
     [Fact]
     public async Task DifferentTexts_ReturnDifferentEmbeddings()
     {
@@ -24,6 +30,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
         Assert.False(VectorsAreEqual(a, b), "Unrelated texts should not produce identical embedding vectors.");
     }
 
+    /// <summary>
+    /// Verifies that batch and single calls produce different embeddings for unrelated texts.
+    /// </summary>
     [Fact]
     public async Task DifferentTexts_BatchAndSingle_ReturnDifferentEmbeddings()
     {
@@ -37,6 +46,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
     // Same text reproduces the same vector
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that identical text produces equivalent embeddings across calls.
+    /// </summary>
     [Fact]
     public async Task SameText_CalledTwice_ReturnsEquivalentEmbeddings()
     {
@@ -54,6 +66,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
     // Semantically similar texts are closer together than dissimilar ones
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that semantically similar texts are closer than dissimilar texts.
+    /// </summary>
     [Fact]
     public async Task SemanticallySimilarTexts_HigherSimilarityThanDissimilarTexts()
     {
@@ -69,6 +84,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
             $"'dog'↔'puppy' similarity ({similarPairScore:F4}) should exceed 'dog'↔'spaceship' ({dissimilarPairScore:F4}).");
     }
 
+    /// <summary>
+    /// Verifies that semantically similar sentences are closer than unrelated sentences.
+    /// </summary>
     [Fact]
     public async Task SemanticallySimilarSentences_HigherSimilarityThanUnrelatedSentences()
     {
@@ -88,6 +106,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
     // Batch results are consistent with individual calls
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Verifies that batch embeddings match individual embeddings.
+    /// </summary>
     [Fact]
     public async Task BatchEmbeddings_MatchIndividualEmbeddings()
     {

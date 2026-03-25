@@ -48,6 +48,8 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
     internal EmbeddingGenerator(EmbeddingOptions options, HttpMessageHandler? httpMessageHandler, ILogger<EmbeddingGenerator>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrEmpty(options.BaseUrl);
+        ArgumentException.ThrowIfNullOrEmpty(options.ApiKey);
 
         _modelId = options.ModelId;
         _logger = logger ?? NullLogger<EmbeddingGenerator>.Instance;

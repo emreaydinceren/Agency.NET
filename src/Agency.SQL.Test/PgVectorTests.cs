@@ -5,6 +5,8 @@ namespace Agency.SQL.Test;
 /// <summary>
 /// Functional tests for pgvector operations against the PostgreSQL instance in docker-compose.yml.
 /// Requires: docker compose up -d  (image: pgvector/pgvector:pg16)
+/// Run with:  dotnet test --filter "Category=Functional"
+/// Skip with: dotnet test --filter "Category!=Functional"
 ///
 /// Test vectors are 3-dimensional unit vectors so expected distances are
 /// analytically exact and assertions can be made with tight tolerances.
@@ -14,6 +16,7 @@ namespace Agency.SQL.Test;
 ///   "cherry"  → [0, 0, 1]
 ///   "apricot" → [0.707, 0.707, 0]   ≈ normalised midpoint of apple + banana
 /// </summary>
+[Trait("Category", "Functional")]
 public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 {
     private const double Tolerance = 1e-4;

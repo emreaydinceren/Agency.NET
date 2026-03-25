@@ -3,7 +3,11 @@
   <Project Path="Agency.Console/Agency.Console.csproj" />
   <Project Path="Agency.Embeddings.Test/Agency.Embeddings.Test.csproj" />
   <Project Path="Agency.Embeddings/Agency.Embeddings.csproj" />
+  <Project Path="Agency.Llm.Abstractions/Agency.Llm.Abstractions.csproj" DisplayName="Agency.Llm.Abstractions" />
+  <Project Path="Agency.Llm.Test/Agency.Llm.Test.csproj" DisplayName="Agency.Llm.Test" />
+  <Project Path="Agency.Llm.Claude/Agency.Llm.Claude.csproj" DisplayName="Agency.Llm.Claude" />
+  <Project Path="Agency.Llm.OpenAI/Agency.Llm.OpenAI.csproj" DisplayName="Agency.Llm.OpenAI" />
   <Project Path="Agency.RagFormatter/Agency.RagFormatter.csproj" Id="edd114b8-6e08-4377-8f25-67cd133df6e5" />
-  <Project Path="Agency.SQL.Test/Agency.SQL.Test.csproj" />
-  <Project Path="Agency.SQL/Agency.SQL.csproj" />
+  <Project Path="Agency.Sql.Test/Agency.Sql.Test.csproj" />
+  <Project Path="Agency.SQL/Agency.Sql.csproj" />
 </Solution>

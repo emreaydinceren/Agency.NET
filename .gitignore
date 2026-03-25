@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# MCP config (contains access tokens)
+.mcp.json
+
 # User-specific files
 *.rsuser
 *.suo

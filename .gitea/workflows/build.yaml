@@ -15,10 +15,13 @@ jobs:
           dotnet-version: "10.x"
 
       - name: Restore dependencies
+        working-directory: src
         run: dotnet restore
 
       - name: Build Solution
+        working-directory: src
         run: dotnet build --configuration Release --no-restore
 
       - name: Run Tests
+        working-directory: src
         run: dotnet test --configuration Release --no-build --verbosity normal

@@ -1,6 +1,6 @@
 namespace Agency.Llm.Claude;
 
-using Agency.Llm.Abstractions;
+using Agency.Llm.Common;
 using Anthropic;
 using Anthropic.Core;
 using Anthropic.Models.Messages;
@@ -221,7 +221,7 @@ public class ClaudeClient : ILlmClient
 
         long inputTokens = 0;
         long outputTokens = 0;
-        Agency.Llm.Abstractions.StopReason? stopReason = null;
+        Agency.Llm.Common.StopReason? stopReason = null;
         Exception? streamError = null;
 
         // Drive the enumerator manually: yield is inside try-finally (no catch) ✓
@@ -298,7 +298,7 @@ public class ClaudeClient : ILlmClient
             ExceptionDispatchInfo.Capture(streamError).Throw();
         }
 
-        yield return new LlmStreamChunk(null, stopReason ?? Agency.Llm.Abstractions.StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
+        yield return new LlmStreamChunk(null, stopReason ?? Agency.Llm.Common.StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
 }
 

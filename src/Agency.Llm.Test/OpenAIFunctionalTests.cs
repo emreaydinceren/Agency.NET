@@ -103,7 +103,7 @@ public sealed class OpenAIFunctionalTests
     [Fact]
     public async Task StreamAsync_TerminalChunkHasUsageAndFinishReason()
     {
-        Agency.Llm.Abstractions.LlmStreamChunk? terminal = null;
+        Agency.Llm.Common.LlmStreamChunk? terminal = null;
 
         await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
         {

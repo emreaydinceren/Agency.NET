@@ -1,6 +1,6 @@
 namespace Agency.Llm.OpenAI;
 
-using Agency.Llm.Abstractions;
+using Agency.Llm.Common;
 using global::OpenAI.Chat;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

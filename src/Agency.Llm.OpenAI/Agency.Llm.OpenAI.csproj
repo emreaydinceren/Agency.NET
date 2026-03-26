@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Agency.Llm.Abstractions\Agency.Llm.Abstractions.csproj" />
+    <ProjectReference Include="..\Agency.Llm.Common\Agency.Llm.Common.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,13 +1,15 @@
 using Agency.Sql.Postgre;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.UserSecrets;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 
 namespace Agency.Sql.Postgre.Test;
 
 /// <summary>
-/// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml.
-/// Requires the container to be running: docker compose up -d
-/// Connection: Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
-/// Run with:  dotnet test --filter "Category=Functional"
-/// Skip with: dotnet test --filter "Category!=Functional"
+/// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml. Requires the container
+/// to be running: docker compose up -d Connection:
+/// Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db Run with: dotnet test --filter
+/// "Category=Functional" Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
 /// <summary>
@@ -212,23 +214,39 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     // ── Fixture ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a dedicated test table before the test class runs and drops it afterwards.
-    /// Each test run uses a unique table name to support parallel CI execution.
+    /// Creates a dedicated test table before the test class runs and drops it afterwards. Each test run uses a unique
+    /// table name to support parallel CI execution.
     /// </summary>
     /// <summary>
     /// Shared database fixture for PostgreSQL integration tests.
     /// </summary>
     public sealed class DatabaseFixture : IAsyncLifetime
     {
-        private const string ConnectionString =
-            "Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db";
+        public DatabaseFixture() {
+
+            var config = new ConfigurationBuilder()
+               .AddUserSecrets<PostgreSqlRunnerTests>()
+               .AddEnvironmentVariables()
+               .Build();
+
+            var connectionString =
+                config.GetConnectionString("PostgreSql");
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "Connection string is not configured. Please set it in user secrets or environment variables with the key 'PostgreSql:ConnectionString'.");
+            }
+
+            this.Runner = new PostgreSqlRunner(connectionString);
+        }
 
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
         /// <summary>
         /// Gets the shared PostgreSQL runner.
         /// </summary>
-        public PostgreSqlRunner Runner { get; } = new(ConnectionString);
+        public PostgreSqlRunner Runner { get; }
 
         /// <summary>Fully-qualified table name used by the shared test data table.</summary>
         public string Table { get; private set; } = default!;

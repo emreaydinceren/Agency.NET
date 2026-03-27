@@ -1,4 +1,5 @@
 using Agency.Sql.Postgre;
+using Microsoft.Extensions.Configuration;
 
 namespace Agency.Sql.Postgre.Test;
 
@@ -536,15 +537,32 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     /// </summary>
     public sealed class VectorFixture : IAsyncLifetime
     {
-        private const string ConnectionString =
-            "Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db";
+        public VectorFixture()
+        {
+
+            var config = new ConfigurationBuilder()
+               .AddUserSecrets<PostgreSqlRunnerTests>()
+               .AddEnvironmentVariables()
+               .Build();
+
+            var connectionString =
+                config.GetConnectionString("PostgreSql");
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "Connection string is not configured. Please set it in user secrets or environment variables with the key 'PostgreSql:ConnectionString'.");
+            }
+
+            this.Runner = new PostgreSqlRunner(connectionString);
+        }
 
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
         /// <summary>
         /// Gets the shared PostgreSQL runner.
         /// </summary>
-        public PostgreSqlRunner Runner { get; } = new(ConnectionString);
+        public PostgreSqlRunner Runner { get; }
 
         /// <summary>
         /// Gets the dedicated test table name.

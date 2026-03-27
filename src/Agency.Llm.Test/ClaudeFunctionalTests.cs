@@ -1,10 +1,13 @@
 namespace Agency.Llm.Test;
 
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using System.Runtime.CompilerServices;
+
 /// <summary>
-/// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/> using LM Studio.
-/// Run with:  dotnet test --filter "Category=Functional"
-/// Skip with: dotnet test --filter "Category!=Functional"
-/// Requires LM Studio running with qwen/qwen3-coder-next loaded at http://llm-host.example:1234
+/// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/> using LM Studio. Run with: dotnet test --filter
+/// "Category=Functional" Skip with: dotnet test --filter "Category!=Functional" Requires LM Studio running with
+/// qwen/qwen3-coder-next loaded at http://llm-host.example:1234
 /// </summary>
 [Trait("Category", "Functional")]
 /// <summary>
@@ -12,15 +15,44 @@ namespace Agency.Llm.Test;
 /// </summary>
 public sealed class ClaudeFunctionalTests
 {
-    private const string Model = "qwen/qwen3-coder-next";
+    private const string EnvironmentNameVariable = "DOTNET_ENVIRONMENT";
+    private const string ConfigurationSection = "LlmTest:Claude";
     private const string SystemPrompt = "You are a concise assistant.";
 
+    private static readonly string EnvironmentName =
+        Environment.GetEnvironmentVariable(EnvironmentNameVariable) ?? "Development";
+
+    private readonly string Model = GetRequiredConfiguration($"{ConfigurationSection}:Model");
+
+    private static readonly IConfiguration Configuration = new ConfigurationBuilder()
+        .SetBasePath(AppContext.BaseDirectory)
+        .AddJsonFile("appsettings.json", optional: false)
+        .AddJsonFile($"appsettings.{EnvironmentName}.json", optional: true)
+        .AddUserSecrets<ClaudeFunctionalTests>(optional: true)
+        .AddEnvironmentVariables()
+        .Build();
+
     private static readonly Agency.Llm.Claude.ClaudeClient Client = new(
-        Microsoft.Extensions.Options.Options.Create(new Agency.Llm.Claude.ClaudeClientOptions
+        Options.Create(new Agency.Llm.Claude.ClaudeClientOptions
         {
-            ApiKey = "lm-studio",
-            BaseUrl = "http://llm-host.example:1234",
+            ApiKey = GetRequiredConfiguration($"{ConfigurationSection}:ApiKey"),
+            BaseUrl = GetRequiredConfiguration($"{ConfigurationSection}:BaseUrl"),
         }));
+
+    private static string GetRequiredConfiguration(string key)
+    {
+        try
+        {
+            return Configuration[key]
+                ?? throw new InvalidOperationException($"Missing required configuration value '{key}'.");
+        }
+        catch
+        {
+            Configuration.AsEnumerable().ToList().ForEach(kv => Console.WriteLine($"Config: {kv.Key} = {kv.Value}"));
+            throw;
+        }
+        
+    }
 
     /// <summary>
     /// Verifies that <see cref="Agency.Llm.Claude.ClaudeClient.SendAsync"/> returns a response without error.

@@ -9,6 +9,11 @@ jobs:
   build:
     runs-on: dotnet-10
 
+    env:
+      LlmTest__Claude__ApiKey: ${{ secrets.LlmTest_Claude_ApiKey }}
+      LlmTest__OpenAI__ApiKey: ${{ secrets.LlmTest_OpenAI_ApiKey }}
+      ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings_PostgreSql }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

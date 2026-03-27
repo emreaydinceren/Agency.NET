@@ -61,7 +61,7 @@ public class ClaudeClient : ILlmClient
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _logger = logger ?? NullLogger<ClaudeClient>.Instance;
+        this._logger = logger ?? NullLogger<ClaudeClient>.Instance;
 
         var co = new ClientOptions
         {
@@ -83,7 +83,7 @@ public class ClaudeClient : ILlmClient
     /// </summary>
     public ClaudeClient(ILogger<ClaudeClient>? logger = null)
     {
-        _logger = logger ?? NullLogger<ClaudeClient>.Instance;
+        this._logger = logger ?? NullLogger<ClaudeClient>.Instance;
         this._client = new AnthropicClient();
     }
 
@@ -106,7 +106,7 @@ public class ClaudeClient : ILlmClient
         _requestCounter.Add(1, tags);
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Sending request to Claude. Model={Model}", model);
+        this._logger.LogInformation("Sending request to Claude. Model={Model}", model);
 
         try
         {
@@ -125,7 +125,7 @@ public class ClaudeClient : ILlmClient
                 ],
             };
 
-            var message = await _client.Messages.Create(messageToSend, cancellationToken);
+            var message = await this._client.Messages.Create(messageToSend, cancellationToken);
             message.Validate();
 
             sw.Stop();
@@ -140,7 +140,7 @@ public class ClaudeClient : ILlmClient
             activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
             activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
 
-            _logger.LogInformation(
+            this._logger.LogInformation(
                 "Claude request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
                 model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
 
@@ -156,7 +156,7 @@ public class ClaudeClient : ILlmClient
             _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
             _errorCounter.Add(1, tags);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            _logger.LogError(ex, "Claude request failed. Model={Model}", model);
+            this._logger.LogError(ex, "Claude request failed. Model={Model}", model);
             throw;
         }
     }
@@ -202,7 +202,7 @@ public class ClaudeClient : ILlmClient
         _requestCounter.Add(1, tags);
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Starting streaming request to Claude. Model={Model}", model);
+        this._logger.LogInformation("Starting streaming request to Claude. Model={Model}", model);
 
         MessageCreateParams messageToSend = new()
         {
@@ -226,7 +226,7 @@ public class ClaudeClient : ILlmClient
 
         // Drive the enumerator manually: yield is inside try-finally (no catch) ✓
         // MoveNextAsync exceptions are caught in the inner try-catch (no yield inside) ✓
-        var enumerator = _client.Messages
+        var enumerator = this._client.Messages
             .CreateStreaming(messageToSend, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
 
@@ -279,7 +279,7 @@ public class ClaudeClient : ILlmClient
             {
                 _errorCounter.Add(1, tags);
                 activity?.SetStatus(ActivityStatusCode.Error, streamError.Message);
-                _logger.LogError(streamError, "Claude streaming request failed. Model={Model}", model);
+                this._logger.LogError(streamError, "Claude streaming request failed. Model={Model}", model);
             }
             else
             {
@@ -287,7 +287,7 @@ public class ClaudeClient : ILlmClient
                 _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
                 activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
                 activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
-                _logger.LogInformation(
+                this._logger.LogInformation(
                     "Claude streaming request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
                     model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
             }

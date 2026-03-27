@@ -20,7 +20,7 @@ public partial class SQLQueryEmbedder
     /// </summary>
     public SQLQueryEmbedder(IEmbeddingGenerator embeddingGenerator)
     {
-        _embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
+        this._embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public partial class SQLQueryEmbedder
             var inputText = match.Groups["text"].Value.Replace("''", "'");
 
             // Adjust type below if your generator returns a different type
-            var embeddings = await _embeddingGenerator.GenerateEmbeddingAsync(inputText, cancellationToken);
+            var embeddings = await this._embeddingGenerator.GenerateEmbeddingAsync(inputText, cancellationToken);
 
             _ = sb.Remove(match.Index, match.Length)
                 .Insert(match.Index, ToSqlVectorLiteral(embeddings.Span));

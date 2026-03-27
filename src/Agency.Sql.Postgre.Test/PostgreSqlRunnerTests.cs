@@ -24,7 +24,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     /// </summary>
     public PostgreSqlRunnerTests(DatabaseFixture fixture)
     {
-        _fixture = fixture;
+        this._fixture = fixture;
     }
 
     // ── Constructor validation ──────────────────────────────────────────────
@@ -47,8 +47,8 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task ExecuteAsync_NullOrWhitespaceSql_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _fixture.Runner.ExecuteAsync(null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => _fixture.Runner.ExecuteAsync("   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.ExecuteAsync(null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.ExecuteAsync("   "));
     }
 
     // ── QueryAsync validation ───────────────────────────────────────────────
@@ -59,8 +59,8 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_NullOrWhitespaceSql_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _fixture.Runner.QueryAsync(null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => _fixture.Runner.QueryAsync("   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.QueryAsync(null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.QueryAsync("   "));
     }
 
     // ── Functional: DDL ────────────────────────────────────────────────────
@@ -71,9 +71,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task ExecuteAsync_CreateAndDropTable_Succeeds()
     {
-        var table = _fixture.UniqueName("ddl_test");
+        var table = this._fixture.UniqueName("ddl_test");
 
-        await _fixture.Runner.ExecuteAsync($"""
+        await this._fixture.Runner.ExecuteAsync($"""
             CREATE TABLE IF NOT EXISTS {table} (
                 id   SERIAL PRIMARY KEY,
                 name TEXT NOT NULL
@@ -81,7 +81,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
             """);
 
         // Verify table exists by querying information_schema
-        var ds = await _fixture.Runner.QueryAsync($"""
+        var ds = await this._fixture.Runner.QueryAsync($"""
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
@@ -90,7 +90,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
         Assert.Single(ds.Rows);
 
-        await _fixture.Runner.ExecuteAsync($"DROP TABLE {table}");
+        await this._fixture.Runner.ExecuteAsync($"DROP TABLE {table}");
     }
 
     // ── Functional: INSERT and row-count ───────────────────────────────────
@@ -101,8 +101,8 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task ExecuteAsync_InsertRows_ReturnsRowsAffected()
     {
-        int affected = await _fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {_fixture.Table} (name, score)
+        int affected = await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score)
             VALUES ('alpha', 1.1), ('beta', 2.2)
             """);
 
@@ -117,12 +117,12 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_AfterInsert_ReturnsExpectedRows()
     {
-        await _fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {_fixture.Table} (name, score) VALUES ('gamma', 3.3)
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('gamma', 3.3)
             """);
 
-        var ds = await _fixture.Runner.QueryAsync($"""
-            SELECT name, score FROM {_fixture.Table} WHERE name = 'gamma'
+        var ds = await this._fixture.Runner.QueryAsync($"""
+            SELECT name, score FROM {this._fixture.Table} WHERE name = 'gamma'
             """);
 
         Assert.Single(ds.Rows);
@@ -138,13 +138,13 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_WithParameter_FiltersCorrectly()
     {
-        await _fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {_fixture.Table} (name, score)
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score)
             VALUES ('delta', 4.4), ('epsilon', 5.5)
             """);
 
-        var ds = await _fixture.Runner.QueryAsync(
-            $"SELECT name FROM {_fixture.Table} WHERE name = @name",
+        var ds = await this._fixture.Runner.QueryAsync(
+            $"SELECT name FROM {this._fixture.Table} WHERE name = @name",
             new Dictionary<string, object?> { ["name"] = "delta" });
 
         Assert.Single(ds.Rows);
@@ -159,12 +159,12 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_NullColumnValue_ReturnedAsNull()
     {
-        await _fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {_fixture.Table} (name, score) VALUES ('null_score', NULL)
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('null_score', NULL)
             """);
 
-        var ds = await _fixture.Runner.QueryAsync($"""
-            SELECT score FROM {_fixture.Table} WHERE name = 'null_score'
+        var ds = await this._fixture.Runner.QueryAsync($"""
+            SELECT score FROM {this._fixture.Table} WHERE name = 'null_score'
             """);
 
         Assert.Single(ds.Rows);
@@ -179,8 +179,8 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_NoMatchingRows_ReturnsEmptyList()
     {
-        var ds = await _fixture.Runner.QueryAsync($"""
-            SELECT * FROM {_fixture.Table} WHERE name = 'does_not_exist'
+        var ds = await this._fixture.Runner.QueryAsync($"""
+            SELECT * FROM {this._fixture.Table} WHERE name = 'does_not_exist'
             """);
 
         Assert.Empty(ds.Rows);
@@ -194,18 +194,18 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task ExecuteAsync_Update_ReturnsCorrectRowCount()
     {
-        await _fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {_fixture.Table} (name, score) VALUES ('zeta', 6.6), ('eta', 7.7)
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('zeta', 6.6), ('eta', 7.7)
             """);
 
-        int affected = await _fixture.Runner.ExecuteAsync(
-            $"UPDATE {_fixture.Table} SET score = @score WHERE name = @name",
+        int affected = await this._fixture.Runner.ExecuteAsync(
+            $"UPDATE {this._fixture.Table} SET score = @score WHERE name = @name",
             new Dictionary<string, object?> { ["score"] = 99.9, ["name"] = "zeta" });
 
         Assert.Equal(1, affected);
 
-        var ds = await _fixture.Runner.QueryAsync($"""
-            SELECT score FROM {_fixture.Table} WHERE name = 'zeta'
+        var ds = await this._fixture.Runner.QueryAsync($"""
+            SELECT score FROM {this._fixture.Table} WHERE name = 'zeta'
             """);
 
         Assert.Equal(99.9, Convert.ToDouble(ds["score", 0]), precision: 5);
@@ -252,17 +252,17 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
         public string Table { get; private set; } = default!;
 
         /// <summary>Returns a unique table name scoped to this test run.</summary>
-        public string UniqueName(string prefix) => $"{prefix}_{_runId}";
+        public string UniqueName(string prefix) => $"{prefix}_{this._runId}";
 
         /// <summary>
         /// Creates the dedicated test table.
         /// </summary>
         public async Task InitializeAsync()
         {
-            Table = UniqueName("runner_tests");
+            this.Table = this.UniqueName("runner_tests");
 
-            await Runner.ExecuteAsync($"""
-                CREATE TABLE {Table} (
+            await this.Runner.ExecuteAsync($"""
+                CREATE TABLE {this.Table} (
                     id    SERIAL PRIMARY KEY,
                     name  TEXT    NOT NULL,
                     score DOUBLE PRECISION NULL
@@ -275,7 +275,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
         /// </summary>
         public async Task DisposeAsync()
         {
-            await Runner.ExecuteAsync($"DROP TABLE IF EXISTS {Table}");
+            await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}");
         }
     }
 }

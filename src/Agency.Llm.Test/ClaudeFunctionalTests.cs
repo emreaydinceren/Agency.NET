@@ -2,57 +2,24 @@ namespace Agency.Llm.Test;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using System.Runtime.CompilerServices;
 
 /// <summary>
 /// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/> using LM Studio. Run with: dotnet test --filter
 /// "Category=Functional" Skip with: dotnet test --filter "Category!=Functional" Requires LM Studio running with
 /// qwen/qwen3-coder-next loaded at http://llm-host.example:1234
 /// </summary>
+/// <remarks>
+/// Creates the test class with a shared Claude fixture.
+/// </remarks>
 [Trait("Category", "Functional")]
 /// <summary>
 /// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/>.
 /// </summary>
-public sealed class ClaudeFunctionalTests
+public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fixture) : IClassFixture<ClaudeFunctionalTests.ClaudeFixture>
 {
-    private const string EnvironmentNameVariable = "DOTNET_ENVIRONMENT";
-    private const string ConfigurationSection = "LlmTest:Claude";
     private const string SystemPrompt = "You are a concise assistant.";
 
-    private static readonly string EnvironmentName =
-        Environment.GetEnvironmentVariable(EnvironmentNameVariable) ?? "Development";
-
-    private readonly string Model = GetRequiredConfiguration($"{ConfigurationSection}:Model");
-
-    private static readonly IConfiguration Configuration = new ConfigurationBuilder()
-        .SetBasePath(AppContext.BaseDirectory)
-        .AddJsonFile("appsettings.json", optional: false)
-        .AddJsonFile($"appsettings.{EnvironmentName}.json", optional: true)
-        .AddUserSecrets<ClaudeFunctionalTests>(optional: true)
-        .AddEnvironmentVariables()
-        .Build();
-
-    private static readonly Agency.Llm.Claude.ClaudeClient Client = new(
-        Options.Create(new Agency.Llm.Claude.ClaudeClientOptions
-        {
-            ApiKey = GetRequiredConfiguration($"{ConfigurationSection}:ApiKey"),
-            BaseUrl = GetRequiredConfiguration($"{ConfigurationSection}:BaseUrl"),
-        }));
-
-    private static string GetRequiredConfiguration(string key)
-    {
-        try
-        {
-            return Configuration[key]
-                ?? throw new InvalidOperationException($"Missing required configuration value '{key}'.");
-        }
-        catch
-        {
-            Configuration.AsEnumerable().ToList().ForEach(kv => Console.WriteLine($"Config: {kv.Key} = {kv.Value}"));
-            throw;
-        }
-        
-    }
+    private readonly ClaudeFixture _fixture = fixture;
 
     /// <summary>
     /// Verifies that <see cref="Agency.Llm.Claude.ClaudeClient.SendAsync"/> returns a response without error.
@@ -60,7 +27,7 @@ public sealed class ClaudeFunctionalTests
     [Fact]
     public async Task SendAsync_ReturnsWithoutError()
     {
-        var response = await Client.SendAsync(Model, SystemPrompt, "Reply with one word: hello");
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello");
 
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
         Assert.True(System.Enum.IsDefined(response.FinishReason));
@@ -76,7 +43,7 @@ public sealed class ClaudeFunctionalTests
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello"))
         {
             if (chunk.Text is not null)
             {
@@ -95,7 +62,7 @@ public sealed class ClaudeFunctionalTests
     {
         var sb = new System.Text.StringBuilder();
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "What is 2 + 2? Reply with just the number."))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "What is 2 + 2? Reply with just the number."))
         {
             if (chunk.Text is not null)
             {
@@ -115,7 +82,7 @@ public sealed class ClaudeFunctionalTests
         const string prompt = "Reply with exactly: streaming works";
 
         var streamed = new System.Text.StringBuilder();
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, prompt))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, prompt))
         {
             if (chunk.Text is not null)
             {
@@ -124,7 +91,7 @@ public sealed class ClaudeFunctionalTests
         }
 
         // Both methods must complete without error against the same endpoint
-        var response = await Client.SendAsync(Model, SystemPrompt, prompt);
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, prompt);
 
         Assert.False(string.IsNullOrWhiteSpace(streamed.ToString()));
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
@@ -138,7 +105,7 @@ public sealed class ClaudeFunctionalTests
     {
         Agency.Llm.Common.LlmStreamChunk? terminal = null;
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello"))
         {
             terminal = chunk;
         }
@@ -157,7 +124,7 @@ public sealed class ClaudeFunctionalTests
     [Fact]
     public async Task SendAsync_WithTemperature_ReturnsWithoutError()
     {
-        var response = await Client.SendAsync(Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f);
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f);
 
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
         Assert.True(System.Enum.IsDefined(response.FinishReason));
@@ -172,7 +139,7 @@ public sealed class ClaudeFunctionalTests
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f))
         {
             if (chunk.Text is not null)
             {
@@ -181,5 +148,55 @@ public sealed class ClaudeFunctionalTests
         }
 
         Assert.NotEmpty(chunks);
+    }
+
+    /// <summary>
+    /// Shared fixture that loads Claude functional test configuration and initializes the client.
+    /// </summary>
+    public sealed class ClaudeFixture
+    {
+        private const string EnvironmentNameVariable = "DOTNET_ENVIRONMENT";
+        private const string ConfigurationSection = "LlmTest:Claude";
+
+        /// <summary>
+        /// Creates the fixture and initializes configuration-backed Claude client settings.
+        /// </summary>
+        public ClaudeFixture()
+        {
+            var environmentName = Environment.GetEnvironmentVariable(EnvironmentNameVariable) ?? "Development";
+
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
+                .AddUserSecrets<ClaudeFunctionalTests>(optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            this.Model = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:Model");
+
+            this.Client = new Agency.Llm.Claude.ClaudeClient(
+                Options.Create(new Agency.Llm.Claude.ClaudeClientOptions
+                {
+                    ApiKey = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:ApiKey"),
+                    BaseUrl = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:BaseUrl"),
+                }));
+        }
+
+        /// <summary>
+        /// Gets the configured model name used by the functional tests.
+        /// </summary>
+        public string Model { get; }
+
+        /// <summary>
+        /// Gets the configured Claude client instance.
+        /// </summary>
+        public Agency.Llm.Claude.ClaudeClient Client { get; }
+
+        private static string GetRequiredConfiguration(IConfiguration configuration, string key)
+        {
+            return configuration[key]
+                ?? throw new InvalidOperationException($"Missing required configuration value '{key}'.");
+        }
     }
 }

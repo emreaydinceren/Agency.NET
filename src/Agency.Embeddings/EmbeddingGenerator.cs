@@ -58,8 +58,8 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
         ArgumentException.ThrowIfNullOrEmpty(options.BaseUrl);
         ArgumentException.ThrowIfNullOrEmpty(options.ApiKey);
 
-        _modelId = options.ModelId;
-        _logger = logger ?? NullLogger<EmbeddingGenerator>.Instance;
+        this._modelId = options.ModelId;
+        this._logger = logger ?? NullLogger<EmbeddingGenerator>.Instance;
 
         var clientOptions = new OpenAIClientOptions
         {
@@ -71,7 +71,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
             clientOptions.Transport = new HttpClientPipelineTransport(new HttpClient(httpMessageHandler));
         }
 
-        _client = new EmbeddingClient(options.ModelId, new ApiKeyCredential(options.ApiKey), clientOptions);
+        this._client = new EmbeddingClient(options.ModelId, new ApiKeyCredential(options.ApiKey), clientOptions);
     }
 
     /// <summary>Generates an embedding vector for a single input string.</summary>
@@ -82,15 +82,15 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
         using var activity = _activitySource.StartActivity("embedding.generate", ActivityKind.Client);
         activity?.SetTag("gen_ai.system", "openai");
         activity?.SetTag("gen_ai.operation.name", "embeddings");
-        activity?.SetTag("gen_ai.request.model", _modelId);
+        activity?.SetTag("gen_ai.request.model", this._modelId);
         activity?.SetTag("input.length", input?.Length ?? 0);
 
         var stopwatch = Stopwatch.StartNew();
-        _logger.LogDebug("Generating embedding for input of length {InputLength}", input?.Length ?? 0);
+        this._logger.LogDebug("Generating embedding for input of length {InputLength}", input?.Length ?? 0);
 
         try
         {
-            var result = await _client.GenerateEmbeddingAsync(input, cancellationToken: cancellationToken);
+            var result = await this._client.GenerateEmbeddingAsync(input, cancellationToken: cancellationToken);
 
             stopwatch.Stop();
 
@@ -99,7 +99,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
 
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            _logger.LogDebug("Embedding generated in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogDebug("Embedding generated in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
 
             return result.Value.ToFloats();
         }
@@ -117,7 +117,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            _logger.LogError(ex, "Error generating embedding after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogError(ex, "Error generating embedding after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }
     }
@@ -132,15 +132,15 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
         using var activity = _activitySource.StartActivity("embedding.generate_batch", ActivityKind.Client);
         activity?.SetTag("gen_ai.system", "openai");
         activity?.SetTag("gen_ai.operation.name", "embeddings");
-        activity?.SetTag("gen_ai.request.model", _modelId);
+        activity?.SetTag("gen_ai.request.model", this._modelId);
         activity?.SetTag("input.count", inputList.Count);
 
         var stopwatch = Stopwatch.StartNew();
-        _logger.LogDebug("Generating embeddings for batch of {InputCount} inputs", inputList.Count);
+        this._logger.LogDebug("Generating embeddings for batch of {InputCount} inputs", inputList.Count);
 
         try
         {
-            var result = await _client.GenerateEmbeddingsAsync(inputList, cancellationToken: cancellationToken);
+            var result = await this._client.GenerateEmbeddingsAsync(inputList, cancellationToken: cancellationToken);
 
             stopwatch.Stop();
             int tokens = result.Value.Usage.InputTokenCount;
@@ -153,7 +153,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
             activity?.SetTag("gen_ai.response.embedding_count", result.Value.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            _logger.LogDebug("Batch embeddings generated in {ElapsedMs}ms. Count: {Count}, Input tokens: {Tokens}",
+            this._logger.LogDebug("Batch embeddings generated in {ElapsedMs}ms. Count: {Count}, Input tokens: {Tokens}",
                 stopwatch.Elapsed.TotalMilliseconds, result.Value.Count, tokens);
 
             return result.Value.Select(static e => e.ToFloats()).ToList();
@@ -172,7 +172,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            _logger.LogError(ex, "Error generating batch embeddings after {ElapsedMs}ms. Input count: {InputCount}",
+            this._logger.LogError(ex, "Error generating batch embeddings after {ElapsedMs}ms. Input count: {InputCount}",
                 stopwatch.Elapsed.TotalMilliseconds, inputList.Count);
             throw;
         }

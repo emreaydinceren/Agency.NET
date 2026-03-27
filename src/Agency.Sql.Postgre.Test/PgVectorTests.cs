@@ -29,7 +29,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
     public PgVectorTests(VectorFixture fx)
     {
-        _fx = fx;
+        this._fx = fx;
     }
 
     // ── Extension presence ──────────────────────────────────────────────────
@@ -40,7 +40,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task PgVector_ExtensionIsInstalled()
     {
-        var ds = await _fx.Runner.QueryAsync("""
+        var ds = await this._fx.Runner.QueryAsync("""
             SELECT extname
             FROM pg_extension
             WHERE extname = 'vector'
@@ -59,10 +59,10 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task VectorColumn_IsCreatedWithCorrectDimension()
     {
         // information_schema does not expose custom types, so query pg_attribute directly
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT atttypmod
             FROM pg_attribute
-            WHERE attrelid = '{_fx.Table}'::regclass
+            WHERE attrelid = '{this._fx.Table}'::regclass
               AND attname    = 'embedding'
             """);
 
@@ -82,9 +82,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     {
         // Cast to text so Npgsql returns it as a plain string without needing
         // the Pgvector type plugin.
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding::text AS vec
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'apple'
             """);
 
@@ -107,9 +107,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task L2Distance_SameVector_IsZero()
     {
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <-> '[1,0,0]' AS dist
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'apple'
             """);
 
@@ -124,9 +124,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task L2Distance_OrthogonalUnitVectors_IsSqrtTwo()
     {
         // ||[1,0,0] - [0,1,0]||₂  =  √(1+1+0)  =  √2
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <-> '[1,0,0]' AS dist
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'banana'
             """);
 
@@ -142,9 +142,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task CosineDistance_SameVector_IsZero()
     {
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <=> '[1,0,0]' AS dist
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'apple'
             """);
 
@@ -159,9 +159,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task CosineDistance_OrthogonalVectors_IsOne()
     {
         // cos([1,0,0], [0,1,0]) = 0  →  cosine distance = 1 - 0 = 1
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <=> '[1,0,0]' AS dist
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'banana'
             """);
 
@@ -177,9 +177,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     {
         // apricot ≈ [0.707, 0.707, 0]
         // cos([1,0,0], [0.707,0.707,0]) = 0.707  →  distance = 1 - 0.707 ≈ 0.293
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <=> '[1,0,0]' AS dist
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'apricot'
             """);
 
@@ -197,9 +197,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     {
         // pgvector returns the *negative* inner product for <#>
         // [1,0,0] · [1,0,0] = 1  →  <#> returns -1
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <#> '[1,0,0]' AS neg_dot
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'apple'
             """);
 
@@ -213,9 +213,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task InnerProduct_OrthogonalVectors_IsZero()
     {
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT embedding <#> '[1,0,0]' AS neg_dot
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE name = 'banana'
             """);
 
@@ -231,9 +231,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task NearestNeighbour_CosineTopOne_ReturnsExactMatch()
     {
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT name
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             ORDER BY embedding <=> '[1,0,0]'
             LIMIT 1
             """);
@@ -250,9 +250,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     {
         // apple  distance = 0
         // apricot distance ≈ 0.765  (< √2 ≈ 1.414 for banana/cherry)
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT name, (embedding <-> '[1,0,0]') AS dist
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             ORDER BY dist
             LIMIT 2
             """);
@@ -269,9 +269,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task NearestNeighbour_WithDistanceThreshold_ExcludesDistantRows()
     {
         // Only apple (dist 0) and apricot (dist ~0.765) are within 0.9 of [1,0,0]
-        var ds = await _fx.Runner.QueryAsync($"""
+        var ds = await this._fx.Runner.QueryAsync($"""
             SELECT name
-            FROM {_fx.Table}
+            FROM {this._fx.Table}
             WHERE (embedding <-> '[1,0,0]') < 0.9
             ORDER BY embedding <-> '[1,0,0]'
             """);
@@ -291,14 +291,14 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     {
         try
         {
-            int affected = await _fx.Runner.ExecuteAsync(
-                $"INSERT INTO {_fx.Table} (name, embedding) VALUES (@name, @vec::vector)",
+            int affected = await this._fx.Runner.ExecuteAsync(
+                $"INSERT INTO {this._fx.Table} (name, embedding) VALUES (@name, @vec::vector)",
                 new Dictionary<string, object?> { ["name"] = "mango", ["vec"] = "[0,0,1]" });
 
             Assert.Equal(1, affected);
 
-            var ds = await _fx.Runner.QueryAsync(
-                $"SELECT name FROM {_fx.Table} WHERE name = @name",
+            var ds = await this._fx.Runner.QueryAsync(
+                $"SELECT name FROM {this._fx.Table} WHERE name = @name",
                 new Dictionary<string, object?> { ["name"] = "mango" });
 
             Assert.Single(ds.Rows);
@@ -306,8 +306,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         }
         finally
         {
-            await _fx.Runner.ExecuteAsync(
-                $"DELETE FROM {_fx.Table} WHERE name = @name",
+            await this._fx.Runner.ExecuteAsync(
+                $"DELETE FROM {this._fx.Table} WHERE name = @name",
                 new Dictionary<string, object?> { ["name"] = "mango" });
         }
     }
@@ -319,20 +319,20 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task ExecuteAsync_WithParameters_UpdatesEmbedding()
     {
         // Insert a temporary row, then update its vector via parameters.
-        await _fx.Runner.ExecuteAsync(
-            $"INSERT INTO {_fx.Table} (name, embedding) VALUES (@name, @vec::vector)",
+        await this._fx.Runner.ExecuteAsync(
+            $"INSERT INTO {this._fx.Table} (name, embedding) VALUES (@name, @vec::vector)",
             new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[0,1,0]" });
 
         try
         {
-            int affected = await _fx.Runner.ExecuteAsync(
-                $"UPDATE {_fx.Table} SET embedding = @vec::vector WHERE name = @name",
+            int affected = await this._fx.Runner.ExecuteAsync(
+                $"UPDATE {this._fx.Table} SET embedding = @vec::vector WHERE name = @name",
                 new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[1,0,0]" });
 
             Assert.Equal(1, affected);
 
-            var ds = await _fx.Runner.QueryAsync(
-                $"SELECT embedding::text AS vec FROM {_fx.Table} WHERE name = @name",
+            var ds = await this._fx.Runner.QueryAsync(
+                $"SELECT embedding::text AS vec FROM {this._fx.Table} WHERE name = @name",
                 new Dictionary<string, object?> { ["name"] = "temp_update" });
 
             string raw = (string)ds["vec", 0]!;
@@ -343,8 +343,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         }
         finally
         {
-            await _fx.Runner.ExecuteAsync(
-                $"DELETE FROM {_fx.Table} WHERE name = @name",
+            await this._fx.Runner.ExecuteAsync(
+                $"DELETE FROM {this._fx.Table} WHERE name = @name",
                 new Dictionary<string, object?> { ["name"] = "temp_update" });
         }
     }
@@ -357,8 +357,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task QueryAsync_WithNameParameter_ReturnsMatchingVector()
     {
-        var ds = await _fx.Runner.QueryAsync(
-            $"SELECT embedding::text AS vec FROM {_fx.Table} WHERE name = @name",
+        var ds = await this._fx.Runner.QueryAsync(
+            $"SELECT embedding::text AS vec FROM {this._fx.Table} WHERE name = @name",
             new Dictionary<string, object?> { ["name"] = "cherry" });
 
         Assert.Single(ds.Rows);
@@ -375,8 +375,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task QueryAsync_WithVectorParameter_ComputesL2Distance()
     {
         // Query vector matches banana exactly → distance should be 0.
-        var ds = await _fx.Runner.QueryAsync(
-            $"SELECT (embedding <-> @vec::vector) AS dist FROM {_fx.Table} WHERE name = @name",
+        var ds = await this._fx.Runner.QueryAsync(
+            $"SELECT (embedding <-> @vec::vector) AS dist FROM {this._fx.Table} WHERE name = @name",
             new Dictionary<string, object?> { ["name"] = "banana", ["vec"] = "[0,1,0]" });
 
         Assert.Single(ds.Rows);
@@ -391,8 +391,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task QueryAsync_WithDistanceThresholdParameter_FiltersRows()
     {
         // Only apple (dist 0) and apricot (dist ~0.765) are within threshold 0.9 of [1,0,0].
-        var ds = await _fx.Runner.QueryAsync(
-            $"SELECT name FROM {_fx.Table} WHERE (embedding <-> '[1,0,0]') < @threshold ORDER BY embedding <-> '[1,0,0]'",
+        var ds = await this._fx.Runner.QueryAsync(
+            $"SELECT name FROM {this._fx.Table} WHERE (embedding <-> '[1,0,0]') < @threshold ORDER BY embedding <-> '[1,0,0]'",
             new Dictionary<string, object?> { ["threshold"] = 0.9 });
 
         Assert.Equal(2, ds.Rows.Count);
@@ -407,8 +407,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     public async Task QueryAsync_WithVectorAndLimitParameters_ReturnsTopKNeighbours()
     {
         // Pass the query vector as a parameter; verify the two nearest to [1,0,0] are returned.
-        var ds = await _fx.Runner.QueryAsync(
-            $"SELECT name, (embedding <-> @vec::vector) AS dist FROM {_fx.Table} ORDER BY dist LIMIT @k",
+        var ds = await this._fx.Runner.QueryAsync(
+            $"SELECT name, (embedding <-> @vec::vector) AS dist FROM {this._fx.Table} ORDER BY dist LIMIT @k",
             new Dictionary<string, object?> { ["vec"] = "[1,0,0]", ["k"] = 2 });
 
         Assert.Equal(2, ds.Rows.Count);
@@ -424,10 +424,10 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task HnswIndex_CosineOps_CanBeCreatedAndQueried()
     {
-        var indexName = _fx.UniqueName("hnsw_idx");
-        var indexTable = _fx.UniqueName("hnsw_docs");
+        var indexName = this._fx.UniqueName("hnsw_idx");
+        var indexTable = this._fx.UniqueName("hnsw_docs");
 
-        await _fx.Runner.ExecuteAsync($"""
+        await this._fx.Runner.ExecuteAsync($"""
             CREATE TABLE {indexTable} (
                 id        SERIAL PRIMARY KEY,
                 name      TEXT NOT NULL,
@@ -437,19 +437,19 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
         try
         {
-            await _fx.Runner.ExecuteAsync($"""
+            await this._fx.Runner.ExecuteAsync($"""
                 INSERT INTO {indexTable} (name, embedding)
                 VALUES ('a', '[1,0,0]'), ('b', '[0,1,0]'), ('c', '[0,0,1]')
                 """);
 
-            await _fx.Runner.ExecuteAsync($"""
+            await this._fx.Runner.ExecuteAsync($"""
                 CREATE INDEX {indexName}
                 ON {indexTable}
                 USING hnsw (embedding vector_cosine_ops)
                 """);
 
             // Verify index was created
-            var idxDs = await _fx.Runner.QueryAsync($"""
+            var idxDs = await this._fx.Runner.QueryAsync($"""
                 SELECT indexname
                 FROM pg_indexes
                 WHERE tablename = '{indexTable}'
@@ -459,7 +459,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             Assert.Single(idxDs.Rows);
 
             // Nearest-neighbour query should still return correct result through the index
-            var ds = await _fx.Runner.QueryAsync($"""
+            var ds = await this._fx.Runner.QueryAsync($"""
                 SELECT name
                 FROM {indexTable}
                 ORDER BY embedding <=> '[1,0,0]'
@@ -471,7 +471,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         }
         finally
         {
-            await _fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
+            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
         }
     }
 
@@ -481,9 +481,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     [Fact]
     public async Task IvfflatIndex_L2Ops_CanBeCreatedAndQueried()
     {
-        var indexTable = _fx.UniqueName("ivf_docs");
+        var indexTable = this._fx.UniqueName("ivf_docs");
 
-        await _fx.Runner.ExecuteAsync($"""
+        await this._fx.Runner.ExecuteAsync($"""
             CREATE TABLE {indexTable} (
                 id        SERIAL PRIMARY KEY,
                 embedding vector(3) NOT NULL
@@ -493,20 +493,20 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         try
         {
             // IVFFlat requires at least as many rows as lists; use lists=1 for small test data
-            await _fx.Runner.ExecuteAsync($"""
+            await this._fx.Runner.ExecuteAsync($"""
                 INSERT INTO {indexTable} (embedding)
                 SELECT ('[' || (random())::text || ',' || (random())::text || ',' || (random())::text || ']')::vector
                 FROM generate_series(1, 10)
                 """);
 
-            await _fx.Runner.ExecuteAsync($"""
+            await this._fx.Runner.ExecuteAsync($"""
                 CREATE INDEX ON {indexTable}
                 USING ivfflat (embedding vector_l2_ops)
                 WITH (lists = 1)
                 """);
 
             // A nearest-neighbour query should execute without error
-            var ds = await _fx.Runner.QueryAsync($"""
+            var ds = await this._fx.Runner.QueryAsync($"""
                 SELECT id
                 FROM {indexTable}
                 ORDER BY embedding <-> '[0.5,0.5,0.5]'
@@ -517,7 +517,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         }
         finally
         {
-            await _fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
+            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
         }
     }
 
@@ -572,19 +572,19 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         /// <summary>
         /// Returns a unique name scoped to the current test run.
         /// </summary>
-        public string UniqueName(string prefix) => $"{prefix}_{_runId}";
+        public string UniqueName(string prefix) => $"{prefix}_{this._runId}";
 
         /// <summary>
         /// Creates the extension, test table, and seed rows.
         /// </summary>
         public async Task InitializeAsync()
         {
-            await Runner.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS vector");
+            await this.Runner.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS vector");
 
-            Table = UniqueName("vec_tests");
+            this.Table = this.UniqueName("vec_tests");
 
-            await Runner.ExecuteAsync($"""
-                CREATE TABLE {Table} (
+            await this.Runner.ExecuteAsync($"""
+                CREATE TABLE {this.Table} (
                     id        SERIAL PRIMARY KEY,
                     name      TEXT NOT NULL,
                     embedding vector(3) NOT NULL
@@ -592,8 +592,8 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 """);
 
             // Four predictable seed vectors
-            await Runner.ExecuteAsync($"""
-                INSERT INTO {Table} (name, embedding) VALUES
+            await this.Runner.ExecuteAsync($"""
+                INSERT INTO {this.Table} (name, embedding) VALUES
                     ('apple',   '[1,0,0]'),
                     ('banana',  '[0,1,0]'),
                     ('cherry',  '[0,0,1]'),
@@ -606,7 +606,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         /// </summary>
         public async Task DisposeAsync()
         {
-            await Runner.ExecuteAsync($"DROP TABLE IF EXISTS {Table}");
+            await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}");
         }
     }
 }

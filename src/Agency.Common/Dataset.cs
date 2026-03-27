@@ -26,12 +26,12 @@ public class Dataset(IReadOnlyCollection<DbColumn> columns, IReadOnlyList<object
     {
         get
         {
-            if (rowIndex < 0 || rowIndex >= Rows.Count)
+            if (rowIndex < 0 || rowIndex >= this.Rows.Count)
             {
                 throw new IndexOutOfRangeException($"Row index {rowIndex} is out of range.");
             }
 
-            if (columnIndex < 0 || columnIndex >= Columns.Count)
+            if (columnIndex < 0 || columnIndex >= this.Columns.Count)
             {
                 throw new IndexOutOfRangeException($"Column index {columnIndex} is out of range.");
             }
@@ -47,7 +47,7 @@ public class Dataset(IReadOnlyCollection<DbColumn> columns, IReadOnlyList<object
     {
         get
         {
-            if (!_columnDict.TryGetValue(columnName, out var column))
+            if (!this._columnDict.TryGetValue(columnName, out var column))
             {
                 throw new ArgumentException($"Column name '{columnName}' does not exist.", nameof(columnName));
             }

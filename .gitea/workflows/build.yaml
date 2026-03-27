@@ -10,9 +10,9 @@ jobs:
     runs-on: dotnet-10
 
     env:
-      LlmTest__Claude__ApiKey: ${{ secrets.LlmTest_Claude_ApiKey }}
-      LlmTest__OpenAI__ApiKey: ${{ secrets.LlmTest_OpenAI_ApiKey }}
-      ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings_PostgreSql }}
+      LlmTest__Claude__ApiKey: ${{ secrets.LlmTest__Claude__ApiKey }}
+      LlmTest__OpenAI__ApiKey: ${{ secrets.LlmTest__OpenAI__ApiKey }}
+      ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings__PostgreSql }}
 
     steps:
       - name: Checkout

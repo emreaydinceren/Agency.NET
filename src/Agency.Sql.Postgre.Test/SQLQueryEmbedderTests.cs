@@ -130,15 +130,15 @@ public sealed class SQLQueryEmbedderTests
 
         public void Register(string input, float[] vector)
         {
-            _embeddings[input] = vector;
+            this._embeddings[input] = vector;
         }
 
         public Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string input, CancellationToken cancellationToken = default)
         {
-            CapturedInputs.Add(input);
-            CapturedTokens.Add(cancellationToken);
+            this.CapturedInputs.Add(input);
+            this.CapturedTokens.Add(cancellationToken);
 
-            if (_embeddings.TryGetValue(input, out var embedding))
+            if (this._embeddings.TryGetValue(input, out var embedding))
             {
                 return Task.FromResult(embedding);
             }

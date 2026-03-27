@@ -59,7 +59,7 @@ public class OpenAIClient : ILlmClient
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _logger = logger ?? NullLogger<OpenAIClient>.Instance;
+        this._logger = logger ?? NullLogger<OpenAIClient>.Instance;
 
         var credential = new ApiKeyCredential(options.Value.ApiKey);
         var clientOptions = new global::OpenAI.OpenAIClientOptions();
@@ -77,7 +77,7 @@ public class OpenAIClient : ILlmClient
     /// </summary>
     public OpenAIClient(ILogger<OpenAIClient>? logger = null)
     {
-        _logger = logger ?? NullLogger<OpenAIClient>.Instance;
+        this._logger = logger ?? NullLogger<OpenAIClient>.Instance;
         var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? string.Empty;
         this._client = new global::OpenAI.OpenAIClient(new ApiKeyCredential(apiKey));
     }
@@ -101,7 +101,7 @@ public class OpenAIClient : ILlmClient
         _requestCounter.Add(1, tags);
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Sending request to OpenAI. Model={Model}", model);
+        this._logger.LogInformation("Sending request to OpenAI. Model={Model}", model);
 
         try
         {
@@ -129,7 +129,7 @@ public class OpenAIClient : ILlmClient
             activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
             activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
 
-            _logger.LogInformation(
+            this._logger.LogInformation(
                 "OpenAI request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
                 model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
 
@@ -145,7 +145,7 @@ public class OpenAIClient : ILlmClient
             _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
             _errorCounter.Add(1, tags);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            _logger.LogError(ex, "OpenAI request failed. Model={Model}", model);
+            this._logger.LogError(ex, "OpenAI request failed. Model={Model}", model);
             throw;
         }
     }
@@ -169,7 +169,7 @@ public class OpenAIClient : ILlmClient
         _requestCounter.Add(1, tags);
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Starting streaming request to OpenAI. Model={Model}", model);
+        this._logger.LogInformation("Starting streaming request to OpenAI. Model={Model}", model);
 
         ChatClient chatClient = this._client.GetChatClient(model);
 
@@ -243,7 +243,7 @@ public class OpenAIClient : ILlmClient
             {
                 _errorCounter.Add(1, tags);
                 activity?.SetStatus(ActivityStatusCode.Error, streamError.Message);
-                _logger.LogError(streamError, "OpenAI streaming request failed. Model={Model}", model);
+                this._logger.LogError(streamError, "OpenAI streaming request failed. Model={Model}", model);
             }
             else
             {
@@ -251,7 +251,7 @@ public class OpenAIClient : ILlmClient
                 _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
                 activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
                 activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
-                _logger.LogInformation(
+                this._logger.LogInformation(
                     "OpenAI streaming request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
                     model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
             }

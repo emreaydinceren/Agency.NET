@@ -9,41 +9,18 @@ using Microsoft.Extensions.Options;
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// Requires LM Studio running with qwen/qwen3-coder-next loaded at http://llm-host.example:1234
 /// </summary>
+/// <remarks>
+/// Creates the test class with a shared OpenAI fixture.
+/// </remarks>
 [Trait("Category", "Functional")]
 /// <summary>
 /// Functional tests for <see cref="Agency.Llm.OpenAI.OpenAIClient"/>.
 /// </summary>
-public sealed class OpenAIFunctionalTests
+public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fixture) : IClassFixture<OpenAIFunctionalTests.OpenAiFixture>
 {
-    private const string EnvironmentNameVariable = "DOTNET_ENVIRONMENT";
-    private const string ConfigurationSection = "LlmTest:OpenAI";
     private const string SystemPrompt = "You are a concise assistant.";
 
-    private static readonly string EnvironmentName =
-        Environment.GetEnvironmentVariable(EnvironmentNameVariable) ?? "Development";
-
-    private readonly string Model = GetRequiredConfiguration($"{ConfigurationSection}:Model");
-
-    private static readonly IConfiguration Configuration = new ConfigurationBuilder()
-        .SetBasePath(AppContext.BaseDirectory)
-        .AddJsonFile("appsettings.json", optional: false)
-        .AddJsonFile($"appsettings.{EnvironmentName}.json", optional: true)
-        .AddUserSecrets<OpenAIFunctionalTests>(optional: true)
-        .AddEnvironmentVariables()
-        .Build();
-
-    private static readonly Agency.Llm.OpenAI.OpenAIClient Client = new(
-        Options.Create(new Agency.Llm.OpenAI.OpenAIClientOptions
-        {
-            ApiKey = GetRequiredConfiguration($"{ConfigurationSection}:ApiKey"),
-            BaseUrl = GetRequiredConfiguration($"{ConfigurationSection}:BaseUrl"),
-        }));
-
-    private static string GetRequiredConfiguration(string key)
-    {
-        return Configuration[key]
-            ?? throw new InvalidOperationException($"Missing required configuration value '{key}'.");
-    }
+    private readonly OpenAiFixture _fixture = fixture;
 
     /// <summary>
     /// Verifies that <see cref="Agency.Llm.OpenAI.OpenAIClient.SendAsync"/> returns a response without error.
@@ -51,7 +28,7 @@ public sealed class OpenAIFunctionalTests
     [Fact]
     public async Task SendAsync_ReturnsWithoutError()
     {
-        var response = await Client.SendAsync(Model, SystemPrompt, "Reply with one word: hello");
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello");
 
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
         Assert.True(System.Enum.IsDefined(response.FinishReason));
@@ -67,7 +44,7 @@ public sealed class OpenAIFunctionalTests
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello"))
         {
             if (chunk.Text is not null)
             {
@@ -86,7 +63,7 @@ public sealed class OpenAIFunctionalTests
     {
         var sb = new System.Text.StringBuilder();
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "What is 2 + 2? Reply with just the number."))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "What is 2 + 2? Reply with just the number."))
         {
             if (chunk.Text is not null)
             {
@@ -106,7 +83,7 @@ public sealed class OpenAIFunctionalTests
         const string prompt = "Reply with exactly: streaming works";
 
         var streamed = new System.Text.StringBuilder();
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, prompt))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, prompt))
         {
             if (chunk.Text is not null)
             {
@@ -114,7 +91,7 @@ public sealed class OpenAIFunctionalTests
             }
         }
 
-        var response = await Client.SendAsync(Model, SystemPrompt, prompt);
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, prompt);
 
         Assert.False(string.IsNullOrWhiteSpace(streamed.ToString()));
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
@@ -128,7 +105,7 @@ public sealed class OpenAIFunctionalTests
     {
         Agency.Llm.Common.LlmStreamChunk? terminal = null;
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello"))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello"))
         {
             terminal = chunk;
         }
@@ -147,7 +124,7 @@ public sealed class OpenAIFunctionalTests
     [Fact]
     public async Task SendAsync_WithTemperature_ReturnsWithoutError()
     {
-        var response = await Client.SendAsync(Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f);
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f);
 
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
         Assert.True(System.Enum.IsDefined(response.FinishReason));
@@ -162,7 +139,7 @@ public sealed class OpenAIFunctionalTests
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in Client.StreamAsync(Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f))
         {
             if (chunk.Text is not null)
             {
@@ -171,5 +148,55 @@ public sealed class OpenAIFunctionalTests
         }
 
         Assert.NotEmpty(chunks);
+    }
+
+    /// <summary>
+    /// Shared fixture that loads OpenAI functional test configuration and initializes the client.
+    /// </summary>
+    public sealed class OpenAiFixture
+    {
+        private const string EnvironmentNameVariable = "DOTNET_ENVIRONMENT";
+        private const string ConfigurationSection = "LlmTest:OpenAI";
+
+        /// <summary>
+        /// Creates the fixture and initializes configuration-backed OpenAI client settings.
+        /// </summary>
+        public OpenAiFixture()
+        {
+            var environmentName = Environment.GetEnvironmentVariable(EnvironmentNameVariable) ?? "Development";
+
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
+                .AddUserSecrets<OpenAIFunctionalTests>(optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            this.Model = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:Model");
+
+            this.Client = new Agency.Llm.OpenAI.OpenAIClient(
+                Options.Create(new Agency.Llm.OpenAI.OpenAIClientOptions
+                {
+                    ApiKey = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:ApiKey"),
+                    BaseUrl = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:BaseUrl"),
+                }));
+        }
+
+        /// <summary>
+        /// Gets the configured model name used by the functional tests.
+        /// </summary>
+        public string Model { get; }
+
+        /// <summary>
+        /// Gets the configured OpenAI client instance.
+        /// </summary>
+        public Agency.Llm.OpenAI.OpenAIClient Client { get; }
+
+        private static string GetRequiredConfiguration(IConfiguration configuration, string key)
+        {
+            return configuration[key]
+                ?? throw new InvalidOperationException($"Missing required configuration value '{key}'.");
+        }
     }
 }

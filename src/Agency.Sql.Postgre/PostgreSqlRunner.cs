@@ -42,8 +42,8 @@ public sealed class PostgreSqlRunner
     /// </summary>
     public PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null)
     {
-        _logger = logger ?? NullLogger<PostgreSqlRunner>.Instance;
-        _connectionString = !string.IsNullOrWhiteSpace(connectionString)
+        this._logger = logger ?? NullLogger<PostgreSqlRunner>.Instance;
+        this._connectionString = !string.IsNullOrWhiteSpace(connectionString)
             ? connectionString
             : throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
     }
@@ -67,11 +67,11 @@ public sealed class PostgreSqlRunner
         activity?.SetTag("db.statement", sql);
 
         var stopwatch = Stopwatch.StartNew();
-        _logger.LogDebug("Executing non-query SQL: {Sql}", sql);
+        this._logger.LogDebug("Executing non-query SQL: {Sql}", sql);
 
         try
         {
-            await using var connection = new NpgsqlConnection(_connectionString);
+            await using var connection = new NpgsqlConnection(this._connectionString);
             await connection.OpenAsync(cancellationToken);
 
             await using var command = BuildCommand(connection, sql, parameters);
@@ -84,7 +84,7 @@ public sealed class PostgreSqlRunner
             activity?.SetTag("db.rows_affected", rowsAffected);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            _logger.LogDebug("Non-query SQL completed in {ElapsedMs}ms. Rows affected: {RowsAffected}", stopwatch.Elapsed.TotalMilliseconds, rowsAffected);
+            this._logger.LogDebug("Non-query SQL completed in {ElapsedMs}ms. Rows affected: {RowsAffected}", stopwatch.Elapsed.TotalMilliseconds, rowsAffected);
             return rowsAffected;
         }
         catch (Exception ex)
@@ -101,7 +101,7 @@ public sealed class PostgreSqlRunner
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            _logger.LogError(ex, "Error executing non-query SQL after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
+            this._logger.LogError(ex, "Error executing non-query SQL after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
             throw;
         }
     }
@@ -125,11 +125,11 @@ public sealed class PostgreSqlRunner
         activity?.SetTag("db.statement", sql);
 
         var stopwatch = Stopwatch.StartNew();
-        _logger.LogDebug("Executing query SQL: {Sql}", sql);
+        this._logger.LogDebug("Executing query SQL: {Sql}", sql);
 
         try
         {
-            await using var connection = new NpgsqlConnection(_connectionString);
+            await using var connection = new NpgsqlConnection(this._connectionString);
             await connection.OpenAsync(cancellationToken);
 
             await using var command = BuildCommand(connection, sql, parameters);
@@ -156,7 +156,7 @@ public sealed class PostgreSqlRunner
             activity?.SetTag("db.row_count", rows.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            _logger.LogDebug("Query SQL completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, rows.Count);
+            this._logger.LogDebug("Query SQL completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, rows.Count);
             return new Dataset(columnSchema, rows);
         }
         catch (Exception ex)
@@ -173,7 +173,7 @@ public sealed class PostgreSqlRunner
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            _logger.LogError(ex, "Error executing query SQL after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
+            this._logger.LogError(ex, "Error executing query SQL after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
             throw;
         }
     }

@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
     <UserSecretsId>Agency-Sql-Postgre-Test-LocalSecrets</UserSecretsId>
   </PropertyGroup>
 
@@ -26,11 +22,9 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
     <ProjectReference Include="..\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
   </ItemGroup>
 

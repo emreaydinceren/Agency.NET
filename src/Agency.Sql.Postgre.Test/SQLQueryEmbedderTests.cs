@@ -1,4 +1,5 @@
 using Agency.Common;
+using Agency.Embeddings.Common;
 
 namespace Agency.Sql.Postgre.Test;
 

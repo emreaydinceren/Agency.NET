@@ -1,10 +1,21 @@
 <Project>
+  <!-- Common properties for all projects -->
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    
     <LangVersion>latest</LangVersion>
-    
-    <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!-- Test project defaults -->
+  <PropertyGroup Condition="$(MSBuildProjectName.Contains('Test'))">
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Auto-include Xunit for test projects -->
+  <ItemGroup Condition="$(MSBuildProjectName.Contains('Test'))">
+    <Using Include="Xunit" />
+  </ItemGroup>
 </Project>

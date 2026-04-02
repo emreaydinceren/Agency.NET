@@ -1,13 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Agency.Embeddings.Test" />
+    <InternalsVisibleTo Include="Agency.Embeddings.OpenAI.Test" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Agency.Common\Agency.Common.csproj" />
+    <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
   </ItemGroup>
 
 </Project>

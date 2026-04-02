@@ -3,9 +3,8 @@
   <PropertyGroup>
   </PropertyGroup>
 
-    <ItemGroup>
-    <ProjectReference Include="..\Agency.Common\Agency.Common.csproj" />
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
   </ItemGroup>
 
 </Project>
-

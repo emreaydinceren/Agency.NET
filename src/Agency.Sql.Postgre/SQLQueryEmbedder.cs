@@ -1,4 +1,5 @@
 ﻿using Agency.Common;
+using Agency.Embeddings.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;

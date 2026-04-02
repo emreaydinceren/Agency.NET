@@ -2,14 +2,14 @@ using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using Agency.Common;
+using Agency.Embeddings.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OpenAI;
 using OpenAI.Embeddings;
 
-namespace Agency.Embeddings;
+namespace Agency.Embeddings.OpenAI;
 
 /// <summary>
 /// Generates vector embeddings using the model configured in <see cref="EmbeddingOptions"/>,
@@ -20,12 +20,12 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
     /// <summary>
     /// The activity source name used for embedding telemetry.
     /// </summary>
-    public static readonly string ActivitySourceName = "Agency.Embeddings";
+    public static readonly string ActivitySourceName = "Agency.Embeddings.OpenAI";
 
     /// <summary>
     /// The meter name used for embedding telemetry.
     /// </summary>
-    public static readonly string MeterName = "Agency.Embeddings";
+    public static readonly string MeterName = "Agency.Embeddings.OpenAI";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

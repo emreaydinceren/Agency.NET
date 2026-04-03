@@ -3,4 +3,13 @@
   <PropertyGroup>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="pgvector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+  </ItemGroup>
+
 </Project>

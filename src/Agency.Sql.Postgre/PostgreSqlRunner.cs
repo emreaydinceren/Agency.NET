@@ -42,6 +42,7 @@ public sealed class PostgreSqlRunner
     /// </summary>
     public PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null)
     {
+        
         this._logger = logger ?? NullLogger<PostgreSqlRunner>.Instance;
         this._connectionString = !string.IsNullOrWhiteSpace(connectionString)
             ? connectionString
@@ -71,8 +72,10 @@ public sealed class PostgreSqlRunner
 
         try
         {
-            await using var connection = new NpgsqlConnection(this._connectionString);
-            await connection.OpenAsync(cancellationToken);
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(this._connectionString);
+            dataSourceBuilder.UseVector();
+            var datasource = dataSourceBuilder.Build();
+            await using var connection = await datasource.OpenConnectionAsync();
 
             await using var command = BuildCommand(connection, sql, parameters);
             int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
@@ -119,6 +122,11 @@ public sealed class PostgreSqlRunner
             throw new ArgumentException("SQL query cannot be null or whitespace.", nameof(sql));
         }
 
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or whitespace.", nameof(sql));
+        }
+
         using var activity = _activitySource.StartActivity("postgresql.query", ActivityKind.Client);
         activity?.SetTag("db.system", "postgresql");
         activity?.SetTag("db.operation", "query");
@@ -129,15 +137,16 @@ public sealed class PostgreSqlRunner
 
         try
         {
-            await using var connection = new NpgsqlConnection(this._connectionString);
-            await connection.OpenAsync(cancellationToken);
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(this._connectionString);
+            dataSourceBuilder.UseVector();
+            var datasource = dataSourceBuilder.Build();
+            await using var connection = await datasource.OpenConnectionAsync();
 
             await using var command = BuildCommand(connection, sql, parameters);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
+            ReadOnlyCollection<DbColumn>? columnSchema = await reader.GetColumnSchemaAsync(cancellationToken);
             List<object?[]> rows = new();
-
-            ReadOnlyCollection<DbColumn> columnSchema = await reader.GetColumnSchemaAsync(cancellationToken);
 
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -157,7 +166,7 @@ public sealed class PostgreSqlRunner
             activity?.SetStatus(ActivityStatusCode.Ok);
 
             this._logger.LogDebug("Query SQL completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, rows.Count);
-            return new Dataset(columnSchema, rows);
+            return new Dataset(columnSchema!, rows);
         }
         catch (Exception ex)
         {
@@ -178,6 +187,79 @@ public sealed class PostgreSqlRunner
         }
     }
 
+    /// <summary>
+    /// Executes a SQL query and maps each row to a custom object model using the provided async predicate reader.
+    /// </summary>
+    public async Task<List<TResult>> QueryAsync<TResult>(
+        string sql,
+        Func<DbDataReader, Task<TResult>> predicate,
+        Dictionary<string, object?>? parameters = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("SQL query cannot be null or whitespace.", nameof(sql));
+        }
+
+        if (predicate is null)
+        {
+            throw new ArgumentNullException(nameof(predicate));
+        }
+
+        using var activity = _activitySource.StartActivity("postgresql.query", ActivityKind.Client);
+        activity?.SetTag("db.system", "postgresql");
+        activity?.SetTag("db.operation", "query");
+        activity?.SetTag("db.statement", sql);
+
+        var stopwatch = Stopwatch.StartNew();
+        this._logger.LogDebug("Executing query SQL with predicate: {Sql}", sql);
+
+        try
+        {
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(this._connectionString);
+            dataSourceBuilder.UseVector();
+            var datasource = dataSourceBuilder.Build();
+            await using var connection = await datasource.OpenConnectionAsync();
+
+            await using var command = BuildCommand(connection, sql, parameters);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            List<TResult> results = new();
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                results.Add(await predicate(reader));
+            }
+
+            stopwatch.Stop();
+            _executionCount.Add(1, new TagList { { "operation", "query" }, { "status", "success" } });
+            _executionDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "query" } });
+
+            activity?.SetTag("db.row_count", results.Count);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            this._logger.LogDebug("Query SQL with predicate completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
+            return results;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _executionCount.Add(1, new TagList { { "operation", "query" }, { "status", "error" } });
+            _executionDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "query" } });
+
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+            {
+                { "exception.type", ex.GetType().FullName },
+                { "exception.message", ex.Message },
+                { "exception.stacktrace", ex.ToString() },
+            }));
+
+            this._logger.LogError(ex, "Error executing query SQL with predicate after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
+            throw;
+        }
+    }
+
     private static NpgsqlCommand BuildCommand(
         NpgsqlConnection connection,
         string sql,
@@ -189,7 +271,14 @@ public sealed class PostgreSqlRunner
         {
             foreach (var (name, value) in parameters)
             {
-                command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                if (value is NpgsqlParameter parameter)
+                {
+                    command.Parameters.Add(parameter);
+                }
+                else
+                {
+                    command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                }
             }
         }
 

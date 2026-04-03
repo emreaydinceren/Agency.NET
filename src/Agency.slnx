@@ -16,5 +16,6 @@
   <Project Path="Agency.Sql.Postgre.Test/Agency.Sql.Postgre.Test.csproj" />
   <Project Path="Agency.Sql.Postgre/Agency.Sql.Postgre.csproj" />
   <Project Path="Agency.VectorStore.Common/Agency.VectorStore.Common.csproj" Id="a5156262-6a37-4d98-88b8-8696f32dc5f9" />
+  <Project Path="Agency.VectorStore.Sql.Postgre.Test/Agency.VectorStore.Sql.Postgre.Test.csproj" />
   <Project Path="Agency.VectorStore.Sql.Postgre/Agency.VectorStore.Sql.Postgre.csproj" Id="60612533-b6b5-4289-b4bb-d7e5b690262b" />
 </Solution>

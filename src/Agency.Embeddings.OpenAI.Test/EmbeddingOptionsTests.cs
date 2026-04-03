@@ -1,5 +1,3 @@
-using Agency.Embeddings.OpenAI;
-
 namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>

@@ -1,4 +1,3 @@
-using Agency.Embeddings.OpenAI;
 using Microsoft.Extensions.Options;
 
 namespace Agency.Embeddings.OpenAI.Test;

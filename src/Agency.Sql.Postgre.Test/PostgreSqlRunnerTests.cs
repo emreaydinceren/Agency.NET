@@ -1,7 +1,4 @@
-using Agency.Sql.Postgre;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.UserSecrets;
-using Microsoft.Extensions.Configuration.EnvironmentVariables;
 
 namespace Agency.Sql.Postgre.Test;
 
@@ -101,9 +98,11 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task ExecuteAsync_InsertRows_ReturnsRowsAffected()
     {
+        var name1 = this._fixture.UniqueName("insert1");
+        var name2 = this._fixture.UniqueName("insert2");
         int affected = await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score)
-            VALUES ('alpha', 1.1), ('beta', 2.2)
+            VALUES ('{name1}', 1.1), ('{name2}', 2.2)
             """);
 
         Assert.Equal(2, affected);
@@ -117,16 +116,17 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_AfterInsert_ReturnsExpectedRows()
     {
+        var uniqueName = this._fixture.UniqueName("insert_test");
         await this._fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {this._fixture.Table} (name, score) VALUES ('gamma', 3.3)
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 3.3)
             """);
 
         var ds = await this._fixture.Runner.QueryAsync($"""
-            SELECT name, score FROM {this._fixture.Table} WHERE name = 'gamma'
+            SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'
             """);
 
         Assert.Single(ds.Rows);
-        Assert.Equal("gamma", ds["name", 0]);
+        Assert.Equal(uniqueName, ds["name", 0]);
         Assert.Equal(3.3, Convert.ToDouble(ds["score", 0]), precision: 5);
     }
 
@@ -138,17 +138,19 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_WithParameter_FiltersCorrectly()
     {
+        var uniqueName1 = this._fixture.UniqueName("param_test1");
+        var uniqueName2 = this._fixture.UniqueName("param_test2");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score)
-            VALUES ('delta', 4.4), ('epsilon', 5.5)
+            VALUES ('{uniqueName1}', 4.4), ('{uniqueName2}', 5.5)
             """);
 
         var ds = await this._fixture.Runner.QueryAsync(
             $"SELECT name FROM {this._fixture.Table} WHERE name = @name",
-            new Dictionary<string, object?> { ["name"] = "delta" });
+            new Dictionary<string, object?> { ["name"] = uniqueName1 });
 
         Assert.Single(ds.Rows);
-        Assert.Equal("delta", ds["name", 0]);
+        Assert.Equal(uniqueName1, ds["name", 0]);
     }
 
     // ── Functional: NULL round-trip ────────────────────────────────────────
@@ -159,12 +161,13 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task QueryAsync_NullColumnValue_ReturnedAsNull()
     {
+        var uniqueName = this._fixture.UniqueName("null_value_test");
         await this._fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {this._fixture.Table} (name, score) VALUES ('null_score', NULL)
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', NULL)
             """);
 
         var ds = await this._fixture.Runner.QueryAsync($"""
-            SELECT score FROM {this._fixture.Table} WHERE name = 'null_score'
+            SELECT score FROM {this._fixture.Table} WHERE name = '{uniqueName}'
             """);
 
         Assert.Single(ds.Rows);
@@ -194,24 +197,265 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     [Fact]
     public async Task ExecuteAsync_Update_ReturnsCorrectRowCount()
     {
+        var uniqueName1 = this._fixture.UniqueName("update_test1");
+        var uniqueName2 = this._fixture.UniqueName("update_test2");
         await this._fixture.Runner.ExecuteAsync($"""
-            INSERT INTO {this._fixture.Table} (name, score) VALUES ('zeta', 6.6), ('eta', 7.7)
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName1}', 6.6), ('{uniqueName2}', 7.7)
             """);
 
         int affected = await this._fixture.Runner.ExecuteAsync(
             $"UPDATE {this._fixture.Table} SET score = @score WHERE name = @name",
-            new Dictionary<string, object?> { ["score"] = 99.9, ["name"] = "zeta" });
+            new Dictionary<string, object?> { ["score"] = 99.9, ["name"] = uniqueName1 });
 
         Assert.Equal(1, affected);
 
         var ds = await this._fixture.Runner.QueryAsync($"""
-            SELECT score FROM {this._fixture.Table} WHERE name = 'zeta'
+            SELECT score FROM {this._fixture.Table} WHERE name = '{uniqueName1}'
             """);
 
         Assert.Equal(99.9, Convert.ToDouble(ds["score", 0]), precision: 5);
     }
 
+    // ── QueryAsync<T> validation ───────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that SQL validation rejects empty statements for QueryAsync&lt;T&gt;.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_NullOrWhitespaceSql_ThrowsArgumentException()
+    {
+        var predicate = (System.Data.Common.DbDataReader reader) => Task.FromResult(new TestModel { Name = "", Score = 0 });
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            this._fixture.Runner.QueryAsync<TestModel>(null!, predicate));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            this._fixture.Runner.QueryAsync<TestModel>("   ", predicate));
+    }
+
+    /// <summary>
+    /// Verifies that null predicate is rejected for QueryAsync&lt;T&gt;.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_NullPredicate_ThrowsArgumentNullException()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            this._fixture.Runner.QueryAsync<TestModel>($"SELECT * FROM {this._fixture.Table}", null!));
+    }
+
+    // ── Functional: QueryAsync<T> basic mapping ───────────────────────────
+
+    /// <summary>
+    /// Verifies that rows can be mapped to a custom model using the predicate.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_BasicMapping_ReturnsTypedResults()
+    {
+        var uniqueName = this._fixture.UniqueName("model_test");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 42.5)
+            """);
+
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
+            async reader => new TestModel
+            {
+                Name = reader.GetString(0),
+                Score = reader.GetDouble(1)
+            });
+
+        Assert.Single(results);
+        Assert.Equal(uniqueName, results[0].Name);
+        Assert.Equal(42.5, results[0].Score, precision: 5);
+    }
+
+    /// <summary>
+    /// Verifies that multiple rows are mapped correctly.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_MultipleRows_ReturnsAllMappedRows()
+    {
+        var row1 = this._fixture.UniqueName("row1");
+        var row2 = this._fixture.UniqueName("row2");
+        var row3 = this._fixture.UniqueName("row3");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score)
+            VALUES ('{row1}', 1.1), ('{row2}', 2.2), ('{row3}', 3.3)
+            """);
+
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"""
+            SELECT name, score FROM {this._fixture.Table}
+            WHERE name IN ('{row1}', '{row2}', '{row3}')
+            ORDER BY name
+            """,
+            async reader => new TestModel
+            {
+                Name = reader.GetString(0),
+                Score = reader.GetDouble(1)
+            });
+
+        Assert.Equal(3, results.Count);
+        Assert.Equal(row1, results[0].Name);
+        Assert.Equal(row2, results[1].Name);
+        Assert.Equal(row3, results[2].Name);
+    }
+
+    /// <summary>
+    /// Verifies that empty result sets return an empty list.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_NoMatchingRows_ReturnsEmptyList()
+    {
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"SELECT name, score FROM {this._fixture.Table} WHERE name = 'nonexistent'",
+            async reader => new TestModel
+            {
+                Name = reader.GetString(0),
+                Score = reader.GetDouble(1)
+            });
+
+        Assert.Empty(results);
+    }
+
+    // ── Functional: QueryAsync<T> with NULL values ─────────────────────────
+
+    /// <summary>
+    /// Verifies that NULL values are handled correctly in the predicate.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_NullColumnValue_HandledInPredicate()
+    {
+        var uniqueName = this._fixture.UniqueName("generic_null_value");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', NULL)
+            """);
+
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
+            async reader => new TestModel
+            {
+                Name = reader.GetString(0),
+                Score = reader.IsDBNull(1) ? 0 : reader.GetDouble(1)
+            });
+
+        Assert.Single(results);
+        Assert.Equal(uniqueName, results[0].Name);
+        Assert.Equal(0, results[0].Score);
+    }
+
+    // ── Functional: QueryAsync<T> with parameters ──────────────────────────
+
+    /// <summary>
+    /// Verifies that parameterized queries work with the generic method.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_WithParameters_FiltersCorrectly()
+    {
+        var uniqueName1 = this._fixture.UniqueName("param1");
+        var uniqueName2 = this._fixture.UniqueName("param2");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score)
+            VALUES ('{uniqueName1}', 10.5), ('{uniqueName2}', 20.5)
+            """);
+
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"SELECT name, score FROM {this._fixture.Table} WHERE name = @name",
+            async reader => new TestModel
+            {
+                Name = reader.GetString(0),
+                Score = reader.GetDouble(1)
+            },
+            new Dictionary<string, object?> { ["name"] = uniqueName1 });
+
+        Assert.Single(results);
+        Assert.Equal(uniqueName1, results[0].Name);
+        Assert.Equal(10.5, results[0].Score, precision: 5);
+    }
+
+    // ── Functional: QueryAsync<T> with complex types ───────────────────────
+
+    /// <summary>
+    /// Verifies that the predicate can perform async operations.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_AsyncPredicate_SupportsAsyncOperations()
+    {
+        var uniqueName = this._fixture.UniqueName("async_test");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 55.5)
+            """);
+
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
+            async reader =>
+            {
+                // Simulate async operation
+                await Task.Delay(1);
+                return new TestModel
+                {
+                    Name = reader.GetString(0),
+                    Score = reader.GetDouble(1)
+                };
+            });
+
+        Assert.Single(results);
+        Assert.Equal(uniqueName, results[0].Name);
+    }
+
+    /// <summary>
+    /// Verifies that exceptions in the predicate propagate correctly.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_PredicateThrowsException_ExceptionPropagates()
+    {
+        var uniqueName = this._fixture.UniqueName("error_test");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 1.0)
+            """);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            this._fixture.Runner.QueryAsync<TestModel>(
+                $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
+                async reader => throw new InvalidOperationException("Predicate error")));
+    }
+
+    /// <summary>
+    /// Verifies that the predicate can access columns by name.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsyncGeneric_AccessColumnByName_ReturnsCorrectValues()
+    {
+        var uniqueName = this._fixture.UniqueName("column_name_test");
+        await this._fixture.Runner.ExecuteAsync($"""
+            INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 77.7)
+            """);
+
+        var results = await this._fixture.Runner.QueryAsync<TestModel>(
+            $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
+            async reader => new TestModel
+            {
+                Name = reader["name"].ToString()!,
+                Score = (double)reader["score"]
+            });
+
+        Assert.Single(results);
+        Assert.Equal(uniqueName, results[0].Name);
+        Assert.Equal(77.7, results[0].Score, precision: 5);
+    }
+
     // ── Fixture ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Simple test model for QueryAsync&lt;T&gt; tests.
+    /// </summary>
+    public class TestModel
+    {
+        /// <summary>Gets or sets the name.</summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>Gets or sets the score.</summary>
+        public double Score { get; set; }
+    }
 
     /// <summary>
     /// Creates a dedicated test table before the test class runs and drops it afterwards. Each test run uses a unique

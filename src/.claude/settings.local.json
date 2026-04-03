@@ -15,7 +15,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(dotnet script:*)",
+      "Bash(powershell -Command \"Add-Type -Path 'C:\\\\Users\\\\emrea\\\\.nuget\\\\packages\\\\microsoft.semantickernel.core\\\\1.74.0\\\\lib\\\\net8.0\\\\Microsoft.SemanticKernel.Core.dll'; [Microsoft.SemanticKernel.Text.TextChunker].GetMethods\\([System.Reflection.BindingFlags]::Public + [System.Reflection.BindingFlags]::Static\\) | Select-Object Name\")",
+      "Bash(powershell:*)"
     ]
   }
 }

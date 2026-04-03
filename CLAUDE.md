@@ -46,6 +46,7 @@ Agency.Llm.OpenAI           (OpenAI SDK implementation)
 
 ## C# Conventions
 
+- Always use XML doc comments (`///`) for all class and method comments — never plain `//` comments for documentation. Use `<summary>`, `<param>`, `<returns>`, and `<see cref="..."/>` tags as appropriate. This applies to test projects as well as production code.
 - Do NOT use `yield return` inside try-catch blocks — this does not compile in C#
 - Do NOT instantiate abstract classes directly; use interfaces or concrete implementations
 - Sealed classes cannot be mocked — use functional/integration tests or extract an interface

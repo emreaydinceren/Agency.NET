@@ -44,6 +44,13 @@ Agency.Llm.Claude           (Anthropic SDK implementation)
 Agency.Llm.OpenAI           (OpenAI SDK implementation)
 ```
 
+## C# Conventions
+
+- Do NOT use `yield return` inside try-catch blocks — this does not compile in C#
+- Do NOT instantiate abstract classes directly; use interfaces or concrete implementations
+- Sealed classes cannot be mocked — use functional/integration tests or extract an interface
+- Always verify builds pass (`dotnet build`) after code changes before declaring success
+
 ### ILlmClient Abstraction
 
 All LLM providers implement `ILlmClient` (`Agency.Llm.Abstractions`):
@@ -73,6 +80,29 @@ SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
 - Credentials: `dev_user` / `dev_password`, database: `dev_db`, port `5432`
 - Functional LLM tests target LM Studio at `http://llm-host.example:1234`
 
-### Global Build Config
+### Global Build Config & Centralized Package Management
 
-`src/Directory.Build.props` sets `TreatWarningsAsErrors=true` and `Nullable=enable` for all projects. All code must be warning-free and null-safe.
+`src/Directory.Build.props` is the single source of truth for:
+- **Package versions** — all NuGet dependencies are pinned here and referenced by version in individual `.csproj` files (no duplicate version strings)
+- **Compiler settings** — `TreatWarningsAsErrors=true` and `Nullable=enable` for all projects
+- **Code standards** — all code must be warning-free and null-safe
+
+When adding or updating a dependency:
+1. Add/update the version in `Directory.Build.props`
+2. Reference it in the `.csproj` file without repeating the version number
+3. This ensures consistency across the entire solution and makes dependency updates a single-point change
+
+## Git & Auth
+
+- Git push may fail due to credential/auth issues on this machine. If push fails, inform the user rather than retrying endlessly.
+- This repo uses scoped Git credentials via includeIf directives
+
+## Testing
+
+- Always run the full test suite after changes: `dotnet test`
+- For PostgreSQL tests, ensure connection strings are configured via user secrets — check `dotnet user-secrets list` before assuming config is correct.
+
+## Debugging Approach
+
+- When diagnosing bugs, read the actual error and failing code carefully before suggesting fixes. Do NOT guess at the root cause — verify with evidence first.
+- When user says an approach is wrong, pivot immediately rather than doubling down.

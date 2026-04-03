@@ -8,7 +8,13 @@
       "Bash(ls Agency.VectorStore*)",
       "Bash(dotnet restore:*)",
       "Bash(dotnet test:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet package:*)",
+      "Bash(dotnet fsi:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

@@ -1,18 +1,34 @@
-using System.Data.Common;
-
 namespace Agency.Common;
+
+/// <summary>
+/// Represents column metadata in a dataset.
+/// </summary>
+public interface IColumnMetadata
+{
+    /// <summary>
+    /// Gets the name of the column.
+    /// </summary>
+    string? ColumnName { get; }
+
+    /// <summary>
+    /// Gets the zero-based ordinal of the column.
+    /// </summary>
+    int? ColumnOrdinal { get; }
+}
 
 /// <summary>
 /// Represents a tabular result set with column metadata and row values.
 /// </summary>
-public class Dataset(IReadOnlyCollection<DbColumn> columns, IReadOnlyList<object?[]> rows)
+public class Dataset(IReadOnlyCollection<IColumnMetadata> columns, IReadOnlyList<object?[]> rows)
 {
     /// <summary>
     /// Gets the column metadata for the dataset.
     /// </summary>
-    public IReadOnlyCollection<DbColumn> Columns { get; init; } = columns;
+    public IReadOnlyCollection<IColumnMetadata> Columns { get; init; } = columns;
 
-    private readonly IDictionary<string, DbColumn> _columnDict = columns.ToDictionary(c => c.ColumnName, StringComparer.OrdinalIgnoreCase);
+    private readonly IDictionary<string, IColumnMetadata> _columnDict = columns
+        .Where(c => c.ColumnName != null)
+        .ToDictionary(c => c.ColumnName!, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets the row values for the dataset.

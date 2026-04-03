@@ -9,6 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Agency.Common\Agency.Common.csproj" />
     <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
   </ItemGroup>
 

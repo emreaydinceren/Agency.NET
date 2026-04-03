@@ -166,7 +166,9 @@ public sealed class PostgreSqlRunner
             activity?.SetStatus(ActivityStatusCode.Ok);
 
             this._logger.LogDebug("Query SQL completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, rows.Count);
-            return new Dataset(columnSchema!, rows);
+
+            var columns = columnSchema!.Select(c => (IColumnMetadata)new DbColumnAdapter(c)).ToList();
+            return new Dataset(columns, rows);
         }
         catch (Exception ex)
         {
@@ -283,5 +285,19 @@ public sealed class PostgreSqlRunner
         }
 
         return command;
+    }
+
+    private sealed class DbColumnAdapter : IColumnMetadata
+    {
+        private readonly DbColumn _column;
+
+        public DbColumnAdapter(DbColumn column)
+        {
+            this._column = column;
+        }
+
+        public string? ColumnName => this._column.ColumnName;
+
+        public int? ColumnOrdinal => this._column.ColumnOrdinal;
     }
 }

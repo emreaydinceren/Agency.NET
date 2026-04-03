@@ -1,4 +1,4 @@
-﻿namespace Agency.Common;
+namespace Agency.Embeddings.Common;
 
 /// <summary>
 /// Generates embedding vectors for one or more input strings.

@@ -5,8 +5,9 @@
   </Folder>
   <Project Path="Agency.Common/Agency.Common.csproj" Id="127d1616-af99-4c94-817a-9992c8c21a6e" />
   <Project Path="Agency.Console/Agency.Console.csproj" />
-  <Project Path="Agency.Embeddings.Test/Agency.Embeddings.Test.csproj" />
-  <Project Path="Agency.Embeddings/Agency.Embeddings.csproj" />
+  <Project Path="Agency.Embeddings.Common/Agency.Embeddings.Common.csproj" />
+  <Project Path="Agency.Embeddings.OpenAI.Test/Agency.Embeddings.OpenAI.Test.csproj" />
+  <Project Path="Agency.Embeddings.OpenAI/Agency.Embeddings.OpenAI.csproj" />
   <Project Path="Agency.Llm.Claude/Agency.Llm.Claude.csproj" />
   <Project Path="Agency.Llm.Common/Agency.Llm.Common.csproj" />
   <Project Path="Agency.Llm.OpenAI/Agency.Llm.OpenAI.csproj" />
@@ -14,4 +15,7 @@
   <Project Path="Agency.RagFormatter/Agency.RagFormatter.csproj" Id="edd114b8-6e08-4377-8f25-67cd133df6e5" />
   <Project Path="Agency.Sql.Postgre.Test/Agency.Sql.Postgre.Test.csproj" />
   <Project Path="Agency.Sql.Postgre/Agency.Sql.Postgre.csproj" />
+  <Project Path="Agency.VectorStore.Common/Agency.VectorStore.Common.csproj" Id="a5156262-6a37-4d98-88b8-8696f32dc5f9" />
+  <Project Path="Agency.VectorStore.Sql.Postgre.Test/Agency.VectorStore.Sql.Postgre.Test.csproj" />
+  <Project Path="Agency.VectorStore.Sql.Postgre/Agency.VectorStore.Sql.Postgre.csproj" Id="60612533-b6b5-4289-b4bb-d7e5b690262b" />
 </Solution>

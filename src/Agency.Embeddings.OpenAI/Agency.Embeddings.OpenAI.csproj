@@ -4,15 +4,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Npgsql" />
+    <InternalsVisibleTo Include="Agency.Embeddings.OpenAI.Test" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="Pgvector" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="OpenAI" />
     <PackageReference Include="Serilog" />
     <PackageReference Include="Serilog.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Agency.Common\Agency.Common.csproj" />
     <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
   </ItemGroup>
 

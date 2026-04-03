@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Options;
 
-namespace Agency.Embeddings.Test;
+namespace Agency.Embeddings.OpenAI.Test;
 
 public sealed class EmbeddingGeneratorTests
 {

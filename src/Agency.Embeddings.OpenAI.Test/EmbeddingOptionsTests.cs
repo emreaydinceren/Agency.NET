@@ -1,7 +1,7 @@
-namespace Agency.Embeddings.Test;
+namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>
-/// Tests for <see cref="Agency.Embeddings.EmbeddingOptions"/> defaults.
+/// Tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingOptions"/> defaults.
 /// </summary>
 public sealed class EmbeddingOptionsTests
 {

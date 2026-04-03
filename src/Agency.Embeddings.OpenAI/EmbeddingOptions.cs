@@ -1,4 +1,4 @@
-namespace Agency.Embeddings;
+namespace Agency.Embeddings.OpenAI;
 
 /// <summary>
 /// Options used to configure embedding generation.

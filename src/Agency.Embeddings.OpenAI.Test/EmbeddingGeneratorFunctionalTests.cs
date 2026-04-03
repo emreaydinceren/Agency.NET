@@ -1,4 +1,4 @@
-namespace Agency.Embeddings.Test;
+namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>
 /// Functional tests that call the real LM Studio server at the default address.
@@ -8,7 +8,7 @@ namespace Agency.Embeddings.Test;
 /// </summary>
 [Trait("Category", "Functional")]
 /// <summary>
-/// Functional tests for <see cref="Agency.Embeddings.EmbeddingGenerator"/>.
+/// Functional tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingGenerator"/>.
 /// </summary>
 public sealed class EmbeddingGeneratorFunctionalTests
 {

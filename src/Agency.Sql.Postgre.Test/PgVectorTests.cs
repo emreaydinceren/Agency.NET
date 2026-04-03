@@ -1,4 +1,3 @@
-using Agency.Sql.Postgre;
 using Microsoft.Extensions.Configuration;
 
 namespace Agency.Sql.Postgre.Test;

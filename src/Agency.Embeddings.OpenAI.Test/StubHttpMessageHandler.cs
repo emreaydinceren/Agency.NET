@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 
-namespace Agency.Embeddings.Test;
+namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>
 /// Returns a preset JSON body for every HTTP request, allowing tests to simulate

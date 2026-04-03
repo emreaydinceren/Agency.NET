@@ -14,7 +14,8 @@
       "Bash(dotnet fsi:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

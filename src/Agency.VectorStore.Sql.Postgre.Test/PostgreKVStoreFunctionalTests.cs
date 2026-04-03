@@ -253,6 +253,36 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         }
     }
 
+    /// <summary>
+    /// Verifies that a document tagged with multiple tags (e.g. "document", "pdf", "medical") can be
+    /// found by searching for a single tag ("medical"), while entries that do not carry that tag are excluded.
+    /// Tags are stored as a JSON array under the "tags" metadata key. PostgreSQL's JSONB containment
+    /// operator (@>) treats array matching as subset checking, so {"tags":["medical"]} matches any entry
+    /// whose tags array contains "medical".
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_WithTagsMetadata_FindsByTag()
+    {
+        var kvStore = this._fixture.KVStore;
+
+        var keyWithMedical = this._fixture.UniqueName("tags_medical");
+        var keyWithoutMedical = this._fixture.UniqueName("tags_no_medical");
+
+        var tagsWithMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } };
+        var tagsWithoutMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } };
+
+        await kvStore.UpsertAsync(keyWithMedical, new { title = "Medical report" }, tagsWithMedical);
+        await kvStore.UpsertAsync(keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical);
+
+        // Filter: only entries whose tags array contains "medical"
+        var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
+        var query = new Query(null, null, filter, 100, true);
+        var results = await kvStore.SearchAsync<dynamic>(query);
+
+        Assert.Contains(results, r => r.Key == keyWithMedical);
+        Assert.DoesNotContain(results, r => r.Key == keyWithoutMedical);
+    }
+
     // ── Fixture ─────────────────────────────────────────────────────────────
 
     /// <summary>

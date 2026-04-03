@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+    <ProjectReference Include="..\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
+    <ProjectReference Include="..\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" />
+  </ItemGroup>
+
+</Project>

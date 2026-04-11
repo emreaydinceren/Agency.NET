@@ -1,6 +1,7 @@
 namespace Agency.Llm.Claude;
 
 using Agency.Llm.Common;
+using Agency.Llm.Common.Tools;
 using Anthropic;
 using Anthropic.Core;
 using Anthropic.Models.Messages;
@@ -14,6 +15,21 @@ using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
+using System.Text.Json;
+
+// Our canonical agent message types (same names as Anthropic SDK types — must be aliased).
+using OurMessage = Agency.Llm.Common.Messages.AgentMessage;
+using OurRole = Agency.Llm.Common.Messages.MessageRole;
+using OurContentBlock = Agency.Llm.Common.Messages.ContentBlock;
+using OurTextBlock = Agency.Llm.Common.Messages.TextBlock;
+using OurToolUseBlock = Agency.Llm.Common.Messages.ToolUseBlock;
+using OurToolResultBlock = Agency.Llm.Common.Messages.ToolResultBlock;
+using OurThinkingBlock = Agency.Llm.Common.Messages.ThinkingBlock;
+
+// Anthropic SDK response block types (aliased to resolve ambiguity after removing the namespace import).
+using ATextBlock = Anthropic.Models.Messages.TextBlock;
+using AToolUseBlock = Anthropic.Models.Messages.ToolUseBlock;
+using AThinkingBlock = Anthropic.Models.Messages.ThinkingBlock;
 
 /// <summary>
 /// A client for interacting with the Anthropic Claude API.
@@ -85,6 +101,128 @@ public class ClaudeClient : ILlmClient
     {
         this._logger = logger ?? NullLogger<ClaudeClient>.Instance;
         this._client = new AnthropicClient();
+    }
+
+    /// <summary>
+    /// Sends a structured agent request to Claude, converting our canonical message types
+    /// to Anthropic SDK types and back.
+    /// </summary>
+    public async Task<AgentLlmResponse> SendAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<OurMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        CancellationToken ct = default)
+    {
+        var anthropicTools = tools
+            .Select(static t =>
+            {
+                var schemaDict = t.InputSchema
+                    .EnumerateObject()
+                    .ToDictionary(static p => p.Name, static p => p.Value);
+                return new Tool
+                {
+                    Name = t.Name,
+                    Description = t.Description,
+                    InputSchema = InputSchema.FromRawUnchecked(schemaDict),
+                };
+            })
+            .ToList();
+
+        var anthropicMessages = messages
+            .Select(static m => ConvertToAnthropicMessage(m))
+            .ToList();
+
+        // MessageCreateParams.Tools expects IReadOnlyList<ToolUnion>; convert each Tool.
+        IReadOnlyList<ToolUnion>? toolUnions = anthropicTools.Count > 0
+            ? anthropicTools.ConvertAll(static t => (ToolUnion)t)
+            : null;
+
+        var request = new MessageCreateParams
+        {
+            Model = model,
+            System = systemPrompt,
+            MaxTokens = 8096,
+            Messages = anthropicMessages,
+            Tools = toolUnions,
+        };
+
+        var response = await this._client.Messages.Create(request, ct);
+
+        // Convert response content blocks back to our types.
+        var contentBlocks = new List<OurContentBlock>();
+        foreach (var block in response.Content)
+        {
+            if (block.TryPickText(out ATextBlock? tb) && tb is not null)
+            {
+                contentBlocks.Add(new OurTextBlock(tb.Text));
+            }
+            else if (block.TryPickToolUse(out AToolUseBlock? tub) && tub is not null)
+            {
+                var inputJson = JsonSerializer.Serialize(tub.Input);
+                var inputElement = JsonDocument.Parse(inputJson).RootElement;
+                contentBlocks.Add(new OurToolUseBlock(tub.ID, tub.Name, inputElement));
+            }
+            else if (block.TryPickThinking(out AThinkingBlock? thinking) && thinking is not null)
+            {
+                contentBlocks.Add(new OurThinkingBlock(thinking.Thinking));
+            }
+        }
+
+        var agentMsg = new OurMessage(OurRole.Assistant, contentBlocks);
+        var usage = new LlmTokenUsage(response.Usage.InputTokens, response.Usage.OutputTokens);
+        var stopReason = FinishReasonConverter.ToStopReason(response.StopReason?.ToString());
+
+        return new AgentLlmResponse(agentMsg, stopReason, usage);
+    }
+
+    private static MessageParam ConvertToAnthropicMessage(OurMessage message)
+    {
+        var role = message.Role == OurRole.User ? Role.User : Role.Assistant;
+
+        // Fast path: single text block → send as a plain string (saves allocation).
+        if (message.Content.Count == 1 && message.Content[0] is OurTextBlock singleText)
+        {
+            return new MessageParam { Role = role, Content = singleText.Text };
+        }
+
+        // General path: build a list of typed ContentBlockParams.
+        var blocks = new List<ContentBlockParam>(message.Content.Count);
+        foreach (var block in message.Content)
+        {
+            if (block is OurTextBlock tb)
+            {
+                blocks.Add(new TextBlockParam { Text = tb.Text });
+            }
+            else if (block is OurToolUseBlock tub)
+            {
+                var inputDict = tub.Input
+                    .EnumerateObject()
+                    .ToDictionary(static p => p.Name, static p => p.Value);
+                blocks.Add(new ToolUseBlockParam
+                {
+                    ID = tub.Id,
+                    Name = tub.Name,
+                    Input = inputDict,
+                });
+            }
+            else if (block is OurToolResultBlock trb)
+            {
+                blocks.Add(new ToolResultBlockParam
+                {
+                    ToolUseID = trb.ToolUseId,
+                    Content = trb.Content,
+                    IsError = trb.IsError,
+                });
+            }
+        }
+
+        // MessageParamContent has no implicit operator from List<T>; an explicit cast is needed.
+        return new MessageParam
+        {
+            Role = role,
+            Content = (MessageParamContent)(IReadOnlyList<ContentBlockParam>)blocks,
+        };
     }
 
     /// <summary>

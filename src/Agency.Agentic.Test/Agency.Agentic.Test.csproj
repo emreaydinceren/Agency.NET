@@ -1,0 +1,46 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Agentic\Agency.Agentic.csproj" />
+    <ProjectReference Include="..\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+    <ProjectReference Include="..\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
+    <ProjectReference Include="..\Agency.Ingestion.FileSystem\Agency.Ingestion.FileSystem.csproj" />
+    <ProjectReference Include="..\Agency.Ingestion\Agency.Ingestion.csproj" />
+    <ProjectReference Include="..\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
+    <ProjectReference Include="..\Agency.Llm.Common\Agency.Llm.Common.csproj" />
+    <ProjectReference Include="..\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
+    <ProjectReference Include="..\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
+    <ProjectReference Include="..\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" />
+    <ProjectReference Include="..\Agency.VectorStore.Sql.Sqlite\Agency.VectorStore.Sql.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

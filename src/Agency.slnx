@@ -5,15 +5,19 @@
     <File Path="docker-compose.yml" />
     <File Path="SetupLocal.bat" />
   </Folder>
+  <Project Path="Agency.Agentic.Console/Agency.Agentic.Console.csproj" />
+  <Project Path="Agency.Agentic.Console.Test/Agency.Agentic.Console.Test.csproj" />
+  <Project Path="Agency.Agentic.Test/Agency.Agentic.Test.csproj" Id="57db7c5d-6ae9-42f0-b756-9d11fc02d6c5" />
+  <Project Path="Agency.Agentic/Agency.Agentic.csproj" />
   <Project Path="Agency.Common/Agency.Common.csproj" Id="127d1616-af99-4c94-817a-9992c8c21a6e" />
   <Project Path="Agency.Console/Agency.Console.csproj" />
-  <Project Path="Agency.Ingestion/Agency.Ingestion.csproj" />
-  <Project Path="Agency.Ingestion.FileSystem/Agency.Ingestion.FileSystem.csproj" />
-  <Project Path="Agency.Ingestion.SemanticKernel/Agency.Ingestion.SemanticKernel.csproj" />
-  <Project Path="Agency.Ingestion.Test/Agency.Ingestion.Test.csproj" />
   <Project Path="Agency.Embeddings.Common/Agency.Embeddings.Common.csproj" />
   <Project Path="Agency.Embeddings.OpenAI.Test/Agency.Embeddings.OpenAI.Test.csproj" />
   <Project Path="Agency.Embeddings.OpenAI/Agency.Embeddings.OpenAI.csproj" />
+  <Project Path="Agency.Ingestion.FileSystem/Agency.Ingestion.FileSystem.csproj" />
+  <Project Path="Agency.Ingestion.SemanticKernel/Agency.Ingestion.SemanticKernel.csproj" />
+  <Project Path="Agency.Ingestion.Test/Agency.Ingestion.Test.csproj" />
+  <Project Path="Agency.Ingestion/Agency.Ingestion.csproj" />
   <Project Path="Agency.Llm.Claude/Agency.Llm.Claude.csproj" />
   <Project Path="Agency.Llm.Common/Agency.Llm.Common.csproj" />
   <Project Path="Agency.Llm.OpenAI/Agency.Llm.OpenAI.csproj" />

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      Build the console app alongside the tests so 'dotnet run' always has a
+      fresh binary. ReferenceOutputAssembly=false because we don't import any
+      types from the exe — we only spawn it as a child process.
+    -->
+    <ProjectReference Include="..\Agency.Agentic.Console\Agency.Agentic.Console.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+</Project>

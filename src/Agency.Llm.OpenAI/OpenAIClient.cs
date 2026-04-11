@@ -1,6 +1,8 @@
 namespace Agency.Llm.OpenAI;
 
 using Agency.Llm.Common;
+using Agency.Llm.Common.Messages;
+using Agency.Llm.Common.Tools;
 using global::OpenAI.Chat;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +14,13 @@ using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
+using System.Text.Json;
+
+using OurMessage = Agency.Llm.Common.Messages.AgentMessage;
+using OurRole = Agency.Llm.Common.Messages.MessageRole;
+using OurTextBlock = Agency.Llm.Common.Messages.TextBlock;
+using OurToolUseBlock = Agency.Llm.Common.Messages.ToolUseBlock;
+using OurToolResultBlock = Agency.Llm.Common.Messages.ToolResultBlock;
 
 /// <summary>
 /// A client for interacting with the OpenAI API.
@@ -80,6 +89,119 @@ public class OpenAIClient : ILlmClient
         this._logger = logger ?? NullLogger<OpenAIClient>.Instance;
         var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? string.Empty;
         this._client = new global::OpenAI.OpenAIClient(new ApiKeyCredential(apiKey));
+    }
+
+    /// <summary>
+    /// Sends a structured agent request to OpenAI, converting our canonical message types
+    /// to OpenAI SDK types and back.
+    /// </summary>
+    public async Task<AgentLlmResponse> SendAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<OurMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        CancellationToken ct = default)
+    {
+        ChatClient chatClient = this._client.GetChatClient(model);
+
+        var chatMessages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+        };
+        foreach (var msg in messages)
+        {
+            chatMessages.AddRange(ConvertToOpenAIMessages(msg));
+        }
+
+        var options = new ChatCompletionOptions { MaxOutputTokenCount = 8096 };
+        if (tools.Count > 0)
+        {
+            foreach (var tool in tools)
+            {
+                options.Tools.Add(ChatTool.CreateFunctionTool(
+                    tool.Name,
+                    tool.Description,
+                    BinaryData.FromString(tool.InputSchema.GetRawText())));
+            }
+        }
+
+        var result = await chatClient.CompleteChatAsync(chatMessages, options, ct);
+        var completion = result.Value;
+
+        // Build content blocks from text + tool calls.
+        var contentBlocks = new List<Agency.Llm.Common.Messages.ContentBlock>();
+
+        var text = string.Concat(completion.Content.Select(static p => p.Text ?? string.Empty));
+        if (!string.IsNullOrEmpty(text))
+        {
+            contentBlocks.Add(new OurTextBlock(text));
+        }
+
+        if (completion.ToolCalls is { Count: > 0 } toolCalls)
+        {
+            foreach (var call in toolCalls)
+            {
+                var inputElement = JsonDocument.Parse(call.FunctionArguments.ToString()).RootElement;
+                contentBlocks.Add(new OurToolUseBlock(call.Id, call.FunctionName, inputElement));
+            }
+        }
+
+        var agentMsg = new OurMessage(OurRole.Assistant, contentBlocks);
+        var usage = new LlmTokenUsage(
+            completion.Usage?.InputTokenCount ?? 0,
+            completion.Usage?.OutputTokenCount ?? 0);
+        var stopReason = FinishReasonConverter.ToStopReason(completion.FinishReason.ToString());
+
+        return new AgentLlmResponse(agentMsg, stopReason, usage);
+    }
+
+    /// <summary>
+    /// Converts one of our canonical <see cref="OurMessage"/> objects to the OpenAI SDK
+    /// <see cref="ChatMessage"/> types. User messages containing tool results are expanded
+    /// into multiple <see cref="ToolChatMessage"/> objects (one per result), because the
+    /// OpenAI API represents each tool result as a separate top-level message.
+    /// </summary>
+    private static IEnumerable<ChatMessage> ConvertToOpenAIMessages(OurMessage message)
+    {
+        if (message.Role == OurRole.Assistant)
+        {
+            var toolCalls = message.Content
+                .OfType<OurToolUseBlock>()
+                .Select(static tub => ChatToolCall.CreateFunctionToolCall(
+                    tub.Id,
+                    tub.Name,
+                    BinaryData.FromString(tub.Input.GetRawText())))
+                .ToList();
+
+            if (toolCalls.Count > 0)
+            {
+                yield return new AssistantChatMessage(toolCalls);
+            }
+            else
+            {
+                var assistantText = string.Concat(
+                    message.Content.OfType<OurTextBlock>().Select(static t => t.Text));
+                yield return new AssistantChatMessage(assistantText);
+            }
+        }
+        else // User (initial prompt or tool results)
+        {
+            var toolResults = message.Content.OfType<OurToolResultBlock>().ToList();
+            if (toolResults.Count > 0)
+            {
+                // Each tool result is a separate ToolChatMessage in the OpenAI protocol.
+                foreach (var trb in toolResults)
+                {
+                    yield return new ToolChatMessage(trb.ToolUseId, trb.Content);
+                }
+            }
+            else
+            {
+                var userText = string.Concat(
+                    message.Content.OfType<OurTextBlock>().Select(static t => t.Text));
+                yield return new UserChatMessage(userText);
+            }
+        }
     }
 
     /// <summary>

@@ -6,6 +6,7 @@
   <ItemGroup>
     <PackageVersion Include="Anthropic" Version="12.9.0" />
     <PackageVersion Include="coverlet.collector" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="9.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
@@ -14,6 +15,7 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.5" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Core" Version="1.74.0" />
     <PackageVersion Include="Moq" Version="4.18.4" />
     <PackageVersion Include="Npgsql" Version="10.0.2" />
     <PackageVersion Include="OpenAI" Version="2.9.1" />

@@ -7,8 +7,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NpgsqlTypes;
-using Pgvector;
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Globalization;
@@ -184,39 +184,11 @@ public class PostgreKVStore : IKVStore
                 parameters["hasFilter"] = false;
             }
 
-            var queryResult = await this._postgreSqlRunner.QueryAsync(
+            var results = await this._postgreSqlRunner.QueryAsync<SearchHit<TValue>>(
                 sql,
+                async (reader) => await HydrateSearchHitAsync<TValue>(reader),
                 parameters,
                 cancellationToken);
-
-            var results = queryResult.Rows.Select(row =>
-            {
-                string? valueJson = row[1] switch
-                {
-                    null => null,
-                    DBNull => null,
-                    JsonDocument document => document.RootElement.GetRawText(),
-                    JsonElement element => element.GetRawText(),
-                    _ => row[1]?.ToString()
-                };
-
-                string? metadataJson = row[2] switch
-                {
-                    null => null,
-                    DBNull => null,
-                    JsonDocument document => document.RootElement.GetRawText(),
-                    JsonElement element => element.GetRawText(),
-                    _ => row[2]?.ToString()
-                };
-
-                return new SearchHit<TValue>(
-                    Key: row[0]?.ToString() ?? string.Empty,
-                    Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
-                    Metadata: DeserializeMetadata(metadataJson),
-                    Distance: Convert.ToDouble(row[3]),
-                    UpdatedOn: row[4] != DBNull.Value ? new DateTimeOffset(Convert.ToDateTime(row[4]), TimeSpan.Zero) : DateTimeOffset.UtcNow
-                    );
-            }).ToList();
 
             stopwatch.Stop();
             _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
@@ -307,6 +279,35 @@ public class PostgreKVStore : IKVStore
             this._logger.LogError(ex, "Error upserting vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
             throw;
         }
+    }
+
+    private static async Task<SearchHit<TValue>> HydrateSearchHitAsync<TValue>(DbDataReader reader)
+    {
+        string? valueJson = reader.GetValue(1) switch
+        {
+            null => null,
+            DBNull => null,
+            JsonDocument document => document.RootElement.GetRawText(),
+            JsonElement element => element.GetRawText(),
+            _ => reader.GetValue(1)?.ToString()
+        };
+
+        string? metadataJson = reader.GetValue(2) switch
+        {
+            null => null,
+            DBNull => null,
+            JsonDocument document => document.RootElement.GetRawText(),
+            JsonElement element => element.GetRawText(),
+            _ => reader.GetValue(2)?.ToString()
+        };
+
+        return new SearchHit<TValue>(
+            Key: reader.GetString(0),
+            Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
+            Metadata: DeserializeMetadata(metadataJson),
+            Distance: reader.GetDouble(3),
+            UpdatedOn: reader.IsDBNull(4) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero)
+        );
     }
 
     private static Dictionary<string, object>? DeserializeMetadata(string? metadataJson)

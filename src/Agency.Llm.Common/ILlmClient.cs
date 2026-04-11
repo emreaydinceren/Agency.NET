@@ -1,3 +1,6 @@
+using Agency.Llm.Common.Messages;
+using Agency.Llm.Common.Tools;
+
 namespace Agency.Llm.Common;
 
 /// <summary>
@@ -5,6 +8,20 @@ namespace Agency.Llm.Common;
 /// </summary>
 public interface ILlmClient
 {
+    /// <summary>
+    /// Sends a structured agent request carrying typed messages and tool definitions,
+    /// and returns the fully assembled assistant response.
+    /// Provider implementations should override this to support the agent loop.
+    /// </summary>
+    Task<AgentLlmResponse> SendAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<AgentMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        CancellationToken ct = default)
+        => throw new NotImplementedException(
+            $"{this.GetType().Name} does not implement {nameof(this.SendAgentAsync)}.");
+
     /// <summary>
     /// Sends a completion request and returns the generated response.
     /// </summary>

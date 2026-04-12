@@ -23,6 +23,22 @@ public interface ILlmClient
             $"{this.GetType().Name} does not implement {nameof(this.SendAgentAsync)}.");
 
     /// <summary>
+    /// Streams a structured agent response, yielding text deltas for live display and
+    /// complete <see cref="AgentStreamChunk.ToolUse"/> blocks once each tool call is fully received.
+    /// The final chunk has <see cref="AgentStreamChunk.Text"/> and <see cref="AgentStreamChunk.ToolUse"/>
+    /// both null, with <see cref="AgentStreamChunk.StopReason"/> and <see cref="AgentStreamChunk.Usage"/> set.
+    /// Provider implementations should override this to support the streaming agent loop.
+    /// </summary>
+    IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<AgentMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        CancellationToken ct = default)
+        => throw new NotImplementedException(
+            $"{this.GetType().Name} does not implement {nameof(this.StreamAgentAsync)}.");
+
+    /// <summary>
     /// Sends a completion request and returns the generated response.
     /// </summary>
     Task<LlmResponse> SendAsync(
@@ -97,6 +113,30 @@ public sealed record LlmStreamChunk(
     StopReason? StopReason,
     /// <summary>
     /// Gets the usage recorded for the chunk, if any.
+    /// </summary>
+    LlmTokenUsage? Usage);
+
+/// <summary>
+/// Represents a single chunk in a streaming agent response.
+/// Text delta chunks have <see cref="Text"/> set; all other fields are null.
+/// Tool-use chunks have <see cref="ToolUse"/> set; all other fields are null.
+/// The terminal chunk has <see cref="StopReason"/> and <see cref="Usage"/> set; text and tool-use are null.
+/// </summary>
+public sealed record AgentStreamChunk(
+    /// <summary>
+    /// Gets the streamed text delta, if any.
+    /// </summary>
+    string? Text,
+    /// <summary>
+    /// Gets the completed tool-use block, if any.
+    /// </summary>
+    Messages.ToolUseBlock? ToolUse,
+    /// <summary>
+    /// Gets the terminal stop reason, if any.
+    /// </summary>
+    StopReason? StopReason,
+    /// <summary>
+    /// Gets the token usage for the full response, if any (terminal chunk only).
     /// </summary>
     LlmTokenUsage? Usage);
 

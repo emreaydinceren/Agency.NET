@@ -5,6 +5,7 @@ using Agency.Llm.Common.Messages;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Spectre.Console;
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -41,12 +42,12 @@ ILlmClient llmClient = provider.ToUpperInvariant() switch
     })),
 };
 
-var agent = new Agent(llmClient, model, stream: false);
+var agent = new Agent(llmClient, model, stream: true);
 
 // ── Welcome banner ────────────────────────────────────────────────────────────
 
 Out(ConsoleColor.Cyan,  "╔═══════════════════════════════════════════╗");
-Out(ConsoleColor.Cyan,  "║       Agency  ·  Agent Chat Console        ║");
+Out(ConsoleColor.Cyan,  "║       Agency  ·  Agent Chat Console       ║");
 Out(ConsoleColor.Cyan,  "╚═══════════════════════════════════════════╝");
 OutInline(null,            "Provider : ");
 Out(ConsoleColor.Yellow,   provider);
@@ -72,8 +73,7 @@ int chatTurns = 0;
 
 while (true)
 {
-    OutInline(ConsoleColor.Cyan, "> ");
-    var input = Console.ReadLine();
+    var input = AnsiConsole.Ask<string>(">");
 
     if (input is null)
     {
@@ -123,6 +123,8 @@ while (true)
 
     using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token);
     bool interrupted = false;
+    bool streamingStarted = false;
+    var lineBuffer = new System.Text.StringBuilder();
 
     try
     {
@@ -130,8 +132,41 @@ while (true)
         {
             switch (evt)
             {
+                case TextDeltaEvent delta:
+                    if (!streamingStarted)
+                    {
+                        AnsiConsole.Markup("[green][[Agent]][/] ");
+                        streamingStarted = true;
+                    }
+
+                    lineBuffer.Append(delta.Delta);
+                    string buffered = lineBuffer.ToString();
+                    int lastNewline = buffered.LastIndexOf('\n');
+                    if (lastNewline >= 0)
+                    {
+                        foreach (string line in buffered[..lastNewline].Split('\n'))
+                        {
+                            AnsiConsole.WriteLine(Markup.Escape(line));
+                        }
+                        lineBuffer.Clear();
+                        lineBuffer.Append(buffered[(lastNewline + 1)..]);
+                    }
+                    break;
+
                 case AssistantTurnEvent turn:
-                    PrintAssistantTurn(turn.Message);
+                    if (streamingStarted)
+                    {
+                        if (lineBuffer.Length > 0)
+                        {
+                            AnsiConsole.WriteLine(Markup.Escape(lineBuffer.ToString()));
+                            lineBuffer.Clear();
+                        }
+                        streamingStarted = false;
+                    }
+                    else
+                    {
+                        PrintAssistantTurn(turn.Message);
+                    }
                     break;
 
                 case ToolInvokedEvent tool:
@@ -150,8 +185,7 @@ while (true)
                         $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out  [{result.Status}]");
                     break;
 
-                // SessionStartedEvent, IterationCompletedEvent, TextDeltaEvent:
-                // intentionally suppressed for a clean chat UX.
+                // SessionStartedEvent, IterationCompletedEvent: intentionally suppressed.
             }
         }
     }
@@ -194,8 +228,11 @@ static void PrintAssistantTurn(AgentMessage message)
         switch (block)
         {
             case TextBlock tb when !string.IsNullOrWhiteSpace(tb.Text):
-                OutInline(ConsoleColor.Green, "[Agent] ");
-                Console.WriteLine(tb.Text);
+                AnsiConsole.Markup("[green][[Agent]][/] ");
+                foreach (string line in tb.Text.Split('\n'))
+                {
+                    AnsiConsole.WriteLine(Markup.Escape(line));
+                }
                 break;
 
             case ToolUseBlock tub:

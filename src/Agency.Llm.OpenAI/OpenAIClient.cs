@@ -1,7 +1,6 @@
 namespace Agency.Llm.OpenAI;
 
 using Agency.Llm.Common;
-using Agency.Llm.Common.Messages;
 using Agency.Llm.Common.Tools;
 using global::OpenAI.Chat;
 using Microsoft.Extensions.Logging;
@@ -385,6 +384,150 @@ public class OpenAIClient : ILlmClient
         }
 
         yield return new LlmStreamChunk(null, stopReason ?? StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
+    }
+
+    /// <summary>
+    /// Streams a structured agent response from OpenAI, yielding text deltas immediately and
+    /// complete tool-use blocks once each function call's arguments are fully received.
+    /// </summary>
+    public async IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<OurMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ChatClient chatClient = this._client.GetChatClient(model);
+
+        var chatMessages = new List<ChatMessage> { new SystemChatMessage(systemPrompt) };
+        foreach (var msg in messages)
+        {
+            chatMessages.AddRange(ConvertToOpenAIMessages(msg));
+        }
+
+        var options = new ChatCompletionOptions { MaxOutputTokenCount = 8096 };
+        if (tools.Count > 0)
+        {
+            foreach (var tool in tools)
+            {
+                options.Tools.Add(ChatTool.CreateFunctionTool(
+                    tool.Name,
+                    tool.Description,
+                    BinaryData.FromString(tool.InputSchema.GetRawText())));
+            }
+        }
+
+        int inputTokens = 0;
+        int outputTokens = 0;
+        StopReason? stopReason = null;
+        Exception? streamError = null;
+
+        // Accumulate tool call deltas by index: each entry is (id, name, argsBuilder).
+        var toolCallAccumulators = new System.Collections.Generic.Dictionary<int, (string Id, System.Text.StringBuilder Name, System.Text.StringBuilder Args)>();
+
+        var enumerator = chatClient
+            .CompleteChatStreamingAsync(chatMessages, options, ct)
+            .GetAsyncEnumerator(ct);
+
+        try
+        {
+            while (true)
+            {
+                bool moved;
+                try
+                {
+                    moved = await enumerator.MoveNextAsync();
+                }
+                catch (Exception ex)
+                {
+                    streamError = ex;
+                    break;
+                }
+
+                if (!moved)
+                {
+                    break;
+                }
+
+                var update = enumerator.Current;
+
+                if (update.Usage is not null)
+                {
+                    inputTokens = update.Usage.InputTokenCount;
+                    outputTokens = update.Usage.OutputTokenCount;
+                }
+
+                if (update.FinishReason is not null)
+                {
+                    stopReason = FinishReasonConverter.ToStopReason(update.FinishReason.ToString());
+                }
+
+                foreach (var part in update.ContentUpdate)
+                {
+                    if (!string.IsNullOrEmpty(part.Text))
+                    {
+                        yield return new AgentStreamChunk(part.Text, null, null, null);
+                    }
+                }
+
+                foreach (var toolCallUpdate in update.ToolCallUpdates)
+                {
+                    if (!toolCallAccumulators.TryGetValue(toolCallUpdate.Index, out var acc))
+                    {
+                        acc = (toolCallUpdate.ToolCallId ?? string.Empty, new System.Text.StringBuilder(), new System.Text.StringBuilder());
+                        toolCallAccumulators[toolCallUpdate.Index] = acc;
+                    }
+
+                    if (!string.IsNullOrEmpty(toolCallUpdate.FunctionName))
+                    {
+                        acc.Name.Append(toolCallUpdate.FunctionName);
+                    }
+
+                    if (toolCallUpdate.FunctionArgumentsUpdate is not null)
+                    {
+                        acc.Args.Append(toolCallUpdate.FunctionArgumentsUpdate);
+                    }
+
+                    // Update the accumulator (structs are value types — reassign).
+                    toolCallAccumulators[toolCallUpdate.Index] = (
+                        string.IsNullOrEmpty(acc.Id) && !string.IsNullOrEmpty(toolCallUpdate.ToolCallId)
+                            ? toolCallUpdate.ToolCallId!
+                            : acc.Id,
+                        acc.Name,
+                        acc.Args);
+                }
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+
+            if (streamError is not null)
+            {
+                this._logger.LogError(streamError, "OpenAI streaming agent request failed. Model={Model}", model);
+            }
+            else
+            {
+                this._logger.LogInformation(
+                    "OpenAI streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}",
+                    model, inputTokens, outputTokens);
+            }
+        }
+
+        if (streamError is not null)
+        {
+            ExceptionDispatchInfo.Capture(streamError).Throw();
+        }
+
+        // Yield completed tool-use blocks.
+        foreach (var entry in toolCallAccumulators.OrderBy(static kv => kv.Key))
+        {
+            var argsJson = entry.Value.Args.Length > 0 ? entry.Value.Args.ToString() : "{}";
+            var inputElement = JsonDocument.Parse(argsJson).RootElement;
+            yield return new AgentStreamChunk(null, new OurToolUseBlock(entry.Value.Id, entry.Value.Name.ToString(), inputElement), null, null);
+        }
+
+        yield return new AgentStreamChunk(null, null, stopReason ?? StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
 }
 

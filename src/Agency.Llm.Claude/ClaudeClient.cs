@@ -438,6 +438,154 @@ public class ClaudeClient : ILlmClient
 
         yield return new LlmStreamChunk(null, stopReason ?? Agency.Llm.Common.StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
+
+    /// <summary>
+    /// Streams a structured agent response from Claude, yielding text deltas immediately and
+    /// complete tool-use blocks once each tool call's input JSON is fully received.
+    /// </summary>
+    public async IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<OurMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var anthropicTools = tools
+            .Select(static t =>
+            {
+                var schemaDict = t.InputSchema
+                    .EnumerateObject()
+                    .ToDictionary(static p => p.Name, static p => p.Value);
+                return new Tool
+                {
+                    Name = t.Name,
+                    Description = t.Description,
+                    InputSchema = InputSchema.FromRawUnchecked(schemaDict),
+                };
+            })
+            .ToList();
+
+        var anthropicMessages = messages
+            .Select(static m => ConvertToAnthropicMessage(m))
+            .ToList();
+
+        IReadOnlyList<ToolUnion>? toolUnions = anthropicTools.Count > 0
+            ? anthropicTools.ConvertAll(static t => (ToolUnion)t)
+            : null;
+
+        var request = new MessageCreateParams
+        {
+            Model = model,
+            System = systemPrompt,
+            MaxTokens = 8096,
+            Messages = anthropicMessages,
+            Tools = toolUnions,
+        };
+
+        long inputTokens = 0;
+        long outputTokens = 0;
+        Agency.Llm.Common.StopReason? stopReason = null;
+        Exception? streamError = null;
+
+        // Per-block accumulator for tool-use input JSON (keyed by block index).
+        var toolUseById = new System.Collections.Generic.Dictionary<int, (string Id, string Name, System.Text.StringBuilder Json)>();
+        int currentBlockIndex = -1;
+        bool currentBlockIsToolUse = false;
+
+        var enumerator = this._client.Messages
+            .CreateStreaming(request, ct)
+            .GetAsyncEnumerator(ct);
+
+        try
+        {
+            while (true)
+            {
+                bool moved;
+                try
+                {
+                    moved = await enumerator.MoveNextAsync();
+                }
+                catch (Exception ex)
+                {
+                    streamError = ex;
+                    break;
+                }
+
+                if (!moved)
+                {
+                    break;
+                }
+
+                var e = enumerator.Current;
+
+                if (e.Value is RawMessageStartEvent startEvent)
+                {
+                    inputTokens = startEvent.Message.Usage.InputTokens;
+                }
+                else if (e.Value is RawMessageDeltaEvent deltaUsageEvent)
+                {
+                    outputTokens = deltaUsageEvent.Usage.OutputTokens;
+                    stopReason = FinishReasonConverter.ToNullableStopReason(deltaUsageEvent.Delta.StopReason?.ToString());
+                }
+                else if (e.Value is RawContentBlockStartEvent blockStartEvent)
+                {
+                    currentBlockIndex++;
+                    currentBlockIsToolUse = blockStartEvent.ContentBlock.TryPickToolUse(out AToolUseBlock? toolUseBlock)
+                        && toolUseBlock is not null;
+
+                    if (currentBlockIsToolUse && toolUseBlock is not null)
+                    {
+                        toolUseById[currentBlockIndex] = (toolUseBlock.ID, toolUseBlock.Name, new System.Text.StringBuilder());
+                    }
+                }
+                else if (e.Value is RawContentBlockDeltaEvent contentDeltaEvent)
+                {
+                    if (contentDeltaEvent.Delta.Value is TextDelta textDelta)
+                    {
+                        yield return new AgentStreamChunk(textDelta.Text, null, null, null);
+                    }
+                    else if (contentDeltaEvent.Delta.TryPickInputJson(out InputJsonDelta? jsonDelta)
+                             && jsonDelta is not null
+                             && toolUseById.TryGetValue(currentBlockIndex, out var tool))
+                    {
+                        tool.Json.Append(jsonDelta.PartialJson);
+                    }
+                }
+                else if (e.Value is RawContentBlockStopEvent && currentBlockIsToolUse
+                         && toolUseById.TryGetValue(currentBlockIndex, out var completedTool))
+                {
+                    var inputJson = completedTool.Json.Length > 0
+                        ? completedTool.Json.ToString()
+                        : "{}";
+                    var inputElement = JsonDocument.Parse(inputJson).RootElement;
+                    yield return new AgentStreamChunk(null, new OurToolUseBlock(completedTool.Id, completedTool.Name, inputElement), null, null);
+                    currentBlockIsToolUse = false;
+                }
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+
+            if (streamError is not null)
+            {
+                this._logger.LogError(streamError, "Claude streaming agent request failed. Model={Model}", model);
+            }
+            else
+            {
+                this._logger.LogInformation(
+                    "Claude streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}",
+                    model, inputTokens, outputTokens);
+            }
+        }
+
+        if (streamError is not null)
+        {
+            ExceptionDispatchInfo.Capture(streamError).Throw();
+        }
+
+        yield return new AgentStreamChunk(null, null, stopReason ?? Agency.Llm.Common.StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
+    }
 }
 
 /// <summary>

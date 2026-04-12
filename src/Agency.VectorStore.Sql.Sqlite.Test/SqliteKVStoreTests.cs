@@ -1,6 +1,5 @@
 using Agency.Embeddings.Common;
 using Agency.Sql.Sqlite;
-using Agency.VectorStore.Sql.Sqlite;
 using Moq;
 
 namespace Agency.VectorStore.Sql.Sqlite.Test;

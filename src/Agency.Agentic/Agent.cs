@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Agency.Llm.Common;
 using Microsoft.Extensions.Logging;
 
 namespace Agency.Agentic;
@@ -23,8 +22,9 @@ public sealed class Agent
     ///   Defaults to <c>Any(NoToolCalls, StepCountIs(20))</c>.
     /// </param>
     /// <param name="stream">
-    ///   When <see langword="true"/> (default), uses the streaming code path.
-    ///   Pass <see langword="false"/> in tests to use the simpler <c>SendAgentAsync</c> path.
+    ///   When <see langword="true"/> (default), uses the streaming code path and emits
+    ///   <see cref="TextDeltaEvent"/>s as tokens arrive.
+    ///   Pass <see langword="false"/> to use the simpler <c>SendAgentAsync</c> batch path.
     /// </param>
     /// <param name="logger">Optional structured logger.</param>
     public Agent(
@@ -45,6 +45,7 @@ public sealed class Agent
     /// Runs the agent loop over <paramref name="ctx"/>, yielding events as they occur.
     /// The first event is always <see cref="SessionStartedEvent"/>;
     /// the last is always <see cref="AgentResultEvent"/>.
+    /// When streaming is enabled, <see cref="TextDeltaEvent"/>s are emitted for each text token.
     /// </summary>
     public async IAsyncEnumerable<AgentEvent> RunAsync(
         Context ctx,
@@ -70,18 +71,58 @@ public sealed class Agent
             // 2. Build a fresh system prompt every iteration (D3).
             string systemPrompt = SystemPromptBuilder.Build(ctx);
 
-            // 3. Call the LLM.
-            AgentLlmResponse response = await this._llm.SendAgentAsync(
-                this._model, systemPrompt, ctx.Conversation.Messages, tools, ct);
+            // 3. Call the LLM — streaming or batch depending on configuration.
+            AgentMessage lastAssistant;
+            LlmTokenUsage turnUsage;
+
+            if (this._stream)
+            {
+                // Streaming path: iterate chunk by chunk, yielding TextDeltaEvents live, then
+                // reconstruct the full AgentMessage from accumulated text and tool-use blocks.
+                var textBuilder = new System.Text.StringBuilder();
+                var streamedBlocks = new List<ContentBlock>();
+                turnUsage = new LlmTokenUsage(0, 0);
+
+                await foreach (AgentStreamChunk chunk in this._llm.StreamAgentAsync(
+                    this._model, systemPrompt, ctx.Conversation.Messages, tools, ct))
+                {
+                    if (chunk.Text is not null)
+                    {
+                        textBuilder.Append(chunk.Text);
+                        yield return new TextDeltaEvent(chunk.Text);
+                    }
+                    else if (chunk.ToolUse is not null)
+                    {
+                        streamedBlocks.Add(chunk.ToolUse);
+                    }
+                    else if (chunk.StopReason is not null && chunk.Usage is not null)
+                    {
+                        turnUsage = chunk.Usage;
+                    }
+                }
+
+                if (textBuilder.Length > 0)
+                {
+                    streamedBlocks.Insert(0, new TextBlock(textBuilder.ToString()));
+                }
+
+                lastAssistant = new AgentMessage(MessageRole.Assistant, streamedBlocks);
+            }
+            else
+            {
+                AgentLlmResponse response = await this._llm.SendAgentAsync(
+                    this._model, systemPrompt, ctx.Conversation.Messages, tools, ct);
+                lastAssistant = response.Message;
+                turnUsage = response.Usage;
+            }
 
             ctx.TotalUsage = new(
-                ctx.TotalUsage.InputTokens + response.Usage.InputTokens,
-                ctx.TotalUsage.OutputTokens + response.Usage.OutputTokens);
+                ctx.TotalUsage.InputTokens + turnUsage.InputTokens,
+                ctx.TotalUsage.OutputTokens + turnUsage.OutputTokens);
 
-            AgentMessage lastAssistant = response.Message;
             ctx.Conversation.Append(lastAssistant);
             yield return new AssistantTurnEvent(lastAssistant);
-            yield return new IterationCompletedEvent(ctx.IterationCount, response.Usage);
+            yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage);
 
             // 4. Evaluate stop conditions.
             if (this._stop(ctx, lastAssistant))

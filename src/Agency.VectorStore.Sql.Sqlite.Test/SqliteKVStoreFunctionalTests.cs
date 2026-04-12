@@ -1,7 +1,6 @@
 using Agency.Embeddings.Common;
 using Agency.Sql.Sqlite;
 using Agency.VectorStore.Common;
-using Agency.VectorStore.Sql.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Moq;

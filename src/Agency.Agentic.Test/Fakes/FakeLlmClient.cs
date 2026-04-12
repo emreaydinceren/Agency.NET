@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace Agency.Agentic.Test.Fakes;
 
 /// <summary>

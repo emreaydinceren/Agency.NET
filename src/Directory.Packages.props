@@ -20,7 +20,8 @@
     <PackageVersion Include="Npgsql" Version="10.0.2" />
     <PackageVersion Include="OpenAI" Version="2.9.1" />
     <PackageVersion Include="pgvector" Version="0.3.2" />
-    <PackageVersion Include="Spectre.Console" Version="0.49.1" />
+    <PackageVersion Include="NTokenizers.Extensions.Spectre.Console" Version="2.2.0" />
+    <PackageVersion Include="Spectre.Console" Version="0.54.0" />
     <PackageVersion Include="Serilog" Version="4.2.0" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="9.0.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

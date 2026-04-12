@@ -244,7 +244,10 @@ public class ClaudeClient : ILlmClient
         _requestCounter.Add(1, tags);
 
         var sw = Stopwatch.StartNew();
-        this._logger.LogInformation("Sending request to Claude. Model={Model}", model);
+        if (this._logger.IsEnabled(LogLevel.Information))
+        {
+            this._logger.LogInformation("Sending request to Claude. Model={Model}", model);
+        }
 
         try
         {
@@ -267,10 +270,11 @@ public class ClaudeClient : ILlmClient
             message.Validate();
 
             sw.Stop();
+            var durationMs = sw.Elapsed.TotalMilliseconds;
             var inputTokens = message.Usage.InputTokens;
             var outputTokens = message.Usage.OutputTokens;
 
-            _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
+            _durationHistogram.Record(durationMs, tags);
             _tokenCounter.Add(inputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "input" } });
             _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
 
@@ -278,9 +282,12 @@ public class ClaudeClient : ILlmClient
             activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
             activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
 
-            this._logger.LogInformation(
-                "Claude request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
-                model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
+            if (this._logger.IsEnabled(LogLevel.Information))
+            {
+                this._logger.LogInformation(
+                    "Claude request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                    model, inputTokens, outputTokens, durationMs);
+            }
 
             var messageText = string.Concat(message.Content.Select(static block => ExtractBlockText(block)));
             return new LlmResponse(
@@ -294,7 +301,10 @@ public class ClaudeClient : ILlmClient
             _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
             _errorCounter.Add(1, tags);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            this._logger.LogError(ex, "Claude request failed. Model={Model}", model);
+            if (this._logger.IsEnabled(LogLevel.Error))
+            {
+                this._logger.LogError(ex, "Claude request failed. Model={Model}", model);
+            }
             throw;
         }
     }
@@ -340,7 +350,10 @@ public class ClaudeClient : ILlmClient
         _requestCounter.Add(1, tags);
 
         var sw = Stopwatch.StartNew();
-        this._logger.LogInformation("Starting streaming request to Claude. Model={Model}", model);
+        if (this._logger.IsEnabled(LogLevel.Information))
+        {
+            this._logger.LogInformation("Starting streaming request to Claude. Model={Model}", model);
+        }
 
         MessageCreateParams messageToSend = new()
         {
@@ -417,7 +430,10 @@ public class ClaudeClient : ILlmClient
             {
                 _errorCounter.Add(1, tags);
                 activity?.SetStatus(ActivityStatusCode.Error, streamError.Message);
-                this._logger.LogError(streamError, "Claude streaming request failed. Model={Model}", model);
+                if (this._logger.IsEnabled(LogLevel.Error))
+                {
+                    this._logger.LogError(streamError, "Claude streaming request failed. Model={Model}", model);
+                }
             }
             else
             {
@@ -425,9 +441,13 @@ public class ClaudeClient : ILlmClient
                 _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
                 activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
                 activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
-                this._logger.LogInformation(
-                    "Claude streaming request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
-                    model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
+                var durationMs = sw.Elapsed.TotalMilliseconds;
+                if (this._logger.IsEnabled(LogLevel.Information))
+                {
+                    this._logger.LogInformation(
+                        "Claude streaming request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                        model, inputTokens, outputTokens, durationMs);
+                }
             }
         }
 
@@ -569,13 +589,19 @@ public class ClaudeClient : ILlmClient
 
             if (streamError is not null)
             {
-                this._logger.LogError(streamError, "Claude streaming agent request failed. Model={Model}", model);
+                if (this._logger.IsEnabled(LogLevel.Error))
+                {
+                    this._logger.LogError(streamError, "Claude streaming agent request failed. Model={Model}", model);
+                }
             }
             else
             {
-                this._logger.LogInformation(
-                    "Claude streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}",
-                    model, inputTokens, outputTokens);
+                if (this._logger.IsEnabled(LogLevel.Information))
+                {
+                    this._logger.LogInformation(
+                        "Claude streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}",
+                        model, inputTokens, outputTokens);
+                }
             }
         }
 

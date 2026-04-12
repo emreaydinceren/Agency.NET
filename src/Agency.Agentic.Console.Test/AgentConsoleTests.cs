@@ -196,7 +196,7 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync(
             [
-                "My name is Emre. Just say 'Got it'.",
+                "My name is John Doe. Just say 'Got it'.",
                 "What is my name? Reply with just my name.",
                 "exit",
             ],
@@ -227,7 +227,7 @@ public sealed class AgentConsoleTests
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --project \"{ConsoleCsproj}\"",
+            Arguments = $"run --no-build --project \"{ConsoleCsproj}\"",
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -236,6 +236,8 @@ public sealed class AgentConsoleTests
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        psi.Environment["DOTNET_ENVIRONMENT"] = "Test";
 
         using var process = new Process { StartInfo = psi };
         process.Start();

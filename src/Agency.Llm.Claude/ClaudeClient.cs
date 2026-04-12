@@ -2,6 +2,7 @@ namespace Agency.Llm.Claude;
 
 using Agency.Llm.Common;
 using Agency.Llm.Common.Tools;
+using Agency.Llm.OpenAI;
 using Anthropic;
 using Anthropic.Core;
 using Anthropic.Models.Messages;
@@ -16,20 +17,19 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
-
+// Anthropic SDK response block types (aliased to resolve ambiguity after removing the namespace import).
+using ATextBlock = Anthropic.Models.Messages.TextBlock;
+using AThinkingBlock = Anthropic.Models.Messages.ThinkingBlock;
+using AToolUseBlock = Anthropic.Models.Messages.ToolUseBlock;
+using Model = Common.Model;
+using OurContentBlock = Agency.Llm.Common.Messages.ContentBlock;
 // Our canonical agent message types (same names as Anthropic SDK types — must be aliased).
 using OurMessage = Agency.Llm.Common.Messages.AgentMessage;
 using OurRole = Agency.Llm.Common.Messages.MessageRole;
-using OurContentBlock = Agency.Llm.Common.Messages.ContentBlock;
 using OurTextBlock = Agency.Llm.Common.Messages.TextBlock;
-using OurToolUseBlock = Agency.Llm.Common.Messages.ToolUseBlock;
-using OurToolResultBlock = Agency.Llm.Common.Messages.ToolResultBlock;
 using OurThinkingBlock = Agency.Llm.Common.Messages.ThinkingBlock;
-
-// Anthropic SDK response block types (aliased to resolve ambiguity after removing the namespace import).
-using ATextBlock = Anthropic.Models.Messages.TextBlock;
-using AToolUseBlock = Anthropic.Models.Messages.ToolUseBlock;
-using AThinkingBlock = Anthropic.Models.Messages.ThinkingBlock;
+using OurToolResultBlock = Agency.Llm.Common.Messages.ToolResultBlock;
+using OurToolUseBlock = Agency.Llm.Common.Messages.ToolUseBlock;
 
 /// <summary>
 /// A client for interacting with the Anthropic Claude API.
@@ -73,22 +73,30 @@ public class ClaudeClient : ILlmClient
     /// <summary>
     /// Creates a client from configured options.
     /// </summary>
-    public ClaudeClient(IOptions<ClaudeClientOptions> options, ILogger<ClaudeClient>? logger = null)
+    public ClaudeClient(IOptions<LlmClientOptions> options, ILogger<ClaudeClient>? logger = null)
+        : this(options.Value, logger)
     {
-        ArgumentNullException.ThrowIfNull(options);
+    }
+
+    /// <summary>
+    /// Creates a client from configured options.
+    /// </summary>
+    public ClaudeClient(LlmClientOptions clientOptions, ILogger<ClaudeClient>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(clientOptions);
 
         this._logger = logger ?? NullLogger<ClaudeClient>.Instance;
 
         var co = new ClientOptions
         {
-            ApiKey = options.Value.ApiKey,
-            MaxRetries = options.Value.MaxRetries ?? ClientOptions.DefaultMaxRetries,
-            Timeout = options.Value.Timeout ?? ClientOptions.DefaultTimeout,
+            ApiKey = clientOptions.ApiKey,
+            MaxRetries = clientOptions.MaxRetries ?? ClientOptions.DefaultMaxRetries,
+            Timeout = clientOptions.Timeout ?? ClientOptions.DefaultTimeout,
         };
 
-        if (options.Value.BaseUrl is not null)
+        if (clientOptions.BaseUrl is not null)
         {
-            co.BaseUrl = options.Value.BaseUrl;
+            co.BaseUrl = clientOptions.BaseUrl;
         }
 
         this._client = new AnthropicClient(co);
@@ -104,8 +112,8 @@ public class ClaudeClient : ILlmClient
     }
 
     /// <summary>
-    /// Sends a structured agent request to Claude, converting our canonical message types
-    /// to Anthropic SDK types and back.
+    /// Sends a structured agent request to Claude, converting our canonical message types to Anthropic SDK types and
+    /// back.
     /// </summary>
     public async Task<AgentLlmResponse> SendAgentAsync(
         string model,
@@ -174,6 +182,17 @@ public class ClaudeClient : ILlmClient
         var stopReason = FinishReasonConverter.ToStopReason(response.StopReason?.ToString());
 
         return new AgentLlmResponse(agentMsg, stopReason, usage);
+    }
+
+    public async Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default)
+    {
+        List<Model> models = new();
+        var modelListPage = await this._client.Models.List(cancellationToken: cancellationToken);
+        foreach (var modelInfo in modelListPage.Items)
+        {
+            models.Add(new Model(modelInfo.ID, modelInfo.DisplayName));
+        }
+        return models;
     }
 
     private static MessageParam ConvertToAnthropicMessage(OurMessage message)
@@ -460,8 +479,8 @@ public class ClaudeClient : ILlmClient
     }
 
     /// <summary>
-    /// Streams a structured agent response from Claude, yielding text deltas immediately and
-    /// complete tool-use blocks once each tool call's input JSON is fully received.
+    /// Streams a structured agent response from Claude, yielding text deltas immediately and complete tool-use blocks
+    /// once each tool call's input JSON is fully received.
     /// </summary>
     public async IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
         string model,
@@ -612,57 +631,4 @@ public class ClaudeClient : ILlmClient
 
         yield return new AgentStreamChunk(null, null, stopReason ?? Agency.Llm.Common.StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
-}
-
-/// <summary>
-/// Options for configuring the Claude client.
-/// </summary>
-public class ClaudeClientOptions
-{
-    /// <summary>
-    /// Gets or sets the Anthropic API key.
-    /// </summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the API base URL.
-    /// </summary>
-    public string? BaseUrl { get; set; }
-
-    /// <summary>
-    /// The maximum number of times to retry failed requests, with a short exponential backoff between requests.
-    ///
-    /// <para>
-    /// Only the following error types are retried:
-    /// <list type="bullet">
-    ///   <item>Connection errors (for example, due to a network connectivity problem)</item>
-    ///   <item>408 Request Timeout</item>
-    ///   <item>409 Conflict</item>
-    ///   <item>429 Rate Limit</item>
-    ///   <item>5xx Internal</item>
-    /// </list>
-    /// </para>
-    ///
-    /// <para>The API may also explicitly instruct the SDK to retry or not retry a request.</para>
-    ///
-    /// <para>Defaults to 2 when null. Set to 0 to
-    /// disable retries, which also ignores API instructions to retry.</para>
-    /// </summary>
-    /// <summary>
-    /// Gets or sets the retry count.
-    /// </summary>
-    public int? MaxRetries { get; set; } = null;
-
-    /// <summary>
-    /// Sets the maximum time allowed for a complete HTTP call, not including retries.
-    ///
-    /// <para>This includes resolving DNS, connecting, writing the request body, server processing, as
-    /// well as reading the response body.</para>
-    ///
-    /// <para>Defaults to <c>TimeSpan.FromMinutes(10)</c> when null.</para>
-    /// </summary>
-    /// <summary>
-    /// Gets or sets the request timeout.
-    /// </summary>
-    public TimeSpan? Timeout { get; set; } = null;
 }

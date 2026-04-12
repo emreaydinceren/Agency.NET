@@ -9,9 +9,8 @@ namespace Agency.Llm.Common;
 public interface ILlmClient
 {
     /// <summary>
-    /// Sends a structured agent request carrying typed messages and tool definitions,
-    /// and returns the fully assembled assistant response.
-    /// Provider implementations should override this to support the agent loop.
+    /// Sends a structured agent request carrying typed messages and tool definitions, and returns the fully assembled
+    /// assistant response. Provider implementations should override this to support the agent loop.
     /// </summary>
     Task<AgentLlmResponse> SendAgentAsync(
         string model,
@@ -23,11 +22,11 @@ public interface ILlmClient
             $"{this.GetType().Name} does not implement {nameof(this.SendAgentAsync)}.");
 
     /// <summary>
-    /// Streams a structured agent response, yielding text deltas for live display and
-    /// complete <see cref="AgentStreamChunk.ToolUse"/> blocks once each tool call is fully received.
-    /// The final chunk has <see cref="AgentStreamChunk.Text"/> and <see cref="AgentStreamChunk.ToolUse"/>
-    /// both null, with <see cref="AgentStreamChunk.StopReason"/> and <see cref="AgentStreamChunk.Usage"/> set.
-    /// Provider implementations should override this to support the streaming agent loop.
+    /// Streams a structured agent response, yielding text deltas for live display and complete
+    /// <see cref="AgentStreamChunk.ToolUse"/> blocks once each tool call is fully received. The final chunk has
+    /// <see cref="AgentStreamChunk.Text"/> and <see cref="AgentStreamChunk.ToolUse"/> both null, with
+    /// <see cref="AgentStreamChunk.StopReason"/> and <see cref="AgentStreamChunk.Usage"/> set. Provider implementations
+    /// should override this to support the streaming agent loop.
     /// </summary>
     IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
         string model,
@@ -59,6 +58,13 @@ public interface ILlmClient
         long? maxTokens = 1024,
         float? temperature = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves a read-only list of available models.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a read-only list of models.</returns>
+    Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -98,9 +104,9 @@ public sealed record LlmTokenUsage(
 }
 
 /// <summary>
-/// Represents a single chunk in a streaming LLM response.
-/// Text delta chunks have <see cref="Text"/> set and <see cref="Usage"/>/<see cref="StopReason"/> null.
-/// The final terminal chunk has <see cref="Text"/> null and <see cref="Usage"/>/<see cref="StopReason"/> set.
+/// Represents a single chunk in a streaming LLM response. Text delta chunks have <see cref="Text"/> set and
+/// <see cref="Usage"/> /<see cref="StopReason"/> null. The final terminal chunk has <see cref="Text"/> null and
+/// <see cref="Usage"/> /<see cref="StopReason"/> set.
 /// </summary>
 public sealed record LlmStreamChunk(
     /// <summary>
@@ -117,10 +123,9 @@ public sealed record LlmStreamChunk(
     LlmTokenUsage? Usage);
 
 /// <summary>
-/// Represents a single chunk in a streaming agent response.
-/// Text delta chunks have <see cref="Text"/> set; all other fields are null.
-/// Tool-use chunks have <see cref="ToolUse"/> set; all other fields are null.
-/// The terminal chunk has <see cref="StopReason"/> and <see cref="Usage"/> set; text and tool-use are null.
+/// Represents a single chunk in a streaming agent response. Text delta chunks have <see cref="Text"/> set; all other
+/// fields are null. Tool-use chunks have <see cref="ToolUse"/> set; all other fields are null. The terminal chunk has
+/// <see cref="StopReason"/> and <see cref="Usage"/> set; text and tool-use are null.
 /// </summary>
 public sealed record AgentStreamChunk(
     /// <summary>
@@ -158,3 +163,6 @@ public enum StopReason
     Refusal,    // Added for Claude 3.5+ and OpenAI O1
     PauseTurn   // Added for 2026 Server-Side Tool Loops
 }
+
+
+public sealed record Model(string Id, string Name);

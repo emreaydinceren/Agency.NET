@@ -63,25 +63,33 @@ public class OpenAIClient : ILlmClient
     /// <summary>
     /// Creates a client from configured options.
     /// </summary>
-    public OpenAIClient(IOptions<OpenAIClientOptions> options, ILogger<OpenAIClient>? logger = null)
+    public OpenAIClient(IOptions<LlmClientOptions> options, ILogger<OpenAIClient>? logger = null)
+        : this (options.Value, logger)
     {
-        ArgumentNullException.ThrowIfNull(options);
-
-        this._logger = logger ?? NullLogger<OpenAIClient>.Instance;
-
-        var credential = new ApiKeyCredential(options.Value.ApiKey);
-        var clientOptions = new global::OpenAI.OpenAIClientOptions();
-
-        if (options.Value.BaseUrl is not null)
-        {
-            clientOptions.Endpoint = new Uri(options.Value.BaseUrl);
-        }
-
-        this._client = new global::OpenAI.OpenAIClient(credential, clientOptions);
     }
 
     /// <summary>
-    /// Creates a client using the <c>OPENAI_API_KEY</c> environment variable.
+    /// Creates a client from configured options.
+    /// </summary>
+    public OpenAIClient(LlmClientOptions clientOptions, ILogger<OpenAIClient>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(clientOptions);
+
+        this._logger = logger ?? NullLogger<OpenAIClient>.Instance;
+
+        var credential = new ApiKeyCredential(clientOptions.ApiKey);
+        var openAIClientOptions = new global::OpenAI.OpenAIClientOptions();
+
+        if (clientOptions.BaseUrl is not null)
+        {
+            openAIClientOptions.Endpoint = new Uri(clientOptions.BaseUrl);
+        }
+
+        this._client = new global::OpenAI.OpenAIClient(credential, openAIClientOptions);
+    }
+
+    /// <summary>
+    /// Creates a client using the <c> OPENAI_API_KEY</c> environment variable.
     /// </summary>
     public OpenAIClient(ILogger<OpenAIClient>? logger = null)
     {
@@ -91,8 +99,7 @@ public class OpenAIClient : ILlmClient
     }
 
     /// <summary>
-    /// Sends a structured agent request to OpenAI, converting our canonical message types
-    /// to OpenAI SDK types and back.
+    /// Sends a structured agent request to OpenAI, converting our canonical message types to OpenAI SDK types and back.
     /// </summary>
     public async Task<AgentLlmResponse> SendAgentAsync(
         string model,
@@ -155,10 +162,9 @@ public class OpenAIClient : ILlmClient
     }
 
     /// <summary>
-    /// Converts one of our canonical <see cref="OurMessage"/> objects to the OpenAI SDK
-    /// <see cref="ChatMessage"/> types. User messages containing tool results are expanded
-    /// into multiple <see cref="ToolChatMessage"/> objects (one per result), because the
-    /// OpenAI API represents each tool result as a separate top-level message.
+    /// Converts one of our canonical <see cref="OurMessage"/> objects to the OpenAI SDK <see cref="ChatMessage"/>
+    /// types. User messages containing tool results are expanded into multiple <see cref="ToolChatMessage"/> objects
+    /// (one per result), because the OpenAI API represents each tool result as a separate top-level message.
     /// </summary>
     private static IEnumerable<ChatMessage> ConvertToOpenAIMessages(OurMessage message)
     {
@@ -387,8 +393,8 @@ public class OpenAIClient : ILlmClient
     }
 
     /// <summary>
-    /// Streams a structured agent response from OpenAI, yielding text deltas immediately and
-    /// complete tool-use blocks once each function call's arguments are fully received.
+    /// Streams a structured agent response from OpenAI, yielding text deltas immediately and complete tool-use blocks
+    /// once each function call's arguments are fully received.
     /// </summary>
     public async IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
         string model,
@@ -529,38 +535,15 @@ public class OpenAIClient : ILlmClient
 
         yield return new AgentStreamChunk(null, null, stopReason ?? StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
-}
 
-/// <summary>
-/// Options for configuring the OpenAI client.
-/// </summary>
-public class OpenAIClientOptions
-{
-    /// <summary>
-    /// Gets or sets the OpenAI API key.
-    /// </summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets the API base URL.
-    /// </summary>
-    public string? BaseUrl { get; set; }
-
-    /// <summary>
-    /// The maximum number of times to retry failed requests.
-    /// Defaults to null (uses SDK default).
-    /// </summary>
-    /// <summary>
-    /// Gets or sets the retry count.
-    /// </summary>
-    public int? MaxRetries { get; set; } = null;
-
-    /// <summary>
-    /// Sets the maximum time allowed for a complete HTTP call, not including retries.
-    /// Defaults to null (uses SDK default).
-    /// </summary>
-    /// <summary>
-    /// Gets or sets the request timeout.
-    /// </summary>
-    public TimeSpan? Timeout { get; set; } = null;
+    public async Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default)
+    {
+        List<Model> models = new();
+        var result = await this._client.GetOpenAIModelClient().GetModelsAsync(cancellationToken);
+        foreach (var model in result.Value)
+        {
+            models.Add(new Model(model.Id, model.Id));
+        }
+        return models;
+    }
 }

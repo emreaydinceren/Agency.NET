@@ -62,4 +62,17 @@ internal sealed class FakeLlmClient : ILlmClient
         float? temperature = null,
         CancellationToken cancellationToken = default)
         => throw new NotImplementedException("Use StreamAgentAsync for agent loop tests.");
+
+    /// <inheritdoc/>
+    public IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
+        string model,
+        string systemPrompt,
+        IReadOnlyList<AgentMessage> messages,
+        IReadOnlyList<ToolDefinition> tools,
+        CancellationToken ct = default)
+        => throw new NotImplementedException("Use SendAgentAsync for agent loop tests.");
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Use SendAgentAsync for agent loop tests.");
 }

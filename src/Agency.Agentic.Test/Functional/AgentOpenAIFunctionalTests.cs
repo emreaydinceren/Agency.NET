@@ -177,7 +177,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
             this.Model = GetRequired(configuration, $"{ConfigurationSection}:Model");
 
             this.LlmClient = new OpenAIClient(
-                Options.Create(new OpenAIClientOptions
+                Options.Create(new LlmClientOptions
                 {
                     ApiKey = GetRequired(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequired(configuration, $"{ConfigurationSection}:BaseUrl"),

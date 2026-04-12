@@ -4,6 +4,7 @@ using Agency.Llm.Common;
 using Agency.Llm.Common.Messages;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NTokenizers.Extensions.Spectre.Console;
 using NTokenizers.Extensions.Spectre.Console.Styles;
@@ -14,8 +15,6 @@ internal class Program
 {
     public static async Task Main()
     {
-        // ── Configuration ─────────────────────────────────────────────────────────────
-
         var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Development";
 
         var configuration = new ConfigurationBuilder()
@@ -26,37 +25,55 @@ internal class Program
             .AddEnvironmentVariables()
             .Build();
 
-        var provider = (configuration["Agent:Provider"] ?? "OpenAI").Trim();
-        var section = $"Agent:{provider}";
+        var services = new ServiceCollection();
 
-        var model = configuration[$"{section}Model"]
-            ?? throw new InvalidOperationException(
-                "Missing required configuration value '" + section + "Model'.");
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddOptions<AgentOptions>()
+            .BindConfiguration("Agent");
 
-        bool streamResponses = !bool.TryParse(configuration["Agent:Stream"], out var parsedStream)
-            || parsedStream;
-        int? turnTimeoutSeconds = int.TryParse(configuration["Agent:TurnTimeoutSeconds"], out var parsedTimeout)
-            ? parsedTimeout
-            : null;
-
-        // ── Build LLM client ──────────────────────────────────────────────────────────
-
-        ILlmClient llmClient = provider.ToUpperInvariant() switch
+        services.AddSingleton<ILlmClient>(sp =>
         {
-            "CLAUDE" => new ClaudeClient(Options.Create(new ClaudeClientOptions
-            {
-                ApiKey = configuration[$"{section}:ApiKey"] ?? string.Empty,
-                BaseUrl = configuration[$"{section}:BaseUrl"],
-            })),
-            "OPENAI" => new OpenAIClient(Options.Create(new OpenAIClientOptions
-            {
-                ApiKey = configuration[$"{section}:ApiKey"] ?? "lm-studio",
-                BaseUrl = configuration[$"{section}:BaseUrl"],
-            })),
-            _ => throw new InvalidOperationException($"Unsupported provider '{provider}'."),
-        };
+            AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
 
-        var agent = new Agent(llmClient, model, stream: streamResponses);
+            var providerOptions = options.GetSelectedProviderOptions();
+
+            return options.Provider.ToUpperInvariant() switch
+            {
+                "CLAUDE" => new ClaudeClient(providerOptions),
+                "OPENAI" => new OpenAIClient(providerOptions),
+                _ => throw new InvalidOperationException($"Unsupported provider '{options.Provider}'."),
+            };
+        });
+
+        services.AddSingleton(sp =>
+        {
+            AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
+            string model = options.Model
+                ?? throw new InvalidOperationException(
+                    "Missing required configuration value 'Agent:Model'.");
+            ILlmClient llmClient = sp.GetRequiredService<ILlmClient>();
+            return new Agent(llmClient, model, stream: options.Stream);
+        });
+
+        services.AddSingleton<ConsoleChatSession>();
+
+        using ServiceProvider serviceProvider = services.BuildServiceProvider();
+        var app = serviceProvider.GetRequiredService<ConsoleChatSession>();
+        await app.RunAsync();
+    }
+}
+
+internal sealed class ConsoleChatSession(Agent agent, IOptions<AgentOptions> optionsAccessor)
+{
+    private readonly Agent _agent = agent;
+    private readonly AgentOptions _options = optionsAccessor.Value;
+
+    public async Task RunAsync()
+    {
+        string provider = _options.Provider;
+        string model = _options.Model
+            ?? throw new InvalidOperationException("Missing required configuration value 'Agent:Model'.");
+        int? turnTimeoutSeconds = _options.TurnTimeoutSeconds;
 
         // ── Welcome banner ────────────────────────────────────────────────────────────
 
@@ -149,7 +166,7 @@ internal class Program
 
             try
             {
-                await foreach (AgentEvent evt in agent.RunAsync(ctx, turnCts.Token))
+                await foreach (AgentEvent evt in _agent.RunAsync(ctx, turnCts.Token))
                 {
                     switch (evt)
                     {

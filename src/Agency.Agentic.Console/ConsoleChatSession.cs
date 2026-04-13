@@ -4,25 +4,31 @@ namespace Agency.Agentic.Console;
 using Agency.Agentic;
 using Agency.Agentic.Console.Commands;
 using Agency.Llm.Common.Messages;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NTokenizers.Extensions.Spectre.Console;
 using NTokenizers.Extensions.Spectre.Console.Styles;
 using Spectre.Console;
 using System.Text;
 
-internal sealed class ConsoleChatSession(Agent agent, IOptions<AgentOptions> optionsAccessor)
+internal sealed class ConsoleChatSession
 {
-    private static CommandManager commandManager = new(CommandRegistery.Commands);
-    private readonly Agent _agent = agent;
-    private readonly AgentOptions _options = optionsAccessor.Value;
+    private readonly CommandManager commandManager;
+    private readonly AgentOptions _options;
     private readonly List<string> _history = [];
+    private Agent _agent;
+    internal IServiceProvider ServiceProvider { get; }
 
+    public ConsoleChatSession(IServiceProvider serviceProvider, Agent agent, IOptions<AgentOptions> optionsAccessor)
+    {
+        this.ServiceProvider = serviceProvider;
+        this._agent = agent;
+        this._options = optionsAccessor.Value;
+        this.commandManager = new CommandManager(CommandRegistery.Commands, this);
+    }
 
     public async Task RunAsync()
     {
-        string provider = _options.DefaultClientName;
-        string model = _options.DefaultModel
-            ?? throw new InvalidOperationException("Missing required configuration value 'Agent:Model'.");
         int? turnTimeoutSeconds = _options.TurnTimeoutSeconds;
 
         // ── Welcome banner ────────────────────────────────────────────────────────────
@@ -31,9 +37,9 @@ internal sealed class ConsoleChatSession(Agent agent, IOptions<AgentOptions> opt
         Out(ConsoleColor.Cyan, "║       Agency  ·  Agent Chat Console       ║");
         Out(ConsoleColor.Cyan, "╚═══════════════════════════════════════════╝");
         OutInline(null, "Provider : ");
-        Out(ConsoleColor.Yellow, provider);
+        Out(ConsoleColor.Yellow, this._agent.ClientType);
         OutInline(null, "Model    : ");
-        Out(ConsoleColor.Yellow, model);
+        Out(ConsoleColor.Yellow, this._agent.Model);
         Out(ConsoleColor.DarkGray, "Type /exit to /quit  ·  Ctrl+C to interrupt a turn");
         System.Console.WriteLine();
 
@@ -75,7 +81,7 @@ internal sealed class ConsoleChatSession(Agent agent, IOptions<AgentOptions> opt
 
             if (input.StartsWith('/'))
             {
-                var continuation = commandManager.ExecuteCommand(input);
+                var continuation = await commandManager.ExecuteCommandAsync(input);
 
                switch (continuation)
                 {
@@ -206,6 +212,11 @@ internal sealed class ConsoleChatSession(Agent agent, IOptions<AgentOptions> opt
         Out(ConsoleColor.DarkGray,
             $"Session ended  ·  {chatTurns} turn{(chatTurns == 1 ? "" : "s")}  ·  " +
             $"{ctx?.TotalUsage.InputTokens ?? 0:N0} in, {ctx?.TotalUsage.OutputTokens ?? 0:N0} out total");
+    }
+
+    public void SetAgent(Agent agent)
+    {
+        this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
     }
 
     private async Task<string?> ReadLineAsync(CancellationToken ct)

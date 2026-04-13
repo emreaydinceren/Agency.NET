@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 namespace Agency.Agentic;
 
 /// <summary>
-/// Drives the agent loop: build system prompt → call LLM → handle tool calls → repeat
-/// until a <see cref="StopCondition"/> fires. Yields <see cref="AgentEvent"/>s as they happen.
+/// Drives the agent loop: build system prompt → call LLM → handle tool calls → repeat until a
+/// <see cref="StopCondition"/> fires. Yields <see cref="AgentEvent"/> s as they happen.
 /// </summary>
 public sealed class Agent
 {
@@ -18,13 +18,11 @@ public sealed class Agent
     /// <param name="llm">The LLM client; must implement <see cref="ILlmClient.SendAgentAsync"/>.</param>
     /// <param name="model">The model identifier forwarded to the provider on every call.</param>
     /// <param name="stopWhen">
-    ///   Predicate evaluated after each turn.
-    ///   Defaults to <c>Any(NoToolCalls, StepCountIs(20))</c>.
+    /// Predicate evaluated after each turn. Defaults to <c> Any(NoToolCalls, StepCountIs(20))</c>.
     /// </param>
     /// <param name="stream">
-    ///   When <see langword="true"/> (default), uses the streaming code path and emits
-    ///   <see cref="TextDeltaEvent"/>s as tokens arrive.
-    ///   Pass <see langword="false"/> to use the simpler <c>SendAgentAsync</c> batch path.
+    /// When <see langword="true"/> (default), uses the streaming code path and emits <see cref="TextDeltaEvent"/> s as
+    /// tokens arrive. Pass <see langword="false"/> to use the simpler <c> SendAgentAsync</c> batch path.
     /// </param>
     /// <param name="logger">Optional structured logger.</param>
     public Agent(
@@ -41,11 +39,14 @@ public sealed class Agent
         this._logger = logger;
     }
 
+    public string Model => this._model;
+
+    public string ClientType => this._llm.ClientType;
+
     /// <summary>
-    /// Runs the agent loop over <paramref name="ctx"/>, yielding events as they occur.
-    /// The first event is always <see cref="SessionStartedEvent"/>;
-    /// the last is always <see cref="AgentResultEvent"/>.
-    /// When streaming is enabled, <see cref="TextDeltaEvent"/>s are emitted for each text token.
+    /// Runs the agent loop over <paramref name="ctx"/>, yielding events as they occur. The first event is always
+    /// <see cref="SessionStartedEvent"/>; the last is always <see cref="AgentResultEvent"/>. When streaming is enabled,
+    /// <see cref="TextDeltaEvent"/> s are emitted for each text token.
     /// </summary>
     public async IAsyncEnumerable<AgentEvent> RunAsync(
         Context ctx,

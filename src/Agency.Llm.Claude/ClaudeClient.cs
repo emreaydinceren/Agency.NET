@@ -110,6 +110,8 @@ public class ClaudeClient : ILlmClient
         this._client = new AnthropicClient();
     }
 
+    public string ClientType => "Claude";
+
     /// <summary>
     /// Sends a structured agent request to Claude, converting our canonical message types to Anthropic SDK types and
     /// back.
@@ -189,7 +191,17 @@ public class ClaudeClient : ILlmClient
         var modelListPage = await this._client.Models.List(cancellationToken: cancellationToken);
         foreach (var modelInfo in modelListPage.Items)
         {
-            models.Add(new Model(modelInfo.ID, modelInfo.DisplayName));
+            string? displayName;
+            try
+            {
+                displayName = modelInfo.DisplayName ?? modelInfo.ID;
+            }
+            catch (Anthropic.Exceptions.AnthropicInvalidDataException)
+            {
+                displayName = modelInfo.ID;
+            }
+
+            models.Add(new Model(modelInfo.ID, displayName ?? modelInfo.ID));
         }
         return models;
     }

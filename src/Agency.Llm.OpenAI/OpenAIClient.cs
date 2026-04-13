@@ -98,6 +98,8 @@ public class OpenAIClient : ILlmClient
         this._client = new global::OpenAI.OpenAIClient(new ApiKeyCredential(apiKey));
     }
 
+    public string ClientType => "OpenAI";
+
     /// <summary>
     /// Sends a structured agent request to OpenAI, converting our canonical message types to OpenAI SDK types and back.
     /// </summary>

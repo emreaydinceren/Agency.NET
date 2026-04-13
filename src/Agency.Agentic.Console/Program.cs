@@ -41,10 +41,8 @@ internal class Program
 
         services.AddSingleton(sp =>
         {
-            AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            string model = options.DefaultModel
-                ?? throw new InvalidOperationException(
-                    "Missing required configuration value 'Agent:Model'.");
+           AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
+            var model = options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
             ILlmClient llmClient = sp.GetRequiredService<ILlmClient>();
             return new Agent(llmClient, model, stream: options.Stream);
         });

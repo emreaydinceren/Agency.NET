@@ -74,7 +74,7 @@ internal static class ConsolePicker
                 System.Console.SetCursorPosition(2, inputTop + 1);
                 System.Console.Write(new string(' ', totalWidth));
                 System.Console.SetCursorPosition(2, inputTop + 1);
-                System.Console.ForegroundColor = ConsoleColor.Gray;
+                System.Console.ForegroundColor = ConsoleColor.Cyan;
                 System.Console.Write(header);
                 System.Console.ResetColor();
             }
@@ -86,7 +86,7 @@ internal static class ConsolePicker
                 System.Console.SetCursorPosition(2, descRow);
                 System.Console.Write(new string(' ', totalWidth));
                 System.Console.SetCursorPosition(2, descRow);
-                System.Console.ForegroundColor = ConsoleColor.Gray;
+                System.Console.ForegroundColor = ConsoleColor.DarkGray;
                 System.Console.Write(description);
                 System.Console.ResetColor();
             }

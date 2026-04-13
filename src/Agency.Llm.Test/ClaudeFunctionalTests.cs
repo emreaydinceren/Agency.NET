@@ -1,5 +1,6 @@
 namespace Agency.Llm.Test;
 
+using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -176,7 +177,7 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
             this.Model = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:Model");
 
             this.Client = new Agency.Llm.Claude.ClaudeClient(
-                Options.Create(new OpenAI.LlmClientOptions
+                Options.Create(new LlmClientOptions
                 {
                     ApiKey = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:BaseUrl"),

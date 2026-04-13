@@ -176,7 +176,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
             this.Model = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:Model");
 
             this.Client = new Agency.Llm.OpenAI.OpenAIClient(
-                Options.Create(new Agency.Llm.OpenAI.LlmClientOptions
+                Options.Create(new Agency.Llm.Common.LlmClientOptions
                 {
                     ApiKey = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:BaseUrl"),

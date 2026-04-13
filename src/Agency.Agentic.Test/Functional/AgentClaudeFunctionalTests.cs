@@ -179,7 +179,7 @@ public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.Claude
             this.Model = GetRequired(configuration, $"{ConfigurationSection}:Model");
 
             this.LlmClient = new ClaudeClient(
-                Options.Create(new Llm.OpenAI.LlmClientOptions
+                Options.Create(new LlmClientOptions
                 {
                     ApiKey = GetRequired(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequired(configuration, $"{ConfigurationSection}:BaseUrl"),

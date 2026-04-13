@@ -6,9 +6,7 @@
       fresh binary. ReferenceOutputAssembly=false because we don't import any
       types from the exe — we only spawn it as a child process.
     -->
-    <ProjectReference Include="..\Agency.Agentic.Console\Agency.Agentic.Console.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
+    <ProjectReference Include="..\Agency.Agentic.Console\Agency.Agentic.Console.csproj" />
   </ItemGroup>
 
   <ItemGroup>

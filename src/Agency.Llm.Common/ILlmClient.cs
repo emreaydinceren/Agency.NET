@@ -64,7 +64,7 @@ public interface ILlmClient
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a read-only list of models.</returns>
-    Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>

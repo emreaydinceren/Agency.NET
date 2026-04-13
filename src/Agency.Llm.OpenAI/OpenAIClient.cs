@@ -536,7 +536,7 @@ public class OpenAIClient : ILlmClient
         yield return new AgentStreamChunk(null, null, stopReason ?? StopReason.Unknown, new LlmTokenUsage(inputTokens, outputTokens));
     }
 
-    public async Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default)
     {
         List<Model> models = new();
         var result = await this._client.GetOpenAIModelClient().GetModelsAsync(cancellationToken);

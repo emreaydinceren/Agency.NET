@@ -1,14 +1,19 @@
-namespace Agency.Llm.OpenAI;
+namespace Agency.Llm.Common;
 
 /// <summary>
 /// Options for configuring LlmClient client.
 /// </summary>
-public class LlmClientOptions
+public record class LlmClientOptions
 {
     /// <summary>
     /// Gets or sets the name associated with this instance.
     /// </summary>
     public string Name {  get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the name of the client.
+    /// </summary>
+    public string ClientType { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the OpenAI API key.

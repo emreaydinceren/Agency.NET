@@ -2,7 +2,6 @@ namespace Agency.Llm.Claude;
 
 using Agency.Llm.Common;
 using Agency.Llm.Common.Tools;
-using Agency.Llm.OpenAI;
 using Anthropic;
 using Anthropic.Core;
 using Anthropic.Models.Messages;
@@ -184,9 +183,9 @@ public class ClaudeClient : ILlmClient
         return new AgentLlmResponse(agentMsg, stopReason, usage);
     }
 
-    public async Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default)
     {
-        List<Model> models = new();
+        List<Model> models = [];
         var modelListPage = await this._client.Models.List(cancellationToken: cancellationToken);
         foreach (var modelInfo in modelListPage.Items)
         {

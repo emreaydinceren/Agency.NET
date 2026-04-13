@@ -73,6 +73,6 @@ internal sealed class FakeLlmClient : ILlmClient
         => throw new NotImplementedException("Use SendAgentAsync for agent loop tests.");
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<Model>> GetModels(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default)
         => throw new NotImplementedException("Use SendAgentAsync for agent loop tests.");
 }

@@ -36,7 +36,7 @@ public sealed class AgentConsoleTests
     [Fact]
     public async Task WelcomeBanner_IsShown_OnStartup()
     {
-        var (output, _) = await RunAsync(["exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, _) = await RunAsync(["/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Agency", output);
         Assert.Contains("Agent Chat Console", output);
@@ -49,27 +49,27 @@ public sealed class AgentConsoleTests
     [Fact]
     public async Task Banner_ShowsProviderAndModel()
     {
-        var (output, _) = await RunAsync(["exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, _) = await RunAsync(["/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Provider", output);
         Assert.Contains("Model", output);
     }
 
     /// <summary>
-    /// Verifies that "exit" terminates the app cleanly with a session summary and exit code 0.
+    /// Verifies that "/exit" terminates the app cleanly with a session summary and exit code 0.
     /// Does not call the LLM.
     /// </summary>
     [Fact]
     public async Task Exit_Command_PrintsSessionSummary_AndExitsCleanly()
     {
-        var (output, exitCode) = await RunAsync(["exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, exitCode) = await RunAsync(["/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Session ended", output);
         Assert.Equal(0, exitCode);
     }
 
     /// <summary>
-    /// Verifies that "quit" behaves identically to "exit".
+    /// Verifies that "quit" behaves identically to "/exit".
     /// Does not call the LLM.
     /// </summary>
     [Fact]
@@ -88,7 +88,7 @@ public sealed class AgentConsoleTests
     [Fact]
     public async Task EmptyInput_IsIgnored_ReplContinues()
     {
-        var (output, exitCode) = await RunAsync(["", "exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, exitCode) = await RunAsync(["", "/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Session ended", output);
         Assert.Equal(0, exitCode);
@@ -105,7 +105,7 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync([
             "Reply with exactly one word: hello",
-            "exit",
+            "/exit",
         ]);
 
         Assert.Contains("[Agent]", output);
@@ -120,7 +120,7 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync([
             "Reply with exactly one word: hello",
-            "exit",
+            "/exit",
         ]);
 
         Assert.Contains("[Agent]", output);
@@ -137,7 +137,7 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync([
             "What is 2 + 2? Reply with just the number.",
-            "exit",
+            "/exit",
         ]);
 
         Assert.Contains("Session ended", output);
@@ -159,7 +159,7 @@ public sealed class AgentConsoleTests
             [
                 "What is 2 + 2? Reply with just the number.",
                 "What is 3 + 3? Reply with just the number.",
-                "exit",
+                "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));
 
@@ -179,7 +179,7 @@ public sealed class AgentConsoleTests
             [
                 "What is 2 + 2? Reply with just the number.",
                 "What is 3 + 3? Reply with just the number.",
-                "exit",
+                "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));
 
@@ -198,7 +198,7 @@ public sealed class AgentConsoleTests
             [
                 "My name is John Doe. Just say 'Got it'.",
                 "What is my name? Reply with just my name.",
-                "exit",
+                "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));
 

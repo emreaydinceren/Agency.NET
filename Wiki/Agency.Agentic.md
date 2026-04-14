@@ -13,33 +13,53 @@ The loop, implemented in `Agent.RunAsync`, follows this pattern on every iterati
 ```
 1. Seed conversation with the user prompt (first iteration only)
 2. Build system prompt from Context
-3. Call ILlmClient.SendAgentAsync → AssistantTurnEvent
-4. Evaluate StopCondition
+3. Call ILlmClient — streaming or batch:
+   • stream=true  → StreamAgentAsync → yield TextDeltaEvent per token chunk
+   • stream=false → SendAgentAsync  → single batch response
+4. Emit AssistantTurnEvent + IterationCompletedEvent
+5. Evaluate StopCondition
    └── Stop? → AgentResultEvent → break
-5. Extract ToolUseBlocks from the assistant response
-6. Execute all tool calls in parallel → ToolInvokedEvent (one per tool)
-7. Append tool results to conversation as a User message
-8. Repeat
+6. Extract ToolUseBlocks from the assistant response
+7. Execute all tool calls in parallel → ToolInvokedEvent (one per tool)
+8. Append tool results to conversation as a User message
+9. Repeat
 ```
 
-### Basic Usage
+### Constructor
 
 ```csharp
-var agent = new Agent(llmClient, "claude-opus-4-6", stream: false);
+public Agent(
+    ILlmClient llm,
+    string model,
+    StopCondition? stopWhen = null,   // default: Any(NoToolCalls, StepCountIs(20))
+    bool stream = true,               // true → StreamAgentAsync, false → SendAgentAsync
+    ILogger<Agent>? logger = null)
+```
 
-var ctx = new Context
-{
-    Query    = new QueryContext { Prompt = "What files are in the current directory?" },
-    Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
-    Tools    = new ToolContext { Registry = myToolRegistry },
-};
+Properties: `Agent.Model` (string) and `Agent.ClientType` (forwarded from `ILlmClient.ClientType`).
+
+### Creating a Context
+
+Use the static factory so temporal context is set correctly:
+
+```csharp
+Context ctx = Agent.CreateContext("What files are in the current directory?", tools: myToolContext);
+```
+
+### Single-Session RunAsync
+
+```csharp
+var agent = new Agent(llmClient, "claude-opus-4-6");  // stream=true by default
 
 await foreach (AgentEvent evt in agent.RunAsync(ctx, cancellationToken))
 {
     switch (evt)
     {
+        case TextDeltaEvent delta:
+            Console.Write(delta.Delta);           // live token streaming
+            break;
         case AssistantTurnEvent turn:
-            Console.WriteLine(turn.Message);
+            // full turn available here after streaming completes
             break;
         case ToolInvokedEvent tool:
             Console.WriteLine($"Called {tool.ToolName}");
@@ -51,18 +71,17 @@ await foreach (AgentEvent evt in agent.RunAsync(ctx, cancellationToken))
 }
 ```
 
-### Multi-Turn Conversations
+### Multi-Turn Conversations (`ChatAsync`)
 
-Reuse the same `Context` across REPL iterations. `RunAsync` only seeds the conversation when `ctx.Conversation.Messages.Count == 0`, so you can append user messages manually for subsequent turns:
+`ChatAsync` manages context seeding automatically — use it instead of `RunAsync` for REPL loops:
 
 ```csharp
-// First turn: ctx.Query.Prompt seeds the conversation
-ctx = new Context { Query = new QueryContext { Prompt = input }, ... };
-
-// Subsequent turns: append before calling RunAsync again
-ctx.Conversation.Append(new AgentMessage(MessageRole.User, [new TextBlock(input)]));
-await foreach (var evt in agent.RunAsync(ctx, ct)) { ... }
+// First turn: seeds ctx from input
+// Subsequent turns: appends input as a User message before calling RunAsync
+await foreach (AgentEvent evt in agent.ChatAsync(input, ctx, options, ct)) { ... }
 ```
+
+An optional `AgentOptions.TurnTimeoutSeconds` applies a per-turn cancellation deadline.
 
 ## Context Object
 

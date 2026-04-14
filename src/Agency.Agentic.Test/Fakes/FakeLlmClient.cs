@@ -6,6 +6,9 @@ namespace Agency.Agentic.Test.Fakes;
 /// </summary>
 internal sealed class FakeLlmClient : ILlmClient
 {
+    /// <inheritdoc/>
+    public string ClientType => "Fake";
+
     private readonly Queue<AgentLlmResponse> _agentResponses = new();
 
     /// <summary>Gets the number of times <c>SendAgentAsync</c> was called.</summary>

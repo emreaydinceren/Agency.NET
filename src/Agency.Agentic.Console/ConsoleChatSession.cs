@@ -29,8 +29,6 @@ internal sealed class ConsoleChatSession
 
     public async Task RunAsync()
     {
-        int? turnTimeoutSeconds = _options.TurnTimeoutSeconds;
-
         // ── Welcome banner ────────────────────────────────────────────────────────────
 
         Out(ConsoleColor.Cyan, "╔═══════════════════════════════════════════╗");
@@ -102,28 +100,7 @@ internal sealed class ConsoleChatSession
             long prevIn  = ctx?.TotalUsage.InputTokens  ?? 0;
             long prevOut = ctx?.TotalUsage.OutputTokens ?? 0;
 
-            if (ctx is null)
-            {
-                // First user turn — agent seeds the conversation from Query.Prompt.
-                ctx = new Context
-                {
-                    Query = new QueryContext { Prompt = input },
-                    Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
-                };
-            }
-            else
-            {
-                // Subsequent turns — append the new user message before calling RunAsync.
-                // Agent.RunAsync only seeds when the conversation is empty, so reusing the
-                // same Context gives a persistent multi-turn conversation within one session.
-                ctx.Conversation.Append(new AgentMessage(MessageRole.User, [new TextBlock(input)]));
-            }
-
-            using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token);
-            if (turnTimeoutSeconds is > 0)
-            {
-                turnCts.CancelAfter(TimeSpan.FromSeconds(turnTimeoutSeconds.Value));
-            }
+            ctx ??= Agent.CreateContext(input);
 
             bool interrupted = false;
             bool streamingStarted = false;
@@ -131,7 +108,7 @@ internal sealed class ConsoleChatSession
 
             try
             {
-                await foreach (AgentEvent evt in _agent.RunAsync(ctx, turnCts.Token))
+                await foreach (AgentEvent evt in _agent.ChatAsync(input, ctx, _options, sessionCts.Token))
                 {
                     switch (evt)
                     {
@@ -153,11 +130,11 @@ internal sealed class ConsoleChatSession
                                 streamingStarted = false;
                                 AnsiConsole.Markup("[green][[Agent]][/] ");
                                 using var ms = new MemoryStream(Encoding.UTF8.GetBytes(buffered));
-                                await AnsiConsole.Console.WriteMarkdownAsync(ms, MarkdownStyles.Default, Encoding.UTF8, turnCts.Token);
+                                await AnsiConsole.Console.WriteMarkdownAsync(ms, MarkdownStyles.Default, Encoding.UTF8, sessionCts.Token);
                             }
                             else
                             {
-                                await PrintAssistantTurnAsync(turn.Message, turnCts.Token);
+                                await PrintAssistantTurnAsync(turn.Message, sessionCts.Token);
                             }
                             break;
 

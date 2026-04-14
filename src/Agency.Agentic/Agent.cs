@@ -44,6 +44,55 @@ public sealed class Agent
     public string ClientType => this._llm.ClientType;
 
     /// <summary>
+    /// Creates a new <see cref="Context"/> for a multi-turn conversation session,
+    /// pre-populated with temporal context and the initial user prompt.
+    /// </summary>
+    /// <param name="initialPrompt">The first user message that seeds the conversation.</param>
+    /// <param name="tools">Optional tool context; defaults to <see cref="ToolContext.Empty"/>.</param>
+    public static Context CreateContext(string initialPrompt, ToolContext? tools = null) =>
+        new()
+        {
+            Query = new QueryContext { Prompt = initialPrompt },
+            Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
+            Tools = tools ?? ToolContext.Empty,
+        };
+
+    /// <summary>
+    /// Executes a single user turn within an ongoing conversation. On the first turn
+    /// (empty conversation), delegates directly to <see cref="RunAsync"/> which seeds
+    /// from <see cref="QueryContext.Prompt"/>. On subsequent turns, appends
+    /// <paramref name="userMessage"/> before calling <see cref="RunAsync"/>.
+    /// Applies a per-turn timeout when <see cref="AgentOptions.TurnTimeoutSeconds"/> is configured.
+    /// </summary>
+    /// <param name="userMessage">The user's message for this turn.</param>
+    /// <param name="ctx">The session context, mutated in place across turns.</param>
+    /// <param name="options">Optional agent options; used only for <see cref="AgentOptions.TurnTimeoutSeconds"/>.</param>
+    /// <param name="ct">Cancellation token for the turn.</param>
+    public async IAsyncEnumerable<AgentEvent> ChatAsync(
+        string userMessage,
+        Context ctx,
+        AgentOptions? options = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (ctx.Conversation.Messages.Count > 0)
+        {
+            ctx.Conversation.Append(new AgentMessage(MessageRole.User, [new TextBlock(userMessage)]));
+        }
+
+        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        int? timeout = options?.TurnTimeoutSeconds;
+        if (timeout is > 0)
+        {
+            turnCts.CancelAfter(TimeSpan.FromSeconds(timeout.Value));
+        }
+
+        await foreach (AgentEvent evt in this.RunAsync(ctx, turnCts.Token))
+        {
+            yield return evt;
+        }
+    }
+
+    /// <summary>
     /// Runs the agent loop over <paramref name="ctx"/>, yielding events as they occur. The first event is always
     /// <see cref="SessionStartedEvent"/>; the last is always <see cref="AgentResultEvent"/>. When streaming is enabled,
     /// <see cref="TextDeltaEvent"/> s are emitted for each text token.

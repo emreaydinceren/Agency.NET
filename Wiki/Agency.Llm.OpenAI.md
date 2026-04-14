@@ -9,14 +9,20 @@
 ## How It Works
 
 ```csharp
-var client = new OpenAIClient(Options.Create(new OpenAIClientOptions
+var client = new OpenAIClient(Options.Create(new LlmClientOptions
 {
     ApiKey  = "lm-studio",
     BaseUrl = "http://llm-host.example:1234/v1",   // LM Studio
 }));
 
 // Simple prompt
-string reply = await client.SendAsync("qwen/qwen3-coder-next", "Explain HNSW indexes.");
+LlmResponse reply = await client.SendAsync("qwen/qwen3-coder-next", "system", "Explain HNSW indexes.");
+
+// Streaming simple prompt
+await foreach (LlmStreamChunk chunk in client.StreamAsync("qwen/qwen3-coder-next", "system", "prompt"))
+{
+    if (chunk.Text is not null) Console.Write(chunk.Text);
+}
 
 // Agentic turn
 AgentLlmResponse response = await client.SendAgentAsync(
@@ -25,7 +31,20 @@ AgentLlmResponse response = await client.SendAgentAsync(
     messages:     conversationHistory,
     tools:        toolDefinitions,
     ct:           cancellationToken);
+
+// Streaming agentic turn — tool-use blocks are yielded after the stream ends (OpenAI protocol)
+await foreach (AgentStreamChunk chunk in client.StreamAgentAsync("qwen3", systemPrompt, messages, tools, ct))
+{
+    if (chunk.Text is not null)       Console.Write(chunk.Text);
+    if (chunk.ToolUse is not null)    HandleToolUse(chunk.ToolUse);
+    if (chunk.StopReason is not null) Console.WriteLine(chunk.Usage);
+}
+
+// List available models
+IReadOnlyList<Model> models = await client.GetModelsAsync();
 ```
+
+`ClientType` returns `"OpenAI"`.
 
 ## OpenAI SDK Mapping
 
@@ -66,7 +85,10 @@ private static IEnumerable<ChatMessage> ConvertToOpenAIMessages(AgentMessage mes
 Same pattern as [[Agency.Llm.Claude]]:
 - `ActivitySource` name: `Agency.Llm.OpenAI`
 - `Meter` name: `Agency.Llm.OpenAI`
-- Metrics: `openai.requests`, `openai.errors`, `openai.duration`, `openai.tokens`
+- Metrics: `llm.client.requests`, `llm.client.errors`, `llm.client.duration`, `llm.client.tokens`
+- Tags: `gen_ai.system=openai`, `gen_ai.request.model`, `llm.method`, `gen_ai.token.type`
+
+> **Note**: For OpenAI, `StreamAgentAsync` accumulates all tool-call argument chunks before yielding `ToolUse` blocks (they all arrive after the terminal chunk). Claude's `StreamAgentAsync` yields each tool block as soon as its JSON is fully received.
 
 ## How It Relates to Other Projects
 

@@ -1,5 +1,5 @@
-using Anthropic.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Agency.Agentic.Console.Commands;
 
@@ -35,20 +35,15 @@ internal class ModelsCommand
         var models = session.ServiceProvider.GetRequiredService<Models>();
         var results = await models.GetAllAsync();
 
-        List<string[]> modelRows = [];
-
-        foreach (var result in results)
+        ConsolePicker.Show(prompt =>
         {
-            foreach (var model in result)
+            foreach (var result in results)
             {
-                modelRows.Add(new string[] { result.Key.Name, model.Name });
+                prompt.AddChoiceGroup<string>(result.Key.Name, result.Select(m => m.Name));
             }
+            return prompt;
         }
-
-        int pickerTop = System.Console.CursorTop;
-        int pickerLeft = System.Console.CursorLeft;
-
-        ConsolePicker.Show(modelRows, 0, pickerTop, pickerLeft, "Select Model", "Switch between models");
+        , "Select Model", "Switch between models");
 
         return CommandContinuation.Continue;
     }

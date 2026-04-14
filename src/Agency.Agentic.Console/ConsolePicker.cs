@@ -1,189 +1,151 @@
 namespace Agency.Agentic.Console;
 
+using Spectre.Console;
 using System.Text;
+
+internal class ConsolePickerRow(params string[] values)
+{
+    public string[] Values { get; } = values;
+
+    public string this[int index] => Values[index];
+}
 
 /// <summary>
 /// Renders an inline multi-column picker UI in the console with arrow-key navigation.
 /// </summary>
 internal static class ConsolePicker
 {
-    /// <summary>
-    /// Renders an inline multi-column picker below the current input line. Arrow keys navigate; Enter confirms; Escape dismisses.
-    /// Each item is a <see cref="string"/> array whose columns are padded to align on screen.
-    /// </summary>
-    /// <param name="items">Rows to display; each element is an array of column values.</param>
-    /// <param name="returnItemIndex">Index of the column whose value is returned on selection.</param>
-    /// <param name="inputTop">Cursor row of the active input line.</param>
-    /// <param name="inputLeft">Cursor column right after the last typed character.</param>
-    /// <param name="header">Optional header text displayed above the picker with dimmer styling; if <see langword="null"/>, not shown.</param>
-    /// <param name="description">Optional description text displayed above the items with dimmer styling; if <see langword="null"/>, not shown.</param>
-    /// <returns>
-    /// The value at <paramref name="returnItemIndex"/> for the selected row, or <see langword="null"/> if dismissed.
-    /// </returns>
-    internal static string? Show(IEnumerable<string[]> items, int returnItemIndex, int inputTop, int inputLeft, string? header = null, string? description = null)
+    public static string? Show(
+    IReadOnlyCollection<ConsolePickerRow> rows,
+    int returnItemIndex,
+    string? title = null,
+    string? moreChoicesText = null,
+    bool? searchEnabled = false,
+    string? searchPlaceholderText = null,
+    int pageSize = 10)
     {
-        string[][] rows = items.ToArray();
-        if (rows.Length == 0)
+        Dictionary<int, int> maxWidthOfColumn = new Dictionary<int, int>();
+
+        foreach(var row in rows)
+        {
+            for(int colIndex = 0; colIndex < row.Values.Length; colIndex++)
+            {
+                if (maxWidthOfColumn.TryGetValue(colIndex, out var maxWidth) == false)
+                {
+                    maxWidthOfColumn[colIndex] = row[colIndex].Length;
+                }
+                else
+                {
+                    maxWidthOfColumn[colIndex] = Math.Max(maxWidth, row[colIndex].Length);
+                }
+            }
+        }
+
+        string[] options = new string[rows.Count];
+        Dictionary<string, string> reverseLookUp = new();
+
+        int optionIndex = 0;
+        foreach (var row in rows)
+        {
+            var line = new StringBuilder();
+            for (int i = 0; i < row.Values.Length; i++)
+            {
+                string value = row.Values[i];
+                line.Append(value.PadRight(maxWidthOfColumn[i] + 2));
+            }
+
+            options[optionIndex++] = line.ToString();
+            reverseLookUp[line.ToString()] = row.Values[returnItemIndex];
+        }
+
+        var selected = Show(
+        options, title,moreChoicesText, searchEnabled, searchPlaceholderText, pageSize);
+
+        if (selected != null && reverseLookUp.TryGetValue(selected, out var original))
+        {
+            return original.Trim();
+        }
+
+        return null;
+    }
+
+    public static string? Show(
+    string[] options,
+    string? title = null,
+    string? moreChoicesText = null,
+    bool? searchEnabled = false,
+    string? searchPlaceholderText = null,
+    int pageSize = 10)
+    {
+        return Show(prompt => 
+        prompt.AddChoices(options),
+        title, moreChoicesText, searchEnabled, searchPlaceholderText, pageSize);
+    }
+
+    /// <summary>
+    /// Presents a single list prompt.
+    /// </summary>
+    /// <param name="promptFunc">
+    /// A function that configures the <see cref="SelectionPrompt{T}"/> with items and styling.
+    /// </param>
+    /// <param name="title">Optional title text for the prompt; if <see langword="null"/>, not shown.</param>
+    /// <param name="moreChoicesText">
+    /// <example>
+    /// var selection = await ShowSelectionPromptAsync( prompt => prompt .AddChoiceGroup("Berries", new[] {
+    /// "Blackcurrant", "Blueberry", "Cloudberry", "Elderberry", "Honeyberry", "Mulberry" }) .AddChoices(new[] {
+    /// "Apple", "Apricot", "Avocado", "Banana", "Cherry", "Cocunut", "Date", "Dragonfruit", "Durian", "Egg plant",
+    /// "Fig", "Grape", "Guava", "Jackfruit", "Jambul", "Kiwano", "Kiwifruit", "Lime", "Lylo", "Lychee", "Melon",
+    /// "Nectarine", "Orange", "Olive" }), title: "Select your favorite [green]fruit[/]:", moreChoicesText: "[grey](Move
+    /// up and down to reveal more fruits)[/]" );
+    /// </example>
+    public static string? Show(
+        Func<SelectionPrompt<string>, SelectionPrompt<string>> promptFunc,
+        string? title = null,
+        string? moreChoicesText = null,
+        bool? searchEnabled = false,
+        string? searchPlaceholderText = null,
+        int pageSize = 10)
+    {
+        var prompt = new SelectionPrompt<string>().PageSize(pageSize);
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            prompt = prompt.Title(title);
+        }
+
+        if (!string.IsNullOrWhiteSpace(moreChoicesText))
+        {
+            prompt = prompt.MoreChoicesText(moreChoicesText);
+        }
+
+        prompt = promptFunc(prompt);
+
+        prompt.SearchEnabled = searchEnabled ?? false;
+        prompt.SearchPlaceholderText = searchPlaceholderText;
+
+        int startTop = System.Console.CursorTop;
+        int startLeft = System.Console.CursorLeft;
+
+        prompt.AddCancelResult("[grey][[Press ESC to cancel]][/]");
+
+        try
+        {
+            return AnsiConsole.Prompt(prompt);
+        }
+        catch (OperationCanceledException)
         {
             return null;
         }
-
-        // Compute the maximum width for each column position.
-        int colCount = rows.Max(r => r.Length);
-        int[] colWidths = new int[colCount];
-        foreach (string[] row in rows)
+        finally
         {
-            for (int c = 0; c < row.Length; c++)
+            int endTop = System.Console.CursorTop;
+            for (int row = endTop; row >= startTop; row--)
             {
-                colWidths[c] = Math.Max(colWidths[c], row[c].Length);
-            }
-        }
-
-        // Calculate total width: 1 leading space + columns + 2 spaces between cols + 1 trailing space.
-        int contentWidth = colWidths.Sum() + (colCount - 1) * 2;
-        int totalWidth = 1 + contentWidth + 1;
-
-        // Expand to fill console width if available.
-        int consoleWidth = System.Console.WindowWidth - 2; // Account for left margin
-        if (totalWidth < consoleWidth)
-        {
-            int extraSpace = consoleWidth - totalWidth;
-            colWidths[colCount - 1] += extraSpace;
-            totalWidth = consoleWidth;
-        }
-
-        // Calculate item offset based on header and description.
-        int itemOffset = 0;
-        if (!string.IsNullOrEmpty(header))
-        {
-            itemOffset++;
-        }
-
-        if (!string.IsNullOrEmpty(description))
-        {
-            itemOffset++;
-        }
-
-        int selectedIndex = 0;
-
-        void Render()
-        {
-            // Render header with dimmer styling.
-            if (!string.IsNullOrEmpty(header))
-            {
-                System.Console.SetCursorPosition(2, inputTop + 1);
-                System.Console.Write(new string(' ', totalWidth));
-                System.Console.SetCursorPosition(2, inputTop + 1);
-                System.Console.ForegroundColor = ConsoleColor.Cyan;
-                System.Console.Write(header);
-                System.Console.ResetColor();
+                System.Console.SetCursorPosition(0, row);
+                System.Console.Write(new string(' ', System.Console.BufferWidth));
             }
 
-            // Render description with dimmer styling.
-            if (!string.IsNullOrEmpty(description))
-            {
-                int descRow = inputTop + 1 + (string.IsNullOrEmpty(header) ? 0 : 1);
-                System.Console.SetCursorPosition(2, descRow);
-                System.Console.Write(new string(' ', totalWidth));
-                System.Console.SetCursorPosition(2, descRow);
-                System.Console.ForegroundColor = ConsoleColor.DarkGray;
-                System.Console.Write(description);
-                System.Console.ResetColor();
-            }
-
-            // Render items.
-            for (int i = 0; i < rows.Length; i++)
-            {
-                System.Console.SetCursorPosition(2, inputTop + 1 + itemOffset + i);
-                System.Console.Write(new string(' ', totalWidth));
-                System.Console.SetCursorPosition(2, inputTop + 1 + itemOffset + i);
-
-                if (i == selectedIndex)
-                {
-                    System.Console.BackgroundColor = ConsoleColor.DarkBlue;
-                    System.Console.ForegroundColor = ConsoleColor.White;
-                }
-
-                var sb = new StringBuilder(" ");
-                for (int c = 0; c < rows[i].Length; c++)
-                {
-                    sb.Append(rows[i][c].PadRight(colWidths[c]));
-                    if (c < rows[i].Length - 1)
-                    {
-                        sb.Append("  ");
-                    }
-                }
-
-                sb.Append(' ');
-                System.Console.Write(sb.ToString());
-                System.Console.ResetColor();
-            }
-
-            System.Console.SetCursorPosition(inputLeft, inputTop);
-        }
-
-        void Clear()
-        {
-            // Clear header if present.
-            if (!string.IsNullOrEmpty(header))
-            {
-                System.Console.SetCursorPosition(0, inputTop + 1);
-                System.Console.Write(new string(' ', totalWidth + 2));
-            }
-
-            // Clear description if present.
-            if (!string.IsNullOrEmpty(description))
-            {
-                int descRow = inputTop + 1 + (string.IsNullOrEmpty(header) ? 0 : 1);
-                System.Console.SetCursorPosition(0, descRow);
-                System.Console.Write(new string(' ', totalWidth + 2));
-            }
-
-            // Clear items.
-            for (int i = 0; i < rows.Length; i++)
-            {
-                System.Console.SetCursorPosition(0, inputTop + 1 + itemOffset + i);
-                System.Console.Write(new string(' ', totalWidth + 2));
-            }
-
-            System.Console.SetCursorPosition(inputLeft, inputTop);
-        }
-
-        Render();
-
-        while (true)
-        {
-            ConsoleKeyInfo key = System.Console.ReadKey(intercept: true);
-
-            switch (key.Key)
-            {
-                case ConsoleKey.UpArrow:
-                    if (selectedIndex > 0)
-                    {
-                        selectedIndex--;
-                        Render();
-                    }
-
-                    break;
-
-                case ConsoleKey.DownArrow:
-                    if (selectedIndex < rows.Length - 1)
-                    {
-                        selectedIndex++;
-                        Render();
-                    }
-
-                    break;
-
-                case ConsoleKey.Enter:
-                    Clear();
-                    string[] selected = rows[selectedIndex];
-                    return returnItemIndex < selected.Length ? selected[returnItemIndex] : null;
-
-                case ConsoleKey.Escape:
-                    Clear();
-                    return null;
-            }
+            System.Console.SetCursorPosition(startLeft, startTop);
         }
     }
 }

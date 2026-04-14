@@ -7,9 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Agency.Agentic\Agency.Agentic.csproj" />
-    <ProjectReference Include="..\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <ProjectReference Include="..\Agency.Llm.Common\Agency.Llm.Common.csproj" />
-    <ProjectReference Include="..\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

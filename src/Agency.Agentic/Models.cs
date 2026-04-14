@@ -1,6 +1,5 @@
-namespace Agency.Agentic.Console;
+namespace Agency.Agentic;
 
-using Agency.Agentic;
 using Agency.Llm.Claude;
 using Agency.Llm.Common;
 using Agency.Llm.OpenAI;

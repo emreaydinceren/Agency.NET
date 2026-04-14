@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Agentic;
 
@@ -9,11 +13,38 @@ namespace Agency.Agentic;
 /// </summary>
 public sealed class Agent
 {
+    public static readonly string ActivitySourceName = "Agency.Agentic.Agent";
+    public static readonly string MeterName = "Agency.Agentic.Agent";
+
+    private static readonly ActivitySource _activitySource = new(ActivitySourceName);
+    private static readonly Meter _meter = new(MeterName);
+
+    private static readonly Counter<long> _turnCounter = _meter.CreateCounter<long>(
+        "agent.turns",
+        description: "Total number of agent chat turns");
+
+    private static readonly Counter<long> _errorCounter = _meter.CreateCounter<long>(
+        "agent.errors",
+        description: "Total number of failed agent turns");
+
+    private static readonly Histogram<double> _turnDurationHistogram = _meter.CreateHistogram<double>(
+        "agent.turn.duration",
+        unit: "ms",
+        description: "Duration of an agent chat turn in milliseconds");
+
+    private static readonly Counter<long> _tokenCounter = _meter.CreateCounter<long>(
+        "agent.tokens",
+        description: "Number of tokens consumed by the agent");
+
+    private static readonly Counter<long> _toolCallCounter = _meter.CreateCounter<long>(
+        "agent.tool.calls",
+        description: "Total number of tool calls executed by the agent");
+
     private readonly ILlmClient _llm;
     private readonly string _model;
     private readonly StopCondition _stop;
     private readonly bool _stream;
-    private readonly ILogger<Agent>? _logger;
+    private readonly ILogger<Agent> _logger;
 
     /// <param name="llm">The LLM client; must implement <see cref="ILlmClient.SendAgentAsync"/>.</param>
     /// <param name="model">The model identifier forwarded to the provider on every call.</param>
@@ -36,7 +67,7 @@ public sealed class Agent
         this._model = model ?? throw new ArgumentNullException(nameof(model));
         this._stop = stopWhen ?? StopConditions.Any(StopConditions.NoToolCalls, StopConditions.StepCountIs(20));
         this._stream = stream;
-        this._logger = logger;
+        this._logger = logger ?? NullLogger<Agent>.Instance;
     }
 
     public string Model => this._model;
@@ -74,6 +105,27 @@ public sealed class Agent
         AgentOptions? options = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        using var activity = _activitySource.StartActivity("Agent.ChatAsync");
+        activity?.SetTag("agent.model", this._model);
+        activity?.SetTag("agent.client_type", this._llm.ClientType);
+        activity?.SetTag("agent.stream", this._stream);
+
+        var tags = new TagList
+        {
+            { "agent.model", this._model },
+            { "agent.client_type", this._llm.ClientType },
+            { "agent.stream", this._stream },
+        };
+
+        _turnCounter.Add(1, tags);
+        var sw = Stopwatch.StartNew();
+        long prevInputTokens = ctx.TotalUsage.InputTokens;
+        long prevOutputTokens = ctx.TotalUsage.OutputTokens;
+
+        this._logger.LogInformation(
+            "Starting agent chat turn. Model={Model}, ClientType={ClientType}, Stream={Stream}",
+            this._model, this._llm.ClientType, this._stream);
+
         if (ctx.Conversation.Messages.Count > 0)
         {
             ctx.Conversation.Append(new AgentMessage(MessageRole.User, [new TextBlock(userMessage)]));
@@ -84,11 +136,82 @@ public sealed class Agent
         if (timeout is > 0)
         {
             turnCts.CancelAfter(TimeSpan.FromSeconds(timeout.Value));
+            activity?.SetTag("agent.turn.timeout_seconds", timeout.Value);
         }
 
-        await foreach (AgentEvent evt in this.RunAsync(ctx, turnCts.Token))
+        var enumerator = this.RunAsync(ctx, turnCts.Token).GetAsyncEnumerator(turnCts.Token);
+        Exception? turnError = null;
+
+        try
         {
-            yield return evt;
+            while (true)
+            {
+                bool moved;
+                try
+                {
+                    moved = await enumerator.MoveNextAsync();
+                }
+                catch (Exception ex)
+                {
+                    turnError = ex;
+                    break;
+                }
+
+                if (!moved)
+                {
+                    break;
+                }
+
+                yield return enumerator.Current;
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+            sw.Stop();
+
+            _turnDurationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
+
+            if (turnError is not null)
+            {
+                _errorCounter.Add(1, tags);
+                activity?.SetStatus(ActivityStatusCode.Error, turnError.Message);
+                this._logger.LogError(
+                    turnError,
+                    "Agent chat turn failed. Model={Model}, ClientType={ClientType}",
+                    this._model, this._llm.ClientType);
+            }
+            else
+            {
+                long deltaIn = ctx.TotalUsage.InputTokens - prevInputTokens;
+                long deltaOut = ctx.TotalUsage.OutputTokens - prevOutputTokens;
+
+                _tokenCounter.Add(deltaIn, new TagList
+                {
+                    { "agent.model", this._model },
+                    { "agent.client_type", this._llm.ClientType },
+                    { "agent.token.type", "input" },
+                });
+
+                _tokenCounter.Add(deltaOut, new TagList
+                {
+                    { "agent.model", this._model },
+                    { "agent.client_type", this._llm.ClientType },
+                    { "agent.token.type", "output" },
+                });
+
+                activity?.SetTag("agent.usage.input_tokens", deltaIn);
+                activity?.SetTag("agent.usage.output_tokens", deltaOut);
+
+                this._logger.LogInformation(
+                    "Agent chat turn completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                    this._model, deltaIn, deltaOut, sw.Elapsed.TotalMilliseconds);
+            }
+        }
+
+        if (turnError is not null)
+        {
+            ExceptionDispatchInfo.Capture(turnError).Throw();
         }
     }
 
@@ -166,6 +289,20 @@ public sealed class Agent
                 turnUsage = response.Usage;
             }
 
+            _tokenCounter.Add(turnUsage.InputTokens, new TagList
+            {
+                { "agent.model", this._model },
+                { "agent.client_type", this._llm.ClientType },
+                { "agent.token.type", "input" },
+            });
+
+            _tokenCounter.Add(turnUsage.OutputTokens, new TagList
+            {
+                { "agent.model", this._model },
+                { "agent.client_type", this._llm.ClientType },
+                { "agent.token.type", "output" },
+            });
+
             ctx.TotalUsage = new(
                 ctx.TotalUsage.InputTokens + turnUsage.InputTokens,
                 ctx.TotalUsage.OutputTokens + turnUsage.OutputTokens);
@@ -205,9 +342,17 @@ public sealed class Agent
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    this._logger?.LogWarning(ex, "Tool {Tool} failed", use.Name);
+                    this._logger.LogWarning(ex, "Tool {Tool} failed", use.Name);
                     result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
                 }
+
+                _toolCallCounter.Add(1, new TagList
+                {
+                    { "agent.model", this._model },
+                    { "agent.client_type", this._llm.ClientType },
+                    { "agent.tool.name", use.Name },
+                    { "agent.tool.error", result.IsError },
+                });
 
                 resultBlocks[index] = new ToolResultBlock(use.Id, result.Content, result.IsError);
                 return new ToolInvokedEvent(use.Name, use.Input, result);

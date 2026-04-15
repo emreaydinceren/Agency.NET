@@ -1,4 +1,6 @@
 
+using Agency.Agentic.Tools;
+
 namespace Agency.Agentic;
 
 /// <summary>The user's intent for this agent session.</summary>
@@ -43,7 +45,9 @@ public sealed record ToolContext
     public static ToolContext Empty { get; } = new();
 
     /// <summary>Gets the tool registry to dispatch tool calls against.</summary>
-    public IToolRegistry Registry { get; init; } = Agency.Agentic.Tools.EmptyToolRegistry.Instance;
+    public IToolRegistry Registry { get; init; } = new ToolRegistry(
+        [new ExecutePowershellTool(),
+            new ReadFileTool()]);
 }
 
 /// <summary>Caller identity and preferences injected into the system prompt.</summary>

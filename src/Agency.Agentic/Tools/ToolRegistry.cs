@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 namespace Agency.Agentic.Tools;
+
 // ITool, IToolRegistry, ToolDefinition, ToolResult come from Agency.Llm.Common.Tools via global usings.
 
 /// <summary>No-op registry used when no tools are registered.</summary>
@@ -13,8 +14,8 @@ internal sealed class EmptyToolRegistry : IToolRegistry
 }
 
 /// <summary>
-/// Default in-memory <see cref="IToolRegistry"/> backed by a name-keyed dictionary.
-/// Tool invocations are dispatched by name; unknown names return an error result.
+/// Default in-memory <see cref="IToolRegistry"/> backed by a name-keyed dictionary. Tool invocations are dispatched by
+/// name; unknown names return an error result.
 /// </summary>
 public sealed class ToolRegistry : IToolRegistry
 {

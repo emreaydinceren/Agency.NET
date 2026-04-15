@@ -6,8 +6,6 @@ using Agency.Llm.Common.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using NTokenizers.Extensions.Spectre.Console;
-using NTokenizers.Extensions.Spectre.Console.Styles;
 using Spectre.Console;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -177,24 +175,27 @@ internal sealed class ConsoleChatSession
                                     string buffered = streamingBuffer!.ToString();
                                     streamingBuffer = null;
                                     streamingStarted = false;
-                                    AnsiConsole.Markup("[green][[Agent]][/] ");
-                                    using var ms = new MemoryStream(Encoding.UTF8.GetBytes(buffered));
-                                    await AnsiConsole.Console.WriteMarkdownAsync(ms, MarkdownStyles.Default, Encoding.UTF8, sessionCts.Token);
+                                    AnsiConsole.Markup("[green][[Agent]][/]");
+                                    MarkdownRenderer.Print(buffered);
                                 }
                                 else
                                 {
-                                    await PrintAssistantTurnAsync(turn.Message, sessionCts.Token);
+                                    PrintAssistantTurn(turn.Message);
                                 }
 
                                 break;
 
                             case ToolInvokedEvent tool:
+                                //  This fires after the agent has actually executed the tool
                                 OutInline(ConsoleColor.Yellow, $"  ⚙ {tool.ToolName}");
                                 OutInline(ConsoleColor.DarkGray, " → ");
                                 var resultPreview = tool.Result.Content.Length > 100
                                     ? string.Concat(tool.Result.Content.AsSpan(0, 100), "…")
                                     : tool.Result.Content;
-                                Out(tool.Result.IsError ? ConsoleColor.Red : ConsoleColor.DarkGreen, resultPreview);
+                                if (tool.Result.IsError)
+                                {
+                                    Out(ConsoleColor.Red, resultPreview);
+                                }
                                 break;
 
                             case AgentResultEvent result:
@@ -417,7 +418,7 @@ internal sealed class ConsoleChatSession
         }
     }
 
-    private static async Task PrintAssistantTurnAsync(AgentMessage message, CancellationToken ct)
+    private static void PrintAssistantTurn(AgentMessage message)
     {
         foreach (ContentBlock block in message.Content)
         {
@@ -425,15 +426,16 @@ internal sealed class ConsoleChatSession
             {
                 case TextBlock tb when !string.IsNullOrWhiteSpace(tb.Text):
                 {
-                    AnsiConsole.Markup("[green][[Agent]][/] ");
-                    byte[] textBytes = Encoding.UTF8.GetBytes(tb.Text);
-                    using var ms = new MemoryStream(textBytes);
-                    await AnsiConsole.Console.WriteMarkdownAsync(ms, MarkdownStyles.Default, Encoding.UTF8, ct);
+                    // This is when Agent wants to write a message
+                    AnsiConsole.MarkupLine("[green][[Agent]][/]");
+                    MarkdownRenderer.Print(tb.Text);
                     break;
                 }
 
                 case ToolUseBlock tub:
-                    Out(ConsoleColor.Magenta, $"  → calling {tub.Name}");
+
+                // This is when Agent wants to call a tool - we show the tool name and input, but not the output (since it may be large or sensitive)
+                Out(ConsoleColor.Magenta, $"  → calling {tub.Name} {tub.Input}");
                     break;
             }
         }

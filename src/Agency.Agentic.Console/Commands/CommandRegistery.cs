@@ -35,16 +35,20 @@ internal class ModelsCommand
         var models = session.ServiceProvider.GetRequiredService<Models>();
         var results = await models.GetAllAsync();
 
-        ConsolePicker.Show(prompt =>
+        var (selectedClient, selectedModel) = ConsolePicker.Show<(string,string)>(prompt =>
         {
             foreach (var result in results)
             {
-                prompt.AddChoiceGroup<string>(result.Key.Name, result.Select(m => m.Name));
+                prompt.AddChoiceGroup<(string, string)>(new (string.Empty, result.Key.Name), result.Select(m => (result.Key.Name, m.Id)));
             }
             return prompt;
-        }
-        , "Select Model", "Switch between models");
+        },
+        itemToStringConverter: item => item.Item2,
+        moreChoicesText: "More models available...",
+        title: "Select Model",
+        searchPlaceholderText: "Switch between models");
 
+        //TODO: Handle model switch
         return CommandContinuation.Continue;
     }
 }

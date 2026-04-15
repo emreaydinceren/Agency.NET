@@ -77,9 +77,9 @@ internal static class ConsolePicker
     string? searchPlaceholderText = null,
     int pageSize = 10)
     {
-        return Show(prompt => 
+        return Show<string>(prompt => 
         prompt.AddChoices(options),
-        title, moreChoicesText, searchEnabled, searchPlaceholderText, pageSize);
+        title, moreChoicesText, searchEnabled, searchPlaceholderText, null, null, pageSize);
     }
 
     /// <summary>
@@ -98,15 +98,17 @@ internal static class ConsolePicker
     /// "Nectarine", "Orange", "Olive" }), title: "Select your favorite [green]fruit[/]:", moreChoicesText: "[grey](Move
     /// up and down to reveal more fruits)[/]" );
     /// </example>
-    public static string? Show(
-        Func<SelectionPrompt<string>, SelectionPrompt<string>> promptFunc,
+    public static T? Show<T>(
+        Func<SelectionPrompt<T>, SelectionPrompt<T>> promptFunc,
         string? title = null,
         string? moreChoicesText = null,
         bool? searchEnabled = false,
         string? searchPlaceholderText = null,
-        int pageSize = 10)
+        T? cancelValue = default,
+        Func<T, string>? itemToStringConverter = null,
+        int pageSize = 10) where T : notnull
     {
-        var prompt = new SelectionPrompt<string>().PageSize(pageSize);
+        var prompt = new SelectionPrompt<T> ().PageSize(pageSize);
 
         if (!string.IsNullOrWhiteSpace(title))
         {
@@ -119,14 +121,20 @@ internal static class ConsolePicker
         }
 
         prompt = promptFunc(prompt);
-
+        if (itemToStringConverter != null)
+        {
+            prompt.Converter = itemToStringConverter;
+        }
         prompt.SearchEnabled = searchEnabled ?? false;
         prompt.SearchPlaceholderText = searchPlaceholderText;
 
         int startTop = System.Console.CursorTop;
         int startLeft = System.Console.CursorLeft;
 
-        prompt.AddCancelResult("[grey][[Press ESC to cancel]][/]");
+        if (cancelValue != null)
+        {
+            prompt.AddCancelResult(cancelValue);
+        }
 
         try
         {
@@ -134,7 +142,7 @@ internal static class ConsolePicker
         }
         catch (OperationCanceledException)
         {
-            return null;
+            return default;
         }
         finally
         {

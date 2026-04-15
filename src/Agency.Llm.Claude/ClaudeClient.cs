@@ -286,7 +286,6 @@ public class ClaudeClient : ILlmClient
                 MaxTokens = maxTokens ?? 1024,
                 Model = model,
                 System = systemPrompt,
-                Temperature = temperature,
                 Messages = [
                     new()
                     {
@@ -390,7 +389,6 @@ public class ClaudeClient : ILlmClient
             MaxTokens = maxTokens ?? 1024,
             Model = model,
             System = systemPrompt,
-            Temperature = temperature,
             Messages = [
                 new()
                 {

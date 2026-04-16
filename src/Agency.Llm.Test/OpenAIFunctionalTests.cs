@@ -28,7 +28,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     [Fact]
     public async Task SendAsync_ReturnsWithoutError()
     {
-        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello");
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello",cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
         Assert.True(System.Enum.IsDefined(response.FinishReason));
@@ -44,7 +44,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello"))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", cancellationToken: TestContext.Current.CancellationToken))
         {
             if (chunk.Text is not null)
             {
@@ -63,7 +63,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     {
         var sb = new System.Text.StringBuilder();
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "What is 2 + 2? Reply with just the number."))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "What is 2 + 2? Reply with just the number.", cancellationToken: TestContext.Current.CancellationToken))
         {
             if (chunk.Text is not null)
             {
@@ -83,7 +83,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
         const string prompt = "Reply with exactly: streaming works";
 
         var streamed = new System.Text.StringBuilder();
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, prompt))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, prompt, cancellationToken: TestContext.Current.CancellationToken))
         {
             if (chunk.Text is not null)
             {
@@ -91,7 +91,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
             }
         }
 
-        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, prompt);
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, prompt, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(streamed.ToString()));
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
@@ -105,7 +105,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     {
         Agency.Llm.Common.LlmStreamChunk? terminal = null;
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello"))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", cancellationToken: TestContext.Current.CancellationToken))
         {
             terminal = chunk;
         }
@@ -124,7 +124,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     [Fact]
     public async Task SendAsync_WithTemperature_ReturnsWithoutError()
     {
-        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f);
+        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(response.Message));
         Assert.True(System.Enum.IsDefined(response.FinishReason));
@@ -139,7 +139,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f))
+        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f, cancellationToken: TestContext.Current.CancellationToken))
         {
             if (chunk.Text is not null)
             {

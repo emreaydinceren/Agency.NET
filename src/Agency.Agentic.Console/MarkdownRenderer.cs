@@ -50,7 +50,7 @@ internal static class MarkdownRenderer
             // ── blank line ───────────────────────────────────────────────────────
             if (string.IsNullOrEmpty(line))
             {
-                System.Console.WriteLine();
+                AnsiConsole.MarkupLine(string.Empty);
                 continue;
             }
 

@@ -40,11 +40,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
 
         // Insert test data to verify schema is correct
         var testValue = new { message = "initialization test" };
-        await kvStore.UpsertAsync("test_init_key", testValue);
+        await kvStore.UpsertAsync("test_init_key", testValue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Query back to verify with a value search
         var query = new Query(null, "initialization test", null, 1);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(results);
     }
@@ -61,11 +61,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var key = this._fixture.UniqueName("simple_object");
         var value = new { name = "Test Item", score = 42 };
 
-        await kvStore.UpsertAsync(key, value);
+        await kvStore.UpsertAsync(key, value, cancellationToken: TestContext.Current.CancellationToken);
 
         // Verify it was stored with vector search on the serialized value
         var query = new Query(null, "Test Item", null, 100);
-        var allResults = await kvStore.SearchAsync<dynamic>(query);
+        var allResults = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
         Assert.NotEmpty(allResults);
     }
 
@@ -80,11 +80,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var value = new { description = "Item with metadata" };
         var metadata = new Dictionary<string, object> { ["source"] = "test", ["priority"] = "high" };
 
-        await kvStore.UpsertAsync(key, value, metadata);
+        await kvStore.UpsertAsync(key, value, metadata, TestContext.Current.CancellationToken);
 
         // Search with exact key match to get the item
         var query = new Query(key, null, null, 100);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         var item = results.FirstOrDefault(r => r.Key == key);
         Assert.NotNull(item);
@@ -105,14 +105,14 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var value2 = new { version = 2, message = "Updated version" };
 
         // Insert first version
-        await kvStore.UpsertAsync(key, value1);
+        await kvStore.UpsertAsync(key, value1, cancellationToken: TestContext.Current.CancellationToken);
 
         // Update with second version
-        await kvStore.UpsertAsync(key, value2);
+        await kvStore.UpsertAsync(key, value2, cancellationToken: TestContext.Current.CancellationToken);
 
         // Verify update succeeded (should have exactly one entry with this key)
         var query = new Query(key, null, null, 100);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
         var items = results.Where(r => r.Key == key).ToList();
 
         Assert.Single(items);
@@ -129,11 +129,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var kvStore = this._fixture.KVStore;
 
         // Ensure isolation: this assertion is only valid when no rows are present.
-        await this._fixture.ClearStoreAsync();
+        await this._fixture.ClearStoreAsync(TestContext.Current.CancellationToken);
 
         // Search for a key that won't exist
         var query = new Query("xyzabc123nonexistent", null, null, 10);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
     }
@@ -150,12 +150,12 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         for (int i = 0; i < 5; i++)
         {
             var key = this._fixture.UniqueName($"limit_test_{i}");
-            await kvStore.UpsertAsync(key, new { index = i });
+            await kvStore.UpsertAsync(key, new { index = i }, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         // Search with vector search and limit of 2
         var query = new Query(null, "index", null, 2);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.True(results.Count <= 2, $"Expected at most 2 results, got {results.Count}");
     }
@@ -175,13 +175,13 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var metadata1 = new Dictionary<string, object> { ["category"] = "important" };
         var metadata2 = new Dictionary<string, object> { ["category"] = "archived" };
 
-        await kvStore.UpsertAsync(key1, new { name = "Important item" }, metadata1);
-        await kvStore.UpsertAsync(key2, new { name = "Archived item" }, metadata2);
+        await kvStore.UpsertAsync(key1, new { name = "Important item" }, metadata1, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync(key2, new { name = "Archived item" }, metadata2, TestContext.Current.CancellationToken);
 
         // Search with vector search and metadata filter for "important"
         var filterDict = new Dictionary<string, object> { ["category"] = "important" };
         var query = new Query(null, "item", filterDict, 100);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         // All results should have category = important
         foreach (var result in results)
@@ -203,11 +203,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var key = this._fixture.UniqueName("distance_test");
 
         // Insert an item
-        await kvStore.UpsertAsync(key, new { content = "similarity search test" });
+        await kvStore.UpsertAsync(key, new { content = "similarity search test" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Search for similar content
         var query = new Query(null, "similarity search", null, 10);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         if (results.Count > 0)
         {
@@ -234,12 +234,12 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var key1 = this._fixture.UniqueName("order_test_1");
         var key2 = this._fixture.UniqueName("order_test_2");
 
-        await kvStore.UpsertAsync(key1, new { text = "apple fruit red" });
-        await kvStore.UpsertAsync(key2, new { text = "xyz abc 123" });
+        await kvStore.UpsertAsync(key1, new { text = "apple fruit red" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync(key2, new { text = "xyz abc 123" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Search for something similar to the first item using vector search
         var query = new Query(null, "apple red", null, 100);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         // Verify results are sorted by distance (ascending)
         if (results.Count > 1)
@@ -271,13 +271,13 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var tagsWithMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } };
         var tagsWithoutMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } };
 
-        await kvStore.UpsertAsync(keyWithMedical, new { title = "Medical report" }, tagsWithMedical);
-        await kvStore.UpsertAsync(keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical);
+        await kvStore.UpsertAsync(keyWithMedical, new { title = "Medical report" }, tagsWithMedical, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync(keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical, TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
         var query = new Query(null, null, filter, 100, true);
-        var results = await kvStore.SearchAsync<dynamic>(query);
+        var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.Contains(results, r => r.Key == keyWithMedical);
         Assert.DoesNotContain(results, r => r.Key == keyWithoutMedical);
@@ -346,29 +346,29 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         /// <summary>
         /// Initializes the vector store schema and tables.
         /// </summary>
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
             var logger = new Mock<ILogger<PostgreKVStore>>();
             this.KVStore = new PostgreKVStore(this._embeddingGenerator, this._sqlRunner, logger.Object);
 
             // Initialize schema with standard embedding dimension
-            await this.KVStore.InitializeSchemaAsync(dimensions: 1536);
+            await this.KVStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
         }
 
         /// <summary>
         /// Cleans up test data. Note: We don't drop the table to preserve any test data for debugging.
         /// In a production scenario, you might truncate or drop the table.
         /// </summary>
-        public async Task DisposeAsync()
+        public async ValueTask DisposeAsync()
         {
             // Optional: Clean up if desired. For now, we leave the table intact for debugging.
             // await this._sqlRunner.ExecuteAsync("TRUNCATE TABLE semantic_kv_store");
-            await Task.CompletedTask;
+            await ValueTask.CompletedTask;
         }
 
-        public async Task ClearStoreAsync()
+        public async Task ClearStoreAsync(CancellationToken cancellationToken = default)
         {
-            await this._sqlRunner.ExecuteAsync("TRUNCATE TABLE semantic_kv_store;");
+            await this._sqlRunner.ExecuteAsync("TRUNCATE TABLE semantic_kv_store;", cancellationToken: cancellationToken);
         }
     }
 }

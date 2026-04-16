@@ -38,7 +38,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
     {
         var ds = await this._fx.Runner.QueryAsync("""
             SELECT vec_distance_L2('[1,0,0]', '[1,0,0]') AS dist
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal(0.0, Convert.ToDouble(ds["dist", 0]), Tolerance);
@@ -55,7 +55,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         var ds = await this._fx.Runner.QueryAsync($"""
             SELECT name FROM sqlite_master
             WHERE type = 'table' AND name = '{this._fx.Table}'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal(this._fx.Table, ds["name", 0]);
@@ -73,7 +73,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT embedding
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
 
@@ -98,7 +98,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_distance_L2(embedding, '[1,0,0]') AS dist
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(0.0, dist, Tolerance);
@@ -115,7 +115,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_distance_L2(embedding, '[1,0,0]') AS dist
             FROM {this._fx.Table}
             WHERE name = 'banana'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(Math.Sqrt(2), dist, Tolerance);
@@ -133,7 +133,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_distance_cosine(embedding, '[1,0,0]') AS dist
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(0.0, dist, Tolerance);
@@ -150,7 +150,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_distance_cosine(embedding, '[1,0,0]') AS dist
             FROM {this._fx.Table}
             WHERE name = 'banana'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(1.0, dist, Tolerance);
@@ -168,7 +168,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_distance_cosine(embedding, '[1,0,0]') AS dist
             FROM {this._fx.Table}
             WHERE name = 'apricot'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(1.0 - (1.0 / Math.Sqrt(2)), dist, Tolerance);
@@ -189,7 +189,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_dot_product(embedding, '[1,0,0]') AS dot
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dot = Convert.ToDouble(ds["dot", 0]);
         Assert.Equal(1.0, dot, Tolerance);
@@ -205,7 +205,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             SELECT vec_dot_product(embedding, '[1,0,0]') AS dot
             FROM {this._fx.Table}
             WHERE name = 'banana'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dot = Convert.ToDouble(ds["dot", 0]);
         Assert.Equal(0.0, dot, Tolerance);
@@ -224,7 +224,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             FROM {this._fx.Table}
             ORDER BY vec_distance_cosine(embedding, '[1,0,0]')
             LIMIT 1
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal("apple", ds["name", 0]);
@@ -243,7 +243,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             FROM {this._fx.Table}
             ORDER BY dist
             LIMIT 2
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -262,7 +262,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             FROM {this._fx.Table}
             WHERE vec_distance_L2(embedding, '[1,0,0]') < 0.9
             ORDER BY vec_distance_L2(embedding, '[1,0,0]')
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -281,13 +281,15 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         {
             int affected = await this._fx.Runner.ExecuteAsync(
                 $"INSERT INTO {this._fx.Table} (name, embedding) VALUES (@name, @vec)",
-                new Dictionary<string, object?> { ["name"] = "mango", ["vec"] = "[0,0,1]" });
+                new Dictionary<string, object?> { ["name"] = "mango", ["vec"] = "[0,0,1]" },
+                TestContext.Current.CancellationToken);
 
             Assert.Equal(1, affected);
 
             var ds = await this._fx.Runner.QueryAsync(
                 $"SELECT name FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "mango" });
+                new Dictionary<string, object?> { ["name"] = "mango" },
+                TestContext.Current.CancellationToken);
 
             Assert.Single(ds.Rows);
             Assert.Equal("mango", ds["name", 0]);
@@ -296,7 +298,8 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         {
             await this._fx.Runner.ExecuteAsync(
                 $"DELETE FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "mango" });
+                new Dictionary<string, object?> { ["name"] = "mango" },
+                TestContext.Current.CancellationToken);
         }
     }
 
@@ -308,19 +311,22 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
     {
         await this._fx.Runner.ExecuteAsync(
             $"INSERT INTO {this._fx.Table} (name, embedding) VALUES (@name, @vec)",
-            new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[0,1,0]" });
+            new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[0,1,0]" },
+            TestContext.Current.CancellationToken);
 
         try
         {
             int affected = await this._fx.Runner.ExecuteAsync(
                 $"UPDATE {this._fx.Table} SET embedding = @vec WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[1,0,0]" });
+                new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[1,0,0]" },
+                TestContext.Current.CancellationToken);
 
             Assert.Equal(1, affected);
 
             var ds = await this._fx.Runner.QueryAsync(
                 $"SELECT embedding FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "temp_update" });
+                new Dictionary<string, object?> { ["name"] = "temp_update" },
+                TestContext.Current.CancellationToken);
 
             float[] components = ParseVector((string)ds["embedding", 0]!);
             Assert.Equal(1f, components[0], precision: 4);
@@ -331,7 +337,8 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         {
             await this._fx.Runner.ExecuteAsync(
                 $"DELETE FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "temp_update" });
+                new Dictionary<string, object?> { ["name"] = "temp_update" },
+                TestContext.Current.CancellationToken);
         }
     }
 
@@ -345,7 +352,8 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
     {
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT embedding FROM {this._fx.Table} WHERE name = @name",
-            new Dictionary<string, object?> { ["name"] = "cherry" });
+            new Dictionary<string, object?> { ["name"] = "cherry" },
+            TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         float[] components = ParseVector((string)ds["embedding", 0]!);
@@ -363,7 +371,8 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         // Query vector matches banana exactly → distance should be 0.
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT vec_distance_L2(embedding, @vec) AS dist FROM {this._fx.Table} WHERE name = @name",
-            new Dictionary<string, object?> { ["name"] = "banana", ["vec"] = "[0,1,0]" });
+            new Dictionary<string, object?> { ["name"] = "banana", ["vec"] = "[0,1,0]" },
+            TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         double dist = Convert.ToDouble(ds["dist", 0]);
@@ -379,7 +388,8 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         // Only apple (dist 0) and apricot (dist ~0.765) are within threshold 0.9 of [1,0,0].
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT name FROM {this._fx.Table} WHERE vec_distance_L2(embedding, '[1,0,0]') < @threshold ORDER BY vec_distance_L2(embedding, '[1,0,0]')",
-            new Dictionary<string, object?> { ["threshold"] = 0.9 });
+            new Dictionary<string, object?> { ["threshold"] = 0.9 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -394,7 +404,8 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
     {
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT name, vec_distance_L2(embedding, @vec) AS dist FROM {this._fx.Table} ORDER BY dist LIMIT @k",
-            new Dictionary<string, object?> { ["vec"] = "[1,0,0]", ["k"] = 2 });
+            new Dictionary<string, object?> { ["vec"] = "[1,0,0]", ["k"] = 2 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -420,24 +431,24 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
                 name      TEXT NOT NULL,
                 embedding TEXT NOT NULL
             )
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
             await this._fx.Runner.ExecuteAsync($"""
                 INSERT INTO {indexTable} (name, embedding)
                 VALUES ('a', '[1,0,0]'), ('b', '[0,1,0]'), ('c', '[0,0,1]')
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             await this._fx.Runner.ExecuteAsync($"""
                 CREATE INDEX {indexName} ON {indexTable} (name)
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             // Verify index was created
             var idxDs = await this._fx.Runner.QueryAsync($"""
                 SELECT name FROM sqlite_master
                 WHERE type = 'index' AND name = '{indexName}'
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(idxDs.Rows);
 
@@ -447,14 +458,14 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
                 FROM {indexTable}
                 ORDER BY vec_distance_cosine(embedding, '[1,0,0]')
                 LIMIT 1
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(ds.Rows);
             Assert.Equal("a", ds["name", 0]);
         }
         finally
         {
-            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
+            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}", cancellationToken: TestContext.Current.CancellationToken);
         }
     }
 
@@ -540,7 +551,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         /// <summary>
         /// Creates the test table and inserts seed vectors.
         /// </summary>
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
             this.Table = this.UniqueName("vec_tests");
 
@@ -550,7 +561,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
                     name      TEXT NOT NULL,
                     embedding TEXT NOT NULL
                 )
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             // Four predictable seed vectors (same as PgVectorTests)
             await this.Runner.ExecuteAsync($"""
@@ -559,15 +570,15 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
                     ('banana',  '[0,1,0]'),
                     ('cherry',  '[0,0,1]'),
                     ('apricot', '[0.707,0.707,0]')
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         /// <summary>
         /// Drops the dedicated test table and closes the keep-alive connection.
         /// </summary>
-        public async Task DisposeAsync()
+        async ValueTask IAsyncDisposable.DisposeAsync()
         {
-            await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}");
+            await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}", cancellationToken: TestContext.Current.CancellationToken);
             await this._keepAlive.CloseAsync();
         }
     }

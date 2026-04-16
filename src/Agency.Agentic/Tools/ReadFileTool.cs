@@ -21,7 +21,8 @@ public class ReadFileTool : ITool
 
     public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
     {
-        var path = input.GetProperty("path").GetString();
+        dynamic accessor = new JsonDynamicAccessor(input);
+        string? path = accessor.path;
         if (string.IsNullOrEmpty(path))
         {
             return Task.FromResult(new ToolResult("Path is required.", IsError: true));
@@ -41,32 +42,5 @@ public class ReadFileTool : ITool
         {
             return Task.FromResult(new ToolResult($"Error reading file: {ex.Message}", IsError: true));
         }
-    }
-}
-
-public class AgentTool : ITool
-{
-    static JsonElement InputSchema => JsonDocument.Parse(@"{
-        ""type"": ""object"",
-        ""properties"": {
-            ""prompt"": { ""type"": ""string"" },
-            ""model"": { ""type"": ""string"" }
-        },
-        ""required"": [""prompt"", ""model""]
-    }").RootElement;
-
-    public ToolDefinition Definition
-    {
-        get
-        {
-            return new ToolDefinition("agent_tool", "Delegates to the agent's main loop, allowing the agent to decide the next action to take. " +
-                "Input should be a JSON object with a single 'reasoning' property describing why delegation is needed."
-                , InputSchema);
-        }
-    }
-
-    public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
-    {
-        throw new NotImplementedException();
     }
 }

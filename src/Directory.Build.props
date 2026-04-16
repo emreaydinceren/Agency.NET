@@ -12,7 +12,17 @@
   <!-- Test project defaults -->
   <PropertyGroup Condition="$(MSBuildProjectName.Contains('Test'))">
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.Contains('Test'))">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+        <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 
   <!-- Auto-include Xunit for test projects -->
   <ItemGroup Condition="$(MSBuildProjectName.Contains('Test'))">

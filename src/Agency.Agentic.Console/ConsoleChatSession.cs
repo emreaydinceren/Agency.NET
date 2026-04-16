@@ -2,6 +2,7 @@ namespace Agency.Agentic.Console;
 
 using Agency.Agentic;
 using Agency.Agentic.Console.Commands;
+using Agency.Agentic.Contexts;
 using Agency.Llm.Common.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Spectre.Console;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Management.Automation.Runspaces;
 using System.Text;
 
 internal sealed class ConsoleChatSession
@@ -45,26 +47,38 @@ internal sealed class ConsoleChatSession
         description: "Duration of a console chat session in milliseconds");
 
     private readonly CommandManager commandManager;
+    private readonly IChatOutput output;
     private readonly AgentOptions _options;
     private readonly List<string> _history = [];
     private readonly ILogger<ConsoleChatSession> _logger;
+    private readonly ToolContext toolContext;
     private Agent _agent;
+
     internal IServiceProvider ServiceProvider { get; }
 
     public ConsoleChatSession(
         IServiceProvider serviceProvider,
         Agent agent,
         IOptions<AgentOptions> optionsAccessor,
+        ToolContext toolContext,
+        IChatOutput? chatOutput = null,
         ILogger<ConsoleChatSession>? logger = null)
     {
         this.ServiceProvider = serviceProvider;
         this._agent = agent;
         this._options = optionsAccessor.Value;
+        this.toolContext = toolContext;
         this._logger = logger ?? NullLogger<ConsoleChatSession>.Instance;
-        this.commandManager = new CommandManager(CommandRegistery.Commands, this);
+        this.output = chatOutput ?? ConsoleOutput.Instance;
+        this.commandManager = new CommandManager(CommandRegistry.Commands, this);
     }
 
-    public async Task RunAsync()
+    internal void SetAgent(Agent agent)
+    {
+        this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
+    }
+
+    public async Task RunAsync(string? initialInput = null)
     {
         using var activity = _activitySource.StartActivity("ConsoleChatSession.RunAsync");
         activity?.SetTag("agent.client_type", this._agent.ClientType);
@@ -80,8 +94,8 @@ internal sealed class ConsoleChatSession
         var sw = Stopwatch.StartNew();
         bool failed = false;
 
-        Context? ctx = null;
         int chatTurns = 0;
+        ChatSession? chatSession = null;
 
         this._logger.LogInformation(
             "Starting console chat session. ClientType={ClientType}, Model={Model}",
@@ -89,15 +103,15 @@ internal sealed class ConsoleChatSession
 
         try
         {
-            Out(ConsoleColor.Cyan, "╔═══════════════════════════════════════════╗");
-            Out(ConsoleColor.Cyan, "║       Agency  ·  Agent Chat Console       ║");
-            Out(ConsoleColor.Cyan, "╚═══════════════════════════════════════════╝");
-            OutInline(null, "Provider : ");
-            Out(ConsoleColor.Yellow, this._agent.ClientType);
-            OutInline(null, "Model    : ");
-            Out(ConsoleColor.Yellow, this._agent.Model);
-            Out(ConsoleColor.DarkGray, "Type /exit to /quit  ·  Ctrl+C to interrupt a turn");
-            System.Console.WriteLine();
+            this.output.WriteLine("cyan", "╔═══════════════════════════════════════════╗");
+            this.output.WriteLine("cyan", "║       Agency  ·  Agent Chat Console       ║");
+            this.output.WriteLine("cyan", "╚═══════════════════════════════════════════╝");
+            this.output.Write(null, "Provider : ");
+            this.output.WriteLine("yellow", this._agent.ClientType);
+            this.output.Write(null, "Model    : ");
+            this.output.WriteLine("yellow", this._agent.Model);
+            this.output.WriteLine("gray", "Type /exit to /quit  ·  Ctrl+C to interrupt a turn");
+            this.output.WriteLine();
 
             using var sessionCts = new CancellationTokenSource();
             System.Console.CancelKeyPress += (_, e) =>
@@ -106,11 +120,13 @@ internal sealed class ConsoleChatSession
                 sessionCts.Cancel();
             };
 
+            chatSession = new(this._agent, this._options, this.toolContext);
+
             // ── REPL loop ─────────────────────────────────────────────────────────────────
 
             while (true)
             {
-                var input = await ReadLineAsync(sessionCts.Token);
+                var input = initialInput ?? await ReadLineAsync(sessionCts.Token);
 
                 if (input is null || sessionCts.IsCancellationRequested)
                 {
@@ -124,15 +140,19 @@ internal sealed class ConsoleChatSession
                     continue;
                 }
 
+                // Slash commands are handled immediately in the REPL, without going through the agent.
+                // This allows for commands that can control the session itself (like /exit or /reset)
+                // or perform other actions without needing to be defined as tools.
                 if (input.StartsWith('/'))
                 {
                     _commandCounter.Add(1, tags);
-                    var continuation = await commandManager.ExecuteCommandAsync(input);
+
+                    CommandContinuation continuation = await commandManager.ExecuteCommandAsync(input);
 
                     switch (continuation)
                     {
                         case CommandContinuation.ExitSession:
-                            Out(ConsoleColor.DarkYellow, "Exiting session...");
+                            this.output.WriteLine("goldenrod", "Exiting session...");
                             break;
                         case CommandContinuation.Continue:
                             continue;
@@ -141,13 +161,9 @@ internal sealed class ConsoleChatSession
                     break;
                 }
 
-                System.Console.WriteLine();
-
                 // Snapshot token counts before this run so we can show the per-turn delta.
-                long prevIn = ctx?.TotalUsage.InputTokens ?? 0;
-                long prevOut = ctx?.TotalUsage.OutputTokens ?? 0;
-
-                ctx ??= Agent.CreateContext(input);
+                long prevIn = chatSession.TotalUsage.InputTokens;
+                long prevOut = chatSession.TotalUsage.OutputTokens;
 
                 bool interrupted = false;
                 bool streamingStarted = false;
@@ -155,53 +171,71 @@ internal sealed class ConsoleChatSession
 
                 try
                 {
-                    await foreach (AgentEvent evt in _agent.ChatAsync(input, ctx, _options, sessionCts.Token))
+                    this.output.StartSpinner();
+
+                    // This loops through the events of the turn as they come in from the agent. The main point of complexity here
+                    // is handling the fact that TextDeltaEvents may stream in one or more chunks before the AssistantTurnEvent comes in
+                    // to indicate the turn is done. We want to buffer those deltas until the turn is done so we can print them together, rather
+                    // than interleaving them with any ToolInvokedEvents that may come in during the turn.
+                    await foreach (AgentEvent evt in chatSession.SendAsync(input, sessionCts.Token))
                     {
                         switch (evt)
                         {
                             case TextDeltaEvent delta:
-                                if (!streamingStarted)
-                                {
-                                    streamingStarted = true;
-                                    streamingBuffer = new StringBuilder();
-                                }
+                            // This event may come in one or more chunks as the assistant generates a response. We buffer it until the turn
+                            // is done (indicated by AssistantTurnEvent) before printing, so that we don't interleave it with ToolInvokedEvents
+                            // that may also come in the middle of the response.
 
-                                streamingBuffer!.Append(delta.Delta);
-                                break;
+                            if (!streamingStarted)
+                            {
+                                streamingStarted = true;
+                                streamingBuffer = new StringBuilder();
+                            }
+
+                            streamingBuffer!.Append(delta.Delta);
+                            break;
 
                             case AssistantTurnEvent turn:
-                                if (streamingStarted)
+                            // This event may come in the middle of streaming text deltas, or as a complete message at the end.
+                            // If streaming, we buffer it until the turn is done; if not, we print it immediately.
+
+                            if (streamingStarted)
                                 {
                                     string buffered = streamingBuffer!.ToString();
                                     streamingBuffer = null;
                                     streamingStarted = false;
-                                    AnsiConsole.Markup("[green][[Agent]][/]");
+                                    this.output.WriteMarkup("[green][[Agent]][/]");
                                     MarkdownRenderer.Print(buffered);
                                 }
                                 else
                                 {
-                                    PrintAssistantTurn(turn.Message);
+                                    this.PrintAssistantTurn(turn.Message);
                                 }
 
                                 break;
 
                             case ToolInvokedEvent tool:
-                                //  This fires after the agent has actually executed the tool
-                                OutInline(ConsoleColor.Yellow, $"  ⚙ {tool.ToolName}");
-                                OutInline(ConsoleColor.DarkGray, " → ");
-                                var resultPreview = tool.Result.Content.Length > 100
-                                    ? string.Concat(tool.Result.Content.AsSpan(0, 100), "…")
-                                    : tool.Result.Content;
-                                if (tool.Result.IsError)
-                                {
-                                    Out(ConsoleColor.Red, resultPreview);
-                                }
+                            //  This fires after the agent has actually executed the tool and result is ready.
+
+                            var resultPreview = TruncateString(tool.Result.Content, 100, 3);
+                            if (tool.Result.IsError)
+                            {
+                                this.output.WriteLine("red", resultPreview);
+                            }
+                            else
+                            {
+                                //this.output.WriteLine("yellow", $"  ⚙ {tool.ToolName} done.");
+                                //this.output.WriteLine("gray", $"    ↳ result: {resultPreview}");
+                                this.output.WriteMarkdownInBorderedPanel($"Calling {tool.ToolName}", $"[gray]{resultPreview}[/]");
+                            }
                                 break;
 
                             case AgentResultEvent result:
-                                long deltaIn = ctx.TotalUsage.InputTokens - prevIn;
-                                long deltaOut = ctx.TotalUsage.OutputTokens - prevOut;
-                                Out(ConsoleColor.DarkGray,
+                            // This is the final event of the turn, showing the overall result and token usage for the turn.
+
+                            long deltaIn = chatSession.TotalUsage.InputTokens - prevIn;
+                                long deltaOut = chatSession.TotalUsage.OutputTokens - prevOut;
+                                this.output.WriteLine("gray",
                                     $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out  [{result.Status}]");
                                 break;
 
@@ -213,16 +247,18 @@ internal sealed class ConsoleChatSession
                 {
                     streamingBuffer = null;
                     streamingStarted = false;
-                    Out(ConsoleColor.DarkYellow, "  [interrupted]");
+                    this.output.WriteLine("goldenrod", "  [interrupted]");
                     interrupted = true;
+                }
+                finally
+                {
+                    this.output.StopSpinner();
                 }
 
                 if (!interrupted)
                 {
                     chatTurns++;
                 }
-
-                System.Console.WriteLine();
 
                 // If the session CTS was triggered (not just the turn), break the REPL.
                 if (sessionCts.IsCancellationRequested)
@@ -234,10 +270,10 @@ internal sealed class ConsoleChatSession
                 // until the user presses Ctrl+C again or types "exit".
             }
 
-            System.Console.WriteLine();
-            Out(ConsoleColor.DarkGray,
+            this.output.WriteLine();
+            this.output.WriteLine("gray",
                 $"Session ended  ·  {chatTurns} turn{(chatTurns == 1 ? "" : "s")}  ·  " +
-                $"{ctx?.TotalUsage.InputTokens ?? 0:N0} in, {ctx?.TotalUsage.OutputTokens ?? 0:N0} out total");
+                $"{chatSession.TotalUsage.InputTokens:N0} in, {chatSession.TotalUsage.OutputTokens:N0} out total");
         }
         catch (Exception ex)
         {
@@ -256,24 +292,24 @@ internal sealed class ConsoleChatSession
             _sessionDurationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
             _sessionTurnCounter.Add(chatTurns, tags);
 
-            if (ctx is not null)
+            if (chatSession?.IsStarted == true)
             {
-                _sessionTokenCounter.Add(ctx.TotalUsage.InputTokens, new TagList
+                _sessionTokenCounter.Add(chatSession.TotalUsage.InputTokens, new TagList
                 {
                     { "agent.client_type", this._agent.ClientType },
                     { "agent.model", this._agent.Model },
                     { "agent.token.type", "input" },
                 });
 
-                _sessionTokenCounter.Add(ctx.TotalUsage.OutputTokens, new TagList
+                _sessionTokenCounter.Add(chatSession.TotalUsage.OutputTokens, new TagList
                 {
                     { "agent.client_type", this._agent.ClientType },
                     { "agent.model", this._agent.Model },
                     { "agent.token.type", "output" },
                 });
 
-                activity?.SetTag("agent.usage.input_tokens", ctx.TotalUsage.InputTokens);
-                activity?.SetTag("agent.usage.output_tokens", ctx.TotalUsage.OutputTokens);
+                activity?.SetTag("agent.usage.input_tokens", chatSession.TotalUsage.InputTokens);
+                activity?.SetTag("agent.usage.output_tokens", chatSession.TotalUsage.OutputTokens);
             }
 
             if (!failed)
@@ -285,19 +321,18 @@ internal sealed class ConsoleChatSession
         }
     }
 
-    public void SetAgent(Agent agent)
-    {
-        this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
-    }
-
     private async Task<string?> ReadLineAsync(CancellationToken ct)
     {
-        if (System.Console.IsInputRedirected)
+        var console = AnsiConsole.Console;
+
+        if (!console.Profile.Capabilities.Interactive)
         {
-            return System.Console.ReadLine();
+            return await new TextPrompt<string>(string.Empty)
+                .AllowEmpty()
+                .ShowAsync(console, ct);
         }
 
-        System.Console.Write("> ");
+        this.output.WriteMarkup("[blue]>[/] ");
 
         var buffer = new StringBuilder();
         int historyIndex = _history.Count;
@@ -306,11 +341,11 @@ internal sealed class ConsoleChatSession
         {
             if (ct.IsCancellationRequested)
             {
-                System.Console.WriteLine();
+                this.output.WriteLine();
                 return null;
             }
 
-            if (!System.Console.KeyAvailable)
+            if (!console.Input.IsKeyAvailable())
             {
                 try
                 {
@@ -318,19 +353,25 @@ internal sealed class ConsoleChatSession
                 }
                 catch (OperationCanceledException)
                 {
-                    System.Console.WriteLine();
+                    this.output.WriteLine();
                     return null;
                 }
 
                 continue;
             }
 
-            ConsoleKeyInfo key = System.Console.ReadKey(intercept: true);
+            ConsoleKeyInfo? keyInfo = console.Input.ReadKey(intercept: true);
+            if (keyInfo is null)
+            {
+                continue;
+            }
+
+            ConsoleKeyInfo key = keyInfo.Value;
 
             switch (key.Key)
             {
                 case ConsoleKey.Enter:
-                    System.Console.WriteLine();
+                    this.output.WriteLine();
                     string result = buffer.ToString();
                     if (!string.IsNullOrWhiteSpace(result))
                     {
@@ -341,7 +382,7 @@ internal sealed class ConsoleChatSession
 
                 case ConsoleKey.Backspace when buffer.Length > 0:
                     buffer.Remove(buffer.Length - 1, 1);
-                    System.Console.Write("\b \b");
+                    this.output.Write ("\b \b");
                     break;
 
                 case ConsoleKey.Escape:
@@ -376,27 +417,21 @@ internal sealed class ConsoleChatSession
                 default:
                 if (key.KeyChar == '/' && buffer.Length == 0)
                 {
-                    var (startLeft, starTop) = (System.Console.CursorLeft, System.Console.CursorTop);
-                    var commands = CommandRegistery.Commands.Select(cmd => new ConsolePickerRow( cmd.CommandText, cmd.Description )).ToList();
-                    System.Console.WriteLine();
+                    var commands = CommandRegistry.Commands.Select(cmd => new ConsolePickerRow( cmd.CommandText, cmd.Description )).ToList();
+                    this.output.WriteLine();
                     string? picked = ConsolePicker.Show(commands, 0);
-                    System.Console.CursorTop = starTop;
-                    System.Console.CursorLeft = startLeft;
-                    if (picked is null)
-                    {
-                        System.Console.Write(buffer);
-                    }
+                    this.output.WriteMarkup("[blue]>[/] ");
                     if (picked is not null)
                     {
-                        ReplaceBufferLine(buffer, picked);
                         buffer.Clear();
                         buffer.Append(picked);
+                        this.output.Write(picked);
                     }
                 }
                 else if (key.KeyChar >= 32) // printable character
                 {
                     buffer.Append(key.KeyChar);
-                    System.Console.Write(key.KeyChar);
+                    this.output.Write(key.KeyChar.ToString());
                 }
 
                     break;
@@ -405,20 +440,20 @@ internal sealed class ConsoleChatSession
     }
 
 
-    private static void ReplaceBufferLine(StringBuilder current, string replacement)
+    private void ReplaceBufferLine(StringBuilder current, string replacement)
     {
         int currentLen = current.Length;
-        System.Console.Write(new string('\b', currentLen));
-        System.Console.Write(replacement);
+        AnsiConsole.Cursor.MoveLeft(currentLen);
+        this.output.Write(replacement);
         int overflow = currentLen - replacement.Length;
         if (overflow > 0)
         {
-            System.Console.Write(new string(' ', overflow));
-            System.Console.Write(new string('\b', overflow));
+            this.output.Write(new string(' ', overflow));
+            AnsiConsole.Cursor.MoveLeft(overflow);
         }
     }
 
-    private static void PrintAssistantTurn(AgentMessage message)
+    private void PrintAssistantTurn(AgentMessage message)
     {
         foreach (ContentBlock block in message.Content)
         {
@@ -427,39 +462,57 @@ internal sealed class ConsoleChatSession
                 case TextBlock tb when !string.IsNullOrWhiteSpace(tb.Text):
                 {
                     // This is when Agent wants to write a message
-                    AnsiConsole.MarkupLine("[green][[Agent]][/]");
-                    MarkdownRenderer.Print(tb.Text);
+                    this.output.WriteMarkup("[green]●[/]");
+                    this.output.WriteLineMarkdown(tb.Text);
                     break;
                 }
 
                 case ToolUseBlock tub:
 
+                var command = tub.Input.GetRawText();
+
+                if (command == null)
+                {
+                    this.output.WriteLine("gray", $"  → calling {tub.Name} with non-text input");
+                    break;
+                }
+
+                var commandPreview = TruncateString(command, 100, 3);
+
                 // This is when Agent wants to call a tool - we show the tool name and input, but not the output (since it may be large or sensitive)
-                Out(ConsoleColor.Magenta, $"  → calling {tub.Name} {tub.Input}");
+                this.output.WriteMarkdownInBorderedPanel($"Calling {tub.Name}", $"[gray]{commandPreview}[/]");
+                //this.output.WriteLine("magenta", $"  → calling {tub.Name}");
+                //this.output.WriteLine("gray", $"    ↳ command: {commandPreview}");
                     break;
             }
         }
     }
 
-    private static void Out(ConsoleColor? color, string text)
+    private static string TruncateString(string text, int maxWidth, int maxLines)
     {
-        if (color.HasValue)
+        using var tr = new StringReader(text);
+        string? line;
+        var sb = new StringBuilder();
+        int lineCount = 0;
+        while ((line = tr.ReadLine()) != null)
         {
-            System.Console.ForegroundColor = color.Value;
+            if (lineCount > 0)
+            {
+                sb.AppendLine();
+            }
+
+            sb.Append(
+                line.Length > maxWidth
+                ? string.Concat(line.AsSpan(0, maxWidth), "...")
+                : line);
+
+
+            if (lineCount++ > maxLines)
+            {
+                sb.AppendLine("...");
+                break;
+            }
         }
-
-        System.Console.WriteLine(text);
-        System.Console.ResetColor();
-    }
-
-    private static void OutInline(ConsoleColor? color, string text)
-    {
-        if (color.HasValue)
-        {
-            System.Console.ForegroundColor = color.Value;
-        }
-
-        System.Console.Write(text);
-        System.Console.ResetColor();
+        return sb.ToString();
     }
 }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
+using Agency.Agentic.Contexts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -220,7 +221,7 @@ public sealed class Agent
     /// <see cref="SessionStartedEvent"/>; the last is always <see cref="AgentResultEvent"/>. When streaming is enabled,
     /// <see cref="TextDeltaEvent"/> s are emitted for each text token.
     /// </summary>
-    public async IAsyncEnumerable<AgentEvent> RunAsync(
+    internal async IAsyncEnumerable<AgentEvent> RunAsync(
         Context ctx,
         [EnumeratorCancellation] CancellationToken ct = default)
     {

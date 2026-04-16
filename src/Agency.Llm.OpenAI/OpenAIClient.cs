@@ -85,6 +85,11 @@ public class OpenAIClient : ILlmClient
             openAIClientOptions.Endpoint = new Uri(clientOptions.BaseUrl);
         }
 
+        if (clientOptions.Timeout is { } timeout && timeout > TimeSpan.Zero)
+        {
+            openAIClientOptions.NetworkTimeout = timeout;
+        }
+
         this._client = new global::OpenAI.OpenAIClient(credential, openAIClientOptions);
     }
 

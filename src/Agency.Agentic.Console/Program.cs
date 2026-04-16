@@ -5,13 +5,19 @@ global using System.Runtime.CompilerServices;
 namespace Agency.Agentic.Console;
 
 using Agency.Agentic;
-using Agency.Llm.Common;
+using Agency.Agentic.Console.Telemetry;
+using Agency.Agentic.Tools;
+using Agency.Agentic.Contexts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog;
 
 internal class Program
 {
+    private static ServiceProvider? serviceProvider;
+
     public static async Task Main()
     {
         System.Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -27,33 +33,63 @@ internal class Program
             .AddEnvironmentVariables()
             .Build();
 
-        var services = new ServiceCollection();
+        ServiceCollection services = new ServiceCollection();
 
         services
             .AddSingleton<IConfiguration>(configuration)
-            .AddTransient<Models>();
+            .AddTransient<Models>()
+            .AddTelemetry(configuration);
 
         services.AddOptions<AgentOptions>()
         .BindConfiguration("Agent");
 
         services.AddSingleton(sp =>
         {
-            var models = sp.GetRequiredService<Models>();
-            return models.CreateLlmClient();
+            AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
+            return CreateAgent(null, null, options.Stream);
         });
 
-        services.AddSingleton(sp =>
-        {
+        services.AddSingleton(sp => {
             AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            var model = options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
-            ILlmClient llmClient = sp.GetRequiredService<ILlmClient>();
-            return new Agent(llmClient, model, stream: options.Stream);
+
+            var registry = new ToolRegistry();
+            registry.Register(new ExecutePowershellTool());
+            registry.Register(new ReadFileTool());
+            registry.Register(new WriteFileTool());
+            registry.Register(new AgentTool((clientName, modelName, stream) => (options, CreateAgent(clientName, modelName, stream), registry)));
+
+            return new ToolContext()
+            {
+                Registry = registry
+            }; 
         });
 
         services.AddSingleton<ConsoleChatSession>();
 
-        using ServiceProvider serviceProvider = services.BuildServiceProvider();
-        var app = serviceProvider.GetRequiredService<ConsoleChatSession>();
+        await using ServiceProvider provider = services.BuildServiceProvider();
+        serviceProvider = provider;
+        ConsoleChatSession app = provider.GetRequiredService<ConsoleChatSession>();
         await app.RunAsync();
+        Log.CloseAndFlush();
+    }
+
+    internal static Agent CreateAgent(
+        string? clientName,
+        string? modelName,
+        bool stream)
+    {
+        if (serviceProvider is null)
+        {
+            throw new InvalidOperationException("Service provider is not initialized.");
+        }
+
+        AgentOptions options = serviceProvider.GetRequiredService<IOptions<AgentOptions>>().Value;
+        clientName = clientName ?? options.DefaultClientName ?? throw new InvalidOperationException("DefaultClientName must be specified in the configuration.");
+        modelName = modelName ?? options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
+
+        var models = serviceProvider.GetRequiredService<Models>();
+        var logger = serviceProvider.GetRequiredService<ILogger<Agent>>();
+        var llmClient=  models.CreateLlmClient(clientName);
+        return new Agent(llmClient, modelName,null, stream, logger);
     }
 }

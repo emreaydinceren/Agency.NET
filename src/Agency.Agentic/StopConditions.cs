@@ -1,5 +1,7 @@
 namespace Agency.Agentic;
 
+using Agency.Agentic.Contexts;
+
 /// <summary>
 /// A predicate evaluated after each assistant turn to decide whether the loop should halt.
 /// </summary>
@@ -9,8 +11,8 @@ namespace Agency.Agentic;
 public delegate bool StopCondition(Context ctx, AgentMessage lastResponse);
 
 /// <summary>
-/// Factory methods for the most common <see cref="StopCondition"/> delegates.
-/// Compose multiple conditions with <see cref="Any"/>.
+/// Factory methods for the most common <see cref="StopCondition"/> delegates. Compose multiple conditions with
+/// <see cref="Any"/>.
 /// </summary>
 public static class StopConditions
 {

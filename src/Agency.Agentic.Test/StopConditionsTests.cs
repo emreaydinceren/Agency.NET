@@ -1,6 +1,7 @@
-using System.Text.Json;
-
 namespace Agency.Agentic.Test;
+
+using Agency.Agentic.Contexts;
+using System.Text.Json;
 
 /// <summary>
 /// Unit tests for the <see cref="StopConditions"/> factory methods and delegates.

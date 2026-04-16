@@ -88,11 +88,11 @@ public sealed class FileLoaderTests
         var tempFile = Path.GetTempFileName();
         try
         {
-            await File.WriteAllTextAsync(tempFile, "test content");
+            await File.WriteAllTextAsync(tempFile, "test content", cancellationToken: TestContext.Current.CancellationToken);
             var loader = new FileLoader(tempFile);
 
             var docs = new List<Document>();
-            await foreach (var doc in loader.LoadAsync())
+            await foreach (var doc in loader.LoadAsync(TestContext.Current.CancellationToken))
             {
                 docs.Add(doc);
             }
@@ -117,11 +117,11 @@ public sealed class FileLoaderTests
         var tempFile = Path.GetTempFileName();
         try
         {
-            await File.WriteAllTextAsync(tempFile, "expected content");
+            await File.WriteAllTextAsync(tempFile, "expected content", cancellationToken: TestContext.Current.CancellationToken );
             var loader = new FileLoader(tempFile);
 
             Document? doc = null;
-            await foreach (var d in loader.LoadAsync())
+            await foreach (var d in loader.LoadAsync(TestContext.Current.CancellationToken))
             {
                 doc = d;
             }

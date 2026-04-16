@@ -6,6 +6,23 @@ namespace Agency.Agentic.Tools;
 
 internal static class Extensions
 {
+    private static bool IsDisplayableProperty(PSPropertyInfo property)
+        => property.IsGettable && property is not PSScriptProperty;
+
+    private static bool TryGetDisplayValue(PSPropertyInfo property, out object? value)
+    {
+        try
+        {
+            value = property.Value;
+            return true;
+        }
+        catch
+        {
+            value = null;
+            return false;
+        }
+    }
+
     internal static string ToMarkdownTable(this IEnumerable<PSObject> results)
     {
         var list = results.ToList();
@@ -17,7 +34,7 @@ internal static class Extensions
         // 1. Collect all property names across all objects
         var allProps = new SortedSet<string>(
             list.SelectMany(r => r.Properties)
-                .Where(p => p.IsGettable)
+                .Where(IsDisplayableProperty)
                 .Select(p => p.Name)).ToList();
 
         var columns = allProps.Select((name, index) => new ColumnMetadata(name, index)).ToList();
@@ -28,11 +45,15 @@ internal static class Extensions
         foreach(var psObject in list)
         {
             object?[] values = new object?[columns.Count];
-            foreach(var prop in psObject.Properties)
+            foreach (var prop in psObject.Properties.Where(IsDisplayableProperty))
             {
-                values[columnsDict[prop.Name]] = prop.Value;
-                dataset.AddRow(values);
+                if (TryGetDisplayValue(prop, out object? value))
+                {
+                    values[columnsDict[prop.Name]] = value;
+                }
             }
+
+            dataset.AddRow(values);
         }
 
         return dataset.ToMarkdownTable();
@@ -44,13 +65,15 @@ internal static class Extensions
 
         foreach (var prop in result.Properties)
         {
-            if (prop.IsGettable == false)
+            if (!IsDisplayableProperty(prop))
             {
                 continue;
             }
 
-            sb.AppendLine($"- **{prop.Name}**: {prop.Value}");
-            sb.AppendLine(sb.ToString());
+            if (TryGetDisplayValue(prop, out object? value))
+            {
+                sb.AppendLine($"- **{prop.Name}**: {value}");
+            }
         }
         return sb.ToString();
     }

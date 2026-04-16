@@ -3,31 +3,6 @@ using Spectre.Console;
 
 namespace Agency.Agentic.Console.Commands;
 
-internal static class CommandRegistery
-{
-    private static List<Command> commands = [];
-
-    internal static IReadOnlyList<Command> Commands => commands;
-
-    static CommandRegistery()
-    {
-        commands.Add(new Command("/exit", "Exit the current chat session.")
-        {
-            Execute = (_, _) => Task.FromResult(CommandContinuation.ExitSession)
-        });
-
-        commands.Add(new Command("/help", "Show help information.")
-        {
-            Execute = (_, _) => Task.FromResult(CommandContinuation.Continue)
-        });
-
-        commands.Add(new Command("/model", "Show model picker.")
-        {
-            Execute = (_, session) => ModelsCommand.RunSelectModelCommandAsync(session)
-        });
-    }
-}
-
 internal class ModelsCommand
 {
     public static async Task<CommandContinuation> RunSelectModelCommandAsync(ConsoleChatSession session)
@@ -43,12 +18,19 @@ internal class ModelsCommand
             }
             return prompt;
         },
+
         itemToStringConverter: item => item.Item2,
         moreChoicesText: "More models available...",
         title: "Select Model",
         searchPlaceholderText: "Switch between models");
 
-        //TODO: Handle model switch
+        if (selectedClient is not null && selectedModel is not null)
+        {
+            var agent = Program.CreateAgent(selectedClient, selectedModel, stream: true);
+            session.SetAgent(agent);
+            AnsiConsole.MarkupLine($"[green]⎿ Switched to model:[/] [yellow]{selectedModel}[/] from client [yellow]{selectedClient}[/]");
+        }
+
         return CommandContinuation.Continue;
     }
 }

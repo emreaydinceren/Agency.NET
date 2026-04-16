@@ -1,6 +1,3 @@
-using Microsoft.Extensions.Hosting;
-using static System.Collections.Specialized.BitVector32;
-
 namespace Agency.Agentic.Console.Commands;
 
 internal class Command (string Name, string Description)

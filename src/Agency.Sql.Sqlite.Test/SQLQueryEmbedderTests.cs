@@ -24,8 +24,8 @@ public sealed class SQLQueryEmbedderTests
     {
         var embedder = new SQLQueryEmbedder(new StubEmbeddingGenerator());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => embedder.EmbedVectorsInQueryAsync(null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => embedder.EmbedVectorsInQueryAsync("   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => embedder.EmbedVectorsInQueryAsync(null!, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() => embedder.EmbedVectorsInQueryAsync("   ", TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ public sealed class SQLQueryEmbedderTests
         var embedder = new SQLQueryEmbedder(generator);
         const string sql = "SELECT * FROM docs WHERE id = 1";
 
-        var result = await embedder.EmbedVectorsInQueryAsync(sql);
+        var result = await embedder.EmbedVectorsInQueryAsync(sql, TestContext.Current.CancellationToken);
 
         Assert.Equal(sql, result);
         Assert.Empty(generator.CapturedInputs);
@@ -56,7 +56,7 @@ public sealed class SQLQueryEmbedderTests
         var embedder = new SQLQueryEmbedder(generator);
         const string sql = "SELECT * FROM docs WHERE 1 - (embedding <=> vectorize('hello')::vector) < 0.5";
 
-        var result = await embedder.EmbedVectorsInQueryAsync(sql);
+        var result = await embedder.EmbedVectorsInQueryAsync(sql, TestContext.Current.CancellationToken);
 
         Assert.Equal("SELECT * FROM docs WHERE 1 - (embedding <=> '[0.1,-0.2,1.5]'::vector) < 0.5", result);
         Assert.Single(generator.CapturedInputs);
@@ -75,7 +75,7 @@ public sealed class SQLQueryEmbedderTests
         var embedder = new SQLQueryEmbedder(generator);
         const string sql = "SELECT vectorize('O''Reilly')::vector";
 
-        var result = await embedder.EmbedVectorsInQueryAsync(sql);
+        var result = await embedder.EmbedVectorsInQueryAsync(sql, TestContext.Current.CancellationToken);
 
         Assert.Equal("SELECT '[1]'::vector", result);
         Assert.Single(generator.CapturedInputs);
@@ -95,7 +95,7 @@ public sealed class SQLQueryEmbedderTests
         var embedder = new SQLQueryEmbedder(generator);
         const string sql = "SELECT vectorize('first')::vector AS a, VECTORIZE('second')::vector AS b";
 
-        var result = await embedder.EmbedVectorsInQueryAsync(sql);
+        var result = await embedder.EmbedVectorsInQueryAsync(sql, TestContext.Current.CancellationToken);
 
         Assert.Equal("SELECT '[1,2]'::vector AS a, '[3,4]'::vector AS b", result);
         Assert.Equal(2, generator.CapturedInputs.Count);
@@ -113,9 +113,8 @@ public sealed class SQLQueryEmbedderTests
         generator.Register("token", [9f]);
 
         var embedder = new SQLQueryEmbedder(generator);
-        using var cts = new CancellationTokenSource();
 
-        _ = await embedder.EmbedVectorsInQueryAsync("SELECT vectorize('token')::vector", cts.Token);
+        _ = await embedder.EmbedVectorsInQueryAsync("SELECT vectorize('token')::vector", TestContext.Current.CancellationToken);
 
         Assert.True(generator.CapturedTokens[0].CanBeCanceled);
     }

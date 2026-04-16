@@ -1,8 +1,9 @@
+namespace Agency.Agentic.Test.Functional;
+
+using Agency.Agentic.Contexts;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-
-namespace Agency.Agentic.Test.Functional;
 
 /// <summary>
 /// End-to-end functional tests for the <see cref="Agent"/> loop using
@@ -46,7 +47,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
         var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
-        var result = await RunToResultAsync(agent, ctx);
+        var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.False(string.IsNullOrWhiteSpace(result.FinalText));
@@ -65,7 +66,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
         var events = new List<AgentEvent>();
-        await foreach (var evt in agent.RunAsync(ctx))
+        await foreach (var evt in agent.RunAsync(ctx, ct: TestContext.Current.CancellationToken))
         {
             events.Add(evt);
         }
@@ -90,7 +91,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
 
         var ctx = new Context { Query = new QueryContext { Prompt = "Count from 1 to 100." } };
 
-        var result = await RunToResultAsync(agent, ctx);
+        var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal(1, ctx.IterationCount);
@@ -106,7 +107,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
         var ctx = new Context { Query = new QueryContext { Prompt = "What is 2 + 2? Reply with just the number." } };
 
-        var result = await RunToResultAsync(agent, ctx);
+        var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.TotalUsage.InputTokens > 0);
         Assert.True(result.TotalUsage.OutputTokens > 0);
@@ -131,7 +132,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
 
         AgentResultEvent? result = null;
         bool toolInvoked = false;
-        await foreach (var evt in agent.RunAsync(ctx))
+        await foreach (var evt in agent.RunAsync(ctx, ct: TestContext.Current.CancellationToken))
         {
             if (evt is ToolInvokedEvent t && t.ToolName == EchoTool.ToolName)
             {

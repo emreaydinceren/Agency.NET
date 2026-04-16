@@ -30,7 +30,8 @@ public class ExecutePowershellTool : ITool
     {
         try
         {
-            var command = input.GetProperty("command").GetString();
+            dynamic accessor = new JsonDynamicAccessor(input);
+            var command = accessor.command;
 
             if (string.IsNullOrEmpty(command))
             {
@@ -58,12 +59,22 @@ public class ExecutePowershellTool : ITool
                 return Task.FromResult(new ToolResult("(no output)", IsError: false));
             }
 
-            if (results.Count == 1)
-            {
-                return Task.FromResult(new ToolResult(results[0].ToMarkdown(), IsError: false));
-            }
+            Runspace? previousDefaultRunspace = Runspace.DefaultRunspace;
+            Runspace.DefaultRunspace = runspace;
 
-            return Task.FromResult(new ToolResult(results.ToMarkdownTable(), IsError: false));
+            try
+            {
+                if (results.Count == 1)
+                {
+                    return Task.FromResult(new ToolResult(results[0].ToMarkdown(), IsError: false));
+                }
+
+                return Task.FromResult(new ToolResult(results.ToMarkdownTable(), IsError: false));
+            }
+            finally
+            {
+                Runspace.DefaultRunspace = previousDefaultRunspace;
+            }
         }
         catch (Exception ex)
         {

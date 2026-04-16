@@ -43,7 +43,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT extname
             FROM pg_extension
             WHERE extname = 'vector'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal("vector", ds["extname", 0]);
@@ -63,7 +63,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             FROM pg_attribute
             WHERE attrelid = '{this._fx.Table}'::regclass
               AND attname    = 'embedding'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         // atttypmod for vector(n) encodes the dimension as the raw value
@@ -85,7 +85,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding::text AS vec
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
 
@@ -110,7 +110,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <-> '[1,0,0]' AS dist
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(0.0, dist, Tolerance);
@@ -127,7 +127,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <-> '[1,0,0]' AS dist
             FROM {this._fx.Table}
             WHERE name = 'banana'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(Math.Sqrt(2), dist, Tolerance);
@@ -145,7 +145,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <=> '[1,0,0]' AS dist
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(0.0, dist, Tolerance);
@@ -162,7 +162,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <=> '[1,0,0]' AS dist
             FROM {this._fx.Table}
             WHERE name = 'banana'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(1.0, dist, Tolerance);
@@ -180,7 +180,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <=> '[1,0,0]' AS dist
             FROM {this._fx.Table}
             WHERE name = 'apricot'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double dist = Convert.ToDouble(ds["dist", 0]);
         Assert.Equal(1.0 - (1.0 / Math.Sqrt(2)), dist, Tolerance);
@@ -200,7 +200,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <#> '[1,0,0]' AS neg_dot
             FROM {this._fx.Table}
             WHERE name = 'apple'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double negDot = Convert.ToDouble(ds["neg_dot", 0]);
         Assert.Equal(-1.0, negDot, Tolerance);
@@ -216,7 +216,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             SELECT embedding <#> '[1,0,0]' AS neg_dot
             FROM {this._fx.Table}
             WHERE name = 'banana'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         double negDot = Convert.ToDouble(ds["neg_dot", 0]);
         Assert.Equal(0.0, negDot, Tolerance);
@@ -235,7 +235,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             FROM {this._fx.Table}
             ORDER BY embedding <=> '[1,0,0]'
             LIMIT 1
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal("apple", ds["name", 0]);
@@ -254,7 +254,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             FROM {this._fx.Table}
             ORDER BY dist
             LIMIT 2
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -273,7 +273,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             FROM {this._fx.Table}
             WHERE (embedding <-> '[1,0,0]') < 0.9
             ORDER BY embedding <-> '[1,0,0]'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -292,13 +292,13 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         {
             int affected = await this._fx.Runner.ExecuteAsync(
                 $"INSERT INTO {this._fx.Table} (name, embedding) VALUES (@name, @vec::vector)",
-                new Dictionary<string, object?> { ["name"] = "mango", ["vec"] = "[0,0,1]" });
+                new Dictionary<string, object?> { ["name"] = "mango", ["vec"] = "[0,0,1]" }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(1, affected);
 
             var ds = await this._fx.Runner.QueryAsync(
                 $"SELECT name FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "mango" });
+                new Dictionary<string, object?> { ["name"] = "mango" }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(ds.Rows);
             Assert.Equal("mango", ds["name", 0]);
@@ -307,7 +307,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         {
             await this._fx.Runner.ExecuteAsync(
                 $"DELETE FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "mango" });
+                new Dictionary<string, object?> { ["name"] = "mango" }, cancellationToken: TestContext.Current.CancellationToken);
         }
     }
 
@@ -320,19 +320,19 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         // Insert a temporary row, then update its vector via parameters.
         await this._fx.Runner.ExecuteAsync(
             $"INSERT INTO {this._fx.Table} (name, embedding) VALUES (@name, @vec::vector)",
-            new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[0,1,0]" });
+            new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[0,1,0]" }, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
             int affected = await this._fx.Runner.ExecuteAsync(
                 $"UPDATE {this._fx.Table} SET embedding = @vec::vector WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[1,0,0]" });
+                new Dictionary<string, object?> { ["name"] = "temp_update", ["vec"] = "[1,0,0]" }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(1, affected);
 
             var ds = await this._fx.Runner.QueryAsync(
                 $"SELECT embedding::text AS vec FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "temp_update" });
+                new Dictionary<string, object?> { ["name"] = "temp_update" }, cancellationToken: TestContext.Current.CancellationToken);
 
             string raw = (string)ds["vec", 0]!;
             float[] components = ParseVector(raw);
@@ -344,7 +344,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         {
             await this._fx.Runner.ExecuteAsync(
                 $"DELETE FROM {this._fx.Table} WHERE name = @name",
-                new Dictionary<string, object?> { ["name"] = "temp_update" });
+                new Dictionary<string, object?> { ["name"] = "temp_update" }, cancellationToken: TestContext.Current.CancellationToken);
         }
     }
 
@@ -358,7 +358,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     {
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT embedding::text AS vec FROM {this._fx.Table} WHERE name = @name",
-            new Dictionary<string, object?> { ["name"] = "cherry" });
+            new Dictionary<string, object?> { ["name"] = "cherry" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         float[] components = ParseVector((string)ds["vec", 0]!);
@@ -376,7 +376,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         // Query vector matches banana exactly → distance should be 0.
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT (embedding <-> @vec::vector) AS dist FROM {this._fx.Table} WHERE name = @name",
-            new Dictionary<string, object?> { ["name"] = "banana", ["vec"] = "[0,1,0]" });
+            new Dictionary<string, object?> { ["name"] = "banana", ["vec"] = "[0,1,0]" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         double dist = Convert.ToDouble(ds["dist", 0]);
@@ -392,7 +392,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         // Only apple (dist 0) and apricot (dist ~0.765) are within threshold 0.9 of [1,0,0].
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT name FROM {this._fx.Table} WHERE (embedding <-> '[1,0,0]') < @threshold ORDER BY embedding <-> '[1,0,0]'",
-            new Dictionary<string, object?> { ["threshold"] = 0.9 });
+            new Dictionary<string, object?> { ["threshold"] = 0.9 }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -408,7 +408,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         // Pass the query vector as a parameter; verify the two nearest to [1,0,0] are returned.
         var ds = await this._fx.Runner.QueryAsync(
             $"SELECT name, (embedding <-> @vec::vector) AS dist FROM {this._fx.Table} ORDER BY dist LIMIT @k",
-            new Dictionary<string, object?> { ["vec"] = "[1,0,0]", ["k"] = 2 });
+            new Dictionary<string, object?> { ["vec"] = "[1,0,0]", ["k"] = 2 }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ds.Rows.Count);
         Assert.Equal("apple", ds["name", 0]);
@@ -432,20 +432,20 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 name      TEXT NOT NULL,
                 embedding vector(3) NOT NULL
             )
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
             await this._fx.Runner.ExecuteAsync($"""
                 INSERT INTO {indexTable} (name, embedding)
                 VALUES ('a', '[1,0,0]'), ('b', '[0,1,0]'), ('c', '[0,0,1]')
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             await this._fx.Runner.ExecuteAsync($"""
                 CREATE INDEX {indexName}
                 ON {indexTable}
                 USING hnsw (embedding vector_cosine_ops)
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             // Verify index was created
             var idxDs = await this._fx.Runner.QueryAsync($"""
@@ -453,7 +453,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 FROM pg_indexes
                 WHERE tablename = '{indexTable}'
                   AND indexname  = '{indexName}'
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(idxDs.Rows);
 
@@ -463,14 +463,14 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 FROM {indexTable}
                 ORDER BY embedding <=> '[1,0,0]'
                 LIMIT 1
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(ds.Rows);
             Assert.Equal("a", ds["name", 0]);
         }
         finally
         {
-            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
+            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}", cancellationToken: TestContext.Current.CancellationToken);
         }
     }
 
@@ -487,7 +487,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 id        SERIAL PRIMARY KEY,
                 embedding vector(3) NOT NULL
             )
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
@@ -496,13 +496,13 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 INSERT INTO {indexTable} (embedding)
                 SELECT ('[' || (random())::text || ',' || (random())::text || ',' || (random())::text || ']')::vector
                 FROM generate_series(1, 10)
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             await this._fx.Runner.ExecuteAsync($"""
                 CREATE INDEX ON {indexTable}
                 USING ivfflat (embedding vector_l2_ops)
                 WITH (lists = 1)
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             // A nearest-neighbour query should execute without error
             var ds = await this._fx.Runner.QueryAsync($"""
@@ -510,13 +510,13 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
                 FROM {indexTable}
                 ORDER BY embedding <-> '[0.5,0.5,0.5]'
                 LIMIT 1
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(ds.Rows);
         }
         finally
         {
-            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}");
+            await this._fx.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {indexTable}", cancellationToken: TestContext.Current.CancellationToken);
         }
     }
 
@@ -576,7 +576,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         /// <summary>
         /// Creates the extension, test table, and seed rows.
         /// </summary>
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
             await this.Runner.ExecuteAsync("CREATE EXTENSION IF NOT EXISTS vector");
 
@@ -603,7 +603,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
         /// <summary>
         /// Drops the dedicated test table.
         /// </summary>
-        public async Task DisposeAsync()
+        public async ValueTask DisposeAsync()
         {
             await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}");
         }

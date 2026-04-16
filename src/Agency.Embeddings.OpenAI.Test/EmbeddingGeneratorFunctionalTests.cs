@@ -24,8 +24,8 @@ public sealed class EmbeddingGeneratorFunctionalTests
     [Fact]
     public async Task DifferentTexts_ReturnDifferentEmbeddings()
     {
-        var a = await Generator.GenerateEmbeddingAsync("the quick brown fox");
-        var b = await Generator.GenerateEmbeddingAsync("SELECT * FROM users WHERE id = 1");
+        var a = await Generator.GenerateEmbeddingAsync("the quick brown fox", TestContext.Current.CancellationToken);
+        var b = await Generator.GenerateEmbeddingAsync("SELECT * FROM users WHERE id = 1", TestContext.Current.CancellationToken);
 
         Assert.False(VectorsAreEqual(a, b), "Unrelated texts should not produce identical embedding vectors.");
     }
@@ -36,7 +36,7 @@ public sealed class EmbeddingGeneratorFunctionalTests
     [Fact]
     public async Task DifferentTexts_BatchAndSingle_ReturnDifferentEmbeddings()
     {
-        var results = await Generator.GenerateEmbeddingsAsync(["sunrise over the mountains", "database migration script"]);
+        var results = await Generator.GenerateEmbeddingsAsync(["sunrise over the mountains", "database migration script"], TestContext.Current.CancellationToken);
 
         Assert.False(VectorsAreEqual(results[0], results[1]),
             "Two unrelated texts in a batch should produce different embedding vectors.");
@@ -54,8 +54,8 @@ public sealed class EmbeddingGeneratorFunctionalTests
     {
         const string input = "embeddings should be deterministic";
 
-        var first = await Generator.GenerateEmbeddingAsync(input);
-        var second = await Generator.GenerateEmbeddingAsync(input);
+        var first = await Generator.GenerateEmbeddingAsync(input, TestContext.Current.CancellationToken);
+        var second = await Generator.GenerateEmbeddingAsync(input, TestContext.Current.CancellationToken);
 
         Assert.Equal(first.Length, second.Length);
         var similarity = CosineSimilarity(first, second);
@@ -72,9 +72,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
     [Fact]
     public async Task SemanticallySimilarTexts_HigherSimilarityThanDissimilarTexts()
     {
-        var dog = await Generator.GenerateEmbeddingAsync("dog");
-        var puppy = await Generator.GenerateEmbeddingAsync("puppy");
-        var spaceship = await Generator.GenerateEmbeddingAsync("spaceship");
+        var dog = await Generator.GenerateEmbeddingAsync("dog", TestContext.Current.CancellationToken);
+        var puppy = await Generator.GenerateEmbeddingAsync("puppy", TestContext.Current.CancellationToken);
+        var spaceship = await Generator.GenerateEmbeddingAsync("spaceship", TestContext.Current.CancellationToken);
 
         var similarPairScore = CosineSimilarity(dog, puppy);
         var dissimilarPairScore = CosineSimilarity(dog, spaceship);
@@ -90,9 +90,9 @@ public sealed class EmbeddingGeneratorFunctionalTests
     [Fact]
     public async Task SemanticallySimilarSentences_HigherSimilarityThanUnrelatedSentences()
     {
-        var programming = await Generator.GenerateEmbeddingAsync("writing clean code in C#");
-        var refactoring = await Generator.GenerateEmbeddingAsync("refactoring software for maintainability");
-        var cooking = await Generator.GenerateEmbeddingAsync("how to bake a sourdough loaf");
+        var programming = await Generator.GenerateEmbeddingAsync("writing clean code in C#", TestContext.Current.CancellationToken);
+        var refactoring = await Generator.GenerateEmbeddingAsync("refactoring software for maintainability", TestContext.Current.CancellationToken);
+        var cooking = await Generator.GenerateEmbeddingAsync("how to bake a sourdough loaf", TestContext.Current.CancellationToken);
 
         var relatedScore = CosineSimilarity(programming, refactoring);
         var unrelatedScore = CosineSimilarity(programming, cooking);
@@ -114,12 +114,12 @@ public sealed class EmbeddingGeneratorFunctionalTests
     {
         string[] inputs = ["neural network", "machine learning", "deep learning"];
 
-        var batch = await Generator.GenerateEmbeddingsAsync(inputs);
+        var batch = await Generator.GenerateEmbeddingsAsync(inputs, TestContext.Current.CancellationToken);
 
         var individual = new List<ReadOnlyMemory<float>>();
         foreach (var input in inputs)
         {
-            individual.Add(await Generator.GenerateEmbeddingAsync(input));
+            individual.Add(await Generator.GenerateEmbeddingAsync(input, TestContext.Current.CancellationToken));
         }
 
         Assert.Equal(batch.Count, individual.Count);

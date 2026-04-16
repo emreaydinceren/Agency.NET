@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Agency.Agentic.Tools;
 
 namespace Agency.Agentic.Test;
 
@@ -41,7 +40,7 @@ public sealed class ExecutePowershellToolTests
     {
         string tempDir = Directory.CreateTempSubdirectory().FullName;
         string filePath = Path.Combine(tempDir, "sample.txt");
-        await File.WriteAllTextAsync(filePath, "hello");
+        await File.WriteAllTextAsync(filePath, "hello", cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
@@ -68,7 +67,7 @@ public sealed class ExecutePowershellToolTests
         string tempDir = Directory.CreateTempSubdirectory().FullName;
         string filePath = Path.Combine(tempDir, "content.txt");
         string expectedLine = $"line-{Guid.NewGuid():N}";
-        await File.WriteAllTextAsync(filePath, expectedLine);
+        await File.WriteAllTextAsync(filePath, expectedLine, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {

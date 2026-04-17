@@ -70,13 +70,13 @@ public sealed class ToolRegistry : IToolRegistry
     /// <inheritdoc/>
     public async Task<ToolResult> InvokeAsync(string name, JsonElement input, CancellationToken ct)
     {
+        if (IsToolDisabled(name))
+        {
+            return new ToolResult("Tool is disabled.", IsError: true);
+        }
+
         if (!this._tools.TryGetValue(name, out ITool? tool))
         {
-            if (IsToolDisabled(name))
-            {
-                return new ToolResult("Tool is disabled.", IsError: true);
-            }
-
             return new ToolResult($"No tool registered with name '{name}'.", IsError: true);
         }
 

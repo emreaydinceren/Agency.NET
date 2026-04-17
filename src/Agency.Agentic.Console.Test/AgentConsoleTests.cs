@@ -108,7 +108,7 @@ public sealed class AgentConsoleTests
             "/exit",
         ]);
 
-        Assert.Contains("[Agent]", output);
+        Assert.True(ContainsAgentResponse(output), $"Expected an agent response marker in output. Output:\n{output}");
     }
 
     /// <summary>
@@ -123,7 +123,7 @@ public sealed class AgentConsoleTests
             "/exit",
         ]);
 
-        Assert.Contains("[Agent]", output);
+        Assert.True(ContainsAgentResponse(output), $"Expected an agent response marker in output. Output:\n{output}");
         Assert.Contains("↳ +", output);       // per-turn token delta line
         Assert.Contains("in,", output);        // "↳ +N in, +N out [Success]"
     }
@@ -163,9 +163,9 @@ public sealed class AgentConsoleTests
             ],
             timeout: TimeSpan.FromMinutes(3));
 
-        int agentLines = CountOccurrences(output, "[Agent]");
+        int agentLines = CountAgentResponses(output);
         Assert.True(agentLines >= 2,
-            $"Expected at least 2 [Agent] lines but found {agentLines}. Output:\n{output}");
+            $"Expected at least 2 agent responses but found {agentLines}. Output:\n{output}");
     }
 
     /// <summary>
@@ -203,9 +203,9 @@ public sealed class AgentConsoleTests
             timeout: TimeSpan.FromMinutes(3));
 
         // The agent must have received both turns and produced two responses.
-        int agentLines = CountOccurrences(output, "[Agent]");
+        int agentLines = CountAgentResponses(output);
         Assert.True(agentLines >= 2,
-            $"Expected at least 2 [Agent] lines but found {agentLines}. Output:\n{output}");
+            $"Expected at least 2 agent responses but found {agentLines}. Output:\n{output}");
     }
 
     // ── Helper: process runner ────────────────────────────────────────────────
@@ -227,7 +227,7 @@ public sealed class AgentConsoleTests
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --no-build --project \"{ConsoleCsproj}\"",
+            Arguments = $"run --project \"{ConsoleCsproj}\"",
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -265,11 +265,18 @@ public sealed class AgentConsoleTests
             process.Kill(entireProcessTree: true);
             throw new TimeoutException(
                 $"Console process did not exit within {effectiveTimeout}. " +
-                $"Partial stdout:\n{await outputTask}");
+                $"Partial stdout:\n{await outputTask}\n" +
+                $"Partial stderr:\n{await errorTask}");
         }
 
         // Process has exited; both streams are now fully drained.
         string output = await outputTask;
+        string error = await errorTask;
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            output = $"{output}\n[stderr]\n{error}";
+        }
+
         return (output, process.ExitCode);
     }
 
@@ -284,5 +291,18 @@ public sealed class AgentConsoleTests
         }
 
         return count;
+    }
+
+    private static int CountAgentResponses(string output)
+    {
+        int legacyAgentLines = CountOccurrences(output, "[Agent]");
+        int currentAgentLines = CountOccurrences(output, "● ");
+        return Math.Max(legacyAgentLines, currentAgentLines);
+    }
+
+    private static bool ContainsAgentResponse(string output)
+    {
+        return output.Contains("[Agent]", StringComparison.Ordinal)
+            || output.Contains("● ", StringComparison.Ordinal);
     }
 }

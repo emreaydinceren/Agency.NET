@@ -8,7 +8,7 @@ internal class CommandManager(IEnumerable<Command> initialCommands, ConsoleChatS
 
     public Task<CommandContinuation> ExecuteCommandAsync(string commandText)
     {
-        var command = this._commands.FirstOrDefault(c => c.CommandText.StartsWith(commandText, StringComparison.OrdinalIgnoreCase));
+        var command = this._commands.FirstOrDefault(c => commandText.StartsWith(c.CommandText, StringComparison.OrdinalIgnoreCase));
 
         if (command is null)
         {

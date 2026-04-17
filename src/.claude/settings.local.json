@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(dotnet build *)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(dotnet test *)",
+      "Bash(xargs -I{} sh -c 'dotnet-ildasm \"{}\" 2>/dev/null | grep -l MessageParamContent')",
+      "Bash(dotnet tool list *)"
     ]
   }
 }

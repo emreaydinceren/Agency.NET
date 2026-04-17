@@ -153,7 +153,7 @@ public class PostgreKVStore : IKVStore
             // Vector search on query.Value
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value);
+                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                 parameters["qVector"] = new Pgvector.Vector(embedding.ToArray());
             }
             else
@@ -232,7 +232,7 @@ public class PostgreKVStore : IKVStore
         try
         {
             string contentToEmbed = JsonSerializer.Serialize(value);
-            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed);
+            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
             string vectorLiteral = $"[{string.Join(',', vectorArray.ToArray().Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
 
             // Use EXCLUDED to update existing records on Key conflict

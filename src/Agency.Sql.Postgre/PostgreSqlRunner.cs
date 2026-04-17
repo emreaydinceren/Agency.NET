@@ -11,8 +11,9 @@ namespace Agency.Sql.Postgre;
 
 /// <summary>
 /// Runs raw SQL statements and queries against a PostgreSQL instance.
+/// Owns a singleton <see cref="NpgsqlDataSource"/> for connection pooling; dispose this class when done.
 /// </summary>
-public sealed class PostgreSqlRunner
+public sealed class PostgreSqlRunner : IAsyncDisposable
 {
     /// <summary>
     /// The activity source name used for SQL telemetry.
@@ -34,20 +35,27 @@ public sealed class PostgreSqlRunner
         _meter.CreateHistogram<double>("postgresql.duration", unit: "ms", description: "Duration of SQL operations in milliseconds.");
 
     private readonly ILogger<PostgreSqlRunner> _logger;
-
-    private readonly string _connectionString;
+    private readonly NpgsqlDataSource _dataSource;
 
     /// <summary>
     /// Creates a new PostgreSQL runner for the provided connection string.
     /// </summary>
     public PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null)
     {
-        
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
+        }
+
         this._logger = logger ?? NullLogger<PostgreSqlRunner>.Instance;
-        this._connectionString = !string.IsNullOrWhiteSpace(connectionString)
-            ? connectionString
-            : throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
+
+        var builder = new NpgsqlDataSourceBuilder(connectionString);
+        builder.UseVector();
+        this._dataSource = builder.Build();
     }
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => this._dataSource.DisposeAsync();
 
     /// <summary>
     /// Executes a non-query SQL statement (DDL or DML) and returns the number of rows affected.
@@ -72,11 +80,7 @@ public sealed class PostgreSqlRunner
 
         try
         {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(this._connectionString);
-            dataSourceBuilder.UseVector();
-            var datasource = dataSourceBuilder.Build();
-            await using var connection = await datasource.OpenConnectionAsync();
-
+            await using var connection = await this._dataSource.OpenConnectionAsync(cancellationToken);
             await using var command = BuildCommand(connection, sql, parameters);
             int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -122,11 +126,6 @@ public sealed class PostgreSqlRunner
             throw new ArgumentException("SQL query cannot be null or whitespace.", nameof(sql));
         }
 
-        if (string.IsNullOrWhiteSpace(sql))
-        {
-            throw new ArgumentException("SQL query cannot be null or whitespace.", nameof(sql));
-        }
-
         using var activity = _activitySource.StartActivity("postgresql.query", ActivityKind.Client);
         activity?.SetTag("db.system", "postgresql");
         activity?.SetTag("db.operation", "query");
@@ -137,11 +136,7 @@ public sealed class PostgreSqlRunner
 
         try
         {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(this._connectionString);
-            dataSourceBuilder.UseVector();
-            var datasource = dataSourceBuilder.Build();
-            await using var connection = await datasource.OpenConnectionAsync();
-
+            await using var connection = await this._dataSource.OpenConnectionAsync(cancellationToken);
             await using var command = BuildCommand(connection, sql, parameters);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -218,11 +213,7 @@ public sealed class PostgreSqlRunner
 
         try
         {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(this._connectionString);
-            dataSourceBuilder.UseVector();
-            var datasource = dataSourceBuilder.Build();
-            await using var connection = await datasource.OpenConnectionAsync();
-
+            await using var connection = await this._dataSource.OpenConnectionAsync(cancellationToken);
             await using var command = BuildCommand(connection, sql, parameters);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 

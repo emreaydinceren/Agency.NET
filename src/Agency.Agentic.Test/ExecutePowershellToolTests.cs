@@ -31,8 +31,7 @@ public sealed class ExecutePowershellToolTests
         ToolResult result = await tool.InvokeAsync(JsonSerializer.SerializeToElement(new { }), CancellationToken.None);
 
         Assert.True(result.IsError);
-        Assert.Contains("Exception executing command", result.Content);
-        Assert.Contains("command", result.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Command is required", result.Content);
     }
 
     [Fact]

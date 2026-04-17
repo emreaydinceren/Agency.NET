@@ -7,7 +7,7 @@ using Microsoft.SemanticKernel.Text;
 /// SemanticKernelTextSplitter wraps TextChunker from Microsoft.SemanticKernel.Core
 /// to break large documents into token-bounded chunks. Tests verify:
 /// constructor validation prevents misconfiguration at setup time;
-/// each chunk carries the correct metadata (chunk_index, preserved fields);
+/// each chunk preserves loader-supplied metadata (file_extension, file_name, etc.);
 /// original document metadata is never mutated (chunks get their own copies);
 /// the markdown code path is exercised when file_extension is ".md";
 /// a custom TokenCounter delegate is actually forwarded to TextChunker.
@@ -75,20 +75,19 @@ public sealed class SemanticKernelTextSplitterTests
     }
 
     /// <summary>
-    /// chunk_index is injected by the splitter so downstream consumers (and the
-    /// pipeline key formatter) can determine the ordering of chunks within a
-    /// document. Missing this key would make chunk ordering opaque and break
-    /// the {sourceId}:chunk:{i} key contract.
+    /// The splitter is a pure text transformation; chunk_index is owned by the
+    /// pipeline (DefaultIngestionPipeline.BuildChunkMetadata). The splitter must
+    /// not inject it so the pipeline's authoritative value is never silently overwritten.
     /// </summary>
     [Fact]
-    public void Split_EachChunk_HasChunkIndexMetadata()
+    public void Split_EachChunk_DoesNotSetChunkIndex()
     {
         var splitter = new SemanticKernelTextSplitter(500, 0);
         var doc = new Document("Some content.", "src");
 
         var chunks = splitter.Split(doc).ToList();
 
-        Assert.All(chunks, c => Assert.True(c.Metadata!.ContainsKey("chunk_index")));
+        Assert.All(chunks, c => Assert.False(c.Metadata?.ContainsKey("chunk_index") ?? false));
     }
 
     /// <summary>
@@ -134,9 +133,8 @@ public sealed class SemanticKernelTextSplitterTests
 
     /// <summary>
     /// Each chunk gets its own metadata dictionary; the splitter must not mutate
-    /// the original document's metadata. If it did, a document processed twice
-    /// (e.g. in a retry) would carry stale chunk_index values from the first pass,
-    /// causing incorrect chunk ordering.
+    /// the original document's metadata. If it did, a document re-split on retry
+    /// would see stale values from the first pass.
     /// </summary>
     [Fact]
     public void Split_DoesNotMutateOriginalMetadata()
@@ -197,20 +195,5 @@ public sealed class SemanticKernelTextSplitterTests
         Assert.True(callCount > 0);
     }
 
-    /// <summary>
-    /// The first chunk must have chunk_index == 0 so that the pipeline key
-    /// ({sourceId}:chunk:0) is consistent with the splitter's own index.
-    /// An off-by-one here would cause a mismatch between the chunk key stored
-    /// in the vector store and what the pipeline reports in FailedKeys.
-    /// </summary>
-    [Fact]
-    public void Split_ChunkIndexMetadata_StartsAtZero()
-    {
-        var splitter = new SemanticKernelTextSplitter(500, 0);
-        var doc = new Document("Content.", "src");
 
-        var chunks = splitter.Split(doc).ToList();
-
-        Assert.Equal(0, (int)chunks[0].Metadata!["chunk_index"]);
-    }
 }

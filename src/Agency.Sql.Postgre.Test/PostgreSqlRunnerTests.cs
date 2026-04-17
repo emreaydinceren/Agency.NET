@@ -515,17 +515,14 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
         }
 
         /// <summary>
-        /// Drops the dedicated test table.
+        /// Drops the dedicated test table and disposes the runner's connection pool.
         /// </summary>
         public async Task DisposeAsync()
         {
             await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}");
+            await this.Runner.DisposeAsync();
         }
 
-        ValueTask IAsyncDisposable.DisposeAsync()
-        {
-            // do nothing
-            return ValueTask.CompletedTask;
-        }
+        ValueTask IAsyncDisposable.DisposeAsync() => this.Runner.DisposeAsync();
     }
 }

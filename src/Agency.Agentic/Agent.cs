@@ -290,20 +290,6 @@ public sealed class Agent
                 turnUsage = response.Usage;
             }
 
-            _tokenCounter.Add(turnUsage.InputTokens, new TagList
-            {
-                { "agent.model", this._model },
-                { "agent.client_type", this._llm.ClientType },
-                { "agent.token.type", "input" },
-            });
-
-            _tokenCounter.Add(turnUsage.OutputTokens, new TagList
-            {
-                { "agent.model", this._model },
-                { "agent.client_type", this._llm.ClientType },
-                { "agent.token.type", "output" },
-            });
-
             ctx.TotalUsage = new(
                 ctx.TotalUsage.InputTokens + turnUsage.InputTokens,
                 ctx.TotalUsage.OutputTokens + turnUsage.OutputTokens);

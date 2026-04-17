@@ -68,40 +68,24 @@ public class AgentTool : ITool
             {
                 case SessionStartedEvent ev:
                     verboseSB.AppendLine($"Session started: {ev.SessionId}");
-                break;
+                    break;
                 case ToolInvokedEvent ev:
                     verboseSB.AppendLine($"Tool invoked: {ev.ToolName} with input {ev.Input}");
-                break;
+                    break;
                 case IterationCompletedEvent ev:
                     verboseSB.AppendLine($"Iteration {ev.Iteration} completed.");
-                break;
+                    break;
                 case TextDeltaEvent ev:
                     verboseSB.AppendLine(ev.Delta);
-                break;
+                    break;
                 case ToolUseReceivedEvent ev:
                     verboseSB.AppendLine($"Tool use received: {ev.ToolName} with input {ev.ToolUseId}");
-                break;
+                    break;
                 case AgentResultEvent ev:
                     verboseSB.AppendLine($"Agent result: {ev.Status} with {ev.FinalText}");
                     finalText = ev.FinalText ?? string.Empty;
                     status = ev.Status;
-                break;
-            }
-
-            string? text = agentEvent switch
-            {
-                SessionStartedEvent ev => $"Session started: {ev.SessionId}",
-                ToolInvokedEvent ev => $"Tool invoked: {ev.ToolName} with input {ev.Input}",
-                IterationCompletedEvent ev => $"Iteration {ev.Iteration} completed.",
-                TextDeltaEvent ev => ev.Delta,
-                ToolUseReceivedEvent ev => $"Tool use received: {ev.ToolName} with input {ev.ToolUseId}",
-                AgentResultEvent ev => $"Agent result: {ev.Status} with {ev.FinalText}",
-                _ => null
-            };
-
-            if (text is not null)
-            {
-                verboseSB.AppendLine(text);
+                    break;
             }
         }
 

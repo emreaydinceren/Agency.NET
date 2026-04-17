@@ -169,7 +169,7 @@ public class ClaudeClient : ILlmClient
             else if (block.TryPickToolUse(out AToolUseBlock? tub) && tub is not null)
             {
                 var inputJson = JsonSerializer.Serialize(tub.Input);
-                var inputElement = JsonDocument.Parse(inputJson).RootElement;
+                var inputElement = JsonDocument.Parse(inputJson).RootElement.Clone();
                 contentBlocks.Add(new OurToolUseBlock(tub.ID, tub.Name, inputElement));
             }
             else if (block.TryPickThinking(out AThinkingBlock? thinking) && thinking is not null)
@@ -247,11 +247,10 @@ public class ClaudeClient : ILlmClient
             }
         }
 
-        // MessageParamContent has no implicit operator from List<T>; an explicit cast is needed.
         return new MessageParam
         {
             Role = role,
-            Content = (MessageParamContent)(IReadOnlyList<ContentBlockParam>)blocks,
+            Content = (MessageParamContent)blocks,
         };
     }
 
@@ -605,7 +604,7 @@ public class ClaudeClient : ILlmClient
                     var inputJson = completedTool.Json.Length > 0
                         ? completedTool.Json.ToString()
                         : "{}";
-                    var inputElement = JsonDocument.Parse(inputJson).RootElement;
+                    var inputElement = JsonDocument.Parse(inputJson).RootElement.Clone();
                     yield return new AgentStreamChunk(null, new OurToolUseBlock(completedTool.Id, completedTool.Name, inputElement), null, null);
                     currentBlockIsToolUse = false;
                 }

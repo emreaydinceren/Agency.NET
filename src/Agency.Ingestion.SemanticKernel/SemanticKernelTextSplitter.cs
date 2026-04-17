@@ -45,10 +45,10 @@ public sealed class SemanticKernelTextSplitter : ITextSplitter
             ? this.SplitMarkdown(document.Content)
             : this.SplitPlainText(document.Content);
 
-        return paragraphs.Select((text, index) => document with
+        return paragraphs.Select(text => document with
         {
             Content = text,
-            Metadata = AddChunkMetadata(document.Metadata, index),
+            Metadata = document.Metadata is null ? null : new Dictionary<string, object>(document.Metadata, StringComparer.Ordinal),
         });
     }
 
@@ -76,12 +76,4 @@ public sealed class SemanticKernelTextSplitter : ITextSplitter
                MarkdownExtensions.Contains(extStr, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static Dictionary<string, object> AddChunkMetadata(
-        Dictionary<string, object>? existing,
-        int chunkIndex)
-    {
-        var result = new Dictionary<string, object>(existing ?? [], StringComparer.Ordinal);
-        result["chunk_index"] = chunkIndex;
-        return result;
-    }
 }

@@ -135,6 +135,13 @@ internal sealed class ConsoleChatSession
                     continue;
                 }
 
+                if (input.Equals("quit", StringComparison.OrdinalIgnoreCase)
+                    || input.Equals("exit", StringComparison.OrdinalIgnoreCase))
+                {
+                    this.output.WriteLine("yellow", "Exiting session...");
+                    break;
+                }
+
                 // Slash commands are handled immediately in the REPL, without going through the agent.
                 // This allows for commands that can control the session itself (like /exit or /reset)
                 // or perform other actions without needing to be defined as tools.
@@ -147,7 +154,7 @@ internal sealed class ConsoleChatSession
                     switch (continuation)
                     {
                         case CommandContinuation.ExitSession:
-                        this.output.WriteLine("goldenrod", "Exiting session...");
+                        this.output.WriteLine("yellow", "Exiting session...");
                         break;
                         case CommandContinuation.Clear:
                         AnsiConsole.Clear();
@@ -242,7 +249,7 @@ internal sealed class ConsoleChatSession
                 {
                     streamingBuffer = null;
                     streamingStarted = false;
-                    this.output.WriteLine("goldenrod", "  [interrupted]");
+                    this.output.WriteLine("yellow", "  [interrupted]");
                     interrupted = true;
                 }
 

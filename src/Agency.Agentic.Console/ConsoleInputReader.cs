@@ -22,9 +22,15 @@ internal sealed class ConsoleInputReader(IChatOutput output)
 
         if (!console.Profile.Capabilities.Interactive)
         {
-            return await new TextPrompt<string>(string.Empty)
-                .AllowEmpty()
-                .ShowAsync(console, ct);
+            try
+            {
+                return await System.Console.In.ReadLineAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                output.WriteLine();
+                return null;
+            }
         }
 
         int initialCursorTop = System.Console.CursorTop;

@@ -154,7 +154,7 @@ public class OpenAIClient : ILlmClient
         {
             foreach (var call in toolCalls)
             {
-                var inputElement = JsonDocument.Parse(call.FunctionArguments.ToString()).RootElement;
+                var inputElement = JsonDocument.Parse(call.FunctionArguments.ToString()).RootElement.Clone();
                 contentBlocks.Add(new OurToolUseBlock(call.Id, call.FunctionName, inputElement));
             }
         }
@@ -536,7 +536,7 @@ public class OpenAIClient : ILlmClient
         foreach (var entry in toolCallAccumulators.OrderBy(static kv => kv.Key))
         {
             var argsJson = entry.Value.Args.Length > 0 ? entry.Value.Args.ToString() : "{}";
-            var inputElement = JsonDocument.Parse(argsJson).RootElement;
+            var inputElement = JsonDocument.Parse(argsJson).RootElement.Clone();
             yield return new AgentStreamChunk(null, new OurToolUseBlock(entry.Value.Id, entry.Value.Name.ToString(), inputElement), null, null);
         }
 

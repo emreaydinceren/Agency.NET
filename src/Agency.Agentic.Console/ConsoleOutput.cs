@@ -78,6 +78,11 @@ internal sealed class ConsoleOutput : IChatOutput
 
     public void StartSpinner(string markup = "[yellow]Thinking..[/]")
     {
+        if (System.Console.IsOutputRedirected || !AnsiConsole.Console.Profile.Capabilities.Interactive)
+        {
+            return;
+        }
+
         spinnerRunning = true;
 
         spinnerThread = new Thread(() =>
@@ -108,6 +113,11 @@ internal sealed class ConsoleOutput : IChatOutput
 
     public void StopSpinner()
     {
+        if (System.Console.IsOutputRedirected || !AnsiConsole.Console.Profile.Capabilities.Interactive)
+        {
+            return;
+        }
+
         spinnerRunning = false;
         spinnerThread?.Join(timeout: TimeSpan.FromMilliseconds(500));
         spinnerThread = null;

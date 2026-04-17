@@ -70,9 +70,14 @@ public sealed class SqliteKVStore : IKVStore
             float[] a = ParseVector(v1);
             float[] b = ParseVector(v2);
             double dot = a.Zip(b).Sum(p => (double)p.First * p.Second);
-            double magA = Math.Sqrt(a.Sum(x => (double)x * x));
-            double magB = Math.Sqrt(b.Sum(x => (double)x * x));
-            return 1.0 - (dot / (magA * magB));
+            double normA = Math.Sqrt(a.Sum(x => (double)x * x));
+            double normB = Math.Sqrt(b.Sum(x => (double)x * x));
+            if (normA == 0 || normB == 0)
+            {
+                return 1.0;
+            }
+
+            return 1.0 - (dot / (normA * normB));
         });
     }
 
@@ -170,7 +175,7 @@ public sealed class SqliteKVStore : IKVStore
 
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value);
+                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                 parameters["qVector"] = FormatVector(embedding.ToArray());
             }
             else
@@ -246,7 +251,7 @@ public sealed class SqliteKVStore : IKVStore
         try
         {
             string contentToEmbed = JsonSerializer.Serialize(value);
-            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed);
+            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
             string vectorLiteral = FormatVector(vectorArray.ToArray());
             string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
@@ -417,5 +422,5 @@ public sealed class SqliteKVStore : IKVStore
         => $"[{string.Join(',', vector.Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
 
     private static float[] ParseVector(string raw)
-        => raw.Trim('[', ']').Split(',').Select(float.Parse).ToArray();
+        => raw.Trim('[', ']').Split(',').Select(s => float.Parse(s, CultureInfo.InvariantCulture)).ToArray();
 }

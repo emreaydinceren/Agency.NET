@@ -2,26 +2,9 @@ namespace Agency.Agentic.Console;
 
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Threading.Channels;
 
 internal sealed class ConsoleOutput : IChatOutput
 {
-    enum State
-    {
-        Stopped,
-        Running,
-        Spinner,
-    }
-
-    private Channel<IRenderable> mainChannel = Channel.CreateUnbounded<IRenderable>();
-    private Channel<IRenderable> spinnerChannel = Channel.CreateUnbounded<IRenderable>();
-    private Task? consumerTask; 
-    private Task? spinnerTask;
-    private CancellationTokenSource? spinnerCTS;
-    private CancellationTokenSource? consumerCTS;
-
-    private volatile State state = State.Stopped;
-
     public static IChatOutput Instance { get; private set; } = new ConsoleOutput();
 
     public void WriteLineMarkdown(string text)
@@ -31,14 +14,13 @@ internal sealed class ConsoleOutput : IChatOutput
 
     public void WriteMarkup(string text)
     {
-        this.EnsureConsumerStarted();
-        this.mainChannel.Writer.TryWrite(new Markup(text));
+        
+        this.Write(new Markup(text));
     }
 
     private void Write(IRenderable renderable)
     {
-        this.EnsureConsumerStarted();
-        this.mainChannel.Writer.TryWrite(renderable);
+        AnsiConsole.Write(renderable);
     }
 
     public void WriteLineMarkup(string text)
@@ -78,110 +60,6 @@ internal sealed class ConsoleOutput : IChatOutput
         }
     }
 
-    private void EnsureConsumerStarted()
-    {
-        if (this.state != State.Running)
-        {
-            StartConsumer();
-        }
-    }
-
-    private async Task ConsumeAsync(CancellationToken cancellationToken)
-    {
-        var reader = this.mainChannel.Reader;
-
-        try
-        {
-            await foreach (IRenderable renderable in reader.ReadAllAsync(cancellationToken))
-            {
-                if (state == State.Spinner)
-                {
-                    this.spinnerChannel.Writer.TryWrite(renderable);
-                }
-                else
-                {
-                    AnsiConsole.Write(renderable);
-                }
-
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // expected on cancellation, ignore
-        }
-    }
-
-    public void StartSpinner(string markup = "[yellow]Thinking..[/]")
-    {
-        var originalState = Interlocked.CompareExchange(ref state, State.Spinner, State.Running);
-
-        if (originalState != State.Running)
-        {
-            StartConsumer();
-            StartSpinner(markup);
-        }
-
-        spinnerCTS = new CancellationTokenSource();
-
-        spinnerTask = AnsiConsole.Status()
-            .AutoRefresh(true)
-            .Spinner(Spinner.Known.Default)
-            .StartAsync(markup, async ctx =>
-            {
-                var reader = this.spinnerChannel.Reader;
-
-                Interlocked.Exchange(ref state, State.Spinner);
-
-                try
-                {
-                    await foreach (IRenderable renderable in reader.ReadAllAsync(spinnerCTS.Token))
-                    {
-                        AnsiConsole.Write(renderable);
-
-                        if (spinnerCTS.Token.IsCancellationRequested)
-                        {
-                            break;
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // expected on cancellation, ignore
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref state, State.Running);
-                }
-            });
-    }
-
-    private void StartConsumer()
-    {
-        this.consumerCTS = new CancellationTokenSource();
-        this.consumerTask = Task.Factory.StartNew(() =>
-            this.ConsumeAsync(this.consumerCTS.Token),
-            this.consumerCTS.Token,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default).Unwrap();
-        Interlocked.Exchange(ref state, State.Running);
-    }
-
-    public void StopSpinner()
-    {
-        if (spinnerCTS != null)
-        {
-            spinnerCTS.Cancel();
-            spinnerTask?.Wait();
-            spinnerTask = null;
-            spinnerCTS.Dispose();
-            spinnerCTS = null;
-        }
-    }
-
     public void WriteMarkdownInBorderedPanel(string header, string text)
     {
         var panel = new Panel(text)
@@ -192,5 +70,47 @@ internal sealed class ConsoleOutput : IChatOutput
             BorderStyle = new Style(Color.Gray)
         };
         this.Write(panel);
+    }
+
+    private static string[] Frames = new[] { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };
+    private Thread? spinnerThread;
+    private volatile bool spinnerRunning;
+
+    public void StartSpinner(string markup = "[yellow]Thinking..[/]")
+    {
+        spinnerRunning = true;
+
+        spinnerThread = new Thread(() =>
+        {
+            int frameIndex = 0;
+
+            while (spinnerRunning)
+            {
+                System.Console.CursorVisible = false;
+                var (cursorLeft, cursorTop) = (System.Console.CursorLeft, System.Console.CursorTop);
+                string frame = Frames[frameIndex % Frames.Length];
+                var text = string.Concat(frame, " ", markup);
+                this.WriteMarkup(text);
+                System.Console.Out.Flush();
+                AnsiConsole.Console.Cursor.MoveLeft(text.Length);
+                frameIndex++;
+                Thread.Sleep(120);
+            }
+            System.Console.CursorVisible = true;
+        })
+        {
+            IsBackground = true,
+            Name = "ConsoleSpinner"
+        };
+
+        spinnerThread.Start();
+    }
+
+    public void StopSpinner()
+    {
+        spinnerRunning = false;
+        spinnerThread?.Join(timeout: TimeSpan.FromMilliseconds(500));
+        spinnerThread = null;
+        System.Console.Write("\r" + new string(' ', 20) + "\r"); // Clear the line
     }
 }

@@ -14,6 +14,9 @@ using System.Text;
 
 internal sealed class ConsoleChatSession
 {
+    private const string PromptMarkup= "[blue]❯ [/]";
+    private const string AssistantMarkup = "[green]● [/]";
+
     public static readonly string ActivitySourceName = "Agency.Agentic.Console";
     public static readonly string MeterName = "Agency.Agentic.Console";
 
@@ -47,8 +50,8 @@ internal sealed class ConsoleChatSession
 
     private readonly CommandManager commandManager;
     private readonly IChatOutput output;
+    private readonly ConsoleInputReader _inputReader;
     private readonly AgentOptions _options;
-    private readonly List<string> _history = [];
     private readonly ILogger<ConsoleChatSession> _logger;
     private readonly ToolContext toolContext;
     private Agent _agent;
@@ -69,6 +72,7 @@ internal sealed class ConsoleChatSession
         this.toolContext = toolContext;
         this._logger = logger ?? NullLogger<ConsoleChatSession>.Instance;
         this.output = chatOutput ?? ConsoleOutput.Instance;
+        this._inputReader = new ConsoleInputReader(this.output);
         this.commandManager = new CommandManager(CommandRegistry.Commands, this);
     }
 
@@ -117,7 +121,7 @@ internal sealed class ConsoleChatSession
 
             while (true)
             {
-                var input = initialInput ?? await ReadLineAsync("[blue]>[/] ", sessionCts.Token);
+                var input = initialInput ?? await this._inputReader.ReadLineAsync(PromptMarkup, sessionCts.Token);
 
                 if (input is null || sessionCts.IsCancellationRequested)
                 {
@@ -169,7 +173,7 @@ internal sealed class ConsoleChatSession
                     this.output.StartSpinner();
 
                     // This loops through the events of the turn as they come in from the agent. The main point of complexity here
-                    // is handling the fact that TextDeltaEvents may stream in one or more chunks before the AssistantTurnEvent comes in
+                    // is handling the fact that TextDeltaEvents may streaming in one or more chunks before the AssistantTurnEvent comes in
                     // to indicate the turn is done. We want to buffer those deltas until the turn is done so we can print them together, rather
                     // than interleaving them with any ToolInvokedEvents that may come in during the turn.
                     await foreach (AgentEvent evt in chatSession.SendAsync(input, sessionCts.Token))
@@ -190,23 +194,21 @@ internal sealed class ConsoleChatSession
                             streamingBuffer!.Append(delta.Delta);
                             break;
 
-                            case AssistantTurnEvent turn:
+                            case AssistantTurnEvent turn when streamingStarted:
                             // This event may come in the middle of streaming text deltas, or as a complete message at the end.
                             // If streaming, we buffer it until the turn is done; if not, we print it immediately.
 
-                            if (streamingStarted)
-                            {
-                                string buffered = streamingBuffer!.ToString();
-                                streamingBuffer = null;
-                                streamingStarted = false;
-                                this.output.WriteMarkup("[green][[Agent]][/]");
-                                MarkdownRenderer.Print(buffered);
-                            }
-                            else
-                            {
-                                this.PrintAssistantTurn(turn.Message);
-                            }
+                            string buffered = streamingBuffer!.ToString();
+                            streamingBuffer = null;
+                            streamingStarted = false;
+                            this.output.WriteMarkup(AssistantMarkup);
+                            MarkdownRenderer.Print(buffered);
+                            this.output.StopSpinner();
+                            break;
 
+                            case AssistantTurnEvent turn:
+                            this.PrintAssistantTurn(turn.Message);
+                            this.output.StopSpinner();
                             break;
 
                             case ToolInvokedEvent tool:
@@ -219,8 +221,6 @@ internal sealed class ConsoleChatSession
                             }
                             else
                             {
-                                //this.output.WriteLine("yellow", $"  ⚙ {tool.ToolName} done.");
-                                //this.output.WriteLine("gray", $"    ↳ result: {resultPreview}");
                                 this.output.WriteMarkdownInBorderedPanel($"Calling {tool.ToolName}", $"[gray]{resultPreview}[/]");
                             }
                             break;
@@ -244,10 +244,6 @@ internal sealed class ConsoleChatSession
                     streamingStarted = false;
                     this.output.WriteLine("goldenrod", "  [interrupted]");
                     interrupted = true;
-                }
-                finally
-                {
-                    this.output.StopSpinner();
                 }
 
                 if (!interrupted)
@@ -316,175 +312,6 @@ internal sealed class ConsoleChatSession
         }
     }
 
-    private void NewMethod()
-    {
-        this.output.WriteLine("cyan", "╔═══════════════════════════════════════════╗");
-        this.output.WriteLine("cyan", "║       Agency  ·  Agent Chat Console       ║");
-        this.output.WriteLine("cyan", "╚═══════════════════════════════════════════╝");
-        this.output.Write(null, "Provider : ");
-        this.output.WriteLine("yellow", this._agent.ClientType);
-        this.output.Write(null, "Model    : ");
-        this.output.WriteLine("yellow", this._agent.Model);
-        this.output.WriteLine("gray", "Type /exit to /quit  ·  Ctrl+C to interrupt a turn");
-        this.output.WriteLine();
-    }
-
-    private async Task<string?> ReadLineAsync(string markup, CancellationToken ct)
-    {
-        var console = AnsiConsole.Console;
-
-        if (!console.Profile.Capabilities.Interactive)
-        {
-            return await new TextPrompt<string>(string.Empty)
-                .AllowEmpty()
-                .ShowAsync(console, ct);
-        }
-
-        this.output.WriteLineMarkup(new string('─', System.Console.BufferWidth));
-        await Task.Delay(25, ct); // slight delay to ensure the above lines are rendered before we move the cursor
-        this.output.WriteLineMarkup(markup);
-        await Task.Delay(25, ct); // slight delay to ensure the above lines are rendered before we move the cursor
-        this.output.WriteLineMarkup(new string('─', System.Console.BufferWidth));
-        await Task.Delay(25, ct); // slight delay to ensure the above lines are rendered before we move the cursor
-        var leftMargin = Markup.Remove(markup).Length;
-        AnsiConsole.Cursor.MoveUp(2);
-        AnsiConsole.Cursor.MoveRight(leftMargin + 1);
-
-        var buffer = new StringBuilder();
-        int historyIndex = _history.Count;
-
-        while (true)
-        {
-            if (ct.IsCancellationRequested)
-            {
-                this.output.WriteLine();
-                return null;
-            }
-
-            if (!console.Input.IsKeyAvailable())
-            {
-                try
-                {
-                    await Task.Delay(50, ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    this.output.WriteLine();
-                    return null;
-                }
-
-                continue;
-            }
-            ConsoleKeyInfo? keyInfo = console.Input.ReadKey(intercept: true);
-            
-            if (keyInfo is null)
-            {
-                continue;
-            }
-
-            ConsoleKeyInfo key = keyInfo.Value;
-
-            switch (key.Key)
-            {
-                case ConsoleKey.Enter:
-                    string result = buffer.ToString();
-                    if (!string.IsNullOrWhiteSpace(result))
-                    {
-                        _history.Add(result);
-                    }
-                    AnsiConsole.Cursor.MoveDown(2);
-                    return result;
-
-                case ConsoleKey.Backspace when buffer.Length > 0:
-                    buffer.Remove(buffer.Length - 1, 1);
-                    this.output.Write ("\b \b");
-                    break;
-
-
-                case ConsoleKey.LeftArrow:
-                AnsiConsole.Cursor.MoveLeft();
-                break;
-
-                case ConsoleKey.Home:
-                AnsiConsole.Cursor.SetPosition(leftMargin + 1, System.Console.CursorTop + 1);
-                break;
-
-                case ConsoleKey.End:
-                AnsiConsole.Cursor.SetPosition(buffer.Length + leftMargin + 1, System.Console.CursorTop + 1);
-                break;
-
-                case ConsoleKey.RightArrow:
-                    AnsiConsole.Cursor.MoveRight();
-                    break;
-
-                case ConsoleKey.Escape:
-                    ReplaceBufferLine(buffer, "");
-                    buffer.Clear();
-                    break;
-
-                case ConsoleKey.UpArrow when historyIndex > 0:
-                    historyIndex--;
-                    ReplaceBufferLine(buffer, _history[historyIndex]);
-                    buffer.Clear();
-                    buffer.Append(_history[historyIndex]);
-                    break;
-
-                case ConsoleKey.DownArrow:
-                    if (historyIndex < _history.Count - 1)
-                    {
-                        historyIndex++;
-                        ReplaceBufferLine(buffer, _history[historyIndex]);
-                        buffer.Clear();
-                        buffer.Append(_history[historyIndex]);
-                    }
-                    else
-                    {
-                        historyIndex = _history.Count;
-                        ReplaceBufferLine(buffer, "");
-                        buffer.Clear();
-                    }
-
-                    break;
-
-                default:
-                if (key.KeyChar == '/' && buffer.Length == 0)
-                {
-                    var commands = CommandRegistry.Commands.Select(cmd => new ConsolePickerRow( cmd.CommandText, cmd.Description )).ToList();
-                    this.output.WriteLine();
-                    string? picked = ConsolePicker.Show(commands, 0);
-                    this.output.WriteMarkup(markup);
-                    if (picked is not null)
-                    {
-                        buffer.Clear();
-                        buffer.Append(picked);
-                        this.output.Write(picked);
-                    }
-                }
-                else if (key.KeyChar >= 32) // printable character
-                {
-                    buffer.Append(key.KeyChar);
-                    this.output.Write(key.KeyChar.ToString());
-                }
-
-                    break;
-            }
-        }
-    }
-
-
-    private void ReplaceBufferLine(StringBuilder current, string replacement)
-    {
-        int currentLen = current.Length;
-        AnsiConsole.Cursor.MoveLeft(currentLen);
-        this.output.Write(replacement);
-        int overflow = currentLen - replacement.Length;
-        if (overflow > 0)
-        {
-            this.output.Write(new string(' ', overflow));
-            AnsiConsole.Cursor.MoveLeft(overflow);
-        }
-    }
-
     private void PrintAssistantTurn(AgentMessage message)
     {
         foreach (ContentBlock block in message.Content)
@@ -494,7 +321,7 @@ internal sealed class ConsoleChatSession
                 case TextBlock tb when !string.IsNullOrWhiteSpace(tb.Text):
                 {
                     // This is when Agent wants to write a message
-                    this.output.WriteMarkup("[green]●[/]");
+                    this.output.WriteMarkup(AssistantMarkup);
                     this.output.WriteLineMarkdown(tb.Text);
                     break;
                 }
@@ -513,8 +340,6 @@ internal sealed class ConsoleChatSession
 
                 // This is when Agent wants to call a tool - we show the tool name and input, but not the output (since it may be large or sensitive)
                 this.output.WriteMarkdownInBorderedPanel($"Calling {tub.Name}", $"[gray]{commandPreview}[/]");
-                //this.output.WriteLine("magenta", $"  → calling {tub.Name}");
-                //this.output.WriteLine("gray", $"    ↳ command: {commandPreview}");
                     break;
             }
         }
@@ -547,48 +372,18 @@ internal sealed class ConsoleChatSession
         }
         return sb.ToString();
     }
-}
 
-
-public class Spinner
-{
-    private static string[] Frames = new[] { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };
-    private Thread? spinnerThread;
-    private volatile bool spinnerRunning;
-
-    public void StartSpinner()
+    private void NewMethod()
     {
-
-        spinnerRunning = true;
-
-        spinnerThread = new Thread(() =>
-        {
-            
-            int frameIndex = 0;
-
-            while (spinnerRunning)
-            {
-                string frame = Frames[frameIndex % Frames.Length];
-                System.Console.Write($"\r{frame} Thinking..  ");
-                System.Console.Out.Flush();
-
-                frameIndex++;
-                Thread.Sleep(80); // ~12.5 FPS
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "ConsoleSpinner"
-        };
-
-        spinnerThread.Start();
-    }
-
-    public void StopSpinner()
-    {
-        spinnerRunning = false;
-        spinnerThread?.Join(timeout: TimeSpan.FromMilliseconds(500));
-        spinnerThread = null;
-        System.Console.Write("\r" + new string(' ', 20) + "\r"); // Clear the line
+        this.output.WriteLine("cyan", "╔═══════════════════════════════════════════╗");
+        this.output.WriteLine("cyan", "║       Agency  ·  Agent Chat Console       ║");
+        this.output.WriteLine("cyan", "╚═══════════════════════════════════════════╝");
+        this.output.Write(null, "Provider : ");
+        this.output.WriteLine("yellow", this._agent.ClientType);
+        this.output.Write(null, "Model    : ");
+        this.output.WriteLine("yellow", this._agent.Model);
+        this.output.WriteLine("gray", "Type /exit to /quit  ·  Ctrl+C to interrupt a turn");
+        this.output.WriteLine();
     }
 }
+

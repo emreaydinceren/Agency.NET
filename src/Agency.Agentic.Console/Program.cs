@@ -84,8 +84,8 @@ internal class Program
         }
 
         AgentOptions options = serviceProvider.GetRequiredService<IOptions<AgentOptions>>().Value;
-        clientName = clientName ?? options.DefaultClientName ?? throw new InvalidOperationException("DefaultClientName must be specified in the configuration.");
-        modelName = modelName ?? options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
+        clientName = !string.IsNullOrEmpty(clientName) ? clientName : (options.DefaultClientName ?? throw new InvalidOperationException("DefaultClientName must be specified in the configuration."));
+        modelName = !string.IsNullOrEmpty(modelName) ? modelName : (options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration."));
 
         var models = serviceProvider.GetRequiredService<Models>();
         var logger = serviceProvider.GetRequiredService<ILogger<Agent>>();

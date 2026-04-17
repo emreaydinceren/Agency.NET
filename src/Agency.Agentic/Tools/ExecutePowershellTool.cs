@@ -68,8 +68,8 @@ public class ExecutePowershellTool : ITool
                 {
                     return Task.FromResult(new ToolResult(results[0].ToMarkdown(), IsError: false));
                 }
-
-                return Task.FromResult(new ToolResult(results.ToMarkdownTable(), IsError: false));
+                string markdown = results.ToMarkdownTable();
+                return Task.FromResult(new ToolResult(markdown, IsError: false));
             }
             finally
             {

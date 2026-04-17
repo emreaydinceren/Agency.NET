@@ -1,4 +1,5 @@
 using Agency.Common;
+using Newtonsoft.Json.Linq;
 using System.Management.Automation;
 using System.Text;
 
@@ -23,41 +24,120 @@ internal static class Extensions
         }
     }
 
+
+    /// <summary>
+    /// Converts a collection of PSObjects into a GitHub-flavored Markdown table.
+    /// Returns an empty string if the collection is null or empty.
+    /// </summary>
     internal static string ToMarkdownTable(this IEnumerable<PSObject> results)
     {
-        var list = results.ToList();
+        if (results is null)
+        {
+            return string.Empty;
+        }
+
+        var list = results as IList<PSObject> ?? results.ToList();
         if (list.Count == 0)
         {
-            return "_(no results)_";
+            return string.Empty;
         }
 
-        // 1. Collect all property names across all objects
-        var allProps = new SortedSet<string>(
-            list.SelectMany(r => r.Properties)
-                .Where(IsDisplayableProperty)
-                .Select(p => p.Name)).ToList();
-
-        var columns = allProps.Select((name, index) => new ColumnMetadata(name, index)).ToList();
-
-        var columnsDict = columns.ToDictionary(c => c.ColumnName ?? string.Empty, c => c.ColumnOrdinal ?? 0);
-
-        var dataset = new Dataset(columns);
-        foreach(var psObject in list)
+        // Preserve column order as they first appear across objects.
+        var columns = new List<string>();
+        var seen = new HashSet<string>();
+        foreach (var obj in list)
         {
-            object?[] values = new object?[columns.Count];
-            foreach (var prop in psObject.Properties.Where(IsDisplayableProperty))
+            if (obj?.Properties is null)
             {
-                if (TryGetDisplayValue(prop, out object? value))
-                {
-                    values[columnsDict[prop.Name]] = value;
-                }
+                continue;
             }
 
-            dataset.AddRow(values);
+            foreach (var prop in obj.Properties)
+            {
+                if (seen.Add(prop.Name))
+                {
+                    columns.Add(prop.Name);
+                }
+            }
         }
 
-        return dataset.ToMarkdownTable();
+        if (columns.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        // Build row data as strings, tracking max width per column for pretty alignment.
+        var rows = new List<string[]>(list.Count);
+        var widths = columns.Select(c => c.Length).ToArray();
+
+        foreach (var obj in list)
+        {
+            var row = new string[columns.Count];
+
+            if (columns.Count == 1)
+            {
+                rows.Add(new string[1] { EscapeCell(obj.ToString() ?? string.Empty) });
+                continue;
+            }
+
+            for (int i = 0; i < columns.Count; i++)
+            {
+                var value = obj?.Properties[columns[i]]?.Value;
+                row[i] = EscapeCell(value?.ToString() ?? string.Empty);
+                if (row[i].Length > widths[i])
+                {
+                    widths[i] = row[i].Length;
+                }
+            }
+            rows.Add(row);
+        }
+
+        var sb = new StringBuilder();
+
+        // Header
+        sb.Append('|');
+        for (int i = 0; i < columns.Count; i++)
+        {
+            sb.Append(' ').Append(columns[i].PadRight(widths[i])).Append(" |");
+        }
+
+        sb.AppendLine();
+
+        // Separator
+        sb.Append('|');
+        for (int i = 0; i < columns.Count; i++)
+        {
+            sb.Append(' ').Append(new string('-', widths[i])).Append(" |");
+        }
+
+        sb.AppendLine();
+
+        // Rows
+        foreach (var row in rows)
+        {
+            sb.Append('|');
+            for (int i = 0; i < columns.Count; i++)
+            {
+                sb.Append(' ').Append(row[i].PadRight(widths[i])).Append(" |");
+            }
+
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
     }
+
+    private static string EscapeCell(string value)
+    {
+        // Markdown tables break on pipes and newlines. Replace them to keep the table intact.
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("|", "\\|")
+            .Replace("\r\n", " ")
+            .Replace("\n", " ")
+            .Replace("\r", " ");
+    }
+
 
     internal static string ToMarkdown(this PSObject result)
     {

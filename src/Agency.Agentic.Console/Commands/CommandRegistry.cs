@@ -30,7 +30,7 @@ internal static class CommandRegistry
 
     static CommandRegistry()
     {
-        RegisterCommand("/clear", "Clear the console.", (_, _) => CommandContinuation.Continue);
+        RegisterCommand("/clear", "Clear the console.", (_, _) => CommandContinuation.Clear);
         RegisterCommand("/exit", "Exit the current chat session.", (_, session) => CommandContinuation.Continue);
         RegisterCommand("/help", "Show help information.", (_, _) => CommandContinuation.Continue);
         RegisterAsyncCommand("/model", "Show model picker.", (_, session) => ModelsCommand.RunSelectModelCommandAsync(session));

@@ -8,6 +8,7 @@ internal class ModelsCommand
     public static async Task<CommandContinuation> RunSelectModelCommandAsync(ConsoleChatSession session)
     {
         var models = session.ServiceProvider.GetRequiredService<Models>();
+        var agentFactory = session.ServiceProvider.GetRequiredService<IAgentFactory>();
         var results = await models.GetAllAsync();
 
         var (selectedClient, selectedModel) = ConsolePicker.Show<(string,string)>(prompt =>
@@ -26,7 +27,7 @@ internal class ModelsCommand
 
         if (selectedClient is not null && selectedModel is not null)
         {
-            var agent = Program.CreateAgent(selectedClient, selectedModel, stream: true);
+            var agent = agentFactory.CreateAgent(selectedClient, selectedModel, stream: true);
             session.SetAgent(agent);
             AnsiConsole.MarkupLine($"[green]⎿ Switched to model:[/] [yellow]{selectedModel}[/] from client [yellow]{selectedClient}[/]");
         }

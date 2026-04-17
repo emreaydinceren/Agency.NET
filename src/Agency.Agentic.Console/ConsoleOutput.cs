@@ -5,8 +5,6 @@ using Spectre.Console.Rendering;
 
 internal sealed class ConsoleOutput : IChatOutput
 {
-    public static IChatOutput Instance { get; private set; } = new ConsoleOutput();
-
     public void WriteLineMarkdown(string text)
     {
         MarkdownRenderer.Print(text);

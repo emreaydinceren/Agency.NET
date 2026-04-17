@@ -115,6 +115,16 @@ public class OpenAIClient : ILlmClient
         IReadOnlyList<ToolDefinition> tools,
         CancellationToken ct = default)
     {
+        using var activity = _activitySource.StartActivity("SendAgentAsync");
+        activity?.SetTag("gen_ai.system", "openai");
+        activity?.SetTag("gen_ai.request.model", model);
+
+        var tags = new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "llm.method", "send_agent" } };
+        _requestCounter.Add(1, tags);
+
+        var sw = Stopwatch.StartNew();
+        this._logger.LogInformation("Sending agent request to OpenAI. Model={Model}", model);
+
         ChatClient chatClient = this._client.GetChatClient(model);
 
         var chatMessages = new List<ChatMessage>
@@ -138,34 +148,60 @@ public class OpenAIClient : ILlmClient
             }
         }
 
-        var result = await chatClient.CompleteChatAsync(chatMessages, options, ct);
-        var completion = result.Value;
-
-        // Build content blocks from text + tool calls.
-        var contentBlocks = new List<Agency.Llm.Common.Messages.ContentBlock>();
-
-        var text = string.Concat(completion.Content.Select(static p => p.Text ?? string.Empty));
-        if (!string.IsNullOrEmpty(text))
+        try
         {
-            contentBlocks.Add(new OurTextBlock(text));
-        }
+            var result = await chatClient.CompleteChatAsync(chatMessages, options, ct);
+            var completion = result.Value;
+            sw.Stop();
 
-        if (completion.ToolCalls is { Count: > 0 } toolCalls)
-        {
-            foreach (var call in toolCalls)
+            // Build content blocks from text + tool calls.
+            var contentBlocks = new List<Agency.Llm.Common.Messages.ContentBlock>();
+
+            var text = string.Concat(completion.Content.Select(static p => p.Text ?? string.Empty));
+            if (!string.IsNullOrEmpty(text))
             {
-                var inputElement = JsonDocument.Parse(call.FunctionArguments.ToString()).RootElement.Clone();
-                contentBlocks.Add(new OurToolUseBlock(call.Id, call.FunctionName, inputElement));
+                contentBlocks.Add(new OurTextBlock(text));
             }
+
+            if (completion.ToolCalls is { Count: > 0 } toolCalls)
+            {
+                foreach (var call in toolCalls)
+                {
+                    var inputElement = JsonDocument.Parse(call.FunctionArguments.ToString()).RootElement.Clone();
+                    contentBlocks.Add(new OurToolUseBlock(call.Id, call.FunctionName, inputElement));
+                }
+            }
+
+            var inputTokens = completion.Usage?.InputTokenCount ?? 0;
+            var outputTokens = completion.Usage?.OutputTokenCount ?? 0;
+            var durationMs = sw.Elapsed.TotalMilliseconds;
+
+            _durationHistogram.Record(durationMs, tags);
+            _tokenCounter.Add(inputTokens, new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "input" } });
+            _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
+
+            activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
+            activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
+
+            this._logger.LogInformation(
+                "OpenAI agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                model, inputTokens, outputTokens, durationMs);
+
+            var agentMsg = new OurMessage(OurRole.Assistant, contentBlocks);
+            var usage = new LlmTokenUsage(inputTokens, outputTokens);
+            var stopReason = FinishReasonConverter.ToStopReason(completion.FinishReason.ToString());
+
+            return new AgentLlmResponse(agentMsg, stopReason, usage);
         }
-
-        var agentMsg = new OurMessage(OurRole.Assistant, contentBlocks);
-        var usage = new LlmTokenUsage(
-            completion.Usage?.InputTokenCount ?? 0,
-            completion.Usage?.OutputTokenCount ?? 0);
-        var stopReason = FinishReasonConverter.ToStopReason(completion.FinishReason.ToString());
-
-        return new AgentLlmResponse(agentMsg, stopReason, usage);
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
+            _errorCounter.Add(1, tags);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            this._logger.LogError(ex, "OpenAI agent request failed. Model={Model}", model);
+            throw;
+        }
     }
 
     /// <summary>
@@ -410,6 +446,16 @@ public class OpenAIClient : ILlmClient
         IReadOnlyList<ToolDefinition> tools,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        using var activity = _activitySource.StartActivity("StreamAgentAsync");
+        activity?.SetTag("gen_ai.system", "openai");
+        activity?.SetTag("gen_ai.request.model", model);
+
+        var tags = new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "llm.method", "stream_agent" } };
+        _requestCounter.Add(1, tags);
+
+        var sw = Stopwatch.StartNew();
+        this._logger.LogInformation("Starting streaming agent request to OpenAI. Model={Model}", model);
+
         ChatClient chatClient = this._client.GetChatClient(model);
 
         var chatMessages = new List<ChatMessage> { new SystemChatMessage(systemPrompt) };
@@ -437,6 +483,10 @@ public class OpenAIClient : ILlmClient
 
         // Accumulate tool call deltas by index: each entry is (id, name, argsBuilder).
         var toolCallAccumulators = new System.Collections.Generic.Dictionary<int, (string Id, System.Text.StringBuilder Name, System.Text.StringBuilder Args)>();
+
+        // Tracks which tool-call index is currently being streamed; advancing to a new index
+        // signals that the previous call's arguments are complete and can be yielded inline.
+        int currentToolCallIndex = -1;
 
         var enumerator = chatClient
             .CompleteChatStreamingAsync(chatMessages, options, ct)
@@ -485,10 +535,24 @@ public class OpenAIClient : ILlmClient
 
                 foreach (var toolCallUpdate in update.ToolCallUpdates)
                 {
-                    if (!toolCallAccumulators.TryGetValue(toolCallUpdate.Index, out var acc))
+                    int idx = toolCallUpdate.Index;
+
+                    // Advancing to a new index means the previous tool call is fully accumulated.
+                    if (idx != currentToolCallIndex && currentToolCallIndex >= 0
+                        && toolCallAccumulators.TryGetValue(currentToolCallIndex, out var completedAcc))
+                    {
+                        var completedJson = completedAcc.Args.Length > 0 ? completedAcc.Args.ToString() : "{}";
+                        var completedElement = JsonDocument.Parse(completedJson).RootElement.Clone();
+                        yield return new AgentStreamChunk(null, new OurToolUseBlock(completedAcc.Id, completedAcc.Name.ToString(), completedElement), null, null);
+                        toolCallAccumulators.Remove(currentToolCallIndex);
+                    }
+
+                    currentToolCallIndex = idx;
+
+                    if (!toolCallAccumulators.TryGetValue(idx, out var acc))
                     {
                         acc = (toolCallUpdate.ToolCallId ?? string.Empty, new System.Text.StringBuilder(), new System.Text.StringBuilder());
-                        toolCallAccumulators[toolCallUpdate.Index] = acc;
+                        toolCallAccumulators[idx] = acc;
                     }
 
                     if (!string.IsNullOrEmpty(toolCallUpdate.FunctionName))
@@ -502,7 +566,7 @@ public class OpenAIClient : ILlmClient
                     }
 
                     // Update the accumulator (structs are value types — reassign).
-                    toolCallAccumulators[toolCallUpdate.Index] = (
+                    toolCallAccumulators[idx] = (
                         string.IsNullOrEmpty(acc.Id) && !string.IsNullOrEmpty(toolCallUpdate.ToolCallId)
                             ? toolCallUpdate.ToolCallId!
                             : acc.Id,
@@ -514,16 +578,25 @@ public class OpenAIClient : ILlmClient
         finally
         {
             await enumerator.DisposeAsync();
+            sw.Stop();
+
+            _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
 
             if (streamError is not null)
             {
+                _errorCounter.Add(1, tags);
+                activity?.SetStatus(ActivityStatusCode.Error, streamError.Message);
                 this._logger.LogError(streamError, "OpenAI streaming agent request failed. Model={Model}", model);
             }
             else
             {
+                _tokenCounter.Add(inputTokens, new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "input" } });
+                _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "openai" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
+                activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
+                activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
                 this._logger.LogInformation(
-                    "OpenAI streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}",
-                    model, inputTokens, outputTokens);
+                    "OpenAI streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                    model, inputTokens, outputTokens, sw.Elapsed.TotalMilliseconds);
             }
         }
 
@@ -532,7 +605,7 @@ public class OpenAIClient : ILlmClient
             ExceptionDispatchInfo.Capture(streamError).Throw();
         }
 
-        // Yield completed tool-use blocks.
+        // Yield the final tool-use block (the last-streamed index has no successor to trigger inline yield).
         foreach (var entry in toolCallAccumulators.OrderBy(static kv => kv.Key))
         {
             var argsJson = entry.Value.Args.Length > 0 ? entry.Value.Args.ToString() : "{}";

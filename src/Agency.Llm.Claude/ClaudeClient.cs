@@ -17,6 +17,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 // Anthropic SDK response block types (aliased to resolve ambiguity after removing the namespace import).
+using AContentBlock = Anthropic.Models.Messages.ContentBlock;
 using ATextBlock = Anthropic.Models.Messages.TextBlock;
 using AThinkingBlock = Anthropic.Models.Messages.ThinkingBlock;
 using AToolUseBlock = Anthropic.Models.Messages.ToolUseBlock;
@@ -69,6 +70,8 @@ public class ClaudeClient : ILlmClient
 
     private readonly ILogger<ClaudeClient> _logger;
 
+    private readonly LlmClientOptions? _options;
+
     /// <summary>
     /// Creates a client from configured options.
     /// </summary>
@@ -85,6 +88,7 @@ public class ClaudeClient : ILlmClient
         ArgumentNullException.ThrowIfNull(clientOptions);
 
         this._logger = logger ?? NullLogger<ClaudeClient>.Instance;
+        this._options = clientOptions;
 
         var co = new ClientOptions
         {
@@ -123,6 +127,19 @@ public class ClaudeClient : ILlmClient
         IReadOnlyList<ToolDefinition> tools,
         CancellationToken ct = default)
     {
+        using var activity = _activitySource.StartActivity("SendAgentAsync");
+        activity?.SetTag("gen_ai.system", "anthropic");
+        activity?.SetTag("gen_ai.request.model", model);
+
+        var tags = new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "llm.method", "send_agent" } };
+        _requestCounter.Add(1, tags);
+
+        var sw = Stopwatch.StartNew();
+        if (this._logger.IsEnabled(LogLevel.Information))
+        {
+            this._logger.LogInformation("Sending agent request to Claude. Model={Model}", model);
+        }
+
         var anthropicTools = tools
             .Select(static t =>
             {
@@ -151,38 +168,74 @@ public class ClaudeClient : ILlmClient
         {
             Model = model,
             System = systemPrompt,
-            MaxTokens = 8096,
+            MaxTokens = this._options?.MaxTokens ?? 8096,
             Messages = anthropicMessages,
             Tools = toolUnions,
         };
 
-        var response = await this._client.Messages.Create(request, ct);
-
-        // Convert response content blocks back to our types.
-        var contentBlocks = new List<OurContentBlock>();
-        foreach (var block in response.Content)
+        try
         {
-            if (block.TryPickText(out ATextBlock? tb) && tb is not null)
+            var response = await this._client.Messages.Create(request, ct);
+            sw.Stop();
+
+            // Convert response content blocks back to our types.
+            var contentBlocks = new List<OurContentBlock>();
+            foreach (var block in response.Content)
             {
-                contentBlocks.Add(new OurTextBlock(tb.Text));
+                if (block.TryPickText(out ATextBlock? tb) && tb is not null)
+                {
+                    contentBlocks.Add(new OurTextBlock(tb.Text));
+                }
+                else if (block.TryPickToolUse(out AToolUseBlock? tub) && tub is not null)
+                {
+                    var inputJson = JsonSerializer.Serialize(tub.Input);
+                    var inputElement = JsonDocument.Parse(inputJson).RootElement.Clone();
+                    contentBlocks.Add(new OurToolUseBlock(tub.ID, tub.Name, inputElement));
+                }
+                else if (block.TryPickThinking(out AThinkingBlock? thinking) && thinking is not null)
+                {
+                    contentBlocks.Add(new OurThinkingBlock(thinking.Thinking));
+                }
             }
-            else if (block.TryPickToolUse(out AToolUseBlock? tub) && tub is not null)
+
+            var durationMs = sw.Elapsed.TotalMilliseconds;
+            var inputTokens = response.Usage.InputTokens;
+            var outputTokens = response.Usage.OutputTokens;
+
+            _durationHistogram.Record(durationMs, tags);
+            _tokenCounter.Add(inputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "input" } });
+            _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
+
+            activity?.SetTag("gen_ai.response.model", response.Model);
+            activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
+            activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
+
+            if (this._logger.IsEnabled(LogLevel.Information))
             {
-                var inputJson = JsonSerializer.Serialize(tub.Input);
-                var inputElement = JsonDocument.Parse(inputJson).RootElement.Clone();
-                contentBlocks.Add(new OurToolUseBlock(tub.ID, tub.Name, inputElement));
+                this._logger.LogInformation(
+                    "Claude agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                    model, inputTokens, outputTokens, durationMs);
             }
-            else if (block.TryPickThinking(out AThinkingBlock? thinking) && thinking is not null)
-            {
-                contentBlocks.Add(new OurThinkingBlock(thinking.Thinking));
-            }
+
+            var agentMsg = new OurMessage(OurRole.Assistant, contentBlocks);
+            var usage = new LlmTokenUsage(inputTokens, outputTokens);
+            var stopReason = FinishReasonConverter.ToStopReason(response.StopReason?.ToString());
+
+            return new AgentLlmResponse(agentMsg, stopReason, usage);
         }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
+            _errorCounter.Add(1, tags);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            if (this._logger.IsEnabled(LogLevel.Error))
+            {
+                this._logger.LogError(ex, "Claude agent request failed. Model={Model}", model);
+            }
 
-        var agentMsg = new OurMessage(OurRole.Assistant, contentBlocks);
-        var usage = new LlmTokenUsage(response.Usage.InputTokens, response.Usage.OutputTokens);
-        var stopReason = FinishReasonConverter.ToStopReason(response.StopReason?.ToString());
-
-        return new AgentLlmResponse(agentMsg, stopReason, usage);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default)
@@ -337,26 +390,11 @@ public class ClaudeClient : ILlmClient
         }
     }
 
-    private static string ExtractBlockText(object? block)
+    private static string ExtractBlockText(AContentBlock block)
     {
-        if (block is null)
-        {
-            return string.Empty;
-        }
-
-        var blockType = block.GetType();
-        if (blockType.GetProperty("Text")?.GetValue(block) is string text)
-        {
-            return text;
-        }
-
-        var value = blockType.GetProperty("Value")?.GetValue(block);
-        if (value is null)
-        {
-            return string.Empty;
-        }
-
-        return value.GetType().GetProperty("Text")?.GetValue(value) as string ?? string.Empty;
+        return block.TryPickText(out ATextBlock? textBlock) && textBlock is not null
+            ? textBlock.Text
+            : string.Empty;
     }
 
     /// <summary>
@@ -497,6 +535,19 @@ public class ClaudeClient : ILlmClient
         IReadOnlyList<ToolDefinition> tools,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        using var activity = _activitySource.StartActivity("StreamAgentAsync");
+        activity?.SetTag("gen_ai.system", "anthropic");
+        activity?.SetTag("gen_ai.request.model", model);
+
+        var tags = new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "llm.method", "stream_agent" } };
+        _requestCounter.Add(1, tags);
+
+        var sw = Stopwatch.StartNew();
+        if (this._logger.IsEnabled(LogLevel.Information))
+        {
+            this._logger.LogInformation("Starting streaming agent request to Claude. Model={Model}", model);
+        }
+
         var anthropicTools = tools
             .Select(static t =>
             {
@@ -524,7 +575,7 @@ public class ClaudeClient : ILlmClient
         {
             Model = model,
             System = systemPrompt,
-            MaxTokens = 8096,
+            MaxTokens = this._options?.MaxTokens ?? 8096,
             Messages = anthropicMessages,
             Tools = toolUnions,
         };
@@ -613,9 +664,14 @@ public class ClaudeClient : ILlmClient
         finally
         {
             await enumerator.DisposeAsync();
+            sw.Stop();
+
+            _durationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
 
             if (streamError is not null)
             {
+                _errorCounter.Add(1, tags);
+                activity?.SetStatus(ActivityStatusCode.Error, streamError.Message);
                 if (this._logger.IsEnabled(LogLevel.Error))
                 {
                     this._logger.LogError(streamError, "Claude streaming agent request failed. Model={Model}", model);
@@ -623,11 +679,16 @@ public class ClaudeClient : ILlmClient
             }
             else
             {
+                _tokenCounter.Add(inputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "input" } });
+                _tokenCounter.Add(outputTokens, new TagList { { "gen_ai.system", "anthropic" }, { "gen_ai.request.model", model }, { "gen_ai.token.type", "output" } });
+                activity?.SetTag("gen_ai.usage.input_tokens", inputTokens);
+                activity?.SetTag("gen_ai.usage.output_tokens", outputTokens);
+                var durationMs = sw.Elapsed.TotalMilliseconds;
                 if (this._logger.IsEnabled(LogLevel.Information))
                 {
                     this._logger.LogInformation(
-                        "Claude streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}",
-                        model, inputTokens, outputTokens);
+                        "Claude streaming agent request completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
+                        model, inputTokens, outputTokens, durationMs);
                 }
             }
         }

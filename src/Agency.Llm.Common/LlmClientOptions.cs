@@ -41,4 +41,10 @@ public record class LlmClientOptions
     /// Gets or sets the request timeout.
     /// </summary>
     public TimeSpan? Timeout { get; set; } = null;
+
+    /// <summary>
+    /// Gets or sets the maximum number of output tokens per request. Defaults to null (callers supply their own
+    /// default).
+    /// </summary>
+    public long? MaxTokens { get; set; } = null;
 }

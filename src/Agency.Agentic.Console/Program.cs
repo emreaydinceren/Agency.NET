@@ -16,8 +16,6 @@ using Serilog;
 
 internal class Program
 {
-    private static ServiceProvider? serviceProvider;
-
     public static async Task Main()
     {
         System.Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -37,59 +35,45 @@ internal class Program
 
         services
             .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton<IChatOutput, ConsoleOutput>()
             .AddTransient<Models>()
             .AddTelemetry(configuration);
 
         services.AddOptions<AgentOptions>()
         .BindConfiguration("Agent");
 
-        services.AddSingleton(sp =>
+        services.AddScoped<IAgentFactory, AgentFactory>();
+
+        services.AddScoped(sp =>
         {
+            IAgentFactory agentFactory = sp.GetRequiredService<IAgentFactory>();
             AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            return CreateAgent(null, null, options.Stream);
+            return agentFactory.CreateAgent(null, null, options.Stream);
         });
 
-        services.AddSingleton(sp => {
+        services.AddScoped(sp =>
+        {
+            IAgentFactory agentFactory = sp.GetRequiredService<IAgentFactory>();
             AgentOptions options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
 
             var registry = new ToolRegistry();
             registry.Register(new ExecutePowershellTool());
             registry.Register(new ReadFileTool());
             registry.Register(new WriteFileTool());
-            registry.Register(new AgentTool((clientName, modelName, stream) => (options, CreateAgent(clientName, modelName, stream), registry)));
+            registry.Register(new AgentTool((clientName, modelName, stream) => (options, agentFactory.CreateAgent(clientName, modelName, stream), registry)));
 
             return new ToolContext()
             {
                 Registry = registry
-            }; 
+            };
         });
 
-        services.AddSingleton<ConsoleChatSession>();
+        services.AddScoped<ConsoleChatSession>();
 
         await using ServiceProvider provider = services.BuildServiceProvider();
-        serviceProvider = provider;
-        ConsoleChatSession app = provider.GetRequiredService<ConsoleChatSession>();
+        await using AsyncServiceScope scope = provider.CreateAsyncScope();
+        ConsoleChatSession app = scope.ServiceProvider.GetRequiredService<ConsoleChatSession>();
         await app.RunAsync();
         Log.CloseAndFlush();
-    }
-
-    internal static Agent CreateAgent(
-        string? clientName,
-        string? modelName,
-        bool stream)
-    {
-        if (serviceProvider is null)
-        {
-            throw new InvalidOperationException("Service provider is not initialized.");
-        }
-
-        AgentOptions options = serviceProvider.GetRequiredService<IOptions<AgentOptions>>().Value;
-        clientName = !string.IsNullOrEmpty(clientName) ? clientName : (options.DefaultClientName ?? throw new InvalidOperationException("DefaultClientName must be specified in the configuration."));
-        modelName = !string.IsNullOrEmpty(modelName) ? modelName : (options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration."));
-
-        var models = serviceProvider.GetRequiredService<Models>();
-        var logger = serviceProvider.GetRequiredService<ILogger<Agent>>();
-        var llmClient=  models.CreateLlmClient(clientName);
-        return new Agent(llmClient, modelName,null, stream, logger);
     }
 }

@@ -63,7 +63,7 @@ internal sealed class ConsoleChatSession
         Agent agent,
         IOptions<AgentOptions> optionsAccessor,
         ToolContext toolContext,
-        IChatOutput? chatOutput = null,
+        IChatOutput chatOutput,
         ILogger<ConsoleChatSession>? logger = null)
     {
         this.ServiceProvider = serviceProvider;
@@ -71,7 +71,7 @@ internal sealed class ConsoleChatSession
         this._options = optionsAccessor.Value;
         this.toolContext = toolContext;
         this._logger = logger ?? NullLogger<ConsoleChatSession>.Instance;
-        this.output = chatOutput ?? ConsoleOutput.Instance;
+        this.output = chatOutput;
         this._inputReader = new ConsoleInputReader(this.output);
         this.commandManager = new CommandManager(CommandRegistry.Commands, this);
     }

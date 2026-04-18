@@ -16,8 +16,8 @@ namespace Agency.Agentic;
 /// </summary>
 public sealed class Agent
 {
-    public static readonly string ActivitySourceName = "Agency.Agentic.Agent";
-    public static readonly string MeterName = "Agency.Agentic.Agent";
+    public const string ActivitySourceName = "Agency.Agentic.Agent";
+    public const string MeterName = "Agency.Agentic.Agent";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

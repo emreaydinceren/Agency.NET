@@ -18,22 +18,7 @@ using Serilog.Extensions.Logging;
 /// </summary>
 internal static class TelemetryServiceCollectionExtensions
 {
-    // All instrumented components across the Agency solution.
-    // Add a new entry here whenever a class with ActivitySourceName / MeterName is added.
-    private static readonly string[] s_sources =
-    [
-        "Agency.Agentic.Console",
-        "Agency.Agentic.Agent",
-        "Agency.Agentic.Models",
-        "Agency.Llm.Claude",
-        "Agency.Llm.OpenAI",
-        "Agency.Embeddings.OpenAI",
-        "Agency.Ingestion",
-        "Agency.Sql.Sqlite",
-        "Agency.Sql.Postgre",
-        "Agency.VectorStore.Sql.Sqlite",
-        "Agency.VectorStore.Sql.Postgre",
-    ];
+    private const string AgencyWildcard = "Agency.*";
 
     /// <summary>
     /// Adds OpenTelemetry file exporters for traces and metrics, and a Serilog-backed
@@ -84,7 +69,7 @@ internal static class TelemetryServiceCollectionExtensions
         TracerProvider tracerProvider = Sdk.CreateTracerProviderBuilder()
             .SetResourceBuilder(resource)
             .SetSampler(sampler)
-            .AddSource(s_sources)
+            .AddSource(AgencyWildcard)
             .AddProcessor(new SimpleActivityExportProcessor(new FileSpanExporter(options.FileExport)))
             .Build()
             ?? throw new InvalidOperationException("TracerProvider could not be built.");
@@ -104,7 +89,7 @@ internal static class TelemetryServiceCollectionExtensions
 
         MeterProvider meterProvider = Sdk.CreateMeterProviderBuilder()
             .SetResourceBuilder(resource)
-            .AddMeter(s_sources)
+            .AddMeter(AgencyWildcard)
             .AddReader(new PeriodicExportingMetricReader(
                 new FileMetricExporter(options.FileExport),
                 exportIntervalMilliseconds: options.FileExport.Metrics.ExportIntervalMs))

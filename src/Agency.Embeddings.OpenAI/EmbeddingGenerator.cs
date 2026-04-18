@@ -20,12 +20,12 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
     /// <summary>
     /// The activity source name used for embedding telemetry.
     /// </summary>
-    public static readonly string ActivitySourceName = "Agency.Embeddings.OpenAI";
+    public const string ActivitySourceName = "Agency.Embeddings.OpenAI";
 
     /// <summary>
     /// The meter name used for embedding telemetry.
     /// </summary>
-    public static readonly string MeterName = "Agency.Embeddings.OpenAI";
+    public const string MeterName = "Agency.Embeddings.OpenAI";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

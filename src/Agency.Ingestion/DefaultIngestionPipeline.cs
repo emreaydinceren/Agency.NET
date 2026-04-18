@@ -13,10 +13,10 @@ using System.Diagnostics.Metrics;
 public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue>
 {
     /// <summary>The activity source name used for ingestion telemetry.</summary>
-    public static readonly string ActivitySourceName = "Agency.Ingestion";
+    public const string ActivitySourceName = "Agency.Ingestion";
 
     /// <summary>The meter name used for ingestion telemetry.</summary>
-    public static readonly string MeterName = "Agency.Ingestion";
+    public const string MeterName = "Agency.Ingestion";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

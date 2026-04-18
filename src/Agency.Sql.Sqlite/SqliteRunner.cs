@@ -17,12 +17,12 @@ public sealed class SqliteRunner
     /// <summary>
     /// The activity source name used for SQL telemetry.
     /// </summary>
-    public static readonly string ActivitySourceName = "Agency.Sql.Sqlite";
+    public const string ActivitySourceName = "Agency.Sql.Sqlite";
 
     /// <summary>
     /// The meter name used for SQL telemetry.
     /// </summary>
-    public static readonly string MeterName = "Agency.Sql.Sqlite";
+    public const string MeterName = "Agency.Sql.Sqlite";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

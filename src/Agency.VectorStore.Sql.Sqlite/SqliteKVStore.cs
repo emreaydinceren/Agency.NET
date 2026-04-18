@@ -21,10 +21,10 @@ using System.Text.Json;
 public sealed class SqliteKVStore : IKVStore
 {
     /// <summary>The activity source name used for vector store telemetry.</summary>
-    public static readonly string ActivitySourceName = "Agency.VectorStore.Sql.Sqlite";
+    public const string ActivitySourceName = "Agency.VectorStore.Sql.Sqlite";
 
     /// <summary>The meter name used for vector store telemetry.</summary>
-    public static readonly string MeterName = "Agency.VectorStore.Sql.Sqlite";
+    public const string MeterName = "Agency.VectorStore.Sql.Sqlite";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

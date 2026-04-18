@@ -18,12 +18,12 @@ public sealed class PostgreSqlRunner : IAsyncDisposable
     /// <summary>
     /// The activity source name used for SQL telemetry.
     /// </summary>
-    public static readonly string ActivitySourceName = "Agency.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.Sql.Postgre";
 
     /// <summary>
     /// The meter name used for SQL telemetry.
     /// </summary>
-    public static readonly string MeterName = "Agency.Sql.Postgre";
+    public const string MeterName = "Agency.Sql.Postgre";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

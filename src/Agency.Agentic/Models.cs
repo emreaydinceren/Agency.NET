@@ -11,8 +11,8 @@ using System.Diagnostics.Metrics;
 
 public sealed class Models
 {
-    public static readonly string ActivitySourceName = "Agency.Agentic.Models";
-    public static readonly string MeterName = "Agency.Agentic.Models";
+    public const string ActivitySourceName = "Agency.Agentic.Models";
+    public const string MeterName = "Agency.Agentic.Models";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

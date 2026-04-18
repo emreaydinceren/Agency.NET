@@ -19,12 +19,12 @@ public class PostgreKVStore : IKVStore
     /// <summary>
     /// The activity source name used for vector store telemetry.
     /// </summary>
-    public static readonly string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
 
     /// <summary>
     /// The meter name used for vector store telemetry.
     /// </summary>
-    public static readonly string MeterName = "Agency.VectorStore.Sql.Postgre";
+    public const string MeterName = "Agency.VectorStore.Sql.Postgre";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

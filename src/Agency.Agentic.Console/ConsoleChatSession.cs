@@ -17,8 +17,8 @@ internal sealed class ConsoleChatSession
     private const string PromptMarkup= "[blue]❯ [/]";
     private const string AssistantMarkup = "[green]● [/]";
 
-    public static readonly string ActivitySourceName = "Agency.Agentic.Console";
-    public static readonly string MeterName = "Agency.Agentic.Console";
+    public const string ActivitySourceName = "Agency.Agentic.Console";
+    public const string MeterName = "Agency.Agentic.Console";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

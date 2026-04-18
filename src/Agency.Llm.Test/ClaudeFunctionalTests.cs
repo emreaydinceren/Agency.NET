@@ -1,54 +1,103 @@
 namespace Agency.Llm.Test;
 
+using Agency.Llm.Claude;
 using Agency.Llm.Common;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-/// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/> using LM Studio. Run with: dotnet test --filter
-/// "Category=Functional" Skip with: dotnet test --filter "Category!=Functional" Requires LM Studio running with
-/// qwen/qwen3-coder-next loaded at http://llm-host.example:1234
+/// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/> exercised via
+/// <see cref="IChatClient"/>. Run with: <c>dotnet test --filter "Category=Functional"</c>.
+/// Skip with: <c>dotnet test --filter "Category!=Functional"</c>.
+/// Requires a Claude API key in user secrets or environment variables.
 /// </summary>
-/// <remarks>
-/// Creates the test class with a shared Claude fixture.
-/// </remarks>
 [Trait("Category", "Functional")]
-/// <summary>
-/// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/>.
-/// </summary>
-public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fixture) : IClassFixture<ClaudeFunctionalTests.ClaudeFixture>
+public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fixture)
+    : IClassFixture<ClaudeFunctionalTests.ClaudeFixture>
 {
     private const string SystemPrompt = "You are a concise assistant.";
 
     private readonly ClaudeFixture _fixture = fixture;
 
+    private IReadOnlyList<ChatMessage> SimpleMessages(string userPrompt) =>
+    [
+        new ChatMessage(ChatRole.User, userPrompt),
+    ];
+
+    private ChatOptions MakeChatOptions(float? temperature = null) =>
+        new()
+        {
+            ModelId = this._fixture.Model,
+            Instructions = SystemPrompt,
+            MaxOutputTokens = 512,
+            Temperature = temperature,
+        };
+
+    // ── GetResponseAsync ──────────────────────────────────────────────────────
+
     /// <summary>
-    /// Verifies that <see cref="Agency.Llm.Claude.ClaudeClient.SendAsync"/> returns a response without error.
+    /// Verifies that <see cref="IChatClient.GetResponseAsync"/> returns a non-empty response.
     /// </summary>
     [Fact]
-    public async Task SendAsync_ReturnsWithoutError()
+    public async Task GetResponseAsync_ReturnsNonEmptyResponse()
     {
-        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", cancellationToken: TestContext.Current.CancellationToken);
+        var response = await this._fixture.Client.GetResponseAsync(
+            SimpleMessages("Reply with one word: hello"),
+            MakeChatOptions(),
+            TestContext.Current.CancellationToken);
 
-        Assert.False(string.IsNullOrWhiteSpace(response.Message));
-        Assert.True(System.Enum.IsDefined(response.FinishReason));
-        Assert.True(response.Usage.InputTokens >= 0);
-        Assert.True(response.Usage.OutputTokens >= 0);
+        string text = string.Concat(
+            response.Messages
+                .SelectMany(static m => m.Contents.OfType<TextContent>())
+                .Select(static t => t.Text));
+
+        Assert.False(string.IsNullOrWhiteSpace(text));
+        Assert.NotNull(response.FinishReason);
+        Assert.True((response.Usage?.InputTokenCount ?? 0) >= 0);
+        Assert.True((response.Usage?.OutputTokenCount ?? 0) >= 0);
     }
 
     /// <summary>
-    /// Verifies that streaming returns at least one text chunk.
+    /// Verifies that <see cref="IChatClient.GetResponseAsync"/> works with a specified temperature.
     /// </summary>
     [Fact]
-    public async Task StreamAsync_YieldsAtLeastOneChunk()
+    public async Task GetResponseAsync_WithTemperature_ReturnsNonEmptyResponse()
+    {
+        var response = await this._fixture.Client.GetResponseAsync(
+            SimpleMessages("Reply with one word: hello"),
+            MakeChatOptions(temperature: 0.7f),
+            TestContext.Current.CancellationToken);
+
+        string text = string.Concat(
+            response.Messages
+                .SelectMany(static m => m.Contents.OfType<TextContent>())
+                .Select(static t => t.Text));
+
+        Assert.False(string.IsNullOrWhiteSpace(text));
+    }
+
+    // ── GetStreamingResponseAsync ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that <see cref="IChatClient.GetStreamingResponseAsync"/> yields at least one text chunk.
+    /// </summary>
+    [Fact]
+    public async Task GetStreamingResponseAsync_YieldsAtLeastOneTextChunk()
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", cancellationToken: TestContext.Current.CancellationToken))
+        await foreach (var update in this._fixture.Client.GetStreamingResponseAsync(
+            SimpleMessages("Reply with one word: hello"),
+            MakeChatOptions(),
+            TestContext.Current.CancellationToken))
         {
-            if (chunk.Text is not null)
+            foreach (var content in update.Contents.OfType<TextContent>())
             {
-                chunks.Add(chunk.Text);
+                if (!string.IsNullOrEmpty(content.Text))
+                {
+                    chunks.Add(content.Text);
+                }
             }
         }
 
@@ -56,18 +105,21 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
     }
 
     /// <summary>
-    /// Verifies that streamed chunks combine into a non-empty response.
+    /// Verifies that streaming chunks combine into a non-empty response.
     /// </summary>
     [Fact]
-    public async Task StreamAsync_JoinedChunksFormNonEmptyResponse()
+    public async Task GetStreamingResponseAsync_JoinedChunksFormNonEmptyResponse()
     {
         var sb = new System.Text.StringBuilder();
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "What is 2 + 2? Reply with just the number.", cancellationToken: TestContext.Current.CancellationToken))
+        await foreach (var update in this._fixture.Client.GetStreamingResponseAsync(
+            SimpleMessages("What is 2 + 2? Reply with just the number."),
+            MakeChatOptions(),
+            TestContext.Current.CancellationToken))
         {
-            if (chunk.Text is not null)
+            foreach (var content in update.Contents.OfType<TextContent>())
             {
-                sb.Append(chunk.Text);
+                sb.Append(content.Text);
             }
         }
 
@@ -75,81 +127,82 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
     }
 
     /// <summary>
-    /// Verifies that streaming and non-streaming responses are both produced for the same prompt.
+    /// Verifies that streaming and batch responses are both produced for the same prompt.
     /// </summary>
     [Fact]
-    public async Task StreamAsync_ChunksAreConsistentWithSendAsync()
+    public async Task GetStreamingResponseAsync_ChunksAreConsistentWithGetResponseAsync()
     {
-        const string prompt = "Reply with exactly: streaming works";
+        const string userPrompt = "Reply with exactly: streaming works";
 
         var streamed = new System.Text.StringBuilder();
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, prompt, cancellationToken: TestContext.Current.CancellationToken))
+        await foreach (var update in this._fixture.Client.GetStreamingResponseAsync(
+            SimpleMessages(userPrompt),
+            MakeChatOptions(),
+            TestContext.Current.CancellationToken))
         {
-            if (chunk.Text is not null)
+            foreach (var content in update.Contents.OfType<TextContent>())
             {
-                streamed.Append(chunk.Text);
+                streamed.Append(content.Text);
             }
         }
 
-        // Both methods must complete without error against the same endpoint
-        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, prompt, cancellationToken: TestContext.Current.CancellationToken);
+        var response = await this._fixture.Client.GetResponseAsync(
+            SimpleMessages(userPrompt),
+            MakeChatOptions(),
+            TestContext.Current.CancellationToken);
+
+        string batchText = string.Concat(
+            response.Messages
+                .SelectMany(static m => m.Contents.OfType<TextContent>())
+                .Select(static t => t.Text));
 
         Assert.False(string.IsNullOrWhiteSpace(streamed.ToString()));
-        Assert.False(string.IsNullOrWhiteSpace(response.Message));
+        Assert.False(string.IsNullOrWhiteSpace(batchText));
     }
 
     /// <summary>
-    /// Verifies that the terminal streamed chunk contains usage and stop-reason data.
+    /// Verifies that aggregating the streaming response reports token usage.
     /// </summary>
     [Fact]
-    public async Task StreamAsync_TerminalChunkHasUsageAndFinishReason()
+    public async Task GetStreamingResponseAsync_ReportsUsage()
     {
-        Agency.Llm.Common.LlmStreamChunk? terminal = null;
+        var response = await this._fixture.Client.GetStreamingResponseAsync(
+            SimpleMessages("Reply with one word: hello"),
+            MakeChatOptions(),
+            TestContext.Current.CancellationToken)
+            .ToChatResponseAsync(TestContext.Current.CancellationToken);
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", cancellationToken: TestContext.Current.CancellationToken))
-        {
-            terminal = chunk;
-        }
-
-        Assert.NotNull(terminal);
-        Assert.Null(terminal.Text);
-        Assert.NotNull(terminal.Usage);
-        Assert.True(terminal.Usage.TotalTokens > 0);
-        Assert.NotNull(terminal.StopReason);
-        Assert.True(System.Enum.IsDefined(terminal.StopReason.Value));
+        Assert.NotNull(response.Usage);
+        Assert.True((response.Usage.InputTokenCount ?? 0) > 0);
+        Assert.True((response.Usage.OutputTokenCount ?? 0) > 0);
     }
 
     /// <summary>
-    /// Verifies that temperature can be supplied to the completion request.
+    /// Verifies that streaming with temperature yields at least one text chunk.
     /// </summary>
     [Fact]
-    public async Task SendAsync_WithTemperature_ReturnsWithoutError()
-    {
-        var response = await this._fixture.Client.SendAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f, cancellationToken: TestContext.Current.CancellationToken);
-
-        Assert.False(string.IsNullOrWhiteSpace(response.Message));
-        Assert.True(System.Enum.IsDefined(response.FinishReason));
-        Assert.True(response.Usage.TotalTokens >= 0);
-    }
-
-    /// <summary>
-    /// Verifies that streaming with temperature returns at least one text chunk.
-    /// </summary>
-    [Fact]
-    public async Task StreamAsync_WithTemperature_YieldsAtLeastOneChunk()
+    public async Task GetStreamingResponseAsync_WithTemperature_YieldsAtLeastOneChunk()
     {
         var chunks = new List<string>();
 
-        await foreach (var chunk in this._fixture.Client.StreamAsync(this._fixture.Model, SystemPrompt, "Reply with one word: hello", temperature: 0.7f, cancellationToken: TestContext.Current.CancellationToken))
+        await foreach (var update in this._fixture.Client.GetStreamingResponseAsync(
+            SimpleMessages("Reply with one word: hello"),
+            MakeChatOptions(temperature: 0.7f),
+            TestContext.Current.CancellationToken))
         {
-            if (chunk.Text is not null)
+            foreach (var content in update.Contents.OfType<TextContent>())
             {
-                chunks.Add(chunk.Text);
+                if (!string.IsNullOrEmpty(content.Text))
+                {
+                    chunks.Add(content.Text);
+                }
             }
         }
 
         Assert.NotEmpty(chunks);
     }
+
+    // ── Fixture ───────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Shared fixture that loads Claude functional test configuration and initializes the client.
@@ -160,7 +213,7 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
         private const string ConfigurationSection = "LlmTest:Claude";
 
         /// <summary>
-        /// Creates the fixture and initializes configuration-backed Claude client settings.
+        /// Creates the fixture and initializes configuration-backed <see cref="IChatClient"/>.
         /// </summary>
         public ClaudeFixture()
         {
@@ -176,28 +229,22 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
 
             this.Model = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:Model");
 
-            this.Client = new Agency.Llm.Claude.ClaudeClient(
+            this.Client = new ClaudeClient(
                 Options.Create(new LlmClientOptions
                 {
                     ApiKey = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:BaseUrl"),
-                }));
+                })).CreateChatClient();
         }
 
-        /// <summary>
-        /// Gets the configured model name used by the functional tests.
-        /// </summary>
+        /// <summary>Gets the configured model name used by the functional tests.</summary>
         public string Model { get; }
 
-        /// <summary>
-        /// Gets the configured Claude client instance.
-        /// </summary>
-        public Agency.Llm.Claude.ClaudeClient Client { get; }
+        /// <summary>Gets the configured <see cref="IChatClient"/> backed by Claude.</summary>
+        public IChatClient Client { get; }
 
-        private static string GetRequiredConfiguration(IConfiguration configuration, string key)
-        {
-            return configuration[key]
+        private static string GetRequiredConfiguration(IConfiguration configuration, string key) =>
+            configuration[key]
                 ?? throw new InvalidOperationException($"Missing required configuration value '{key}'.");
-        }
     }
 }

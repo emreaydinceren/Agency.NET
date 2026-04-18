@@ -27,7 +27,7 @@ internal sealed class AgentFactory : IAgentFactory
             ? modelName
             : this.options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
 
-        var llmClient = this.models.CreateLlmClient(clientName);
-        return new Agent(llmClient, modelName, null, stream, this.logger);
+        var (chatClient, clientType) = this.models.CreateChatClient(clientName);
+        return new Agent(chatClient, modelName, clientType, null, stream, this.logger);
     }
 }

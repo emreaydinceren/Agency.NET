@@ -3,7 +3,7 @@ namespace Agency.Agentic.Console;
 using Agency.Agentic;
 using Agency.Agentic.Console.Commands;
 using Agency.Agentic.Contexts;
-using Agency.Llm.Common.Messages;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -319,34 +319,23 @@ internal sealed class ConsoleChatSession
         }
     }
 
-    private void PrintAssistantTurn(AgentMessage message)
+    private void PrintAssistantTurn(ChatMessage message)
     {
-        foreach (ContentBlock block in message.Content)
+        foreach (AIContent content in message.Contents)
         {
-            switch (block)
+            switch (content)
             {
-                case TextBlock tb when !string.IsNullOrWhiteSpace(tb.Text):
-                {
-                    // This is when Agent wants to write a message
+                case TextContent tc when !string.IsNullOrWhiteSpace(tc.Text):
                     this.output.WriteMarkup(AssistantMarkup);
-                    this.output.WriteLineMarkdown(tb.Text);
+                    this.output.WriteLineMarkdown(tc.Text);
                     break;
-                }
 
-                case ToolUseBlock tub:
-
-                var command = tub.Input.GetRawText();
-
-                if (command == null)
-                {
-                    this.output.WriteLine("gray", $"  → calling {tub.Name} with non-text input");
-                    break;
-                }
-
-                var commandPreview = TruncateString(command, 100, 3);
-
-                // This is when Agent wants to call a tool - we show the tool name and input, but not the output (since it may be large or sensitive)
-                this.output.WriteMarkdownInBorderedPanel($"Calling {tub.Name}", $"[gray]{commandPreview}[/]");
+                case FunctionCallContent fcc:
+                    var argsPreview = TruncateString(
+                        System.Text.Json.JsonSerializer.Serialize(fcc.Arguments),
+                        100,
+                        3);
+                    this.output.WriteMarkdownInBorderedPanel($"Calling {fcc.Name}", $"[gray]{argsPreview}[/]");
                     break;
             }
         }

@@ -7,11 +7,11 @@ namespace Agency.Agentic;
 /// </summary>
 public sealed class InMemoryConversationManager : IConversationManager
 {
-    private readonly List<AgentMessage> _messages = [];
+    private readonly List<ChatMessage> _messages = [];
 
     /// <inheritdoc/>
-    public IReadOnlyList<AgentMessage> Messages => this._messages;
+    public IReadOnlyList<ChatMessage> Messages => this._messages;
 
     /// <inheritdoc/>
-    public void Append(AgentMessage message) => this._messages.Add(message);
+    public void Append(ChatMessage message) => this._messages.Add(message);
 }

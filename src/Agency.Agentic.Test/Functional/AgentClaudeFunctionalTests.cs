@@ -2,6 +2,7 @@ namespace Agency.Agentic.Test.Functional;
 
 using Agency.Agentic.Contexts;
 using Agency.Llm.Claude;
+using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -11,7 +12,7 @@ using Microsoft.Extensions.Options;
 /// <para>
 /// Run with:  <c>dotnet test --filter "Category=Functional"</c><br/>
 /// Skip with: <c>dotnet test --filter "Category!=Functional"</c><br/>
-/// Requires LM Studio running with a compatible model loaded at http://llm-host.example:1234.
+/// Requires a Claude API key configured in user secrets or environment variables.
 /// </para>
 /// </summary>
 [Trait("Category", "Functional")]
@@ -146,15 +147,15 @@ public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.Claude
         }
 
         // We can only assert the result event was emitted; whether the model actually
-        // called the tool depends on LM Studio's behaviour with tool calling.
+        // called the tool depends on the model's behaviour with tool calling.
         Assert.NotNull(result);
-        _ = toolInvoked; // Informational — not all local models reliably call tools.
+        _ = toolInvoked; // Informational — not all models reliably call tools.
     }
 
     // ── Fixture ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Shared fixture that loads configuration and constructs the <see cref="ClaudeClient"/>.
+    /// Shared fixture that loads configuration and constructs the <see cref="IChatClient"/>.
     /// </summary>
     public sealed class ClaudeAgentFixture
     {
@@ -184,14 +185,14 @@ public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.Claude
                 {
                     ApiKey = GetRequired(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequired(configuration, $"{ConfigurationSection}:BaseUrl"),
-                }));
+                })).CreateChatClient();
         }
 
         /// <summary>Gets the configured model identifier.</summary>
         public string Model { get; }
 
-        /// <summary>Gets the configured LLM client.</summary>
-        public ClaudeClient LlmClient { get; }
+        /// <summary>Gets the configured <see cref="IChatClient"/> backed by Claude.</summary>
+        public IChatClient LlmClient { get; }
 
         private static string GetRequired(IConfiguration cfg, string key) =>
             cfg[key] ?? throw new InvalidOperationException($"Missing required configuration: '{key}'.");

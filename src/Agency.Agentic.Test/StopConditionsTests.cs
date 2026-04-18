@@ -1,7 +1,6 @@
 namespace Agency.Agentic.Test;
 
 using Agency.Agentic.Contexts;
-using System.Text.Json;
 
 /// <summary>
 /// Unit tests for the <see cref="StopConditions"/> factory methods and delegates.
@@ -23,13 +22,11 @@ public sealed class StopConditionsTests
         return ctx;
     }
 
-    private static AgentMessage TextMessage(string text = "done") =>
-        new(MessageRole.Assistant, [new TextBlock(text)]);
+    private static ChatMessage TextMessage(string text = "done") =>
+        new(ChatRole.Assistant, [new TextContent(text)]);
 
-    private static AgentMessage ToolUseMessage(string toolName = "my_tool") =>
-        new(MessageRole.Assistant, [
-            new ToolUseBlock("id-1", toolName, JsonDocument.Parse("{}").RootElement)
-        ]);
+    private static ChatMessage ToolUseMessage(string toolName = "my_tool") =>
+        new(ChatRole.Assistant, [new FunctionCallContent("id-1", toolName)]);
 
     // ── StepCountIs ───────────────────────────────────────────────────────────
 
@@ -66,19 +63,19 @@ public sealed class StopConditionsTests
     }
 
     [Fact]
-    public void NoToolCalls_ReturnsFalse_WhenMessageContainsToolUseBlock()
+    public void NoToolCalls_ReturnsFalse_WhenMessageContainsFunctionCallContent()
     {
         Assert.False(StopConditions.NoToolCalls(MakeContext(), ToolUseMessage()));
     }
 
     [Fact]
-    public void NoToolCalls_ReturnsFalse_WhenMessageContainsTextAndToolUseBlock()
+    public void NoToolCalls_ReturnsFalse_WhenMessageContainsTextAndFunctionCallContent()
     {
-        var mixed = new AgentMessage(
-            MessageRole.Assistant,
+        var mixed = new ChatMessage(
+            ChatRole.Assistant,
             [
-                new TextBlock("I will call a tool."),
-                new ToolUseBlock("id-1", "tool_a", JsonDocument.Parse("{}").RootElement),
+                new TextContent("I will call a tool."),
+                new FunctionCallContent("id-1", "tool_a"),
             ]);
 
         Assert.False(StopConditions.NoToolCalls(MakeContext(), mixed));
@@ -183,7 +180,6 @@ public sealed class StopConditionsTests
     [Fact]
     public void DefaultStop_NoToolCallsOrMaxSteps_TriggersOnNoToolCalls()
     {
-        // Validates that the default AgentV1 stop condition fires correctly.
         StopCondition defaultStop = StopConditions.Any(
             StopConditions.NoToolCalls,
             StopConditions.StepCountIs(20));

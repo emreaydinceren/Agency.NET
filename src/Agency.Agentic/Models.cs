@@ -77,9 +77,9 @@ public sealed class Models
 
                 this._logger.LogInformation("Fetching models from LLM client {ClientName} ({ClientType}).", option.Name, option.ClientType);
 
-                ILlmClient client = CreateLlmClient(option);
+                IModelProvider provider = CreateModelProvider(option);
 
-                foreach (var model in await client.GetModelsAsync(cancellationToken))
+                foreach (var model in await provider.GetModelsAsync(cancellationToken))
                 {
                     pairs.Add((option, model));
                     modelCount++;
@@ -116,10 +116,13 @@ public sealed class Models
         }
     }
 
-    public ILlmClient CreateLlmClient(string clientName)
+    /// <summary>
+    /// Creates an <see cref="IChatClient"/> for the named provider and returns the provider's
+    /// display name alongside the client (used in telemetry tags).
+    /// </summary>
+    public (IChatClient Client, string ClientType) CreateChatClient(string clientName)
     {
-        using var activity = _activitySource.StartActivity(nameof(CreateLlmClient));
-
+        using var activity = _activitySource.StartActivity(nameof(CreateChatClient));
         activity?.SetTag("agentic.models.client_name", clientName);
 
         foreach (var options in this._llmClientOptions)
@@ -128,7 +131,7 @@ public sealed class Models
             {
                 activity?.SetTag("agentic.models.client_type", options.ClientType);
                 this._logger.LogInformation("Resolved LLM client {ClientName} ({ClientType}).", options.Name, options.ClientType);
-                return CreateLlmClient(options);
+                return CreateChatClient(options);
             }
         }
 
@@ -137,7 +140,17 @@ public sealed class Models
         throw new InvalidOperationException($"No LLM client configuration found with name '{clientName}'.");
     }
 
-    private static ILlmClient CreateLlmClient(LlmClientOptions options)
+    private static (IChatClient Client, string ClientType) CreateChatClient(LlmClientOptions options)
+    {
+        return options.ClientType.ToUpperInvariant() switch
+        {
+            "CLAUDE" => (new ClaudeClient(options).CreateChatClient(), "Claude"),
+            "OPENAI" => (new OpenAIClient(options).CreateChatClient(), "OpenAI"),
+            _ => throw new InvalidOperationException($"Unsupported provider '{options.ClientType}'."),
+        };
+    }
+
+    private static IModelProvider CreateModelProvider(LlmClientOptions options)
     {
         return options.ClientType.ToUpperInvariant() switch
         {

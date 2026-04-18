@@ -1,7 +1,6 @@
 namespace Agency.Agentic.Test;
 
 using Agency.Agentic.Contexts;
-using System.Text.Json;
 
 /// <summary>
 /// Unit tests for <see langword="internal"/> helpers exposed via
@@ -19,17 +18,15 @@ public sealed class AgentInternalsTests
         return ctx;
     }
 
-    private static AgentMessage TextOnlyMessage() =>
-        new(MessageRole.Assistant, [new TextBlock("All done.")]);
+    private static ChatMessage TextOnlyMessage() =>
+        new(ChatRole.Assistant, [new TextContent("All done.")]);
 
-    private static AgentMessage ToolUseMessage() =>
-        new(MessageRole.Assistant,
-            [new ToolUseBlock("id-1", "tool", JsonDocument.Parse("{}").RootElement)]);
+    private static ChatMessage ToolUseMessage() =>
+        new(ChatRole.Assistant, [new FunctionCallContent("id-1", "tool")]);
 
     [Fact]
     public void DetermineStatus_ReturnsSuccess_WhenLastMessageHasNoToolCalls()
     {
-        // StopCountIs fires (iteration == limit), but no pending tool calls → clean finish.
         Context ctx = ContextAtIteration(5);
 
         AgentResultStatus status = Agent.DetermineStatus(ctx, TextOnlyMessage());
@@ -40,7 +37,6 @@ public sealed class AgentInternalsTests
     [Fact]
     public void DetermineStatus_ReturnsMaxStepsReached_WhenStepLimitHitWithPendingToolCalls()
     {
-        // Loop was forced to stop mid-flight while the assistant still wanted more tools.
         Context ctx = ContextAtIteration(5);
 
         AgentResultStatus status = Agent.DetermineStatus(ctx, ToolUseMessage());
@@ -51,7 +47,6 @@ public sealed class AgentInternalsTests
     [Fact]
     public void DetermineStatus_ReturnsSuccess_WhenIterationBelowLimitAndNoToolCalls()
     {
-        // Stopped early by NoToolCalls, not by step count — should be Success.
         Context ctx = ContextAtIteration(2);
 
         AgentResultStatus status = Agent.DetermineStatus(ctx, TextOnlyMessage());
@@ -77,7 +72,7 @@ public sealed class AgentInternalsTests
     [Fact]
     public void ExtractFinalText_ReturnsSingleBlockText()
     {
-        var msg = new AgentMessage(MessageRole.Assistant, [new TextBlock("Hello!")]);
+        var msg = new ChatMessage(ChatRole.Assistant, [new TextContent("Hello!")]);
 
         string? result = Agent.ExtractFinalText(msg);
 
@@ -85,15 +80,15 @@ public sealed class AgentInternalsTests
     }
 
     [Fact]
-    public void ExtractFinalText_ConcatenatesMultipleTextBlocks()
+    public void ExtractFinalText_ConcatenatesMultipleTextContents()
     {
-        // Multiple TextBlocks in one message are joined — this happens with
-        // interleaved ThinkingBlocks between text segments.
-        var msg = new AgentMessage(MessageRole.Assistant,
+        // Multiple TextContent items in one message are joined — this happens with
+        // interleaved TextReasoningContent between text segments.
+        var msg = new ChatMessage(ChatRole.Assistant,
         [
-            new TextBlock("Part one. "),
-            new ThinkingBlock("internal reasoning"),
-            new TextBlock("Part two."),
+            new TextContent("Part one. "),
+            new TextReasoningContent("internal reasoning"),
+            new TextContent("Part two."),
         ]);
 
         string? result = Agent.ExtractFinalText(msg);
@@ -102,11 +97,11 @@ public sealed class AgentInternalsTests
     }
 
     [Fact]
-    public void ExtractFinalText_ReturnsNull_WhenNoTextBlocksPresent()
+    public void ExtractFinalText_ReturnsNull_WhenNoTextContentsPresent()
     {
         // A message that is purely tool calls has no extractable final text.
-        var msg = new AgentMessage(MessageRole.Assistant,
-            [new ToolUseBlock("id-1", "tool", JsonDocument.Parse("{}").RootElement)]);
+        var msg = new ChatMessage(ChatRole.Assistant,
+            [new FunctionCallContent("id-1", "tool")]);
 
         string? result = Agent.ExtractFinalText(msg);
 
@@ -114,10 +109,10 @@ public sealed class AgentInternalsTests
     }
 
     [Fact]
-    public void ExtractFinalText_ReturnsNull_WhenTextBlocksAreAllEmpty()
+    public void ExtractFinalText_ReturnsNull_WhenTextContentsAreAllEmpty()
     {
-        var msg = new AgentMessage(MessageRole.Assistant,
-            [new TextBlock(""), new TextBlock("")]);
+        var msg = new ChatMessage(ChatRole.Assistant,
+            [new TextContent(""), new TextContent("")]);
 
         string? result = Agent.ExtractFinalText(msg);
 
@@ -125,13 +120,13 @@ public sealed class AgentInternalsTests
     }
 
     [Fact]
-    public void ExtractFinalText_IgnoresThinkingAndToolUseBlocks()
+    public void ExtractFinalText_IgnoresReasoningAndFunctionCallContents()
     {
-        var msg = new AgentMessage(MessageRole.Assistant,
+        var msg = new ChatMessage(ChatRole.Assistant,
         [
-            new ThinkingBlock("internal thought"),
-            new TextBlock("Visible answer."),
-            new ToolUseBlock("id-1", "tool", JsonDocument.Parse("{}").RootElement),
+            new TextReasoningContent("internal thought"),
+            new TextContent("Visible answer."),
+            new FunctionCallContent("id-1", "tool"),
         ]);
 
         string? result = Agent.ExtractFinalText(msg);
@@ -155,7 +150,7 @@ public sealed class AgentInternalsTests
         IToolRegistry registry = EmptyToolRegistry.Instance;
 
         ToolResult result = await registry.InvokeAsync(
-            "anything", JsonDocument.Parse("{}").RootElement, CancellationToken.None);
+            "anything", System.Text.Json.JsonDocument.Parse("{}").RootElement, CancellationToken.None);
 
         Assert.True(result.IsError);
         Assert.Contains("anything", result.Content);

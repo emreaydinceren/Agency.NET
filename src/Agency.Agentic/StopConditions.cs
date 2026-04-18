@@ -8,7 +8,7 @@ using Agency.Agentic.Contexts;
 /// <param name="ctx">The current session context (iteration count, usage, cost, etc.).</param>
 /// <param name="lastResponse">The most recent assistant message.</param>
 /// <returns><see langword="true"/> to stop; <see langword="false"/> to continue.</returns>
-public delegate bool StopCondition(Context ctx, AgentMessage lastResponse);
+public delegate bool StopCondition(Context ctx, ChatMessage lastResponse);
 
 /// <summary>
 /// Factory methods for the most common <see cref="StopCondition"/> delegates. Compose multiple conditions with
@@ -20,9 +20,9 @@ public static class StopConditions
     public static StopCondition StepCountIs(int n) =>
         (ctx, _) => ctx.IterationCount >= n;
 
-    /// <summary>Stops when the last assistant message contains no <see cref="ToolUseBlock"/>s.</summary>
+    /// <summary>Stops when the last assistant message contains no <see cref="FunctionCallContent"/>s.</summary>
     public static readonly StopCondition NoToolCalls =
-        (_, msg) => !msg.Content.OfType<ToolUseBlock>().Any();
+        (_, msg) => !msg.Contents.OfType<FunctionCallContent>().Any();
 
     /// <summary>Stops when accumulated cost reaches or exceeds <paramref name="usd"/>.</summary>
     public static StopCondition BudgetExceeded(decimal usd) =>

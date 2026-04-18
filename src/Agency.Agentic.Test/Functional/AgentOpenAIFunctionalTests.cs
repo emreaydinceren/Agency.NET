@@ -1,6 +1,7 @@
 namespace Agency.Agentic.Test.Functional;
 
 using Agency.Agentic.Contexts;
+using Agency.Llm.Common;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -152,7 +153,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
     // ── Fixture ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Shared fixture that loads configuration and constructs the <see cref="OpenAIClient"/>.
+    /// Shared fixture that loads configuration and constructs the <see cref="IChatClient"/>.
     /// </summary>
     public sealed class OpenAIAgentFixture
     {
@@ -182,14 +183,14 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
                 {
                     ApiKey = GetRequired(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequired(configuration, $"{ConfigurationSection}:BaseUrl"),
-                }));
+                })).CreateChatClient();
         }
 
         /// <summary>Gets the configured model identifier.</summary>
         public string Model { get; }
 
-        /// <summary>Gets the configured LLM client.</summary>
-        public OpenAIClient LlmClient { get; }
+        /// <summary>Gets the configured <see cref="IChatClient"/> backed by OpenAI-compatible endpoint.</summary>
+        public IChatClient LlmClient { get; }
 
         private static string GetRequired(IConfiguration cfg, string key) =>
             cfg[key] ?? throw new InvalidOperationException($"Missing required configuration: '{key}'.");

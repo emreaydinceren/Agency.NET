@@ -1,7 +1,7 @@
 namespace Agency.Agentic.Contexts;
 
 /// <summary>
-/// Canonical session state. The wire-format <c> messages[]</c> array is derived from this object on every loop
+/// Canonical session state. The wire-format <c>messages[]</c> array is derived from this object on every loop
 /// iteration — it is never the source of truth.
 /// </summary>
 public sealed record Context

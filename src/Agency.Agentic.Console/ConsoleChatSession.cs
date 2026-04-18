@@ -106,7 +106,7 @@ internal sealed class ConsoleChatSession
 
         try
         {
-            this.NewMethod();
+            this.WriteHeader();
 
             using var sessionCts = new CancellationTokenSource();
             System.Console.CancelKeyPress += (_, e) =>
@@ -369,7 +369,7 @@ internal sealed class ConsoleChatSession
         return sb.ToString();
     }
 
-    private void NewMethod()
+    private void WriteHeader()
     {
         this.output.WriteLine("cyan", "╔═══════════════════════════════════════════╗");
         this.output.WriteLine("cyan", "║       Agency  ·  Agent Chat Console       ║");

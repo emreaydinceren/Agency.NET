@@ -123,10 +123,10 @@ public class PostgreKVStore : IKVStore
         using var activity = _activitySource.StartActivity("vectorstore.search", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "search");
         activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
-        activity?.SetTag("vectorstore.has_metadata_filter", query.metadataFilter != null);
+        activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Searching vector store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.metadataFilter != null);
+        this._logger.LogDebug("Searching vector store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
         try
         {
@@ -173,9 +173,9 @@ public class PostgreKVStore : IKVStore
                 parameters["hasKey"] = false;
             }
 
-            if (query.metadataFilter != null)
+            if (query.MetadataFilter != null)
             {
-                parameters["mFilter"] = new NpgsqlParameter("mFilter", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(query.metadataFilter) };
+                parameters["mFilter"] = new NpgsqlParameter("mFilter", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(query.MetadataFilter) };
                 parameters["hasFilter"] = true;
             }
             else

@@ -150,16 +150,16 @@ public sealed class SqliteKVStore : IKVStore
         using var activity = _activitySource.StartActivity("vectorstore.search", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "search");
         activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
-        activity?.SetTag("vectorstore.has_metadata_filter", query.metadataFilter != null);
+        activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Searching SQLite vector store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.metadataFilter != null);
+        this._logger.LogDebug("Searching SQLite vector store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
         try
         {
             // When a metadata filter is present we skip the SQL LIMIT so that C#-side filtering
             // can apply it after the containment check. LIMIT -1 means "no limit" in SQLite.
-            int sqlLimit = query.metadataFilter != null ? -1 : (query.Limit ?? 10);
+            int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
             const string sql = """
                 SELECT key, value, metadata,
@@ -200,10 +200,10 @@ public sealed class SqliteKVStore : IKVStore
                 parameters,
                 cancellationToken);
 
-            if (query.metadataFilter != null)
+            if (query.MetadataFilter != null)
             {
                 results = results
-                    .Where(r => MatchesMetadataFilter(r.Metadata, query.metadataFilter))
+                    .Where(r => MatchesMetadataFilter(r.Metadata, query.MetadataFilter))
                     .Take(query.Limit ?? 10)
                     .ToList();
             }

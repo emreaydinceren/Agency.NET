@@ -38,7 +38,7 @@ public record class SearchHit<TValue>(string Key, TValue Value, Dictionary<strin
 /// </summary>
 /// <param name="Key">The key to filter the query results. Can be null to match any key.</param>
 /// <param name="Value">The value to filter the query results. Can be null to match any value.</param>
-/// <param name="metadataFilter">
+/// <param name="MetadataFilter">
 /// An optional dictionary specifying metadata key-value pairs to filter the results. If null, no metadata filtering is
 /// applied.
 /// </param>
@@ -49,7 +49,7 @@ public record class SearchHit<TValue>(string Key, TValue Value, Dictionary<strin
 /// A value indicating whether to include metadata in the query results. If <see langword="true"/>, metadata is
 /// included; otherwise, it is excluded.
 /// </param>
-public record class Query(string? Key, string? Value, IDictionary<string, object>? metadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false);
+public record class Query(string? Key, string? Value, IDictionary<string, object>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false);
 
 /// <summary>
 /// Defines the contract for a key-value store that supports asynchronous upsert and search operations.

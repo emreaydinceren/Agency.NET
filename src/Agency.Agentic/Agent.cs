@@ -376,13 +376,26 @@ public sealed class Agent
                 ct.ThrowIfCancellationRequested();
                 var input = ToJsonElement(call.Arguments);
                 ToolResult result;
+
+                using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
+                toolActivity?.SetTag("agent.tool.name", call.Name);
+                toolActivity?.SetTag("agent.model", this._model);
+                toolActivity?.SetTag("agent.client_type", this._clientType);
+
                 try
                 {
                     result = await ctx.Tools.Registry.InvokeAsync(call.Name, input, ct);
+                    toolActivity?.SetStatus(result.IsError ? ActivityStatusCode.Error : ActivityStatusCode.Ok, result.IsError ? result.Content : null);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     this._logger.LogWarning(ex, "Tool {Tool} failed", call.Name);
+                    toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    toolActivity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                    }));
                     result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
                 }
 

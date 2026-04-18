@@ -304,53 +304,9 @@ public class PostgreKVStore : IKVStore
         return new SearchHit<TValue>(
             Key: reader.GetString(0),
             Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
-            Metadata: DeserializeMetadata(metadataJson),
+            Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
             Distance: reader.GetDouble(3),
             UpdatedOn: reader.IsDBNull(4) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero)
         );
-    }
-
-    private static Dictionary<string, object>? DeserializeMetadata(string? metadataJson)
-    {
-        if (string.IsNullOrWhiteSpace(metadataJson))
-        {
-            return null;
-        }
-
-        var rawMetadata = JsonSerializer.Deserialize<Dictionary<string, object>>(metadataJson);
-        if (rawMetadata == null)
-        {
-            return null;
-        }
-
-        return rawMetadata.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value is JsonElement jsonElement
-                ? ConvertJsonElementToObject(jsonElement)
-                : kvp.Value);
-    }
-
-    private static object ConvertJsonElementToObject(JsonElement jsonElement)
-    {
-        return jsonElement.ValueKind switch
-        {
-            JsonValueKind.String => jsonElement.GetString() ?? string.Empty,
-            JsonValueKind.Number => jsonElement.TryGetInt64(out var intValue)
-                ? intValue
-                : jsonElement.TryGetDouble(out var doubleValue)
-                    ? doubleValue
-                    : jsonElement.GetDecimal(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null!,
-            JsonValueKind.Object => jsonElement
-                .EnumerateObject()
-                .ToDictionary(property => property.Name, property => ConvertJsonElementToObject(property.Value)!),
-            JsonValueKind.Array => jsonElement
-                .EnumerateArray()
-                .Select(ConvertJsonElementToObject)
-                .ToList(),
-            _ => jsonElement.GetRawText()
-        };
     }
 }

@@ -323,7 +323,7 @@ public sealed class SqliteKVStore : IKVStore
         return new SearchHit<TValue>(
             Key: key,
             Value: JsonSerializer.Deserialize<TValue>(valueJson)!,
-            Metadata: DeserializeMetadata(metadataJson),
+            Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
             Distance: distance,
             UpdatedOn: updatedOn);
     }
@@ -376,46 +376,6 @@ public sealed class SqliteKVStore : IKVStore
 
         // Scalar equality
         return string.Equals(metaValue?.ToString(), filterValue?.ToString(), StringComparison.Ordinal);
-    }
-
-    private static Dictionary<string, object>? DeserializeMetadata(string? metadataJson)
-    {
-        if (string.IsNullOrWhiteSpace(metadataJson))
-        {
-            return null;
-        }
-
-        var raw = JsonSerializer.Deserialize<Dictionary<string, object>>(metadataJson);
-        if (raw == null)
-        {
-            return null;
-        }
-
-        return raw.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value is JsonElement element ? ConvertJsonElementToObject(element) : kvp.Value);
-    }
-
-    private static object ConvertJsonElementToObject(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString() ?? string.Empty,
-            JsonValueKind.Number => element.TryGetInt64(out long i)
-                ? i
-                : element.TryGetDouble(out double d)
-                    ? d
-                    : (object)element.GetDecimal(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null!,
-            JsonValueKind.Object => element.EnumerateObject()
-                .ToDictionary(p => p.Name, p => ConvertJsonElementToObject(p.Value)!),
-            JsonValueKind.Array => element.EnumerateArray()
-                .Select(ConvertJsonElementToObject)
-                .ToList(),
-            _ => element.GetRawText()
-        };
     }
 
     private static string FormatVector(float[] vector)

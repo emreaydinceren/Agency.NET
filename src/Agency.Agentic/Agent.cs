@@ -429,11 +429,16 @@ public sealed class Agent
         return string.IsNullOrEmpty(text) ? null : text;
     }
 
-    private static JsonElement ToJsonElement(IDictionary<string, object?>? arguments)
+    private static readonly JsonElement _emptyElement =
+        JsonSerializer.SerializeToElement(
+            new Dictionary<string, object?>(),
+            AgentJsonContext.Default.DictionaryStringObject);
+
+    internal static JsonElement ToJsonElement(IDictionary<string, object?>? arguments)
     {
         if (arguments is null or { Count: 0 })
         {
-            return JsonDocument.Parse("{}").RootElement;
+            return _emptyElement;
         }
 
         return JsonSerializer.SerializeToElement(arguments);

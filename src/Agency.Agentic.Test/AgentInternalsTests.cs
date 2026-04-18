@@ -1,5 +1,6 @@
 namespace Agency.Agentic.Test;
 
+using System.Text.Json;
 using Agency.Agentic.Contexts;
 
 /// <summary>
@@ -132,6 +133,48 @@ public sealed class AgentInternalsTests
         string? result = Agent.ExtractFinalText(msg);
 
         Assert.Equal("Visible answer.", result);
+    }
+
+    // ── Agent.ToJsonElement ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ToJsonElement_ReturnsEmptyObject_WhenArgumentsIsNull()
+    {
+        JsonElement result = Agent.ToJsonElement(null);
+
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Empty(result.EnumerateObject());
+    }
+
+    [Fact]
+    public void ToJsonElement_ReturnsEmptyObject_WhenArgumentsIsEmpty()
+    {
+        JsonElement result = Agent.ToJsonElement(new Dictionary<string, object?>());
+
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Empty(result.EnumerateObject());
+    }
+
+    [Fact]
+    public void ToJsonElement_SerializesKeyValuePairs()
+    {
+        var args = new Dictionary<string, object?> { ["x"] = 42, ["y"] = "hello" };
+
+        JsonElement result = Agent.ToJsonElement(args);
+
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Equal(42, result.GetProperty("x").GetInt32());
+        Assert.Equal("hello", result.GetProperty("y").GetString());
+    }
+
+    [Fact]
+    public void ToJsonElement_HandlesNullValueInDictionary()
+    {
+        var args = new Dictionary<string, object?> { ["key"] = null };
+
+        JsonElement result = Agent.ToJsonElement(args);
+
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("key").ValueKind);
     }
 
     // ── EmptyToolRegistry ─────────────────────────────────────────────────────

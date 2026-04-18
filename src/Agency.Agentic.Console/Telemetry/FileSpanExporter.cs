@@ -10,84 +10,51 @@ using OpenTelemetry;
 /// </summary>
 internal sealed class FileSpanExporter : BaseExporter<Activity>
 {
-    private readonly string _outputDir;
-    private readonly string _filePrefix;
-    private readonly object _lock = new();
-    private StreamWriter? _writer;
-    private string _currentDate = "";
+    private readonly DailyRollingFileWriter _fileWriter;
 
     /// <summary>Initialises the exporter from resolved <see cref="FileExportOptions"/>.</summary>
     internal FileSpanExporter(FileExportOptions options)
     {
-        this._outputDir = options.OutputDirectory;
-        this._filePrefix = options.Traces.FilePrefix;
-        Directory.CreateDirectory(this._outputDir);
-        this.EnsureWriter();
+        this._fileWriter = new DailyRollingFileWriter(options.OutputDirectory, options.Traces.FilePrefix);
     }
 
     /// <inheritdoc />
     public override ExportResult Export(in Batch<Activity> batch)
     {
-        lock (this._lock)
+        try
         {
-            try
+            foreach (Activity activity in batch)
             {
-                this.EnsureWriter();
+                StringBuilder sb = new();
+                sb.Append($"[{activity.StartTimeUtc:yyyy-MM-dd HH:mm:ss.fff}] ");
+                sb.Append($"TraceId={activity.TraceId} ");
+                sb.Append($"SpanId={activity.SpanId} ");
+                sb.Append($"Parent={activity.ParentSpanId} ");
+                sb.Append($"Name={activity.DisplayName} ");
+                sb.Append($"Kind={activity.Kind} ");
+                sb.Append($"Status={activity.Status} ");
+                sb.Append($"Duration={activity.Duration.TotalMilliseconds:F1}ms");
 
-                foreach (Activity activity in batch)
+                foreach (KeyValuePair<string, object?> tag in activity.TagObjects)
                 {
-                    StringBuilder sb = new();
-                    sb.Append($"[{activity.StartTimeUtc:yyyy-MM-dd HH:mm:ss.fff}] ");
-                    sb.Append($"TraceId={activity.TraceId} ");
-                    sb.Append($"SpanId={activity.SpanId} ");
-                    sb.Append($"Parent={activity.ParentSpanId} ");
-                    sb.Append($"Name={activity.DisplayName} ");
-                    sb.Append($"Kind={activity.Kind} ");
-                    sb.Append($"Status={activity.Status} ");
-                    sb.Append($"Duration={activity.Duration.TotalMilliseconds:F1}ms");
-
-                    foreach (KeyValuePair<string, object?> tag in activity.TagObjects)
-                    {
-                        sb.Append($" {tag.Key}={tag.Value}");
-                    }
-
-                    foreach (ActivityEvent evt in activity.Events)
-                    {
-                        sb.Append($" | Event:{evt.Name}@{evt.Timestamp:HH:mm:ss.fff}");
-                    }
-
-                    this._writer?.WriteLine(sb.ToString());
+                    sb.Append($" {tag.Key}={tag.Value}");
                 }
 
-                this._writer?.Flush();
-                return ExportResult.Success;
-            }
-            catch (Exception)
-            {
-                return ExportResult.Failure;
-            }
-        }
-    }
+                foreach (ActivityEvent evt in activity.Events)
+                {
+                    sb.Append($" | Event:{evt.Name}@{evt.Timestamp:HH:mm:ss.fff}");
+                }
 
-    /// <summary>
-    /// Opens or rolls the underlying <see cref="StreamWriter"/> when the UTC date changes.
-    /// Uses <see cref="FileShare.Read"/> so the file can be read externally while the app runs.
-    /// </summary>
-    private void EnsureWriter()
-    {
-        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        if (today == this._currentDate && this._writer != null)
+                this._fileWriter.WriteLine(sb.ToString());
+            }
+
+            return this._fileWriter.Flush() ? ExportResult.Success : ExportResult.Failure;
+        }
+        catch (Exception ex)
         {
-            return;
+            Trace.WriteLine($"[FileSpanExporter] Export failed: {ex}");
+            return ExportResult.Failure;
         }
-
-        this._writer?.Flush();
-        this._writer?.Dispose();
-
-        this._currentDate = today;
-        string filePath = Path.Combine(this._outputDir, $"{this._filePrefix}-{this._currentDate}.log");
-        FileStream fileStream = new(filePath, FileMode.Append, FileAccess.Write, FileShare.Read);
-        this._writer = new StreamWriter(fileStream, Encoding.UTF8) { AutoFlush = false };
     }
 
     /// <inheritdoc />
@@ -95,12 +62,7 @@ internal sealed class FileSpanExporter : BaseExporter<Activity>
     {
         if (disposing)
         {
-            lock (this._lock)
-            {
-                this._writer?.Flush();
-                this._writer?.Dispose();
-                this._writer = null;
-            }
+            this._fileWriter.Dispose();
         }
 
         base.Dispose(disposing);

@@ -21,4 +21,8 @@
     <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Messages\" />
+  </ItemGroup>
+
 </Project>

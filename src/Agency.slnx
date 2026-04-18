@@ -12,6 +12,7 @@
   <Project Path="Agency.Common/Agency.Common.csproj" Id="127d1616-af99-4c94-817a-9992c8c21a6e" />
   <Project Path="Agency.Console/Agency.Console.csproj" />
   <Project Path="Agency.Embeddings.Common/Agency.Embeddings.Common.csproj" />
+  <Project Path="Agency.Embeddings.Common.Test/Agency.Embeddings.Common.Test.csproj" />
   <Project Path="Agency.Embeddings.OpenAI.Test/Agency.Embeddings.OpenAI.Test.csproj" />
   <Project Path="Agency.Embeddings.OpenAI/Agency.Embeddings.OpenAI.csproj" />
   <Project Path="Agency.Ingestion.FileSystem/Agency.Ingestion.FileSystem.csproj" />

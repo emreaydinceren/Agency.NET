@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="pgvector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agency.Common\Agency.Common.csproj" />
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+    <ProjectReference Include="..\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
+  </ItemGroup>
+
+</Project>

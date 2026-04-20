@@ -19,12 +19,12 @@ public class PostgreKVStore : IKVStore
     /// <summary>
     /// The activity source name used for vector store telemetry.
     /// </summary>
-    public static readonly string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
 
     /// <summary>
     /// The meter name used for vector store telemetry.
     /// </summary>
-    public static readonly string MeterName = "Agency.VectorStore.Sql.Postgre";
+    public const string MeterName = "Agency.VectorStore.Sql.Postgre";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);
@@ -123,10 +123,10 @@ public class PostgreKVStore : IKVStore
         using var activity = _activitySource.StartActivity("vectorstore.search", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "search");
         activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
-        activity?.SetTag("vectorstore.has_metadata_filter", query.metadataFilter != null);
+        activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Searching vector store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.metadataFilter != null);
+        this._logger.LogDebug("Searching vector store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
         try
         {
@@ -153,7 +153,7 @@ public class PostgreKVStore : IKVStore
             // Vector search on query.Value
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value);
+                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                 parameters["qVector"] = new Pgvector.Vector(embedding.ToArray());
             }
             else
@@ -173,9 +173,9 @@ public class PostgreKVStore : IKVStore
                 parameters["hasKey"] = false;
             }
 
-            if (query.metadataFilter != null)
+            if (query.MetadataFilter != null)
             {
-                parameters["mFilter"] = new NpgsqlParameter("mFilter", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(query.metadataFilter) };
+                parameters["mFilter"] = new NpgsqlParameter("mFilter", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(query.MetadataFilter) };
                 parameters["hasFilter"] = true;
             }
             else
@@ -232,7 +232,7 @@ public class PostgreKVStore : IKVStore
         try
         {
             string contentToEmbed = JsonSerializer.Serialize(value);
-            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed);
+            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
             string vectorLiteral = $"[{string.Join(',', vectorArray.ToArray().Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
 
             // Use EXCLUDED to update existing records on Key conflict
@@ -304,53 +304,9 @@ public class PostgreKVStore : IKVStore
         return new SearchHit<TValue>(
             Key: reader.GetString(0),
             Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
-            Metadata: DeserializeMetadata(metadataJson),
+            Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
             Distance: reader.GetDouble(3),
             UpdatedOn: reader.IsDBNull(4) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero)
         );
-    }
-
-    private static Dictionary<string, object>? DeserializeMetadata(string? metadataJson)
-    {
-        if (string.IsNullOrWhiteSpace(metadataJson))
-        {
-            return null;
-        }
-
-        var rawMetadata = JsonSerializer.Deserialize<Dictionary<string, object>>(metadataJson);
-        if (rawMetadata == null)
-        {
-            return null;
-        }
-
-        return rawMetadata.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value is JsonElement jsonElement
-                ? ConvertJsonElementToObject(jsonElement)
-                : kvp.Value);
-    }
-
-    private static object ConvertJsonElementToObject(JsonElement jsonElement)
-    {
-        return jsonElement.ValueKind switch
-        {
-            JsonValueKind.String => jsonElement.GetString() ?? string.Empty,
-            JsonValueKind.Number => jsonElement.TryGetInt64(out var intValue)
-                ? intValue
-                : jsonElement.TryGetDouble(out var doubleValue)
-                    ? doubleValue
-                    : jsonElement.GetDecimal(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null!,
-            JsonValueKind.Object => jsonElement
-                .EnumerateObject()
-                .ToDictionary(property => property.Name, property => ConvertJsonElementToObject(property.Value)!),
-            JsonValueKind.Array => jsonElement
-                .EnumerateArray()
-                .Select(ConvertJsonElementToObject)
-                .ToList(),
-            _ => jsonElement.GetRawText()
-        };
     }
 }

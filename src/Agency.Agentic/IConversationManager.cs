@@ -8,8 +8,8 @@ namespace Agency.Agentic;
 public interface IConversationManager
 {
     /// <summary>Gets the current ordered list of messages.</summary>
-    IReadOnlyList<AgentMessage> Messages { get; }
+    IReadOnlyList<ChatMessage> Messages { get; }
 
     /// <summary>Appends <paramref name="message"/> to the conversation.</summary>
-    void Append(AgentMessage message);
+    void Append(ChatMessage message);
 }

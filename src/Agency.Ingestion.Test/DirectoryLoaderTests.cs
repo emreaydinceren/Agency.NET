@@ -49,7 +49,7 @@ public sealed class DirectoryLoaderTests : IDisposable
     [Fact]
     public async Task LoadAsync_SingleMdFile_YieldsOneDocument()
     {
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "doc.md"), "# Hello");
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "doc.md"), "# Hello", cancellationToken: TestContext.Current.CancellationToken);
         var loader = new DirectoryLoader(this._tempDir);
 
         var docs = await CollectAsync(loader);
@@ -66,9 +66,9 @@ public sealed class DirectoryLoaderTests : IDisposable
     [Fact]
     public async Task LoadAsync_MultipleFiles_YieldsAllDocuments()
     {
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "a.md"), "a");
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "b.md"), "b");
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "c.md"), "c");
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "a.md"), "a", cancellationToken: TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "b.md"), "b", cancellationToken: TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "c.md"), "c", cancellationToken: TestContext.Current.CancellationToken);
         var loader = new DirectoryLoader(this._tempDir);
 
         var docs = await CollectAsync(loader);
@@ -85,8 +85,8 @@ public sealed class DirectoryLoaderTests : IDisposable
     [Fact]
     public async Task LoadAsync_OnlyMatchesPattern()
     {
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "doc.md"), "markdown");
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "doc.txt"), "text");
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "doc.md"), "markdown", cancellationToken: TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "doc.txt"), "text", cancellationToken: TestContext.Current.CancellationToken);
         var loader = new DirectoryLoader(this._tempDir, "*.md");
 
         var docs = await CollectAsync(loader);
@@ -105,8 +105,8 @@ public sealed class DirectoryLoaderTests : IDisposable
     {
         var subDir = Path.Combine(this._tempDir, "sub");
         Directory.CreateDirectory(subDir);
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "root.md"), "root");
-        await File.WriteAllTextAsync(Path.Combine(subDir, "nested.md"), "nested");
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "root.md"), "root", cancellationToken: TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(subDir, "nested.md"), "nested", cancellationToken: TestContext.Current.CancellationToken);
         var loader = new DirectoryLoader(this._tempDir);
 
         var docs = await CollectAsync(loader);
@@ -123,7 +123,7 @@ public sealed class DirectoryLoaderTests : IDisposable
     [Fact]
     public async Task LoadAsync_SetsFileExtensionMetadata()
     {
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "readme.md"), "content");
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "readme.md"), "content", cancellationToken: TestContext.Current.CancellationToken);
         var loader = new DirectoryLoader(this._tempDir);
 
         var docs = await CollectAsync(loader);
@@ -139,8 +139,8 @@ public sealed class DirectoryLoaderTests : IDisposable
     [Fact]
     public async Task LoadAsync_CancelledToken_ThrowsOperationCanceledException()
     {
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "a.md"), "a");
-        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "b.md"), "b");
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "a.md"), "a", cancellationToken: TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(this._tempDir, "b.md"), "b", cancellationToken: TestContext.Current.CancellationToken);
         var loader = new DirectoryLoader(this._tempDir);
         using var cts = new CancellationTokenSource();
         cts.Cancel();

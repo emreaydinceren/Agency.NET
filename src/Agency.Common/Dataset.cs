@@ -19,21 +19,42 @@ public interface IColumnMetadata
 /// <summary>
 /// Represents a tabular result set with column metadata and row values.
 /// </summary>
-public class Dataset(IReadOnlyCollection<IColumnMetadata> columns, IReadOnlyList<object?[]> rows)
+public class Dataset
 {
     /// <summary>
     /// Gets the column metadata for the dataset.
     /// </summary>
-    public IReadOnlyCollection<IColumnMetadata> Columns { get; init; } = columns;
+    public IReadOnlyCollection<IColumnMetadata> Columns { get; init; }
 
-    private readonly IDictionary<string, IColumnMetadata> _columnDict = columns
-        .Where(c => c.ColumnName != null)
-        .ToDictionary(c => c.ColumnName!, StringComparer.OrdinalIgnoreCase);
+    private readonly IDictionary<string, IColumnMetadata> _columnDict;
+
+    private readonly List<object?[]> rows = new();
 
     /// <summary>
     /// Gets the row values for the dataset.
     /// </summary>
-    public IReadOnlyList<object?[]> Rows { get; init; } = rows;
+    public IReadOnlyList<object?[]> Rows { get; init; }
+
+    public Dataset(IReadOnlyCollection<IColumnMetadata> columns, IReadOnlyList<object?[]> rows)
+    {
+        this.Columns = columns;
+        this._columnDict = columns
+        .Where(c => c.ColumnName != null)
+        .ToDictionary(c => c.ColumnName!, StringComparer.OrdinalIgnoreCase);
+        this.Rows = rows;
+    }
+
+    public Dataset(IReadOnlyCollection<IColumnMetadata> columns)
+    {
+        this.Columns = columns;
+        this._columnDict = columns
+       .Where(c => c.ColumnName != null)
+       .ToDictionary(c => c.ColumnName!, StringComparer.OrdinalIgnoreCase);
+
+        this.Rows = rows;
+    }
+
+    public void AddRow(object?[] values) => this.rows.Add(values);
 
     /// <summary>
     /// Gets a value by zero-based column and row index.

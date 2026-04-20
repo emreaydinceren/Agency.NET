@@ -27,8 +27,10 @@ public sealed class DirectoryLoader(
         foreach (string filePath in files)
         {
             ct.ThrowIfCancellationRequested();
-            string content = await File.ReadAllTextAsync(filePath, ct);
-            yield return FileLoader.BuildDocument(filePath, content);
+            await foreach (Document doc in new FileLoader(filePath).LoadAsync(ct))
+            {
+                yield return doc;
+            }
         }
     }
 }

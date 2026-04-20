@@ -9,7 +9,7 @@ public abstract record AgentEvent;
 public sealed record SessionStartedEvent(string SessionId) : AgentEvent;
 
 /// <summary>Emitted after each LLM response is appended to the conversation.</summary>
-public sealed record AssistantTurnEvent(AgentMessage Message) : AgentEvent;
+public sealed record AssistantTurnEvent(ChatMessage Message) : AgentEvent;
 
 /// <summary>Emitted after a tool has been invoked and its result is ready.</summary>
 public sealed record ToolInvokedEvent(
@@ -26,7 +26,7 @@ public sealed record IterationCompletedEvent(
 public sealed record TextDeltaEvent(string Delta) : AgentEvent;
 
 /// <summary>
-/// Emitted when a complete <see cref="ToolUseBlock"/> is received from the stream,
+/// Emitted when a complete tool call is received from the stream,
 /// before execution begins. Gives UIs a chance to render "calling tool X…".
 /// </summary>
 public sealed record ToolUseReceivedEvent(string ToolName, string ToolUseId) : AgentEvent;
@@ -52,4 +52,11 @@ public enum AgentResultStatus
 
     /// <summary>An unrecoverable error occurred.</summary>
     Error,
+}
+
+/// <summary>Accumulated token usage for a session or turn.</summary>
+public sealed record LlmTokenUsage(long InputTokens, long OutputTokens)
+{
+    /// <summary>Gets the total token count.</summary>
+    public long TotalTokens => this.InputTokens + this.OutputTokens;
 }

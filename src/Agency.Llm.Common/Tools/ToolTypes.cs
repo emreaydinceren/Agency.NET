@@ -27,6 +27,40 @@ public interface IToolRegistry
     /// <summary>Returns the definitions of all registered tools.</summary>
     IReadOnlyList<ToolDefinition> ListDefinitions();
 
+    /// <summary>
+    /// Retrieves a read-only list of all available tool definitions along with their enabled status.
+    /// </summary>
+    /// <remarks>The returned list includes both enabled and disabled tool definitions. The Boolean value in
+    /// each tuple is <see langword="true"/> if the tool is enabled; otherwise, <see langword="false"/>.</remarks>
+    /// <returns>A read-only list of tuples, each containing a Boolean value indicating whether the tool is enabled and the
+    /// corresponding tool definition.</returns>
+    IReadOnlyList<(bool Enabled, ToolDefinition Definition)> ListAllDefinitions();
+
+    /// <summary>
+    /// Disables the tool with the given name, preventing it from being invoked until re-enabled. Tools can be disabled
+    /// by
+    /// </summary>
+    /// <param name="name"></param>
+    void DisabledToolBySystem(string name);
+
+    /// <summary>
+    /// Enables the tool with the given name if it was previously disabled. Tools can be enabled or disabled by both the
+    /// </summary>
+    /// <param name="name"></param>
+    void EnableToolBySystem(string name);
+
+    /// <summary>
+    /// Disables the specified tool for the current user.
+    /// </summary>
+    /// <param name="name">The name of the tool to disable. Cannot be null or empty.</param>
+    void DisableToolByUser(string name);
+
+    /// <summary>
+    /// Enables the specified tool for the current user if it was previously disabled.
+    /// </summary>
+    /// <param name="name"></param>
+    void EnableToolByUser(string name);
+
     /// <summary>Invokes the named tool with the given JSON input.</summary>
     Task<ToolResult> InvokeAsync(string name, JsonElement input, CancellationToken ct);
 }

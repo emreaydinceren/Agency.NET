@@ -78,7 +78,7 @@ public sealed class EmbeddingGeneratorTests
         var handler = new StubHttpMessageHandler(StubHttpMessageHandler.BuildEmbeddingsJson(expected));
         var generator = new EmbeddingGenerator(DefaultOptions, handler);
 
-        var result = await generator.GenerateEmbeddingAsync("hello world");
+        var result = await generator.GenerateEmbeddingAsync("hello world", TestContext.Current.CancellationToken);
 
         Assert.Equal(expected.Length, result.Length);
         for (var i = 0; i < expected.Length; i++)
@@ -97,7 +97,7 @@ public sealed class EmbeddingGeneratorTests
         var handler = new StubHttpMessageHandler(StubHttpMessageHandler.BuildEmbeddingsJson(expected));
         var generator = new EmbeddingGenerator(DefaultOptions, handler);
 
-        var result = await generator.GenerateEmbeddingAsync("text");
+        var result = await generator.GenerateEmbeddingAsync("text", TestContext.Current.CancellationToken);
 
         Assert.Equal(128, result.Length);
     }
@@ -133,7 +133,7 @@ public sealed class EmbeddingGeneratorTests
         var handler = new StubHttpMessageHandler(StubHttpMessageHandler.BuildEmbeddingsJson(first, second));
         var generator = new EmbeddingGenerator(DefaultOptions, handler);
 
-        var results = await generator.GenerateEmbeddingsAsync(["first input", "second input"]);
+        var results = await generator.GenerateEmbeddingsAsync(["first input", "second input"], TestContext.Current.CancellationToken);
 
         Assert.Equal(2, results.Count);
     }
@@ -149,7 +149,7 @@ public sealed class EmbeddingGeneratorTests
         var handler = new StubHttpMessageHandler(StubHttpMessageHandler.BuildEmbeddingsJson(first, second));
         var generator = new EmbeddingGenerator(DefaultOptions, handler);
 
-        var results = await generator.GenerateEmbeddingsAsync(["first input", "second input"]);
+        var results = await generator.GenerateEmbeddingsAsync(["first input", "second input"], TestContext.Current.CancellationToken);
 
         Assert.Equal(first[0], results[0].Span[0], precision: 5);
         Assert.Equal(first[1], results[0].Span[1], precision: 5);
@@ -170,7 +170,7 @@ public sealed class EmbeddingGeneratorTests
         var handler = new StubHttpMessageHandler(StubHttpMessageHandler.BuildEmbeddingsJson(expected));
         var generator = new EmbeddingGenerator(DefaultOptions, handler);
 
-        var results = await generator.GenerateEmbeddingsAsync(["only input"]);
+        var results = await generator.GenerateEmbeddingsAsync(["only input"], TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal(expected.Length, results[0].Length);

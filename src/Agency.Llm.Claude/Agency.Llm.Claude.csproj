@@ -1,17 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Agency.Common\Agency.Common.csproj" />
     <ProjectReference Include="..\Agency.Llm.Common\Agency.Llm.Common.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Anthropic" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="Anthropic" />
   </ItemGroup>
 
 </Project>

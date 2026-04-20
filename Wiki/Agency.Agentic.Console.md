@@ -18,44 +18,58 @@ On startup the console reads `appsettings.json` to select the provider and model
 
 ```
 > [user types a message]
-[Agent] responds here
+[Agent] responds here (rendered as Markdown)
   ↳ +230 in, +47 out  [Success]
 
-> exit
+> /exit
 Session ended  ·  3 turns  ·  1,234 in, 321 out total
 ```
 
 ### Multi-Turn Architecture
 
-The first user message creates the `Context`. Subsequent messages are appended directly to the conversation before calling `RunAsync` again — `Agent.RunAsync` only seeds from `Query.Prompt` when the conversation history is empty:
+Multi-turn state is managed by `Agent.ChatAsync`. The console calls it with the current `Context` on every turn; the method handles seeding on the first turn and appending on subsequent turns:
 
 ```csharp
-if (ctx is null)
-{
-    ctx = new Context
-    {
-        Query    = new QueryContext { Prompt = input },
-        Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
-    };
-}
-else
-{
-    ctx.Conversation.Append(new AgentMessage(MessageRole.User, [new TextBlock(input)]));
-}
+ctx ??= Agent.CreateContext(input);
 
-await foreach (AgentEvent evt in agent.RunAsync(ctx, turnCts.Token)) { ... }
+await foreach (AgentEvent evt in _agent.ChatAsync(input, ctx, _options, sessionCts.Token))
+{
+    // handle events ...
+}
 ```
+
+### Streaming Display
+
+When `Agent` is configured with `stream=true` (the default), the console receives `TextDeltaEvent`s and buffers them internally. When `AssistantTurnEvent` arrives, the buffer is flushed and rendered as Markdown via `NTokenizers.Extensions.Spectre.Console`:
+
+```csharp
+case TextDeltaEvent delta:
+    streamingBuffer.Append(delta.Delta);   // accumulate live tokens
+    break;
+
+case AssistantTurnEvent:
+    // flush + render the full buffered text as Markdown
+    await AnsiConsole.Console.WriteMarkdownAsync(ms, MarkdownStyles.Default, ...);
+    break;
+```
+
+If streaming was not used (batch mode), `AssistantTurnEvent` is handled directly with `PrintAssistantTurnAsync`.
+
+### Command System
+
+Input lines starting with `/` are dispatched to `CommandManager`, which matches against `CommandRegistery.Commands`:
+
+| Command | Behaviour |
+|---|---|
+| `/exit` | Returns `CommandContinuation.ExitSession` — terminates the REPL |
+| `/help` | Returns `CommandContinuation.Continue` (no-op placeholder) |
+| `/model` | Opens `ConsolePicker` to select from all available models |
+
+When the user types `/`, `ConsolePicker` appears inline to autocomplete from the registered command list. Selecting a model via `/model` calls `session.SetAgent(newAgent)` to hot-swap the active `Agent`.
 
 ### Ctrl+C Handling
 
-Two `CancellationTokenSource` instances are linked together:
-
-- `sessionCts` — triggers when Ctrl+C is pressed a second time to exit the session.
-- `turnCts` — linked to `sessionCts` and created fresh per turn; cancels just the current LLM call on first Ctrl+C.
-
-```csharp
-using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token);
-```
+A single `sessionCts` covers the whole session. `Console.CancelKeyPress` cancels it but suppresses process termination (`e.Cancel = true`). Subsequent turns re-check `sessionCts.IsCancellationRequested` to decide whether to exit the REPL.
 
 ## Configuration
 

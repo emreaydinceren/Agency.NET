@@ -1,9 +1,10 @@
-using Agency.Agentic;
+namespace Agency.Agentic.Test.Functional;
+
+using Agency.Agentic.Contexts;
+using Agency.Llm.Common;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-
-namespace Agency.Agentic.Test.Functional;
 
 /// <summary>
 /// End-to-end functional tests for the <see cref="Agent"/> loop using
@@ -47,7 +48,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
         var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
-        var result = await RunToResultAsync(agent, ctx);
+        var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.False(string.IsNullOrWhiteSpace(result.FinalText));
@@ -66,7 +67,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
         var events = new List<AgentEvent>();
-        await foreach (var evt in agent.RunAsync(ctx))
+        await foreach (var evt in agent.RunAsync(ctx, ct: TestContext.Current.CancellationToken))
         {
             events.Add(evt);
         }
@@ -91,7 +92,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
 
         var ctx = new Context { Query = new QueryContext { Prompt = "Count from 1 to 100." } };
 
-        var result = await RunToResultAsync(agent, ctx);
+        var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal(1, ctx.IterationCount);
@@ -107,7 +108,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
         var ctx = new Context { Query = new QueryContext { Prompt = "What is 2 + 2? Reply with just the number." } };
 
-        var result = await RunToResultAsync(agent, ctx);
+        var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.TotalUsage.InputTokens > 0);
         Assert.True(result.TotalUsage.OutputTokens > 0);
@@ -132,7 +133,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
 
         AgentResultEvent? result = null;
         bool toolInvoked = false;
-        await foreach (var evt in agent.RunAsync(ctx))
+        await foreach (var evt in agent.RunAsync(ctx, ct: TestContext.Current.CancellationToken))
         {
             if (evt is ToolInvokedEvent t && t.ToolName == EchoTool.ToolName)
             {
@@ -152,7 +153,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
     // ── Fixture ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Shared fixture that loads configuration and constructs the <see cref="OpenAIClient"/>.
+    /// Shared fixture that loads configuration and constructs the <see cref="IChatClient"/>.
     /// </summary>
     public sealed class OpenAIAgentFixture
     {
@@ -178,18 +179,18 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
             this.Model = GetRequired(configuration, $"{ConfigurationSection}:Model");
 
             this.LlmClient = new OpenAIClient(
-                Options.Create(new OpenAIClientOptions
+                Options.Create(new LlmClientOptions
                 {
                     ApiKey = GetRequired(configuration, $"{ConfigurationSection}:ApiKey"),
                     BaseUrl = GetRequired(configuration, $"{ConfigurationSection}:BaseUrl"),
-                }));
+                })).CreateChatClient();
         }
 
         /// <summary>Gets the configured model identifier.</summary>
         public string Model { get; }
 
-        /// <summary>Gets the configured LLM client.</summary>
-        public OpenAIClient LlmClient { get; }
+        /// <summary>Gets the configured <see cref="IChatClient"/> backed by OpenAI-compatible endpoint.</summary>
+        public IChatClient LlmClient { get; }
 
         private static string GetRequired(IConfiguration cfg, string key) =>
             cfg[key] ?? throw new InvalidOperationException($"Missing required configuration: '{key}'.");

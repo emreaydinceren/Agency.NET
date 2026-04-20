@@ -7,9 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Agency.Agentic\Agency.Agentic.csproj" />
-    <ProjectReference Include="..\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <ProjectReference Include="..\Agency.Llm.Common\Agency.Llm.Common.csproj" />
-    <ProjectReference Include="..\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,7 +15,16 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Spectre.Console" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
   <ItemGroup>

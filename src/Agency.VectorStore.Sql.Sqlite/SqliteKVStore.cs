@@ -21,10 +21,10 @@ using System.Text.Json;
 public sealed class SqliteKVStore : IKVStore
 {
     /// <summary>The activity source name used for vector store telemetry.</summary>
-    public static readonly string ActivitySourceName = "Agency.VectorStore.Sql.Sqlite";
+    public const string ActivitySourceName = "Agency.VectorStore.Sql.Sqlite";
 
     /// <summary>The meter name used for vector store telemetry.</summary>
-    public static readonly string MeterName = "Agency.VectorStore.Sql.Sqlite";
+    public const string MeterName = "Agency.VectorStore.Sql.Sqlite";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);
@@ -70,9 +70,14 @@ public sealed class SqliteKVStore : IKVStore
             float[] a = ParseVector(v1);
             float[] b = ParseVector(v2);
             double dot = a.Zip(b).Sum(p => (double)p.First * p.Second);
-            double magA = Math.Sqrt(a.Sum(x => (double)x * x));
-            double magB = Math.Sqrt(b.Sum(x => (double)x * x));
-            return 1.0 - (dot / (magA * magB));
+            double normA = Math.Sqrt(a.Sum(x => (double)x * x));
+            double normB = Math.Sqrt(b.Sum(x => (double)x * x));
+            if (normA == 0 || normB == 0)
+            {
+                return 1.0;
+            }
+
+            return 1.0 - (dot / (normA * normB));
         });
     }
 
@@ -145,16 +150,16 @@ public sealed class SqliteKVStore : IKVStore
         using var activity = _activitySource.StartActivity("vectorstore.search", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "search");
         activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
-        activity?.SetTag("vectorstore.has_metadata_filter", query.metadataFilter != null);
+        activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Searching SQLite vector store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.metadataFilter != null);
+        this._logger.LogDebug("Searching SQLite vector store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
         try
         {
             // When a metadata filter is present we skip the SQL LIMIT so that C#-side filtering
             // can apply it after the containment check. LIMIT -1 means "no limit" in SQLite.
-            int sqlLimit = query.metadataFilter != null ? -1 : (query.Limit ?? 10);
+            int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
             const string sql = """
                 SELECT key, value, metadata,
@@ -170,7 +175,7 @@ public sealed class SqliteKVStore : IKVStore
 
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value);
+                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                 parameters["qVector"] = FormatVector(embedding.ToArray());
             }
             else
@@ -195,10 +200,10 @@ public sealed class SqliteKVStore : IKVStore
                 parameters,
                 cancellationToken);
 
-            if (query.metadataFilter != null)
+            if (query.MetadataFilter != null)
             {
                 results = results
-                    .Where(r => MatchesMetadataFilter(r.Metadata, query.metadataFilter))
+                    .Where(r => MatchesMetadataFilter(r.Metadata, query.MetadataFilter))
                     .Take(query.Limit ?? 10)
                     .ToList();
             }
@@ -246,7 +251,7 @@ public sealed class SqliteKVStore : IKVStore
         try
         {
             string contentToEmbed = JsonSerializer.Serialize(value);
-            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed);
+            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
             string vectorLiteral = FormatVector(vectorArray.ToArray());
             string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
@@ -318,7 +323,7 @@ public sealed class SqliteKVStore : IKVStore
         return new SearchHit<TValue>(
             Key: key,
             Value: JsonSerializer.Deserialize<TValue>(valueJson)!,
-            Metadata: DeserializeMetadata(metadataJson),
+            Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
             Distance: distance,
             UpdatedOn: updatedOn);
     }
@@ -373,49 +378,9 @@ public sealed class SqliteKVStore : IKVStore
         return string.Equals(metaValue?.ToString(), filterValue?.ToString(), StringComparison.Ordinal);
     }
 
-    private static Dictionary<string, object>? DeserializeMetadata(string? metadataJson)
-    {
-        if (string.IsNullOrWhiteSpace(metadataJson))
-        {
-            return null;
-        }
-
-        var raw = JsonSerializer.Deserialize<Dictionary<string, object>>(metadataJson);
-        if (raw == null)
-        {
-            return null;
-        }
-
-        return raw.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value is JsonElement element ? ConvertJsonElementToObject(element) : kvp.Value);
-    }
-
-    private static object ConvertJsonElementToObject(JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.String => element.GetString() ?? string.Empty,
-            JsonValueKind.Number => element.TryGetInt64(out long i)
-                ? i
-                : element.TryGetDouble(out double d)
-                    ? d
-                    : (object)element.GetDecimal(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null!,
-            JsonValueKind.Object => element.EnumerateObject()
-                .ToDictionary(p => p.Name, p => ConvertJsonElementToObject(p.Value)!),
-            JsonValueKind.Array => element.EnumerateArray()
-                .Select(ConvertJsonElementToObject)
-                .ToList(),
-            _ => element.GetRawText()
-        };
-    }
-
     private static string FormatVector(float[] vector)
         => $"[{string.Join(',', vector.Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
 
     private static float[] ParseVector(string raw)
-        => raw.Trim('[', ']').Split(',').Select(float.Parse).ToArray();
+        => raw.Trim('[', ']').Split(',').Select(s => float.Parse(s, CultureInfo.InvariantCulture)).ToArray();
 }

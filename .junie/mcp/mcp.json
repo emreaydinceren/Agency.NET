@@ -1,0 +1,17 @@
+{
+    "mcpServers": {
+        "gitea": {
+            "command": "go",
+            "args": [
+                "run",
+                "gitea.com/gitea/gitea-mcp@latest",
+                "-t",
+                "stdio"
+            ],
+            "env": {
+                "GITEA_HOST": "http://gitea-host.example:3000",
+                "GITEA_ACCESS_TOKEN": "4d1f125c22b9cdb3e97ded1eb12664d7e3ddc238"
+            }
+        }
+    }
+}

@@ -1,11 +1,12 @@
 using System.Text.Json;
+using Agency.Agentic.Contexts;
 using Agency.Agentic.Test.Fakes;
 
 namespace Agency.Agentic.Test;
 
 /// <summary>
 /// Functional tests for the <see cref="Agent"/> loop.
-/// All tests use a <see cref="FakeLlmClient"/> — no real LLM is needed.
+/// All tests use a <see cref="FakeChatClient"/> — no real LLM is needed.
 /// </summary>
 public sealed class AgentLoopTests
 {
@@ -19,24 +20,26 @@ public sealed class AgentLoopTests
             Tools = tools ?? ToolContext.Empty,
         };
 
-    /// <summary>Builds an <see cref="AgentLlmResponse"/> that contains only a text block.</summary>
-    private static AgentLlmResponse TextResponse(string text, int inputTokens = 10, int outputTokens = 5) =>
-        new(
-            new AgentMessage(MessageRole.Assistant, [new TextBlock(text)]),
-            StopReason.EndTurn,
-            new LlmTokenUsage(inputTokens, outputTokens));
+    /// <summary>Builds a <see cref="ChatResponse"/> that contains only a text block.</summary>
+    private static ChatResponse TextResponse(string text, int inputTokens = 10, int outputTokens = 5) =>
+        new([new ChatMessage(ChatRole.Assistant, text)])
+        {
+            Usage = new UsageDetails { InputTokenCount = inputTokens, OutputTokenCount = outputTokens },
+            FinishReason = ChatFinishReason.Stop,
+        };
 
-    /// <summary>Builds an <see cref="AgentLlmResponse"/> that requests one or more tool calls.</summary>
-    private static AgentLlmResponse ToolCallResponse(params (string id, string name)[] calls)
+    /// <summary>Builds a <see cref="ChatResponse"/> that requests one or more tool calls.</summary>
+    private static ChatResponse ToolCallResponse(params (string id, string name)[] calls)
     {
-        IReadOnlyList<ContentBlock> blocks = calls
-            .Select(c => (ContentBlock)new ToolUseBlock(c.id, c.name, JsonDocument.Parse("{}").RootElement))
+        var contents = calls
+            .Select(c => (AIContent)new FunctionCallContent(c.id, c.name))
             .ToList();
 
-        return new AgentLlmResponse(
-            new AgentMessage(MessageRole.Assistant, blocks),
-            StopReason.ToolUse,
-            new LlmTokenUsage(20, 10));
+        return new ChatResponse([new ChatMessage(ChatRole.Assistant, contents)])
+        {
+            Usage = new UsageDetails { InputTokenCount = 20, OutputTokenCount = 10 },
+            FinishReason = ChatFinishReason.ToolCalls,
+        };
     }
 
     /// <summary>Collects all events from the agent's async enumerable into a list.</summary>
@@ -57,11 +60,11 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_AlwaysEmitsSessionStartedEventFirst()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("Paris."));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("Paris."));
 
         var agent = new Agent(llm, "claude-3-5-sonnet", stream: false);
-        var events = await RunToCompletion(agent, MakeContext());
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         Assert.IsType<SessionStartedEvent>(events[0]);
     }
@@ -69,11 +72,11 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_AlwaysEmitsAgentResultEventLast()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("Done."));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("Done."));
 
         var agent = new Agent(llm, "claude-3-5-sonnet", stream: false);
-        var events = await RunToCompletion(agent, MakeContext());
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         Assert.IsType<AgentResultEvent>(events[^1]);
     }
@@ -81,11 +84,11 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_SessionStartedEvent_HasNonEmptySessionId()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("ok"));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("ok"));
 
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, MakeContext());
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var sessionEvent = Assert.IsType<SessionStartedEvent>(events[0]);
         Assert.NotEmpty(sessionEvent.SessionId);
@@ -97,13 +100,13 @@ public sealed class AgentLoopTests
     public async Task RunAsync_SingleTurn_EmitsCorrectEventSequence()
     {
         // Arrange
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("Paris is the capital of France."));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("Paris is the capital of France."));
 
         var agent = new Agent(llm, "model", stream: false);
 
         // Act
-        var events = await RunToCompletion(agent, MakeContext("What is the capital of France?"));
+        var events = await RunToCompletion(agent, MakeContext("What is the capital of France?"), ct: TestContext.Current.CancellationToken);
 
         // Assert: SessionStarted → AssistantTurn → IterationCompleted → AgentResult
         Assert.Collection(events,
@@ -116,11 +119,11 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_SingleTurn_ResultStatusIsSuccess()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("Done."));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("Done."));
 
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, MakeContext());
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
         Assert.Equal(AgentResultStatus.Success, result.Status);
@@ -129,11 +132,11 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_SingleTurn_FinalTextMatchesAssistantResponse()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("The answer is 42."));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("The answer is 42."));
 
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, MakeContext());
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
         Assert.Equal("The answer is 42.", result.FinalText);
@@ -142,11 +145,11 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_SingleTurn_AccumulatesTokenUsage()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("ok", inputTokens: 100, outputTokens: 50));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("ok", inputTokens: 100, outputTokens: 50));
 
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, MakeContext());
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
         Assert.Equal(100, result.TotalUsage.InputTokens);
@@ -158,36 +161,37 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_SeedsConversation_WithUserPromptAsFirstMessage()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("ok"));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("ok"));
 
         var ctx = MakeContext("My specific prompt");
         var agent = new Agent(llm, "model", stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // The first message sent to the LLM must be the user's prompt.
         var firstSentMessages = llm.ReceivedMessages[0];
-        Assert.Equal(MessageRole.User, firstSentMessages[0].Role);
-        var textBlock = Assert.IsType<TextBlock>(firstSentMessages[0].Content[0]);
-        Assert.Equal("My specific prompt", textBlock.Text);
+        Assert.Equal(ChatRole.User, firstSentMessages[0].Role);
+        var textContent = Assert.IsType<TextContent>(firstSentMessages[0].Contents[0]);
+        Assert.Equal("My specific prompt", textContent.Text);
     }
 
     [Fact]
     public async Task RunAsync_DoesNotDuplicatePrompt_WhenConversationAlreadyHasMessages()
     {
-        var llm = new FakeLlmClient();
-        llm.EnqueueAgentResponse(TextResponse("ok"));
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("ok"));
 
         var ctx = MakeContext("Prompt");
-        var existingMsg = new AgentMessage(MessageRole.User, [new TextBlock("Existing message")]);
+        var existingMsg = new ChatMessage(ChatRole.User, "Existing message");
         ctx.Conversation.Append(existingMsg);
 
         var agent = new Agent(llm, "model", stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // Only the pre-existing message — the prompt should NOT be re-seeded.
         Assert.Single(llm.ReceivedMessages[0]);
-        Assert.Equal("Existing message", ((TextBlock)llm.ReceivedMessages[0][0].Content[0]).Text);
+        var textContent = Assert.IsType<TextContent>(llm.ReceivedMessages[0][0].Contents[0]);
+        Assert.Equal("Existing message", textContent.Text);
     }
 
     // ── Tool call → execution → continue ──────────────────────────────────────
@@ -198,23 +202,22 @@ public sealed class AgentLoopTests
         // Arrange
         var tool = new FakeTool("search");
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
         // Turn 1: LLM requests a tool call.
-        llm.EnqueueAgentResponse(ToolCallResponse(("use-1", "search")));
+        llm.EnqueueResponse(ToolCallResponse(("use-1", "search")));
         // Turn 2: LLM sees the result and finishes.
-        llm.EnqueueAgentResponse(TextResponse("Search is done."));
+        llm.EnqueueResponse(TextResponse("Search is done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
 
         // Act
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
-        // Assert: tool was invoked once
+        // Assert: tool was invoked once, LLM was called twice
         Assert.Equal(1, tool.InvokeCount);
-        // LLM was called twice
-        Assert.Equal(2, llm.SendAgentCallCount);
+        Assert.Equal(2, llm.GetResponseCallCount);
     }
 
     [Fact]
@@ -222,14 +225,14 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("calculator", _ => new ToolResult("42"));
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("use-1", "calculator")));
-        llm.EnqueueAgentResponse(TextResponse("The result is 42."));
+        llm.EnqueueResponse(ToolCallResponse(("use-1", "calculator")));
+        llm.EnqueueResponse(TextResponse("The result is 42."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, ctx);
+        var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var toolEvent = events.OfType<ToolInvokedEvent>().Single();
         Assert.Equal("calculator", toolEvent.ToolName);
@@ -242,23 +245,22 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("search", _ => new ToolResult("result content"));
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("use-abc", "search")));
-        llm.EnqueueAgentResponse(TextResponse("Done."));
+        llm.EnqueueResponse(ToolCallResponse(("use-abc", "search")));
+        llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
-        // The second LLM call must include a user message with the ToolResultBlock.
+        // The second LLM call must include a Tool-role message with the FunctionResultContent.
         var turn2Messages = llm.ReceivedMessages[1];
-        var toolResultMessage = turn2Messages.Last(m => m.Role == MessageRole.User);
-        var resultBlock = toolResultMessage.Content.OfType<ToolResultBlock>().Single();
+        var toolResultMessage = turn2Messages.Last(m => m.Role == ChatRole.Tool);
+        var resultContent = Assert.IsType<FunctionResultContent>(toolResultMessage.Contents[0]);
 
-        Assert.Equal("use-abc", resultBlock.ToolUseId);
-        Assert.Equal("result content", resultBlock.Content);
-        Assert.False(resultBlock.IsError);
+        Assert.Equal("use-abc", resultContent.CallId);
+        Assert.Equal("result content", resultContent.Result?.ToString());
     }
 
     // ── Parallel tool execution ────────────────────────────────────────────────
@@ -269,15 +271,15 @@ public sealed class AgentLoopTests
         var toolA = new FakeTool("tool_a", _ => new ToolResult("A result"));
         var toolB = new FakeTool("tool_b", _ => new ToolResult("B result"));
         var registry = new ToolRegistry([toolA, toolB]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
         // Single assistant turn that requests two tool calls simultaneously.
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "tool_a"), ("id-2", "tool_b")));
-        llm.EnqueueAgentResponse(TextResponse("Both results received."));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "tool_a"), ("id-2", "tool_b")));
+        llm.EnqueueResponse(TextResponse("Both results received."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, ctx);
+        var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, toolA.InvokeCount);
         Assert.Equal(1, toolB.InvokeCount);
@@ -292,22 +294,25 @@ public sealed class AgentLoopTests
         var toolA = new FakeTool("tool_a", _ => new ToolResult("A"));
         var toolB = new FakeTool("tool_b", _ => new ToolResult("B"));
         var registry = new ToolRegistry([toolA, toolB]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "tool_a"), ("id-2", "tool_b")));
-        llm.EnqueueAgentResponse(TextResponse("Done."));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "tool_a"), ("id-2", "tool_b")));
+        llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
-        // Regardless of execution order, result blocks must match original tool-use IDs in sequence.
-        var resultMsg = llm.ReceivedMessages[1].Last(m => m.Role == MessageRole.User);
-        var resultBlocks = resultMsg.Content.OfType<ToolResultBlock>().ToList();
+        // Regardless of execution order, result messages must match original call IDs in sequence.
+        var toolResultMsgs = llm.ReceivedMessages[1]
+            .Where(m => m.Role == ChatRole.Tool)
+            .ToList();
 
-        Assert.Equal(2, resultBlocks.Count);
-        Assert.Equal("id-1", resultBlocks[0].ToolUseId);
-        Assert.Equal("id-2", resultBlocks[1].ToolUseId);
+        Assert.Equal(2, toolResultMsgs.Count);
+        var r0 = Assert.IsType<FunctionResultContent>(toolResultMsgs[0].Contents[0]);
+        var r1 = Assert.IsType<FunctionResultContent>(toolResultMsgs[1].Contents[0]);
+        Assert.Equal("id-1", r0.CallId);
+        Assert.Equal("id-2", r1.CallId);
     }
 
     // ── Tool failure handling ──────────────────────────────────────────────────
@@ -317,14 +322,14 @@ public sealed class AgentLoopTests
     {
         var brokenTool = new FakeTool("broken", _ => throw new InvalidOperationException("Tool exploded"));
         var registry = new ToolRegistry([brokenTool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("use-1", "broken")));
-        llm.EnqueueAgentResponse(TextResponse("I saw the error and I handled it."));
+        llm.EnqueueResponse(ToolCallResponse(("use-1", "broken")));
+        llm.EnqueueResponse(TextResponse("I saw the error and I handled it."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, ctx);
+        var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // The ToolInvokedEvent must mark the result as an error.
         var toolEvent = events.OfType<ToolInvokedEvent>().Single();
@@ -342,16 +347,15 @@ public sealed class AgentLoopTests
         var brokenTool = new FakeTool("broken", _ => throw new InvalidOperationException("fail"));
         var goodTool = new FakeTool("good", _ => new ToolResult("ok"));
         var registry = new ToolRegistry([brokenTool, goodTool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "broken"), ("id-2", "good")));
-        llm.EnqueueAgentResponse(TextResponse("Handled both."));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "broken"), ("id-2", "good")));
+        llm.EnqueueResponse(TextResponse("Handled both."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
-        // Both tools should have been invoked, despite one failing.
         Assert.Equal(1, brokenTool.InvokeCount);
         Assert.Equal(1, goodTool.InvokeCount);
     }
@@ -363,18 +367,16 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("looping_tool");
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        // Both iterations return tool calls — the loop never sees "no tool calls".
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "looping_tool")));
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-2", "looping_tool")));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "looping_tool")));
+        llm.EnqueueResponse(ToolCallResponse(("id-2", "looping_tool")));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        // Stop after 2 steps.
         var agent = new Agent(llm, "model",
             stopWhen: StopConditions.StepCountIs(2),
             stream: false);
-        var events = await RunToCompletion(agent, ctx);
+        var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
         Assert.Equal(AgentResultStatus.MaxStepsReached, result.Status);
@@ -385,16 +387,16 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("t");
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "t")));
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-2", "t")));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "t")));
+        llm.EnqueueResponse(ToolCallResponse(("id-2", "t")));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model",
             stopWhen: StopConditions.StepCountIs(2),
             stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ctx.IterationCount);
     }
@@ -406,15 +408,14 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("t");
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        // Two LLM calls: first requests a tool, second finishes.
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "t")));
-        llm.EnqueueAgentResponse(TextResponse("Done."));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "t")));
+        llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, ctx);
+        var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var iterationEvents = events.OfType<IterationCompletedEvent>().ToList();
         Assert.Equal(2, iterationEvents.Count);
@@ -429,16 +430,15 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("t");
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(ToolCallResponse(("id-1", "t")));
-        llm.EnqueueAgentResponse(TextResponse("Done."));
+        llm.EnqueueResponse(ToolCallResponse(("id-1", "t")));
+        llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        await RunToCompletion(agent, ctx);
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
-        // Both LLM calls must have received a non-empty system prompt.
         Assert.Equal(2, llm.ReceivedSystemPrompts.Count);
         Assert.All(llm.ReceivedSystemPrompts, p => Assert.NotEmpty(p));
     }
@@ -448,8 +448,7 @@ public sealed class AgentLoopTests
     [Fact]
     public async Task RunAsync_Cancellation_ThrowsOperationCanceledException()
     {
-        var llm = new FakeLlmClient();
-        // No responses queued — cancellation should happen before the first LLM call.
+        var llm = new FakeChatClient();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -471,22 +470,26 @@ public sealed class AgentLoopTests
     {
         var tool = new FakeTool("t");
         var registry = new ToolRegistry([tool]);
-        var llm = new FakeLlmClient();
+        var llm = new FakeChatClient();
 
-        llm.EnqueueAgentResponse(new AgentLlmResponse(
-            new AgentMessage(MessageRole.Assistant,
-                [new ToolUseBlock("id-1", "t", JsonDocument.Parse("{}").RootElement)]),
-            StopReason.ToolUse,
-            new LlmTokenUsage(100, 50)));
+        llm.EnqueueResponse(new ChatResponse([
+            new ChatMessage(ChatRole.Assistant, [
+                new FunctionCallContent("id-1", "t"),
+            ])])
+        {
+            Usage = new UsageDetails { InputTokenCount = 100, OutputTokenCount = 50 },
+            FinishReason = ChatFinishReason.ToolCalls,
+        });
 
-        llm.EnqueueAgentResponse(new AgentLlmResponse(
-            new AgentMessage(MessageRole.Assistant, [new TextBlock("Done.")]),
-            StopReason.EndTurn,
-            new LlmTokenUsage(200, 80)));
+        llm.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Done.")])
+        {
+            Usage = new UsageDetails { InputTokenCount = 200, OutputTokenCount = 80 },
+            FinishReason = ChatFinishReason.Stop,
+        });
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model", stream: false);
-        var events = await RunToCompletion(agent, ctx);
+        var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
         Assert.Equal(300, result.TotalUsage.InputTokens);   // 100 + 200

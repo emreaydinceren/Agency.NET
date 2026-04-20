@@ -1,7 +1,6 @@
 using Agency.Embeddings.Common;
 using Agency.Sql.Sqlite;
 using Agency.VectorStore.Common;
-using Agency.VectorStore.Sql.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -27,7 +26,8 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
     public async Task InitializeSchemaAsync_CreatesTable_Succeeds()
     {
         var ds = await this._fixture.Runner.QueryAsync(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'semantic_kv_store'");
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'semantic_kv_store'",
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal("semantic_kv_store", ds["name", 0]);
@@ -39,9 +39,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
     public async Task UpsertAsync_SimpleObject_Succeeds()
     {
         var key = this._fixture.UniqueName("simple");
-        await this._fixture.KVStore.UpsertAsync(key, new { name = "Test Item", score = 42 });
+        await this._fixture.KVStore.UpsertAsync(key, new { name = "Test Item", score = 42 }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(key, null, null, 1));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(key, null, null, 1), TestContext.Current.CancellationToken);
         Assert.NotEmpty(results);
     }
 
@@ -51,9 +51,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key = this._fixture.UniqueName("meta");
         var metadata = new Dictionary<string, object> { ["source"] = "test", ["priority"] = "high" };
 
-        await this._fixture.KVStore.UpsertAsync(key, new { description = "Item with metadata" }, metadata);
+        await this._fixture.KVStore.UpsertAsync(key, new { description = "Item with metadata" }, metadata, TestContext.Current.CancellationToken);
 
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(key, null, null, 1, true));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(key, null, null, 1, true), TestContext.Current.CancellationToken);
         var item = results.FirstOrDefault(r => r.Key == key);
 
         Assert.NotNull(item);
@@ -67,10 +67,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
     {
         var key = this._fixture.UniqueName("update");
 
-        await this._fixture.KVStore.UpsertAsync(key, new { version = 1 });
-        await this._fixture.KVStore.UpsertAsync(key, new { version = 2 });
+        await this._fixture.KVStore.UpsertAsync(key, new { version = 1 }, cancellationToken: TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(key, new { version = 2 }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(key, null, null, 100));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(key, null, null, 100), TestContext.Current.CancellationToken);
         Assert.Single(results, r => r.Key == key);
     }
 
@@ -80,7 +80,8 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
     public async Task SearchAsync_NoMatches_ReturnsEmptyList()
     {
         var results = await this._fixture.KVStore.SearchAsync<dynamic>(
-            new Query("xyzabc123_does_not_exist", null, null, 10));
+            new Query("xyzabc123_does_not_exist", null, null, 10),
+            TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
     }
@@ -91,10 +92,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         for (int i = 0; i < 5; i++)
         {
             await this._fixture.KVStore.UpsertAsync(
-                this._fixture.UniqueName($"limit_{i}"), new { index = i });
+                this._fixture.UniqueName($"limit_{i}"), new { index = i }, cancellationToken: TestContext.Current.CancellationToken);
         }
 
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, "index", null, 2));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, "index", null, 2), TestContext.Current.CancellationToken);
         Assert.True(results.Count <= 2, $"Expected at most 2 results, got {results.Count}");
     }
 
@@ -105,12 +106,12 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key2 = this._fixture.UniqueName("cat_archived");
 
         await this._fixture.KVStore.UpsertAsync(key1, new { name = "Important item" },
-            new Dictionary<string, object> { ["category"] = "important" });
+            new Dictionary<string, object> { ["category"] = "important" }, TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync(key2, new { name = "Archived item" },
-            new Dictionary<string, object> { ["category"] = "archived" });
+            new Dictionary<string, object> { ["category"] = "archived" }, TestContext.Current.CancellationToken);
 
         var filter = new Dictionary<string, object> { ["category"] = "important" };
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, null, filter, 100, true));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, null, filter, 100, true), TestContext.Current.CancellationToken);
 
         Assert.Contains(results, r => r.Key == key1);
         Assert.DoesNotContain(results, r => r.Key == key2);
@@ -123,13 +124,13 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var keyWithoutMedical = this._fixture.UniqueName("tags_no_medical");
 
         await this._fixture.KVStore.UpsertAsync(keyWithMedical, new { title = "Medical report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } });
+            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync(keyWithoutMedical, new { title = "General report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } });
+            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, null, filter, 100, true));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, null, filter, 100, true), TestContext.Current.CancellationToken);
 
         Assert.Contains(results, r => r.Key == keyWithMedical);
         Assert.DoesNotContain(results, r => r.Key == keyWithoutMedical);
@@ -141,10 +142,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key1 = this._fixture.UniqueName("order_1");
         var key2 = this._fixture.UniqueName("order_2");
 
-        await this._fixture.KVStore.UpsertAsync(key1, new { text = "apple fruit red" });
-        await this._fixture.KVStore.UpsertAsync(key2, new { text = "xyz abc 123" });
+        await this._fixture.KVStore.UpsertAsync(key1, new { text = "apple fruit red" }, cancellationToken: TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(key2, new { text = "xyz abc 123" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, "apple red", null, 100));
+        var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query(null, "apple red", null, 100), TestContext.Current.CancellationToken);
 
         if (results.Count > 1)
         {
@@ -205,12 +206,12 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
         public string UniqueName(string prefix) => $"{prefix}_{this._runId}";
 
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
-            await this.KVStore.InitializeSchemaAsync(dimensions: 1536);
+            await this.KVStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
         }
 
-        public async Task DisposeAsync()
+        public async ValueTask DisposeAsync()
         {
             await this._keepAlive.CloseAsync();
         }

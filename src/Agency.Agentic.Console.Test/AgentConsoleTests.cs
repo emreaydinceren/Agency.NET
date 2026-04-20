@@ -36,7 +36,7 @@ public sealed class AgentConsoleTests
     [Fact]
     public async Task WelcomeBanner_IsShown_OnStartup()
     {
-        var (output, _) = await RunAsync(["exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, _) = await RunAsync(["/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Agency", output);
         Assert.Contains("Agent Chat Console", output);
@@ -49,27 +49,27 @@ public sealed class AgentConsoleTests
     [Fact]
     public async Task Banner_ShowsProviderAndModel()
     {
-        var (output, _) = await RunAsync(["exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, _) = await RunAsync(["/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Provider", output);
         Assert.Contains("Model", output);
     }
 
     /// <summary>
-    /// Verifies that "exit" terminates the app cleanly with a session summary and exit code 0.
+    /// Verifies that "/exit" terminates the app cleanly with a session summary and exit code 0.
     /// Does not call the LLM.
     /// </summary>
     [Fact]
     public async Task Exit_Command_PrintsSessionSummary_AndExitsCleanly()
     {
-        var (output, exitCode) = await RunAsync(["exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, exitCode) = await RunAsync(["/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Session ended", output);
         Assert.Equal(0, exitCode);
     }
 
     /// <summary>
-    /// Verifies that "quit" behaves identically to "exit".
+    /// Verifies that "quit" behaves identically to "/exit".
     /// Does not call the LLM.
     /// </summary>
     [Fact]
@@ -88,7 +88,7 @@ public sealed class AgentConsoleTests
     [Fact]
     public async Task EmptyInput_IsIgnored_ReplContinues()
     {
-        var (output, exitCode) = await RunAsync(["", "exit"], timeout: TimeSpan.FromSeconds(60));
+        var (output, exitCode) = await RunAsync(["", "/exit"], timeout: TimeSpan.FromSeconds(60));
 
         Assert.Contains("Session ended", output);
         Assert.Equal(0, exitCode);
@@ -105,10 +105,10 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync([
             "Reply with exactly one word: hello",
-            "exit",
+            "/exit",
         ]);
 
-        Assert.Contains("[Agent]", output);
+        Assert.True(ContainsAgentResponse(output), $"Expected an agent response marker in output. Output:\n{output}");
     }
 
     /// <summary>
@@ -120,10 +120,10 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync([
             "Reply with exactly one word: hello",
-            "exit",
+            "/exit",
         ]);
 
-        Assert.Contains("[Agent]", output);
+        Assert.True(ContainsAgentResponse(output), $"Expected an agent response marker in output. Output:\n{output}");
         Assert.Contains("↳ +", output);       // per-turn token delta line
         Assert.Contains("in,", output);        // "↳ +N in, +N out [Success]"
     }
@@ -137,7 +137,7 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync([
             "What is 2 + 2? Reply with just the number.",
-            "exit",
+            "/exit",
         ]);
 
         Assert.Contains("Session ended", output);
@@ -159,13 +159,13 @@ public sealed class AgentConsoleTests
             [
                 "What is 2 + 2? Reply with just the number.",
                 "What is 3 + 3? Reply with just the number.",
-                "exit",
+                "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));
 
-        int agentLines = CountOccurrences(output, "[Agent]");
+        int agentLines = CountAgentResponses(output);
         Assert.True(agentLines >= 2,
-            $"Expected at least 2 [Agent] lines but found {agentLines}. Output:\n{output}");
+            $"Expected at least 2 agent responses but found {agentLines}. Output:\n{output}");
     }
 
     /// <summary>
@@ -179,7 +179,7 @@ public sealed class AgentConsoleTests
             [
                 "What is 2 + 2? Reply with just the number.",
                 "What is 3 + 3? Reply with just the number.",
-                "exit",
+                "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));
 
@@ -196,16 +196,16 @@ public sealed class AgentConsoleTests
     {
         var (output, _) = await RunAsync(
             [
-                "My name is Emre. Just say 'Got it'.",
+                "My name is John Doe. Just say 'Got it'.",
                 "What is my name? Reply with just my name.",
-                "exit",
+                "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));
 
         // The agent must have received both turns and produced two responses.
-        int agentLines = CountOccurrences(output, "[Agent]");
+        int agentLines = CountAgentResponses(output);
         Assert.True(agentLines >= 2,
-            $"Expected at least 2 [Agent] lines but found {agentLines}. Output:\n{output}");
+            $"Expected at least 2 agent responses but found {agentLines}. Output:\n{output}");
     }
 
     // ── Helper: process runner ────────────────────────────────────────────────
@@ -237,6 +237,8 @@ public sealed class AgentConsoleTests
             CreateNoWindow = true,
         };
 
+        psi.Environment["DOTNET_ENVIRONMENT"] = "Test";
+
         using var process = new Process { StartInfo = psi };
         process.Start();
 
@@ -263,11 +265,18 @@ public sealed class AgentConsoleTests
             process.Kill(entireProcessTree: true);
             throw new TimeoutException(
                 $"Console process did not exit within {effectiveTimeout}. " +
-                $"Partial stdout:\n{await outputTask}");
+                $"Partial stdout:\n{await outputTask}\n" +
+                $"Partial stderr:\n{await errorTask}");
         }
 
         // Process has exited; both streams are now fully drained.
         string output = await outputTask;
+        string error = await errorTask;
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            output = $"{output}\n[stderr]\n{error}";
+        }
+
         return (output, process.ExitCode);
     }
 
@@ -282,5 +291,18 @@ public sealed class AgentConsoleTests
         }
 
         return count;
+    }
+
+    private static int CountAgentResponses(string output)
+    {
+        int legacyAgentLines = CountOccurrences(output, "[Agent]");
+        int currentAgentLines = CountOccurrences(output, "● ");
+        return Math.Max(legacyAgentLines, currentAgentLines);
+    }
+
+    private static bool ContainsAgentResponse(string output)
+    {
+        return output.Contains("[Agent]", StringComparison.Ordinal)
+            || output.Contains("● ", StringComparison.Ordinal);
     }
 }

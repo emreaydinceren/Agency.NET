@@ -3,8 +3,8 @@ using Microsoft.Data.Sqlite;
 namespace Agency.Sql.Sqlite.Test;
 
 /// <summary>
-/// Integration tests for <see cref="SqliteRunner"/> using a named in-memory SQLite database.
-/// No external server required — runs fully in-process.
+/// Integration tests for <see cref="SqliteRunner"/> using a named in-memory SQLite database. No external server
+/// required — runs fully in-process.
 /// </summary>
 public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.DatabaseFixture>
 {
@@ -38,8 +38,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
     [Fact]
     public async Task ExecuteAsync_NullOrWhitespaceSql_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.ExecuteAsync(null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.ExecuteAsync("   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.ExecuteAsync(null!, cancellationToken: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.ExecuteAsync("   ", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     // ── QueryAsync validation ───────────────────────────────────────────────
@@ -50,8 +50,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
     [Fact]
     public async Task QueryAsync_NullOrWhitespaceSql_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.QueryAsync(null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.QueryAsync("   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.QueryAsync(null!, cancellationToken: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() => this._fixture.Runner.QueryAsync("   ", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     // ── Functional: DDL ────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
                 id   INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL
             )
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         // Verify table exists by querying sqlite_master
         var ds = await this._fixture.Runner.QueryAsync($"""
@@ -77,11 +77,11 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
             FROM sqlite_master
             WHERE type = 'table'
               AND name = '{table}'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
 
-        await this._fixture.Runner.ExecuteAsync($"DROP TABLE {table}");
+        await this._fixture.Runner.ExecuteAsync($"DROP TABLE {table}", cancellationToken: TestContext.Current.CancellationToken);
     }
 
     // ── Functional: INSERT and row-count ───────────────────────────────────
@@ -97,7 +97,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         int affected = await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score)
             VALUES ('{name1}', 1.1), ('{name2}', 2.2)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, affected);
     }
@@ -113,11 +113,11 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("insert_test");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 3.3)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var ds = await this._fixture.Runner.QueryAsync($"""
             SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal(uniqueName, ds["name", 0]);
@@ -137,11 +137,12 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score)
             VALUES ('{uniqueName1}', 4.4), ('{uniqueName2}', 5.5)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var ds = await this._fixture.Runner.QueryAsync(
             $"SELECT name FROM {this._fixture.Table} WHERE name = @name",
-            new Dictionary<string, object?> { ["name"] = uniqueName1 });
+            new Dictionary<string, object?> { ["name"] = uniqueName1 },
+            TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Equal(uniqueName1, ds["name", 0]);
@@ -158,11 +159,11 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("null_value_test");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', NULL)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var ds = await this._fixture.Runner.QueryAsync($"""
             SELECT score FROM {this._fixture.Table} WHERE name = '{uniqueName}'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
         Assert.Null(ds["score", 0]);
@@ -178,7 +179,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
     {
         var ds = await this._fixture.Runner.QueryAsync($"""
             SELECT * FROM {this._fixture.Table} WHERE name = 'does_not_exist'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(ds.Rows);
     }
@@ -195,17 +196,18 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName2 = this._fixture.UniqueName("update_test2");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName1}', 6.6), ('{uniqueName2}', 7.7)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         int affected = await this._fixture.Runner.ExecuteAsync(
             $"UPDATE {this._fixture.Table} SET score = @score WHERE name = @name",
-            new Dictionary<string, object?> { ["score"] = 99.9, ["name"] = uniqueName1 });
+            new Dictionary<string, object?> { ["score"] = 99.9, ["name"] = uniqueName1 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(1, affected);
 
         var ds = await this._fixture.Runner.QueryAsync($"""
             SELECT score FROM {this._fixture.Table} WHERE name = '{uniqueName1}'
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(99.9, Convert.ToDouble(ds["score", 0]), precision: 5);
     }
@@ -221,9 +223,9 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var predicate = (System.Data.Common.DbDataReader reader) => Task.FromResult(new TestModel { Name = "", Score = 0 });
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            this._fixture.Runner.QueryAsync<TestModel>(null!, predicate));
+            this._fixture.Runner.QueryAsync<TestModel>(null!, predicate, cancellationToken: TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            this._fixture.Runner.QueryAsync<TestModel>("   ", predicate));
+            this._fixture.Runner.QueryAsync<TestModel>("   ", predicate, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -233,7 +235,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
     public async Task QueryAsyncGeneric_NullPredicate_ThrowsArgumentNullException()
     {
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            this._fixture.Runner.QueryAsync<TestModel>($"SELECT * FROM {this._fixture.Table}", null!));
+            this._fixture.Runner.QueryAsync<TestModel>($"SELECT * FROM {this._fixture.Table}", null!, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     // ── Functional: QueryAsync<T> basic mapping ───────────────────────────
@@ -247,7 +249,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("model_test");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 42.5)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.Runner.QueryAsync<TestModel>(
             $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
@@ -255,7 +257,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
             {
                 Name = reader.GetString(0),
                 Score = reader.GetDouble(1)
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal(uniqueName, results[0].Name);
@@ -274,7 +277,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score)
             VALUES ('{row1}', 1.1), ('{row2}', 2.2), ('{row3}', 3.3)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.Runner.QueryAsync<TestModel>(
             $"""
@@ -286,7 +289,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
             {
                 Name = reader.GetString(0),
                 Score = reader.GetDouble(1)
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, results.Count);
         Assert.Equal(row1, results[0].Name);
@@ -306,7 +310,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
             {
                 Name = reader.GetString(0),
                 Score = reader.GetDouble(1)
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
     }
@@ -322,7 +327,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("generic_null_value");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', NULL)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.Runner.QueryAsync<TestModel>(
             $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
@@ -330,7 +335,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
             {
                 Name = reader.GetString(0),
                 Score = reader.IsDBNull(1) ? 0 : reader.GetDouble(1)
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal(uniqueName, results[0].Name);
@@ -350,7 +356,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score)
             VALUES ('{uniqueName1}', 10.5), ('{uniqueName2}', 20.5)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.Runner.QueryAsync<TestModel>(
             $"SELECT name, score FROM {this._fixture.Table} WHERE name = @name",
@@ -359,7 +365,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
                 Name = reader.GetString(0),
                 Score = reader.GetDouble(1)
             },
-            new Dictionary<string, object?> { ["name"] = uniqueName1 });
+            new Dictionary<string, object?> { ["name"] = uniqueName1 },
+            TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal(uniqueName1, results[0].Name);
@@ -377,20 +384,21 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("async_test");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 55.5)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.Runner.QueryAsync<TestModel>(
             $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
             async reader =>
             {
                 // Simulate async operation
-                await Task.Delay(1);
+                await Task.Delay(1, TestContext.Current.CancellationToken);
                 return new TestModel
                 {
                     Name = reader.GetString(0),
                     Score = reader.GetDouble(1)
                 };
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal(uniqueName, results[0].Name);
@@ -405,12 +413,13 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("error_test");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 1.0)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             this._fixture.Runner.QueryAsync<TestModel>(
                 $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
-                async reader => throw new InvalidOperationException("Predicate error")));
+                async reader => throw new InvalidOperationException("Predicate error"),
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -422,7 +431,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         var uniqueName = this._fixture.UniqueName("column_name_test");
         await this._fixture.Runner.ExecuteAsync($"""
             INSERT INTO {this._fixture.Table} (name, score) VALUES ('{uniqueName}', 77.7)
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.Runner.QueryAsync<TestModel>(
             $"SELECT name, score FROM {this._fixture.Table} WHERE name = '{uniqueName}'",
@@ -430,7 +439,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
             {
                 Name = reader["name"].ToString()!,
                 Score = (double)reader["score"]
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal(uniqueName, results[0].Name);
@@ -452,8 +462,8 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
     }
 
     /// <summary>
-    /// Creates a named in-memory SQLite database and a dedicated test table before the test class runs.
-    /// Holds a keep-alive connection so the in-memory database persists for the lifetime of the fixture.
+    /// Creates a named in-memory SQLite database and a dedicated test table before the test class runs. Holds a
+    /// keep-alive connection so the in-memory database persists for the lifetime of the fixture.
     /// </summary>
     public sealed class DatabaseFixture : IAsyncLifetime
     {
@@ -486,7 +496,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         /// <summary>
         /// Creates the dedicated test table.
         /// </summary>
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
             this.Table = this.UniqueName("runner_tests");
 
@@ -496,7 +506,7 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
                     name  TEXT NOT NULL,
                     score REAL NULL
                 )
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         /// <summary>
@@ -504,8 +514,13 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         /// </summary>
         public async Task DisposeAsync()
         {
-            await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}");
+            await this.Runner.ExecuteAsync($"DROP TABLE IF EXISTS {this.Table}", cancellationToken: TestContext.Current.CancellationToken);
             await this._keepAlive.CloseAsync();
+        }
+
+        ValueTask IAsyncDisposable.DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
         }
     }
 }

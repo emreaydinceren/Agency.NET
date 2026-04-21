@@ -23,6 +23,9 @@
     <Project Path="Llm\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
     <Project Path="Llm\Agency.Llm.Test\Agency.Llm.Test.csproj" />
   </Folder>
+  <Folder Name="/MCP/">
+    <Project Path="Mcp/Agency.Mcp.Memory/Agency.Mcp.Memory.csproj" Id="01412def-20db-4510-b727-416bfb4f3a5f" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />

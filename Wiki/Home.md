@@ -22,6 +22,7 @@ Documents
    Agency.VectorStore.Sql.Sqlite      (SQLite + cosine UDF backend)
           │
           ▼
+   Agency.Sql.Common                        (SqlRunnerBase: shared OTel + execution skeleton)
    Agency.Sql.Postgre / Agency.Sql.Sqlite  (raw SQL runner + vectorize() macro)
    Agency.Common                           (Dataset, IColumnMetadata)
    Agency.RagFormatter                     (Dataset → Markdown table)
@@ -35,6 +36,9 @@ Documents
    Agency.Agentic                     (autonomous agent loop)
    Agency.Agentic.Console             (interactive REPL chat harness)
    Agency.Console                     (one-shot RAG demo stub)
+          │
+          ▼
+   Agency.Mcp.Memory                  (MCP server: Memorize / Recall / Forget via IKVStore)
 ```
 
 ## Project Pages
@@ -48,6 +52,7 @@ Documents
 - [[Agency.Embeddings.OpenAI]] — OpenAI-compatible embedding generator with OTel
 
 ### SQL
+- [[Agency.Sql.Common]] — `SqlRunnerBase` abstract class: shared OTel telemetry + execution skeleton
 - [[Agency.Sql.Postgre]] — PostgreSQL runner + `vectorize()` macro
 - [[Agency.Sql.Sqlite]] — SQLite runner + `vectorize()` macro
 
@@ -72,6 +77,9 @@ Documents
 - [[Agency.Agentic]] — autonomous agent loop, `Context`, `StopConditions`, `AgentEvent`
 - [[Agency.Agentic.Console]] — multi-turn interactive REPL chat harness
 - [[Agency.Console]] — one-shot RAG demo stub
+
+### MCP Servers
+- [[Agency.Mcp.Memory]] — stdio MCP server exposing `Memorize` / `Recall` / `Forget` tools backed by `IKVStore`
 
 ## Cross-Cutting Concerns
 

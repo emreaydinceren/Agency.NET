@@ -6,7 +6,14 @@
       "Bash(dotnet test *)",
       "Bash(xargs -I{} sh -c 'dotnet-ildasm \"{}\" 2>/dev/null | grep -l MessageParamContent')",
       "Bash(dotnet tool list *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(powershell.exe -Command \"[System.Reflection.Assembly]::LoadFile\\('C:\\\\Users\\\\emrea\\\\.nuget\\\\packages\\\\modelcontextprotocol\\\\1.2.0\\\\lib\\\\net10.0\\\\ModelContextProtocol.dll'\\).GetExportedTypes\\(\\) | Select-Object -ExpandProperty FullName | Sort-Object\")",
+      "Read(//c/Users/emrea/.nuget/packages/modelcontextprotocol.client/**)",
+      "Read(//c/Users/emrea/.nuget/packages//**)",
+      "Bash(grep -v \"^\\\\s*$\")",
+      "Bash(cat)",
+      "Bash(dotnet script *)",
+      "Skill(update-wiki)"
     ]
   }
 }

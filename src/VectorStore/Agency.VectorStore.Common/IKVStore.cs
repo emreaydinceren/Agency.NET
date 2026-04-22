@@ -31,4 +31,15 @@ public interface IKVStore
     /// matching the query. The list is empty if no results are found.
     /// </returns>
     Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the entry with the given key asynchronously.
+    /// </summary>
+    /// <param name="key">The key that identifies the entry to delete. Cannot be null.</param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result is <see langword="true"/> if an entry
+    /// was removed, or <see langword="false"/> if no entry existed for that key.
+    /// </returns>
+    Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default);
 }

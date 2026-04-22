@@ -60,7 +60,7 @@ The SQL uses:
 
 ## Observability
 
-- **Activity** `vectorstore.initialize` / `vectorstore.search` / `vectorstore.upsert`
+- **Activity** `vectorstore.initialize` / `vectorstore.search` / `vectorstore.upsert` / `vectorstore.delete`
 - **Counter** `vectorstore.operations` (tags: `operation`, `status`)
 - **Histogram** `vectorstore.duration` (ms)
 

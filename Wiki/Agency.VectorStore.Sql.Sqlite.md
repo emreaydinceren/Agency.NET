@@ -65,7 +65,7 @@ Unlike PostgreSQL's JSONB `@>` operator, SQLite has no native JSON containment. 
 ## Observability
 
 Same metrics as [[Agency.VectorStore.Sql.Postgre]]:
-- **Activity** `vectorstore.initialize` / `vectorstore.search` / `vectorstore.upsert`
+- **Activity** `vectorstore.initialize` / `vectorstore.search` / `vectorstore.upsert` / `vectorstore.delete`
 - **Counter** `vectorstore.operations` / **Histogram** `vectorstore.duration`
 
 ActivitySource name: `Agency.VectorStore.Sql.Sqlite`

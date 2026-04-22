@@ -25,6 +25,7 @@
   </Folder>
   <Folder Name="/MCP/">
     <Project Path="Mcp/Agency.Mcp.Memory/Agency.Mcp.Memory.csproj" Id="01412def-20db-4510-b727-416bfb4f3a5f" />
+    <Project Path="Mcp/Agency.Mcp.Memory.Test/Agency.Mcp.Memory.Test.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />

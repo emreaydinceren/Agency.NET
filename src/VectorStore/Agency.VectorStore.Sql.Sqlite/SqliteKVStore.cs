@@ -302,6 +302,51 @@ public sealed class SqliteKVStore : IKVStore
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
+    {
+        using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
+        activity?.SetTag("vectorstore.operation", "delete");
+        activity?.SetTag("vectorstore.key", key);
+
+        var stopwatch = Stopwatch.StartNew();
+        this._logger.LogDebug("Deleting SQLite vector store entry with key {Key}", key);
+
+        try
+        {
+            int rowsAffected = await this._sqliteRunner.ExecuteAsync(
+                "DELETE FROM semantic_kv_store WHERE key = @k;",
+                new Dictionary<string, object?> { ["k"] = key },
+                cancellationToken);
+
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "success" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
+
+            activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            this._logger.LogDebug("SQLite vector store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
+            return rowsAffected > 0;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "error" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
+
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+            {
+                { "exception.type", ex.GetType().FullName },
+                { "exception.message", ex.Message },
+                { "exception.stacktrace", ex.ToString() },
+            }));
+
+            this._logger.LogError(ex, "Error deleting SQLite vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            throw;
+        }
+    }
+
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)
     {
         string key = reader.GetString(0);

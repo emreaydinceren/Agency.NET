@@ -59,7 +59,8 @@ ActivitySource name: `Agency.Sql.Sqlite` | Meter name: `Agency.Sql.Sqlite`
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Common]] | Returns `Dataset`; `DbColumnAdapter` implements `IColumnMetadata` |
+| [[Agency.Sql.Common]] | `SqliteRunner` extends `SqlRunnerBase`; inherits `ExecuteAsync` / `QueryAsync` with OTel |
+| [[Agency.Common]] | Returns `Dataset`; `IColumnMetadata` adapter lives in `Agency.Sql.Common` |
 | [[Agency.Embeddings.Common]] | `SQLQueryEmbedder` injects `IEmbeddingGenerator` |
 | [[Agency.VectorStore.Sql.Sqlite]] | `SqliteKVStore` delegates all SQL to `SqliteRunner` |
 | [[Agency.RagFormatter]] | Formats the `Dataset` returned by `QueryAsync` |

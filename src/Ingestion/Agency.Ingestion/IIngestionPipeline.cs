@@ -13,6 +13,6 @@ public interface IIngestionPipeline<TValue>
     Task<IngestionResult> ExecuteAsync(
         IDocumentLoader loader,
         ITextSplitter splitter,
-        IKVStore store,
+        IVectorStore store,
         CancellationToken ct = default);
 }

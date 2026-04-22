@@ -17,6 +17,14 @@
     <Project Path="Ingestion\Agency.Ingestion.Test\Agency.Ingestion.Test.csproj" />
     <Project Path="Ingestion\Agency.Ingestion\Agency.Ingestion.csproj" />
   </Folder>
+  <Folder Name="/KeyValueStore/">
+    <Project Path="KeyValueStore\Agency.KeyValueStore.Common.Test\Agency.KeyValueStore.Common.Test.csproj" />
+    <Project Path="KeyValueStore\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />
+    <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Postgre.Test\Agency.KeyValueStore.Sql.Postgre.Test.csproj" />
+    <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Postgre\Agency.KeyValueStore.Sql.Postgre.csproj" />
+    <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Sqlite.Test\Agency.KeyValueStore.Sql.Sqlite.Test.csproj" />
+    <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Sqlite\Agency.KeyValueStore.Sql.Sqlite.csproj" />
+  </Folder>
   <Folder Name="/Llm/">
     <Project Path="Llm\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <Project Path="Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />

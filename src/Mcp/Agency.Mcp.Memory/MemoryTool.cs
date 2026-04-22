@@ -1,4 +1,4 @@
-using Agency.VectorStore.Common;
+using Agency.KeyValueStore.Common;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Text.Json;

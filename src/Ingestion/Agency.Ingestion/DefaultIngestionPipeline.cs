@@ -56,7 +56,7 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
     public async Task<IngestionResult> ExecuteAsync(
         IDocumentLoader loader,
         ITextSplitter splitter,
-        IKVStore store,
+        IVectorStore store,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(loader);

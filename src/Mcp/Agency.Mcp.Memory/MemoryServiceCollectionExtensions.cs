@@ -1,9 +1,8 @@
-using Agency.Embeddings.Common;
+using Agency.KeyValueStore.Common;
+using Agency.KeyValueStore.Sql.Postgre;
+using Agency.KeyValueStore.Sql.Sqlite;
 using Agency.Sql.Postgre;
 using Agency.Sql.Sqlite;
-using Agency.VectorStore.Common;
-using Agency.VectorStore.Sql.Postgre;
-using Agency.VectorStore.Sql.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -15,13 +14,11 @@ namespace Agency.Mcp.Memory;
 public static class MemoryServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the <see cref="IKVStore"/> implementation chosen by <see cref="MemoryOptions.Provider"/>,
-    /// a fallback <see cref="IEmbeddingGenerator"/>, and a hosted service that initializes the store schema on startup.
+    /// Registers the <see cref="IKVStore"/> implementation chosen by <see cref="MemoryOptions.Provider"/>
+    /// and a hosted service that initializes the store schema on startup.
     /// </summary>
     public static IServiceCollection AddKVStore(this IServiceCollection services)
     {
-        services.AddSingleton<IEmbeddingGenerator, RandomEmbeddingGenerator>();
-
         services.AddSingleton<PostgreKVStore>(sp =>
         {
             var opts = sp.GetRequiredService<IOptions<MemoryOptions>>().Value;
@@ -32,9 +29,7 @@ public static class MemoryServiceCollectionExtensions
         services.AddSingleton<SqliteKVStore>(sp =>
         {
             var opts = sp.GetRequiredService<IOptions<MemoryOptions>>().Value;
-            var runner = new SqliteRunner(
-                opts.ConnectionString,
-                onConnectionOpen: SqliteKVStore.RegisterVectorFunctions);
+            var runner = new SqliteRunner(opts.ConnectionString);
             return ActivatorUtilities.CreateInstance<SqliteKVStore>(sp, runner);
         });
 

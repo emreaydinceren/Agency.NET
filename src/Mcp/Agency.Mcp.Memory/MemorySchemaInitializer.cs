@@ -1,4 +1,4 @@
-using Agency.VectorStore.Sql.Sqlite;
+using Agency.KeyValueStore.Sql.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -17,7 +17,7 @@ internal sealed class MemorySchemaInitializer(IServiceProvider services, IOption
         if (string.Equals(this.Provider, "sqlite", StringComparison.OrdinalIgnoreCase))
         {
             var store = services.GetRequiredService<SqliteKVStore>();
-            await store.InitializeSchemaAsync(cancellationToken: cancellationToken);
+            await store.InitializeSchemaAsync(cancellationToken);
         }
     }
 

@@ -1,4 +1,4 @@
-using Agency.VectorStore.Common;
+using Agency.KeyValueStore.Common;
 using Moq;
 
 namespace Agency.Mcp.Memory.Test;

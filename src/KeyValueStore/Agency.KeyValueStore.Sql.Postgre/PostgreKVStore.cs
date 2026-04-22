@@ -1,89 +1,83 @@
-﻿namespace Agency.VectorStore.Sql.Postgre;
+namespace Agency.KeyValueStore.Sql.Postgre;
 
-using Agency.Embeddings.Common;
+using Agency.KeyValueStore.Common;
 using Agency.Sql.Postgre;
-using Agency.VectorStore.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NpgsqlTypes;
-using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Globalization;
 using System.Text.Json;
 
-public class PostgreKVStore : IVectorStore
+/// <summary>
+/// PostgreSQL-backed implementation of <see cref="IKVStore"/> that stores key-value entries without vector embeddings.
+/// Results are ordered by recency (<c>updated_on DESC</c>) and substring matching is used for value search.
+/// </summary>
+public class PostgreKVStore : IKVStore
 {
     /// <summary>
-    /// The activity source name used for vector store telemetry.
+    /// The activity source name used for KV store telemetry.
     /// </summary>
-    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Postgre";
 
     /// <summary>
-    /// The meter name used for vector store telemetry.
+    /// The meter name used for KV store telemetry.
     /// </summary>
-    public const string MeterName = "Agency.VectorStore.Sql.Postgre";
+    public const string MeterName = "Agency.KeyValueStore.Sql.Postgre";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);
 
     private static readonly Counter<long> _operationCount =
-        _meter.CreateCounter<long>("vectorstore.operations", unit: "{operation}", description: "Total number of vector store operations executed.");
+        _meter.CreateCounter<long>("kvstore.operations", unit: "{operation}", description: "Total number of KV store operations executed.");
 
     private static readonly Histogram<double> _operationDuration =
-        _meter.CreateHistogram<double>("vectorstore.duration", unit: "ms", description: "Duration of vector store operations in milliseconds.");
+        _meter.CreateHistogram<double>("kvstore.duration", unit: "ms", description: "Duration of KV store operations in milliseconds.");
 
     private readonly ILogger<PostgreKVStore> _logger;
 
-    private readonly IEmbeddingGenerator _embeddingGenerator;
-
     private readonly PostgreSqlRunner _postgreSqlRunner;
 
+    /// <summary>
+    /// Initializes a new instance of <see cref="PostgreKVStore"/> with the given SQL runner and logger.
+    /// </summary>
+    /// <param name="postgreSqlRunner">The PostgreSQL runner used to execute queries. Cannot be null.</param>
+    /// <param name="logger">The logger instance. If null, a no-op logger is used.</param>
     public PostgreKVStore(
-        IEmbeddingGenerator embeddingGenerator,
         PostgreSqlRunner postgreSqlRunner,
         ILogger<PostgreKVStore> logger)
     {
-        this._embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
         this._postgreSqlRunner = postgreSqlRunner ?? throw new ArgumentNullException(nameof(postgreSqlRunner));
         this._logger = logger ?? NullLogger<PostgreKVStore>.Instance;
     }
 
     /// <summary>
-    /// Configures the PostgreSQL database with the pgvector extension and optimized indexes.
+    /// Creates the <c>kv_store</c> table and supporting GIN index if they do not already exist.
     /// </summary>
-    public async Task InitializeSchemaAsync(int dimensions = 1536, CancellationToken cancellationToken = default)
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("vectorstore.initialize", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "initialize");
-        activity?.SetTag("vectorstore.dimensions", dimensions);
+        using var activity = _activitySource.StartActivity("kvstore.initialize", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "initialize");
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Initializing vector store schema with {Dimensions} dimensions", dimensions);
+        this._logger.LogDebug("Initializing KV store schema");
 
         try
         {
-            string sql = $@"
-            CREATE EXTENSION IF NOT EXISTS vector;
-
-            CREATE TABLE IF NOT EXISTS semantic_kv_store (
-                key TEXT PRIMARY KEY,
-                value JSONB NOT NULL,
-                embedding vector({dimensions}) NOT NULL,
-                metadata JSONB,
+            const string sql = @"
+            CREATE TABLE IF NOT EXISTS kv_store (
+                key        TEXT PRIMARY KEY,
+                value      JSONB NOT NULL,
+                metadata   JSONB,
                 updated_on TIMESTAMPTZ DEFAULT NOW()
             );
 
-            -- HNSW index for high-speed similarity search
-            CREATE INDEX IF NOT EXISTS idx_vector_search
-            ON semantic_kv_store USING hnsw (embedding vector_cosine_ops);
-
-            -- GIN index for high-speed JSON metadata filtering
-            CREATE INDEX IF NOT EXISTS idx_metadata_filter
-            ON semantic_kv_store USING GIN (metadata);
-        ";
+            CREATE INDEX IF NOT EXISTS idx_kv_store_metadata
+            ON kv_store USING GIN (metadata);
+            ";
 
             await this._postgreSqlRunner.ExecuteAsync(sql, null, cancellationToken);
 
@@ -92,7 +86,7 @@ public class PostgreKVStore : IVectorStore
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "initialize" } });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("Vector store schema initialization completed in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogDebug("KV store schema initialization completed in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
         }
         catch (Exception ex)
         {
@@ -108,11 +102,12 @@ public class PostgreKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error initializing vector store schema after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogError(ex, "Error initializing KV store schema after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default)
     {
         if (query == null)
@@ -120,29 +115,23 @@ public class PostgreKVStore : IVectorStore
             throw new ArgumentNullException(nameof(query));
         }
 
-        using var activity = _activitySource.StartActivity("vectorstore.search", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "search");
-        activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
-        activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
+        using var activity = _activitySource.StartActivity("kvstore.search", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "search");
+        activity?.SetTag("kvstore.limit", query.Limit ?? 10);
+        activity?.SetTag("kvstore.has_metadata_filter", query.MetadataFilter != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Searching vector store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
+        this._logger.LogDebug("Searching KV store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
         try
         {
-            // SQL explanation:
-            // 1. @> is the JSONB containment operator (checks if metadata contains the filter).
-            // 2. <=> is the Cosine Distance operator for the vector column.
-            // 3. When @qVector is NULL, skip vector distance calculation (returning 0.0 as placeholder)
-            // 4. Cast @qVector to vector type to handle NULL case properly
             const string sql = @"
-            SELECT key, value, metadata,
-                   CASE WHEN @qVector::vector IS NULL THEN 0.0 ELSE (embedding <=> @qVector::vector) END AS distance,
-                   updated_on
-            FROM semantic_kv_store
-            WHERE (@hasKey = FALSE OR key = @k)
-            AND (@hasFilter = FALSE OR metadata @> @mFilter)
-            ORDER BY distance ASC
+            SELECT key, value, metadata, 0.0::double precision AS distance, updated_on
+            FROM kv_store
+            WHERE (@hasKey    = FALSE OR key = @k)
+              AND (@hasFilter = FALSE OR metadata @> @mFilter)
+              AND (@hasValue  = FALSE OR value::text ILIKE @vLike)
+            ORDER BY updated_on DESC
             LIMIT @l;";
 
             var parameters = new Dictionary<string, object?>
@@ -150,15 +139,16 @@ public class PostgreKVStore : IVectorStore
                 ["l"] = query.Limit ?? 10
             };
 
-            // Vector search on query.Value
+            // Substring value search (optional)
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
-                parameters["qVector"] = new Pgvector.Vector(embedding.ToArray());
+                parameters["hasValue"] = true;
+                parameters["vLike"] = "%" + query.Value + "%";
             }
             else
             {
-                parameters["qVector"] = DBNull.Value;
+                parameters["hasValue"] = false;
+                parameters["vLike"] = string.Empty;
             }
 
             // Exact key match (optional)
@@ -194,10 +184,10 @@ public class PostgreKVStore : IVectorStore
             _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
 
-            activity?.SetTag("vectorstore.result_count", results.Count);
+            activity?.SetTag("kvstore.result_count", results.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this._logger.LogDebug("Vector store search completed in {ElapsedMs}ms. Results returned: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
+            this._logger.LogDebug("KV store search completed in {ElapsedMs}ms. Results returned: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
             return results;
         }
         catch (Exception ex)
@@ -214,43 +204,40 @@ public class PostgreKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error searching vector store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogError(ex, "Error searching KV store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }
     }
 
+    /// <inheritdoc/>
     public async Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("vectorstore.upsert", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "upsert");
-        activity?.SetTag("vectorstore.key", key);
-        activity?.SetTag("vectorstore.has_metadata", metadata != null);
+        using var activity = _activitySource.StartActivity("kvstore.upsert", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "upsert");
+        activity?.SetTag("kvstore.key", key);
+        activity?.SetTag("kvstore.has_metadata", metadata != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Upserting vector store entry with key {Key} and metadata present: {HasMetadata}", key, metadata != null);
+        this._logger.LogDebug("Upserting KV store entry with key {Key} and metadata present: {HasMetadata}", key, metadata != null);
 
         try
         {
-            string contentToEmbed = JsonSerializer.Serialize(value);
-            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
-            string vectorLiteral = $"[{string.Join(',', vectorArray.ToArray().Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
+            string contentJson = JsonSerializer.Serialize(value);
 
-            // Use EXCLUDED to update existing records on Key conflict
-            const string query = @"
-            INSERT INTO semantic_kv_store (key, value, embedding, metadata)
-            VALUES (@k, @v, @e::vector, @m)
+            const string sql = @"
+            INSERT INTO kv_store (key, value, metadata)
+            VALUES (@k, @v, @m)
             ON CONFLICT (key) DO UPDATE
-            SET value = EXCLUDED.value,
-                embedding = EXCLUDED.embedding,
-                metadata = EXCLUDED.metadata;";
+            SET value      = EXCLUDED.value,
+                metadata   = EXCLUDED.metadata,
+                updated_on = NOW();";
 
             await this._postgreSqlRunner.ExecuteAsync(
-                query,
+                sql,
                 new Dictionary<string, object?>
                 {
                     ["k"] = key,
-                    ["v"] = new NpgsqlParameter("v", NpgsqlDbType.Jsonb) { Value = contentToEmbed },
-                    ["e"] = vectorLiteral,
+                    ["v"] = new NpgsqlParameter("v", NpgsqlDbType.Jsonb) { Value = contentJson },
                     ["m"] = metadata != null ? new NpgsqlParameter("m", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(metadata) } : DBNull.Value
                 },
                 cancellationToken);
@@ -260,7 +247,7 @@ public class PostgreKVStore : IVectorStore
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "upsert" } });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("Vector store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogDebug("KV store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
         }
         catch (Exception ex)
         {
@@ -276,7 +263,7 @@ public class PostgreKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error upserting vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error upserting KV store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
             throw;
         }
     }
@@ -284,17 +271,17 @@ public class PostgreKVStore : IVectorStore
     /// <inheritdoc/>
     public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "delete");
-        activity?.SetTag("vectorstore.key", key);
+        using var activity = _activitySource.StartActivity("kvstore.delete", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "delete");
+        activity?.SetTag("kvstore.key", key);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Deleting vector store entry with key {Key}", key);
+        this._logger.LogDebug("Deleting KV store entry with key {Key}", key);
 
         try
         {
             int rowsAffected = await this._postgreSqlRunner.ExecuteAsync(
-                "DELETE FROM semantic_kv_store WHERE key = @k;",
+                "DELETE FROM kv_store WHERE key = @k;",
                 new Dictionary<string, object?> { ["k"] = key },
                 cancellationToken);
 
@@ -302,9 +289,9 @@ public class PostgreKVStore : IVectorStore
             _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "success" } });
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
 
-            activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
+            activity?.SetTag("kvstore.deleted", rowsAffected > 0);
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("Vector store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
+            this._logger.LogDebug("KV store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
             return rowsAffected > 0;
         }
         catch (Exception ex)
@@ -321,7 +308,7 @@ public class PostgreKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error deleting vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error deleting KV store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
             throw;
         }
     }
@@ -346,12 +333,12 @@ public class PostgreKVStore : IVectorStore
             _ => reader.GetValue(2)?.ToString()
         };
 
-        return new SearchHit<TValue>(
+        return await Task.FromResult(new SearchHit<TValue>(
             Key: reader.GetString(0),
             Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
             Distance: reader.GetDouble(3),
             UpdatedOn: reader.IsDBNull(4) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero)
-        );
+        ));
     }
 }

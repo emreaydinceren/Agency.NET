@@ -17,9 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
-    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Postgre\Agency.VectorStore.Sql.Postgre.csproj" />
-    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Sqlite\Agency.VectorStore.Sql.Sqlite.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Postgre\Agency.KeyValueStore.Sql.Postgre.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Sqlite\Agency.KeyValueStore.Sql.Sqlite.csproj" />
   </ItemGroup>
 
 </Project>

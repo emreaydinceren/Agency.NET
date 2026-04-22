@@ -1,7 +1,6 @@
-using Agency.Embeddings.Common;
+using Agency.KeyValueStore.Common;
+using Agency.KeyValueStore.Sql.Sqlite;
 using Agency.Sql.Sqlite;
-using Agency.VectorStore.Common;
-using Agency.VectorStore.Sql.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -191,27 +190,11 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
 
             this._keepAlive = new SqliteConnection(connectionString);
             this._keepAlive.Open();
-            SqliteKVStore.RegisterVectorFunctions(this._keepAlive);
 
-            this.Runner = new SqliteRunner(connectionString, onConnectionOpen: SqliteKVStore.RegisterVectorFunctions);
-
-            var mockGenerator = new Mock<IEmbeddingGenerator>();
-            mockGenerator
-                .Setup(g => g.GenerateEmbeddingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns<string, CancellationToken>((input, _) =>
-                {
-                    int hash = input.GetHashCode();
-                    var rng = new Random(hash);
-                    float[] embedding = new float[1536];
-                    for (int i = 0; i < embedding.Length; i++)
-                    {
-                        embedding[i] = (float)rng.NextDouble();
-                    }
-                    return Task.FromResult((ReadOnlyMemory<float>)embedding.AsMemory());
-                });
+            this.Runner = new SqliteRunner(connectionString);
 
             var logger = new Mock<ILogger<SqliteKVStore>>();
-            this.KVStore = new SqliteKVStore(mockGenerator.Object, this.Runner, logger.Object);
+            this.KVStore = new SqliteKVStore(this.Runner, logger.Object);
             this.Tool = new MemoryTool(this.KVStore);
         }
 
@@ -230,7 +213,7 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
         /// <summary>Initializes the store schema before tests run.</summary>
         public async ValueTask InitializeAsync()
         {
-            await this.KVStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
+            await this.KVStore.InitializeSchemaAsync(TestContext.Current.CancellationToken);
         }
 
         /// <summary>Closes the keep-alive connection after all tests complete.</summary>

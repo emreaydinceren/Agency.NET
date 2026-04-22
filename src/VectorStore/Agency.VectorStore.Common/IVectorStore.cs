@@ -8,7 +8,7 @@
 /// with optional metadata. The interface is generic to support storing values of various types. All operations are
 /// asynchronous, enabling non-blocking usage in scalable applications.
 /// </remarks>
-public interface IKVStore
+public interface IVectorStore
 {
     /// <summary>
     /// Inserts a new value or updates the existing value associated with the specified key asynchronously.

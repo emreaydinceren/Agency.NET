@@ -6,10 +6,10 @@ using System.Runtime.CompilerServices;
 
 /// <summary>
 /// DefaultIngestionPipeline orchestrates the full Load → Split → Store flow.
-/// All three dependencies (IDocumentLoader, ITextSplitter, IKVStore) are mocked
+/// All three dependencies (IDocumentLoader, ITextSplitter, IVectorStore) are mocked
 /// with Moq so tests are deterministic and free of I/O. A shared StringConverter
 /// delegate maps each Document chunk to its Content string, mirroring the most
-/// common real-world usage (storing raw text in IKVStore&lt;string&gt;).
+/// common real-world usage (storing raw text in IVectorStore&lt;string&gt;).
 /// </summary>
 public sealed class DefaultIngestionPipelineTests
 {
@@ -24,7 +24,7 @@ public sealed class DefaultIngestionPipelineTests
     public async Task ExecuteAsync_NullLoader_ThrowsArgumentNullException()
     {
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter);
-        var store = new Mock<IKVStore>().Object;
+        var store = new Mock<IVectorStore>().Object;
         var splitter = new Mock<ITextSplitter>().Object;
 
         await Assert.ThrowsAsync<ArgumentNullException>(
@@ -40,7 +40,7 @@ public sealed class DefaultIngestionPipelineTests
     public async Task ExecuteAsync_NullSplitter_ThrowsArgumentNullException()
     {
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter);
-        var store = new Mock<IKVStore>().Object;
+        var store = new Mock<IVectorStore>().Object;
         var loader = new Mock<IDocumentLoader>().Object;
 
         await Assert.ThrowsAsync<ArgumentNullException>(
@@ -129,7 +129,7 @@ public sealed class DefaultIngestionPipelineTests
     {
         var doc = new Document("content", "source1");
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
@@ -159,7 +159,7 @@ public sealed class DefaultIngestionPipelineTests
     {
         var doc = new Document("content", "my-source");
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
@@ -206,7 +206,7 @@ public sealed class DefaultIngestionPipelineTests
     {
         var doc = new Document("content", "my-source");
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         var loaderMock = new Mock<IDocumentLoader>();
         loaderMock.Setup(l => l.LoadAsync(It.IsAny<CancellationToken>()))
             .Returns(ToAsyncEnumerable([doc], ct: TestContext.Current.CancellationToken));
@@ -233,7 +233,7 @@ public sealed class DefaultIngestionPipelineTests
         var doc = new Document("content", "file.md");
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
         IDictionary<string, object>? capturedMetadata = null;
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
@@ -267,7 +267,7 @@ public sealed class DefaultIngestionPipelineTests
         var chunk2 = doc with { Content = "c2" };
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
         var capturedMetadata = new List<IDictionary<string, object>?>();
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
@@ -301,7 +301,7 @@ public sealed class DefaultIngestionPipelineTests
         var before = DateTimeOffset.UtcNow;
         var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
         IDictionary<string, object>? capturedMetadata = null;
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
@@ -328,7 +328,7 @@ public sealed class DefaultIngestionPipelineTests
     /// document list and a splitter function. Used by the simpler tests that do
     /// not need to capture callbacks or verify specific call arguments.
     /// </summary>
-    private static (IDocumentLoader, ITextSplitter, IKVStore) CreateMocks(
+    private static (IDocumentLoader, ITextSplitter, IVectorStore) CreateMocks(
         IEnumerable<Document> documents,
         Func<Document, IEnumerable<Document>> splitterFunc)
     {
@@ -340,7 +340,7 @@ public sealed class DefaultIngestionPipelineTests
         splitterMock.Setup(s => s.Split(It.IsAny<Document>()))
             .Returns((Document d) => splitterFunc(d));
 
-        var storeMock = new Mock<IKVStore>();
+        var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))

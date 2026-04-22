@@ -1,9 +1,7 @@
-namespace Agency.VectorStore.Sql.Sqlite;
+namespace Agency.KeyValueStore.Sql.Sqlite;
 
-using Agency.Embeddings.Common;
+using Agency.KeyValueStore.Common;
 using Agency.Sql.Sqlite;
-using Agency.VectorStore.Common;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Data.Common;
@@ -13,94 +11,63 @@ using System.Globalization;
 using System.Text.Json;
 
 /// <summary>
-/// An <see cref="IVectorStore"/> backed by SQLite that stores embeddings as JSON-array TEXT columns
-/// and uses a cosine-distance UDF registered via <see cref="RegisterVectorFunctions"/> for similarity search.
+/// An <see cref="IKVStore"/> backed by SQLite that stores key/value entries in a plain TEXT column
+/// and supports substring-based value filtering via the SQLite <c>instr</c> function.
 /// Metadata filtering is applied in-process after the SQL query because SQLite has no native JSONB
-/// containment operator.
+/// containment operator. Results are ordered by recency (newest first).
 /// </summary>
-public sealed class SqliteKVStore : IVectorStore
+public sealed class SqliteKVStore : IKVStore
 {
-    /// <summary>The activity source name used for vector store telemetry.</summary>
-    public const string ActivitySourceName = "Agency.VectorStore.Sql.Sqlite";
+    /// <summary>The activity source name used for KV store telemetry.</summary>
+    public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Sqlite";
 
-    /// <summary>The meter name used for vector store telemetry.</summary>
-    public const string MeterName = "Agency.VectorStore.Sql.Sqlite";
+    /// <summary>The meter name used for KV store telemetry.</summary>
+    public const string MeterName = "Agency.KeyValueStore.Sql.Sqlite";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);
 
     private static readonly Counter<long> _operationCount =
-        _meter.CreateCounter<long>("vectorstore.operations", unit: "{operation}", description: "Total number of vector store operations executed.");
+        _meter.CreateCounter<long>("kvstore.operations", unit: "{operation}", description: "Total number of KV store operations executed.");
 
     private static readonly Histogram<double> _operationDuration =
-        _meter.CreateHistogram<double>("vectorstore.duration", unit: "ms", description: "Duration of vector store operations in milliseconds.");
+        _meter.CreateHistogram<double>("kvstore.duration", unit: "ms", description: "Duration of KV store operations in milliseconds.");
 
     private readonly ILogger<SqliteKVStore> _logger;
-    private readonly IEmbeddingGenerator _embeddingGenerator;
     private readonly SqliteRunner _sqliteRunner;
 
     /// <summary>
     /// Creates a new <see cref="SqliteKVStore"/>.
     /// </summary>
-    /// <param name="embeddingGenerator">Used to generate embedding vectors for stored values and search queries.</param>
-    /// <param name="sqliteRunner">
-    ///   A runner whose <c>onConnectionOpen</c> callback should include <see cref="RegisterVectorFunctions"/>
-    ///   so that the <c>vec_distance_cosine</c> UDF is available on every connection.
-    /// </param>
+    /// <param name="sqliteRunner">The SQLite runner used to execute SQL statements.</param>
     /// <param name="logger">Optional logger.</param>
     public SqliteKVStore(
-        IEmbeddingGenerator embeddingGenerator,
         SqliteRunner sqliteRunner,
         ILogger<SqliteKVStore>? logger = null)
     {
-        this._embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
         this._sqliteRunner = sqliteRunner ?? throw new ArgumentNullException(nameof(sqliteRunner));
         this._logger = logger ?? NullLogger<SqliteKVStore>.Instance;
     }
 
     /// <summary>
-    /// Registers the <c>vec_distance_cosine</c> scalar function on a SQLite connection.
-    /// Pass this as the <c>onConnectionOpen</c> callback when constructing a <see cref="SqliteRunner"/>
-    /// that will be used with <see cref="SqliteKVStore"/>.
+    /// Creates the <c>kv_store</c> table and a key index if they do not already exist.
     /// </summary>
-    public static void RegisterVectorFunctions(SqliteConnection connection)
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
     {
-        connection.CreateFunction("vec_distance_cosine", (string v1, string v2) =>
-        {
-            float[] a = ParseVector(v1);
-            float[] b = ParseVector(v2);
-            double dot = a.Zip(b).Sum(p => (double)p.First * p.Second);
-            double normA = Math.Sqrt(a.Sum(x => (double)x * x));
-            double normB = Math.Sqrt(b.Sum(x => (double)x * x));
-            if (normA == 0 || normB == 0)
-            {
-                return 1.0;
-            }
-
-            return 1.0 - (dot / (normA * normB));
-        });
-    }
-
-    /// <summary>
-    /// Creates the <c>semantic_kv_store</c> table and a key index if they do not already exist.
-    /// </summary>
-    public async Task InitializeSchemaAsync(int dimensions = 1536, CancellationToken cancellationToken = default)
-    {
-        using var activity = _activitySource.StartActivity("vectorstore.initialize", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "initialize");
-        activity?.SetTag("vectorstore.dimensions", dimensions);
+        using var activity = _activitySource.StartActivity("kvstore.initialize", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "initialize");
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Initializing SQLite vector store schema with {Dimensions} dimensions", dimensions);
+        this._logger.LogDebug("Initializing SQLite KV store schema");
 
         try
         {
             await this._sqliteRunner.ExecuteAsync(
                 """
-                CREATE TABLE IF NOT EXISTS semantic_kv_store (
+                CREATE TABLE IF NOT EXISTS kv_store (
                     key        TEXT PRIMARY KEY,
                     value      TEXT NOT NULL,
-                    embedding  TEXT NOT NULL,
                     metadata   TEXT,
                     updated_on TEXT DEFAULT (datetime('now'))
                 )
@@ -109,7 +76,7 @@ public sealed class SqliteKVStore : IVectorStore
                 cancellationToken);
 
             await this._sqliteRunner.ExecuteAsync(
-                "CREATE INDEX IF NOT EXISTS idx_kv_key ON semantic_kv_store (key)",
+                "CREATE INDEX IF NOT EXISTS idx_kv_key ON kv_store (key)",
                 null,
                 cancellationToken);
 
@@ -118,7 +85,7 @@ public sealed class SqliteKVStore : IVectorStore
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "initialize" } });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite vector store schema initialization completed in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogDebug("SQLite KV store schema initialization completed in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
         }
         catch (Exception ex)
         {
@@ -134,7 +101,7 @@ public sealed class SqliteKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error initializing SQLite vector store schema after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogError(ex, "Error initializing SQLite KV store schema after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }
     }
@@ -147,13 +114,13 @@ public sealed class SqliteKVStore : IVectorStore
             throw new ArgumentNullException(nameof(query));
         }
 
-        using var activity = _activitySource.StartActivity("vectorstore.search", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "search");
-        activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
-        activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
+        using var activity = _activitySource.StartActivity("kvstore.search", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "search");
+        activity?.SetTag("kvstore.limit", query.Limit ?? 10);
+        activity?.SetTag("kvstore.has_metadata_filter", query.MetadataFilter != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Searching SQLite vector store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
+        this._logger.LogDebug("Searching SQLite KV store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
         try
         {
@@ -162,12 +129,11 @@ public sealed class SqliteKVStore : IVectorStore
             int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
             const string sql = """
-                SELECT key, value, metadata,
-                       CASE WHEN @qVector IS NULL THEN 0.0 ELSE vec_distance_cosine(embedding, @qVector) END AS distance,
-                       updated_on
-                FROM semantic_kv_store
-                WHERE (@hasKey = 0 OR key = @k)
-                ORDER BY distance ASC
+                SELECT key, value, metadata, 0.0 AS distance, updated_on
+                FROM kv_store
+                WHERE (@hasKey   = 0 OR key = @k)
+                  AND (@hasValue = 0 OR instr(value, @v) > 0)
+                ORDER BY updated_on DESC
                 LIMIT @l
                 """;
 
@@ -175,12 +141,13 @@ public sealed class SqliteKVStore : IVectorStore
 
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
-                parameters["qVector"] = FormatVector(embedding.ToArray());
+                parameters["v"] = query.Value;
+                parameters["hasValue"] = 1;
             }
             else
             {
-                parameters["qVector"] = null;
+                parameters["v"] = string.Empty;
+                parameters["hasValue"] = 0;
             }
 
             if (string.IsNullOrWhiteSpace(query.Key) == false)
@@ -212,10 +179,10 @@ public sealed class SqliteKVStore : IVectorStore
             _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
 
-            activity?.SetTag("vectorstore.result_count", results.Count);
+            activity?.SetTag("kvstore.result_count", results.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this._logger.LogDebug("SQLite vector store search completed in {ElapsedMs}ms. Results: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
+            this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
             return results;
         }
         catch (Exception ex)
@@ -232,7 +199,7 @@ public sealed class SqliteKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error searching SQLite vector store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }
     }
@@ -240,27 +207,24 @@ public sealed class SqliteKVStore : IVectorStore
     /// <inheritdoc/>
     public async Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("vectorstore.upsert", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "upsert");
-        activity?.SetTag("vectorstore.key", key);
-        activity?.SetTag("vectorstore.has_metadata", metadata != null);
+        using var activity = _activitySource.StartActivity("kvstore.upsert", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "upsert");
+        activity?.SetTag("kvstore.key", key);
+        activity?.SetTag("kvstore.has_metadata", metadata != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Upserting SQLite vector store entry with key {Key}", key);
+        this._logger.LogDebug("Upserting SQLite KV store entry with key {Key}", key);
 
         try
         {
-            string contentToEmbed = JsonSerializer.Serialize(value);
-            var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
-            string vectorLiteral = FormatVector(vectorArray.ToArray());
+            string contentJson = JsonSerializer.Serialize(value);
             string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
             const string upsertSql = """
-                INSERT INTO semantic_kv_store (key, value, embedding, metadata)
-                VALUES (@k, @v, @e, @m)
+                INSERT INTO kv_store (key, value, metadata)
+                VALUES (@k, @v, @m)
                 ON CONFLICT (key) DO UPDATE
                 SET value      = excluded.value,
-                    embedding  = excluded.embedding,
                     metadata   = excluded.metadata,
                     updated_on = datetime('now')
                 """;
@@ -270,8 +234,7 @@ public sealed class SqliteKVStore : IVectorStore
                 new Dictionary<string, object?>
                 {
                     ["k"] = key,
-                    ["v"] = contentToEmbed,
-                    ["e"] = vectorLiteral,
+                    ["v"] = contentJson,
                     ["m"] = metadataJson
                 },
                 cancellationToken);
@@ -281,7 +244,7 @@ public sealed class SqliteKVStore : IVectorStore
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "upsert" } });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite vector store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogDebug("SQLite KV store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
         }
         catch (Exception ex)
         {
@@ -297,7 +260,7 @@ public sealed class SqliteKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error upserting SQLite vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error upserting SQLite KV store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
             throw;
         }
     }
@@ -305,17 +268,17 @@ public sealed class SqliteKVStore : IVectorStore
     /// <inheritdoc/>
     public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
-        activity?.SetTag("vectorstore.operation", "delete");
-        activity?.SetTag("vectorstore.key", key);
+        using var activity = _activitySource.StartActivity("kvstore.delete", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "delete");
+        activity?.SetTag("kvstore.key", key);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Deleting SQLite vector store entry with key {Key}", key);
+        this._logger.LogDebug("Deleting SQLite KV store entry with key {Key}", key);
 
         try
         {
             int rowsAffected = await this._sqliteRunner.ExecuteAsync(
-                "DELETE FROM semantic_kv_store WHERE key = @k;",
+                "DELETE FROM kv_store WHERE key = @k;",
                 new Dictionary<string, object?> { ["k"] = key },
                 cancellationToken);
 
@@ -323,9 +286,9 @@ public sealed class SqliteKVStore : IVectorStore
             _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "success" } });
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
 
-            activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
+            activity?.SetTag("kvstore.deleted", rowsAffected > 0);
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite vector store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
+            this._logger.LogDebug("SQLite KV store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
             return rowsAffected > 0;
         }
         catch (Exception ex)
@@ -342,7 +305,7 @@ public sealed class SqliteKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error deleting SQLite vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error deleting SQLite KV store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
             throw;
         }
     }
@@ -374,11 +337,14 @@ public sealed class SqliteKVStore : IVectorStore
     }
 
     /// <summary>
-    /// Returns true when <paramref name="metadata"/> satisfies every constraint in <paramref name="filter"/>.
+    /// Returns <see langword="true"/> when <paramref name="metadata"/> satisfies every constraint in
+    /// <paramref name="filter"/>.
     /// For array-valued filter entries (e.g. <c>{"tags": ["medical"]}</c>), each element in the filter
     /// array must appear somewhere in the corresponding metadata array (subset containment).
     /// For scalar entries, the values are compared as strings.
     /// </summary>
+    /// <param name="metadata">The metadata dictionary from a search hit.</param>
+    /// <param name="filter">The filter criteria to match against.</param>
     private static bool MatchesMetadataFilter(Dictionary<string, object>? metadata, IDictionary<string, object> filter)
     {
         if (metadata == null)
@@ -402,6 +368,13 @@ public sealed class SqliteKVStore : IVectorStore
         return true;
     }
 
+    /// <summary>
+    /// Checks whether a single metadata value satisfies a filter value.
+    /// Supports array containment (all filter elements must appear in the metadata collection)
+    /// and scalar string equality.
+    /// </summary>
+    /// <param name="metaValue">The value from the stored metadata.</param>
+    /// <param name="filterValue">The value specified in the filter.</param>
     private static bool MetadataValueMatches(object? metaValue, object filterValue)
     {
         // Array containment: every element in filterValue must appear in metaValue
@@ -422,10 +395,4 @@ public sealed class SqliteKVStore : IVectorStore
         // Scalar equality
         return string.Equals(metaValue?.ToString(), filterValue?.ToString(), StringComparison.Ordinal);
     }
-
-    private static string FormatVector(float[] vector)
-        => $"[{string.Join(',', vector.Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
-
-    private static float[] ParseVector(string raw)
-        => raw.Trim('[', ']').Split(',').Select(s => float.Parse(s, CultureInfo.InvariantCulture)).ToArray();
 }

@@ -153,7 +153,7 @@ public class PostgreKVStore : IKVStore
             // Vector search on query.Value
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
-                var embedding = await this./.GenerateEmbeddingAsync(query.Value, cancellationToken);
+                var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                 parameters["qVector"] = new Pgvector.Vector(embedding.ToArray());
             }
             else

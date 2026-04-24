@@ -16,7 +16,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key1", "value1", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -33,9 +33,9 @@ public sealed class SearchHitExtensionsTests
         var now = DateTimeOffset.UtcNow;
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key1", "value1", null, 0.1, now),
-            new SearchHit<string>("key2", "value2", null, 0.2, now),
-            new SearchHit<string>("key3", "value3", null, 0.3, now),
+            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.1, now),
+            new SearchHit<string>("test-user", "test-session", "key2", "value2", null, 0.2, now),
+            new SearchHit<string>("test-user", "test-session", "key3", "value3", null, 0.3, now),
         };
 
         var dataset = hits.ToDataset();
@@ -51,7 +51,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -77,7 +77,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "test-key", "value", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -94,7 +94,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "test-value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "test-value", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -111,7 +111,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 0.25, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.25, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -128,7 +128,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 0.0, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.0, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -145,7 +145,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 2.0, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 2.0, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -162,7 +162,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 1.0, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 1.0, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -180,7 +180,7 @@ public sealed class SearchHitExtensionsTests
         var timestamp = new DateTimeOffset(2026, 3, 15, 10, 30, 45, TimeSpan.Zero);
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 0.5, timestamp)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, timestamp)
         };
 
         var dataset = hits.ToDataset();
@@ -202,8 +202,8 @@ public sealed class SearchHitExtensionsTests
         var now = DateTimeOffset.UtcNow;
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key1", "value1", null, 0.1, now),
-            new SearchHit<string>("key2", "value2", null, 0.2, now),
+            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.1, now),
+            new SearchHit<string>("test-user", "test-session", "key2", "value2", null, 0.2, now),
         };
 
         var dataset = hits.ToDataset();
@@ -229,8 +229,8 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<int>>
         {
-            new SearchHit<int>("key1", 42, null, 0.5, DateTimeOffset.UtcNow),
-            new SearchHit<int>("key2", 100, null, 0.3, DateTimeOffset.UtcNow),
+            new SearchHit<int>("test-user", "test-session", "key1", 42, null, 0.5, DateTimeOffset.UtcNow),
+            new SearchHit<int>("test-user", "test-session", "key2", 100, null, 0.3, DateTimeOffset.UtcNow),
         };
 
         var dataset = hits.ToDataset();
@@ -251,8 +251,8 @@ public sealed class SearchHitExtensionsTests
 
         var hits = new List<SearchHit<object>>
         {
-            new SearchHit<object>("key1", obj1, null, 0.5, DateTimeOffset.UtcNow),
-            new SearchHit<object>("key2", obj2, null, 0.3, DateTimeOffset.UtcNow),
+            new SearchHit<object>("test-user", "test-session", "key1", obj1, null, 0.5, DateTimeOffset.UtcNow),
+            new SearchHit<object>("test-user", "test-session", "key2", obj2, null, 0.3, DateTimeOffset.UtcNow),
         };
 
         var dataset = hits.ToDataset();
@@ -292,7 +292,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -313,7 +313,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -339,7 +339,7 @@ public sealed class SearchHitExtensionsTests
         var metadata = new Dictionary<string, object> { { "type", "document" }, { "source", "test" } };
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key1", "value1", metadata, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key1", "value1", metadata, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -356,7 +356,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("key1", "value1", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.5, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();

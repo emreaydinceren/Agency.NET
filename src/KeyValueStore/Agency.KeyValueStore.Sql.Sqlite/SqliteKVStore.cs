@@ -36,6 +36,9 @@ public sealed class SqliteKVStore : IKVStore
     private readonly ILogger<SqliteKVStore> _logger;
     private readonly SqliteRunner _sqliteRunner;
 
+    private const string GlobalSession = "*";
+    private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
+
     /// <summary>
     /// Creates a new <see cref="SqliteKVStore"/>.
     /// </summary>
@@ -66,17 +69,15 @@ public sealed class SqliteKVStore : IKVStore
             await this._sqliteRunner.ExecuteAsync(
                 """
                 CREATE TABLE IF NOT EXISTS kv_store (
-                    key        TEXT PRIMARY KEY,
+                    user_id    TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    key        TEXT NOT NULL,
                     value      TEXT NOT NULL,
                     metadata   TEXT,
-                    updated_on TEXT DEFAULT (datetime('now'))
+                    updated_on TEXT DEFAULT (datetime('now')),
+                    PRIMARY KEY (user_id, session_id, key)
                 )
                 """,
-                null,
-                cancellationToken);
-
-            await this._sqliteRunner.ExecuteAsync(
-                "CREATE INDEX IF NOT EXISTS idx_kv_key ON kv_store (key)",
                 null,
                 cancellationToken);
 
@@ -129,15 +130,30 @@ public sealed class SqliteKVStore : IKVStore
             int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
             const string sql = """
-                SELECT key, value, metadata, 0.0 AS distance, updated_on
+                SELECT user_id, session_id, key, value, metadata, 0.0 AS distance, updated_on
                 FROM kv_store
-                WHERE (@hasKey   = 0 OR key = @k)
-                  AND (@hasValue = 0 OR instr(value, @v) > 0)
+                WHERE user_id = @uid
+                  AND (@hasSessionId = 0 OR session_id = @sid)
+                  AND (@hasKey       = 0 OR key = @k)
+                  AND (@hasValue     = 0 OR instr(value, @v) > 0)
                 ORDER BY updated_on DESC
                 LIMIT @l
                 """;
 
             var parameters = new Dictionary<string, object?> { ["l"] = sqlLimit };
+
+            parameters["uid"] = query.UserId;
+
+            if (query.SessionId != null)
+            {
+                parameters["sid"] = query.SessionId;
+                parameters["hasSessionId"] = 1;
+            }
+            else
+            {
+                parameters["sid"] = string.Empty;
+                parameters["hasSessionId"] = 0;
+            }
 
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
@@ -205,12 +221,13 @@ public sealed class SqliteKVStore : IKVStore
     }
 
     /// <inheritdoc/>
-    public async Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
+    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("kvstore.upsert", ActivityKind.Client);
         activity?.SetTag("kvstore.operation", "upsert");
         activity?.SetTag("kvstore.key", key);
         activity?.SetTag("kvstore.has_metadata", metadata != null);
+        activity?.SetTag("kvstore.user_id", userId);
 
         var stopwatch = Stopwatch.StartNew();
         this._logger.LogDebug("Upserting SQLite KV store entry with key {Key}", key);
@@ -221,9 +238,9 @@ public sealed class SqliteKVStore : IKVStore
             string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
             const string upsertSql = """
-                INSERT INTO kv_store (key, value, metadata)
-                VALUES (@k, @v, @m)
-                ON CONFLICT (key) DO UPDATE
+                INSERT INTO kv_store (user_id, session_id, key, value, metadata)
+                VALUES (@uid, @sid, @k, @v, @m)
+                ON CONFLICT (user_id, session_id, key) DO UPDATE
                 SET value      = excluded.value,
                     metadata   = excluded.metadata,
                     updated_on = datetime('now')
@@ -233,6 +250,8 @@ public sealed class SqliteKVStore : IKVStore
                 upsertSql,
                 new Dictionary<string, object?>
                 {
+                    ["uid"] = userId,
+                    ["sid"] = ResolveSessionId(sessionId),
                     ["k"] = key,
                     ["v"] = contentJson,
                     ["m"] = metadataJson
@@ -266,7 +285,7 @@ public sealed class SqliteKVStore : IKVStore
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("kvstore.delete", ActivityKind.Client);
         activity?.SetTag("kvstore.operation", "delete");
@@ -278,8 +297,8 @@ public sealed class SqliteKVStore : IKVStore
         try
         {
             int rowsAffected = await this._sqliteRunner.ExecuteAsync(
-                "DELETE FROM kv_store WHERE key = @k;",
-                new Dictionary<string, object?> { ["k"] = key },
+                "DELETE FROM kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
+                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
                 cancellationToken);
 
             stopwatch.Stop();
@@ -312,15 +331,17 @@ public sealed class SqliteKVStore : IKVStore
 
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)
     {
-        string key = reader.GetString(0);
-        string valueJson = reader.GetString(1);
-        string? metadataJson = reader.IsDBNull(2) ? null : reader.GetString(2);
-        double distance = Convert.ToDouble(reader.GetValue(3));
+        string userId = reader.GetString(0);
+        string? sessionId = reader.GetString(1) == GlobalSession ? null : reader.GetString(1);
+        string key = reader.GetString(2);
+        string valueJson = reader.GetString(3);
+        string? metadataJson = reader.IsDBNull(4) ? null : reader.GetString(4);
+        double distance = Convert.ToDouble(reader.GetValue(5));
 
         DateTimeOffset updatedOn = DateTimeOffset.UtcNow;
-        if (!reader.IsDBNull(4))
+        if (!reader.IsDBNull(6))
         {
-            string raw = reader.GetString(4);
+            string raw = reader.GetString(6);
             if (DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
             {
@@ -329,6 +350,8 @@ public sealed class SqliteKVStore : IKVStore
         }
 
         return new SearchHit<TValue>(
+            UserId: userId,
+            SessionId: sessionId,
             Key: key,
             Value: JsonSerializer.Deserialize<TValue>(valueJson)!,
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),

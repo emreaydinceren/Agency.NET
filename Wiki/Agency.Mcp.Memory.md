@@ -1,42 +1,47 @@
 # Agency.Mcp.Memory
 
-#mcp #memory #vectorstore #server
+#mcp #memory #keyvaluestore #server
 
 ## What It Is
 
-`Agency.Mcp.Memory` is a standalone **Model Context Protocol (MCP) server** that exposes three tools — `Memorize`, `Recall`, and `Forget` — backed by an [[Agency.VectorStore.Common]] `IKVStore`. It runs as a stdio-transport MCP process and can be wired to any MCP-compatible client (e.g. Claude Desktop). The backing store is configurable at startup: either SQLite (local/embedded) or PostgreSQL (production).
+`Agency.Mcp.Memory` is a standalone **Model Context Protocol (MCP) server** that exposes four tools: `Memorize`, `Recall`, `Forget`, and `ListGlobalKeys`. It runs over stdio transport and resolves its backing store from configuration (`sqlite` or `postgres`) via [[Agency.KeyValueStore.Common]] `IKVStore` implementations.
 
 ## Key Types
 
 ### `MemoryTool`
 
-The MCP tool class decorated with `[McpServerToolType]`. All three methods are exposed as MCP tools via `[McpServerTool]`.
+The MCP tool class decorated with `[McpServerToolType]`. Its methods are exposed as MCP tools via `[McpServerTool]`.
 
 ```csharp
-// Store a piece of information
-string result = await tool.Memorize(new MemoryRecord
+var scope = new MemoryScope { UserId = "user-1", SessionId = "session-42" };
+
+// Store a value under domain|key with metadata (domain/key/tags)
+string memorize = await tool.Memorize(new MemoryRecord
 {
-    Scope = new MemoryScope { UserId = "user-1", SessionId = "session-42" },
+    Scope = scope,
     Domain = "preferences",
     Key = "theme",
-    Value = "dark",
+    Value = "light",
     Tags = ["ui"]
 });
-// → "Memorized: user-1|session-42|preferences|theme"
+// -> "Memorized: preferences|theme"
 
-// Recall with metadata filter
-string json = await tool.Recall(
-    scope: new MemoryScope { UserId = "user-1", SessionId = "session-42" },
+// Recall from the same scope, filtered by domain and tags
+string recall = await tool.Recall(
+    scope,
     domain: "preferences",
     key: null,
     tags: ["ui"]);
 
 // Delete a specific entry
-string msg = await tool.Forget(scope, "preferences", "theme");
-// → "Removed: user-1|session-42|preferences|theme"
+string forget = await tool.Forget(scope, "preferences", "theme");
+// -> "Removed: preferences|theme"
+
+// List distinct keys/tags in the user's global session (sessionId="*")
+string globalIndex = await tool.ListGlobalKeys("user-1");
 ```
 
-Storage keys follow the composite format `{userId}|{sessionId}|{domain}|{key}`, giving each user+session pair its own namespace inside a single shared table.
+`Memorize` validates `Scope`, `Domain`, `Key`, and `Value` and writes entries using a storage key in `{domain}|{key}` format. Scope is applied through `IKVStore` partitioning (`userId` + `sessionId`).
 
 ### `MemoryRecord`
 
@@ -76,11 +81,22 @@ Configuration bound from `appsettings.json` section `"Memory"`:
 
 ### `MemorySchemaInitializer`
 
-A hosted service (`IHostedService`) that calls `SqliteKVStore.InitializeSchemaAsync()` on startup when the provider is SQLite. This guarantees the `semantic_kv_store` table exists before the first tool call.
+A hosted service (`IHostedService`) that calls `SqliteKVStore.InitializeSchemaAsync()` on startup when the provider is SQLite.
 
-### `RandomEmbeddingGenerator`
+### `MemoryServiceCollectionExtensions`
 
-A fallback `IEmbeddingGenerator` registered internally. Produces deterministic pseudo-random vectors seeded from the input string's hash code, so metadata-only recall works without a real embedding API. Similarity-ranked semantic search requires a real embedding provider to be substituted.
+Provides `AddKVStore(IServiceCollection)` to register:
+
+- `PostgreKVStore` using `PostgreSqlRunner` and configured connection string
+- `SqliteKVStore` using `SqliteRunner` and configured connection string
+- `IKVStore` selector based on `MemoryOptions.Provider`
+- `MemorySchemaInitializer` hosted service
+
+### `Program`
+
+Builds the host, binds `MemoryOptions` from the `Memory` configuration section, configures console logging to stderr (`LogToStandardErrorThreshold = Trace`), registers MCP stdio transport with tools from the assembly, and wires `MemoryTool` plus `IKVStore` services.
+
+This project does not define a custom `ActivitySource` or `Meter`; observability is currently provided through standard host logging.
 
 ## Configuration
 
@@ -110,9 +126,8 @@ For PostgreSQL:
 
 | Project | Relationship |
 |---|---|
-| [[Agency.VectorStore.Common]] | `MemoryTool` takes `IKVStore` and calls `UpsertAsync`, `SearchAsync`, `DeleteAsync` |
-| [[Agency.VectorStore.Sql.Postgre]] | Concrete `IKVStore` when `Provider = "postgres"` |
-| [[Agency.VectorStore.Sql.Sqlite]] | Concrete `IKVStore` when `Provider = "sqlite"` |
-| [[Agency.Sql.Postgre]] | `PostgreSqlRunner` used indirectly via `PostgreKVStore` |
-| [[Agency.Sql.Sqlite]] | `SqliteRunner` used indirectly via `SqliteKVStore` |
-| [[Agency.Embeddings.Common]] | Implements `IEmbeddingGenerator`; `RandomEmbeddingGenerator` is the fallback |
+| [[Agency.KeyValueStore.Common]] | `MemoryTool` depends on `IKVStore` (`UpsertAsync`, `SearchAsync`, `DeleteAsync`) |
+| [[Agency.KeyValueStore.Sql.Postgre]] | Provides `PostgreKVStore` when `Provider = "postgres"` |
+| [[Agency.KeyValueStore.Sql.Sqlite]] | Provides `SqliteKVStore` when `Provider = "sqlite"` |
+| [[Agency.Sql.Postgre]] | Provides `PostgreSqlRunner` used to construct `PostgreKVStore` |
+| [[Agency.Sql.Sqlite]] | Provides `SqliteRunner` used to construct `SqliteKVStore` |

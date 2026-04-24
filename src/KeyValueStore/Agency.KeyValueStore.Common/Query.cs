@@ -4,6 +4,10 @@ namespace Agency.KeyValueStore.Common;
 /// Represents a query with optional key, value, metadata filter, result limit, and an option to include metadata in the
 /// results.
 /// </summary>
+/// <param name="UserId">The user whose entries to search. Cannot be null.</param>
+/// <param name="SessionId">
+/// The session to restrict results to. If null, results across all sessions of the user are returned.
+/// </param>
 /// <param name="Key">The key to filter the query results. Can be null to match any key.</param>
 /// <param name="Value">
 /// filter: the stored value must contain this substring (case-insensitive). Can be null to match any value.
@@ -19,4 +23,4 @@ namespace Agency.KeyValueStore.Common;
 /// A value indicating whether to include metadata in the query results. If <see langword="true"/>, metadata is
 /// included; otherwise, it is excluded.
 /// </param>
-public record class Query(string? Key, string? Value, IDictionary<string, object>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false);
+public record class Query(string UserId, string? SessionId, string? Key, string? Value, IDictionary<string, object>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false);

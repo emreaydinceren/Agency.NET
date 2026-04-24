@@ -39,9 +39,9 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
 
         var testKey = this._fixture.UniqueName("init_check");
         var testValue = new { message = "initialization test" };
-        await kvStore.UpsertAsync(testKey, testValue, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", testKey, testValue, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = new Query(testKey, null, null, 1);
+        var query = new Query("test-user", "test-session", testKey, null, null, 1);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(results);
@@ -59,9 +59,9 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var key = this._fixture.UniqueName("simple_object");
         var value = new { name = "Test Item", score = 42 };
 
-        await kvStore.UpsertAsync(key, value, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key, value, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = new Query(key, null, null, 100);
+        var query = new Query("test-user", "test-session", key, null, null, 100);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
         Assert.NotEmpty(results);
     }
@@ -77,9 +77,9 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var value = new { description = "Item with metadata" };
         var metadata = new Dictionary<string, object> { ["source"] = "test", ["priority"] = "high" };
 
-        await kvStore.UpsertAsync(key, value, metadata, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key, value, metadata, TestContext.Current.CancellationToken);
 
-        var query = new Query(key, null, null, 100);
+        var query = new Query("test-user", "test-session", key, null, null, 100);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         var item = results.FirstOrDefault(r => r.Key == key);
@@ -100,10 +100,10 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var value1 = new { version = 1, message = "First version" };
         var value2 = new { version = 2, message = "Updated version" };
 
-        await kvStore.UpsertAsync(key, value1, cancellationToken: TestContext.Current.CancellationToken);
-        await kvStore.UpsertAsync(key, value2, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key, value1, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key, value2, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = new Query(key, null, null, 100);
+        var query = new Query("test-user", "test-session", key, null, null, 100);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
         var items = results.Where(r => r.Key == key).ToList();
 
@@ -122,7 +122,7 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
 
         await this._fixture.ClearStoreAsync(TestContext.Current.CancellationToken);
 
-        var query = new Query("xyzabc123nonexistent", null, null, 10);
+        var query = new Query("test-user", "test-session", "xyzabc123nonexistent", null, null, 10);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.Empty(results);
@@ -139,10 +139,10 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         for (int i = 0; i < 5; i++)
         {
             var key = this._fixture.UniqueName($"limit_test_{i}");
-            await kvStore.UpsertAsync(key, new { index = i }, cancellationToken: TestContext.Current.CancellationToken);
+            await kvStore.UpsertAsync("test-user", "test-session", key, new { index = i }, cancellationToken: TestContext.Current.CancellationToken);
         }
 
-        var query = new Query(null, null, null, 2);
+        var query = new Query("test-user", "test-session", null, null, null, 2);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.True(results.Count <= 2, $"Expected at most 2 results, got {results.Count}");
@@ -162,11 +162,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var metadata1 = new Dictionary<string, object> { ["category"] = "important" };
         var metadata2 = new Dictionary<string, object> { ["category"] = "archived" };
 
-        await kvStore.UpsertAsync(key1, new { name = "Important item" }, metadata1, TestContext.Current.CancellationToken);
-        await kvStore.UpsertAsync(key2, new { name = "Archived item" }, metadata2, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key1, new { name = "Important item" }, metadata1, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key2, new { name = "Archived item" }, metadata2, TestContext.Current.CancellationToken);
 
         var filterDict = new Dictionary<string, object> { ["category"] = "important" };
-        var query = new Query(null, null, filterDict, 100);
+        var query = new Query("test-user", "test-session", null, null, filterDict, 100);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         foreach (var result in results)
@@ -195,11 +195,11 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var tagsWithMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } };
         var tagsWithoutMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } };
 
-        await kvStore.UpsertAsync(keyWithMedical, new { title = "Medical report" }, tagsWithMedical, TestContext.Current.CancellationToken);
-        await kvStore.UpsertAsync(keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" }, tagsWithMedical, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical, TestContext.Current.CancellationToken);
 
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
-        var query = new Query(null, null, filter, 100, true);
+        var query = new Query("test-user", "test-session", null, null, filter, 100, true);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.Contains(results, r => r.Key == keyWithMedical);
@@ -218,10 +218,10 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var keyMatch = this._fixture.UniqueName("substring_match");
         var keyNoMatch = this._fixture.UniqueName("substring_nomatch");
 
-        await kvStore.UpsertAsync(keyMatch, new { note = "important release notes" }, cancellationToken: TestContext.Current.CancellationToken);
-        await kvStore.UpsertAsync(keyNoMatch, new { note = "unrelated" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyMatch, new { note = "important release notes" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyNoMatch, new { note = "unrelated" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = new Query(null, "release", null, 100);
+        var query = new Query("test-user", "test-session", null, "release", null, 100);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         Assert.Contains(results, r => r.Key == keyMatch);
@@ -239,14 +239,14 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         var keyOld = this._fixture.UniqueName("order_old");
         var keyNew = this._fixture.UniqueName("order_new");
 
-        await kvStore.UpsertAsync(keyOld, new { seq = 1 }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyOld, new { seq = 1 }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Small delay to ensure updated_on differs
         await Task.Delay(50, TestContext.Current.CancellationToken);
 
-        await kvStore.UpsertAsync(keyNew, new { seq = 2 }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyNew, new { seq = 2 }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var query = new Query(null, null, null, 100);
+        var query = new Query("test-user", "test-session", null, null, null, 100);
         var results = await kvStore.SearchAsync<dynamic>(query, TestContext.Current.CancellationToken);
 
         var oldIndex = results.ToList().FindIndex(r => r.Key == keyOld);
@@ -255,6 +255,123 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         Assert.True(oldIndex >= 0, "Old key not found in results");
         Assert.True(newIndex >= 0, "New key not found in results");
         Assert.True(newIndex < oldIndex, $"Expected newer entry (index {newIndex}) to appear before older entry (index {oldIndex})");
+    }
+
+    // ── Null sessionId (global / no-session) ────────────────────────────────
+
+    /// <summary>
+    /// Verifies that an entry upserted with a null <c>sessionId</c> produces a
+    /// <see cref="SearchHit{TValue}"/> whose <see cref="SearchHit{TValue}.SessionId"/> is
+    /// <see langword="null"/> when retrieved.
+    /// </summary>
+    [Fact]
+    public async Task UpsertAsync_NullSessionId_SearchHitHasNullSessionId()
+    {
+        var kvStore = this._fixture.KVStore;
+        string key = this._fixture.UniqueName("global_session");
+        await kvStore.UpsertAsync("test-user", null, key, new { note = "global" }, cancellationToken: TestContext.Current.CancellationToken);
+
+        var results = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", null, key, null, null, 1),
+            TestContext.Current.CancellationToken);
+
+        var hit = Assert.Single(results, r => r.Key == key);
+        Assert.Null(hit.SessionId);
+        Assert.Equal("test-user", hit.UserId);
+    }
+
+    /// <summary>
+    /// Verifies that a null <see cref="Query.SessionId"/> returns entries from all sessions,
+    /// while a specific <see cref="Query.SessionId"/> returns only that session's entries.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_NullSessionId_ReturnsEntriesAcrossAllSessions()
+    {
+        var kvStore = this._fixture.KVStore;
+        string keyGlobal = this._fixture.UniqueName("scope_global");
+        string keySession = this._fixture.UniqueName("scope_session");
+
+        await kvStore.UpsertAsync("test-user", null, keyGlobal, new { note = "global" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keySession, new { note = "session" }, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Null sessionId → both entries visible
+        var allResults = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", null, null, null, null, 100),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(allResults, r => r.Key == keyGlobal);
+        Assert.Contains(allResults, r => r.Key == keySession);
+
+        // Specific sessionId → only session-scoped entry visible
+        var sessionResults = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", "test-session", null, null, null, 100),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(sessionResults, r => r.Key == keySession);
+        Assert.DoesNotContain(sessionResults, r => r.Key == keyGlobal);
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="IKVStore.DeleteAsync"/> with a null <c>sessionId</c> removes
+    /// only the global (no-session) entry and leaves session-scoped entries intact.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAsync_NullSessionId_RemovesOnlyGlobalEntry()
+    {
+        var kvStore = this._fixture.KVStore;
+        string key = this._fixture.UniqueName("global_delete");
+
+        await kvStore.UpsertAsync("test-user", null, key, new { note = "global" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key, new { note = "session" }, cancellationToken: TestContext.Current.CancellationToken);
+
+        bool deleted = await kvStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        Assert.True(deleted);
+
+        // Global entry is gone
+        var globalResults = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", null, key, null, null, 100),
+            TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(globalResults, r => r.Key == key && r.SessionId == null);
+
+        // Session-scoped entry is still there
+        var sessionResults = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", "test-session", key, null, null, 1),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(sessionResults, r => r.Key == key);
+    }
+
+    /// <summary>
+    /// Verifies that a null-session entry and an explicit-session entry sharing the same user
+    /// and key are stored as independent rows under the compound primary key.
+    /// </summary>
+    [Fact]
+    public async Task UpsertAsync_NullAndExplicitSessionId_AreIndependentEntries()
+    {
+        var kvStore = this._fixture.KVStore;
+        string key = this._fixture.UniqueName("session_independence");
+
+        await kvStore.UpsertAsync("test-user", null, key, new { version = "global" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "session-a", key, new { version = "session-a" }, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Searching with null sessionId returns both entries for this key
+        var allResults = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", null, key, null, null, 100),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, allResults.Count(r => r.Key == key));
+
+        // Deleting the global entry leaves the session-a entry intact
+        await kvStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+
+        var afterDelete = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", null, key, null, null, 100),
+            TestContext.Current.CancellationToken);
+
+        var remaining = afterDelete.Where(r => r.Key == key).ToList();
+        Assert.Single(remaining);
+        Assert.Equal("session-a", remaining[0].SessionId);
     }
 
     // ── Fixture ─────────────────────────────────────────────────────────────

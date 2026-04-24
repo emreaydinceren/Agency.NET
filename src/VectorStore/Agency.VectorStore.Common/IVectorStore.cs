@@ -14,12 +14,14 @@ public interface IVectorStore
     /// Inserts a new value or updates the existing value associated with the specified key asynchronously.
     /// </summary>
     /// <typeparam name="TValue">The type of the value to store or update.</typeparam>
+    /// <param name="userId">The user this entry belongs to. Cannot be null.</param>
+    /// <param name="sessionId">The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c>"*"</c>).</param>
     /// <param name="key">The key that identifies the value to insert or update. Cannot be null.</param>
     /// <param name="value">The value to insert or update for the specified key.</param>
     /// <param name="metadata">
     /// An optional collection of metadata to associate with the value. May be null if no metadata is required.
     /// </param>
-    Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default);
+    Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Executes an asynchronous search operation using the specified query and returns the matching results.
@@ -35,11 +37,13 @@ public interface IVectorStore
     /// <summary>
     /// Deletes the entry with the given key asynchronously.
     /// </summary>
+    /// <param name="userId">The user this entry belongs to. Cannot be null.</param>
+    /// <param name="sessionId">The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c>"*"</c>).</param>
     /// <param name="key">The key that identifies the entry to delete. Cannot be null.</param>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result is <see langword="true"/> if an entry
     /// was removed, or <see langword="false"/> if no entry existed for that key.
     /// </returns>
-    Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default);
 }

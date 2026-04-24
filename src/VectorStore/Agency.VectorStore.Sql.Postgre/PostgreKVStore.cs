@@ -41,6 +41,10 @@ public class PostgreKVStore : IVectorStore
 
     private readonly PostgreSqlRunner _postgreSqlRunner;
 
+    private const string GlobalSession = "*";
+
+    private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
+
     public PostgreKVStore(
         IEmbeddingGenerator embeddingGenerator,
         PostgreSqlRunner postgreSqlRunner,
@@ -68,19 +72,28 @@ public class PostgreKVStore : IVectorStore
             string sql = $@"
             CREATE EXTENSION IF NOT EXISTS vector;
 
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'semantic_kv_store')
+                   AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'semantic_kv_store' AND column_name = 'user_id') THEN
+                    DROP TABLE semantic_kv_store CASCADE;
+                END IF;
+            END $$;
+
             CREATE TABLE IF NOT EXISTS semantic_kv_store (
-                key TEXT PRIMARY KEY,
-                value JSONB NOT NULL,
-                embedding vector({dimensions}) NOT NULL,
-                metadata JSONB,
-                updated_on TIMESTAMPTZ DEFAULT NOW()
+                user_id    TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                key        TEXT NOT NULL,
+                value      JSONB NOT NULL,
+                embedding  vector({dimensions}) NOT NULL,
+                metadata   JSONB,
+                updated_on TIMESTAMPTZ DEFAULT NOW(),
+                PRIMARY KEY (user_id, session_id, key)
             );
 
-            -- HNSW index for high-speed similarity search
             CREATE INDEX IF NOT EXISTS idx_vector_search
             ON semantic_kv_store USING hnsw (embedding vector_cosine_ops);
 
-            -- GIN index for high-speed JSON metadata filtering
             CREATE INDEX IF NOT EXISTS idx_metadata_filter
             ON semantic_kv_store USING GIN (metadata);
         ";
@@ -136,12 +149,14 @@ public class PostgreKVStore : IVectorStore
             // 3. When @qVector is NULL, skip vector distance calculation (returning 0.0 as placeholder)
             // 4. Cast @qVector to vector type to handle NULL case properly
             const string sql = @"
-            SELECT key, value, metadata,
+            SELECT user_id, session_id, key, value, metadata,
                    CASE WHEN @qVector::vector IS NULL THEN 0.0 ELSE (embedding <=> @qVector::vector) END AS distance,
                    updated_on
             FROM semantic_kv_store
-            WHERE (@hasKey = FALSE OR key = @k)
-            AND (@hasFilter = FALSE OR metadata @> @mFilter)
+            WHERE user_id = @uid
+              AND (@hasSessionId = FALSE OR session_id = @sid)
+              AND (@hasKey       = FALSE OR key = @k)
+              AND (@hasFilter    = FALSE OR metadata @> @mFilter)
             ORDER BY distance ASC
             LIMIT @l;";
 
@@ -149,6 +164,19 @@ public class PostgreKVStore : IVectorStore
             {
                 ["l"] = query.Limit ?? 10
             };
+
+            parameters["uid"] = query.UserId;
+
+            if (query.SessionId != null)
+            {
+                parameters["sid"] = query.SessionId;
+                parameters["hasSessionId"] = true;
+            }
+            else
+            {
+                parameters["sid"] = DBNull.Value;
+                parameters["hasSessionId"] = false;
+            }
 
             // Vector search on query.Value
             if (string.IsNullOrWhiteSpace(query.Value) == false)
@@ -219,15 +247,17 @@ public class PostgreKVStore : IVectorStore
         }
     }
 
-    public async Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
+    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.upsert", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "upsert");
+        activity?.SetTag("vectorstore.user_id", userId);
+        activity?.SetTag("vectorstore.session_id", sessionId ?? "global");
         activity?.SetTag("vectorstore.key", key);
         activity?.SetTag("vectorstore.has_metadata", metadata != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Upserting vector store entry with key {Key} and metadata present: {HasMetadata}", key, metadata != null);
+        this._logger.LogDebug("Upserting vector store entry for user {UserId} session {SessionId} key {Key} with metadata present: {HasMetadata}", userId, sessionId ?? "global", key, metadata != null);
 
         try
         {
@@ -235,19 +265,21 @@ public class PostgreKVStore : IVectorStore
             var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
             string vectorLiteral = $"[{string.Join(',', vectorArray.ToArray().Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
 
-            // Use EXCLUDED to update existing records on Key conflict
+            // Use EXCLUDED to update existing records on compound key conflict
             const string query = @"
-            INSERT INTO semantic_kv_store (key, value, embedding, metadata)
-            VALUES (@k, @v, @e::vector, @m)
-            ON CONFLICT (key) DO UPDATE
-            SET value = EXCLUDED.value,
+            INSERT INTO semantic_kv_store (user_id, session_id, key, value, embedding, metadata)
+            VALUES (@uid, @sid, @k, @v, @e::vector, @m)
+            ON CONFLICT (user_id, session_id, key) DO UPDATE
+            SET value     = EXCLUDED.value,
                 embedding = EXCLUDED.embedding,
-                metadata = EXCLUDED.metadata;";
+                metadata  = EXCLUDED.metadata;";
 
             await this._postgreSqlRunner.ExecuteAsync(
                 query,
                 new Dictionary<string, object?>
                 {
+                    ["uid"] = userId,
+                    ["sid"] = ResolveSessionId(sessionId),
                     ["k"] = key,
                     ["v"] = new NpgsqlParameter("v", NpgsqlDbType.Jsonb) { Value = contentToEmbed },
                     ["e"] = vectorLiteral,
@@ -260,7 +292,7 @@ public class PostgreKVStore : IVectorStore
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "upsert" } });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("Vector store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogDebug("Vector store upsert completed in {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId ?? "global", key);
         }
         catch (Exception ex)
         {
@@ -276,26 +308,28 @@ public class PostgreKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error upserting vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error upserting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId ?? "global", key);
             throw;
         }
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "delete");
+        activity?.SetTag("vectorstore.user_id", userId);
+        activity?.SetTag("vectorstore.session_id", sessionId ?? "global");
         activity?.SetTag("vectorstore.key", key);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Deleting vector store entry with key {Key}", key);
+        this._logger.LogDebug("Deleting vector store entry for user {UserId} session {SessionId} key {Key}", userId, sessionId ?? "global", key);
 
         try
         {
             int rowsAffected = await this._postgreSqlRunner.ExecuteAsync(
-                "DELETE FROM semantic_kv_store WHERE key = @k;",
-                new Dictionary<string, object?> { ["k"] = key },
+                "DELETE FROM semantic_kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
+                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
                 cancellationToken);
 
             stopwatch.Stop();
@@ -304,7 +338,7 @@ public class PostgreKVStore : IVectorStore
 
             activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("Vector store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
+            this._logger.LogDebug("Vector store delete completed in {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId ?? "global", key, rowsAffected > 0);
             return rowsAffected > 0;
         }
         catch (Exception ex)
@@ -321,37 +355,43 @@ public class PostgreKVStore : IVectorStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error deleting vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error deleting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId ?? "global", key);
             throw;
         }
     }
 
     private static async Task<SearchHit<TValue>> HydrateSearchHitAsync<TValue>(DbDataReader reader)
     {
-        string? valueJson = reader.GetValue(1) switch
+        string userId = reader.GetString(0);
+        string rawSession = reader.GetString(1);
+        string? sessionId = rawSession == GlobalSession ? null : rawSession;
+
+        string? valueJson = reader.GetValue(3) switch
         {
             null => null,
             DBNull => null,
             JsonDocument document => document.RootElement.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => reader.GetValue(1)?.ToString()
+            _ => reader.GetValue(3)?.ToString()
         };
 
-        string? metadataJson = reader.GetValue(2) switch
+        string? metadataJson = reader.GetValue(4) switch
         {
             null => null,
             DBNull => null,
             JsonDocument document => document.RootElement.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => reader.GetValue(2)?.ToString()
+            _ => reader.GetValue(4)?.ToString()
         };
 
         return new SearchHit<TValue>(
-            Key: reader.GetString(0),
+            UserId: userId,
+            SessionId: sessionId,
+            Key: reader.GetString(2),
             Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
-            Distance: reader.GetDouble(3),
-            UpdatedOn: reader.IsDBNull(4) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero)
+            Distance: reader.GetDouble(5),
+            UpdatedOn: reader.IsDBNull(6) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(6), TimeSpan.Zero)
         );
     }
 }

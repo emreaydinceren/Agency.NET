@@ -40,6 +40,9 @@ public class PostgreKVStore : IKVStore
 
     private readonly PostgreSqlRunner _postgreSqlRunner;
 
+    private const string GlobalSession = "*";
+    private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
+
     /// <summary>
     /// Initializes a new instance of <see cref="PostgreKVStore"/> with the given SQL runner and logger.
     /// </summary>
@@ -68,11 +71,22 @@ public class PostgreKVStore : IKVStore
         try
         {
             const string sql = @"
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'kv_store')
+                   AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'kv_store' AND column_name = 'user_id') THEN
+                    DROP TABLE kv_store CASCADE;
+                END IF;
+            END $$;
+
             CREATE TABLE IF NOT EXISTS kv_store (
-                key        TEXT PRIMARY KEY,
+                user_id    TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                key        TEXT NOT NULL,
                 value      JSONB NOT NULL,
                 metadata   JSONB,
-                updated_on TIMESTAMPTZ DEFAULT NOW()
+                updated_on TIMESTAMPTZ DEFAULT NOW(),
+                PRIMARY KEY (user_id, session_id, key)
             );
 
             CREATE INDEX IF NOT EXISTS idx_kv_store_metadata
@@ -126,11 +140,13 @@ public class PostgreKVStore : IKVStore
         try
         {
             const string sql = @"
-            SELECT key, value, metadata, 0.0::double precision AS distance, updated_on
+            SELECT user_id, session_id, key, value, metadata, 0.0::double precision AS distance, updated_on
             FROM kv_store
-            WHERE (@hasKey    = FALSE OR key = @k)
-              AND (@hasFilter = FALSE OR metadata @> @mFilter)
-              AND (@hasValue  = FALSE OR value::text ILIKE @vLike)
+            WHERE user_id = @uid
+              AND (@hasSessionId = FALSE OR session_id = @sid)
+              AND (@hasKey       = FALSE OR key = @k)
+              AND (@hasFilter    = FALSE OR metadata @> @mFilter)
+              AND (@hasValue     = FALSE OR value::text ILIKE @vLike)
             ORDER BY updated_on DESC
             LIMIT @l;";
 
@@ -138,6 +154,19 @@ public class PostgreKVStore : IKVStore
             {
                 ["l"] = query.Limit ?? 10
             };
+
+            parameters["uid"] = query.UserId;
+
+            if (query.SessionId != null)
+            {
+                parameters["sid"] = query.SessionId;
+                parameters["hasSessionId"] = true;
+            }
+            else
+            {
+                parameters["sid"] = DBNull.Value;
+                parameters["hasSessionId"] = false;
+            }
 
             // Substring value search (optional)
             if (string.IsNullOrWhiteSpace(query.Value) == false)
@@ -210,7 +239,7 @@ public class PostgreKVStore : IKVStore
     }
 
     /// <inheritdoc/>
-    public async Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
+    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("kvstore.upsert", ActivityKind.Client);
         activity?.SetTag("kvstore.operation", "upsert");
@@ -225,9 +254,9 @@ public class PostgreKVStore : IKVStore
             string contentJson = JsonSerializer.Serialize(value);
 
             const string sql = @"
-            INSERT INTO kv_store (key, value, metadata)
-            VALUES (@k, @v, @m)
-            ON CONFLICT (key) DO UPDATE
+            INSERT INTO kv_store (user_id, session_id, key, value, metadata)
+            VALUES (@uid, @sid, @k, @v, @m)
+            ON CONFLICT (user_id, session_id, key) DO UPDATE
             SET value      = EXCLUDED.value,
                 metadata   = EXCLUDED.metadata,
                 updated_on = NOW();";
@@ -236,6 +265,8 @@ public class PostgreKVStore : IKVStore
                 sql,
                 new Dictionary<string, object?>
                 {
+                    ["uid"] = userId,
+                    ["sid"] = ResolveSessionId(sessionId),
                     ["k"] = key,
                     ["v"] = new NpgsqlParameter("v", NpgsqlDbType.Jsonb) { Value = contentJson },
                     ["m"] = metadata != null ? new NpgsqlParameter("m", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(metadata) } : DBNull.Value
@@ -269,7 +300,7 @@ public class PostgreKVStore : IKVStore
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("kvstore.delete", ActivityKind.Client);
         activity?.SetTag("kvstore.operation", "delete");
@@ -281,8 +312,8 @@ public class PostgreKVStore : IKVStore
         try
         {
             int rowsAffected = await this._postgreSqlRunner.ExecuteAsync(
-                "DELETE FROM kv_store WHERE key = @k;",
-                new Dictionary<string, object?> { ["k"] = key },
+                "DELETE FROM kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
+                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
                 cancellationToken);
 
             stopwatch.Stop();
@@ -315,30 +346,36 @@ public class PostgreKVStore : IKVStore
 
     private static async Task<SearchHit<TValue>> HydrateSearchHitAsync<TValue>(DbDataReader reader)
     {
-        string? valueJson = reader.GetValue(1) switch
+        string userId = reader.GetString(0);
+        string rawSession = reader.GetString(1);
+        string? sessionId = rawSession == GlobalSession ? null : rawSession;
+
+        string? valueJson = reader.GetValue(3) switch
         {
             null => null,
             DBNull => null,
             JsonDocument document => document.RootElement.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => reader.GetValue(1)?.ToString()
+            _ => reader.GetValue(3)?.ToString()
         };
 
-        string? metadataJson = reader.GetValue(2) switch
+        string? metadataJson = reader.GetValue(4) switch
         {
             null => null,
             DBNull => null,
             JsonDocument document => document.RootElement.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => reader.GetValue(2)?.ToString()
+            _ => reader.GetValue(4)?.ToString()
         };
 
         return await Task.FromResult(new SearchHit<TValue>(
-            Key: reader.GetString(0),
+            UserId: userId,
+            SessionId: sessionId,
+            Key: reader.GetString(2),
             Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
-            Distance: reader.GetDouble(3),
-            UpdatedOn: reader.IsDBNull(4) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero)
+            Distance: reader.GetDouble(5),
+            UpdatedOn: reader.IsDBNull(6) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(6), TimeSpan.Zero)
         ));
     }
 }

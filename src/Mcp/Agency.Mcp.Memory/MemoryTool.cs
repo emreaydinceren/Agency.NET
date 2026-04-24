@@ -42,12 +42,10 @@ public class MemoryTool(IKVStore kvStore)
         }
 
         MemoryScope scope = record.Scope;
-        string storageKey = $"{scope.UserId}|{scope.SessionId}|{record.Domain}|{record.Key}";
+        string storageKey = $"{record.Domain}|{record.Key}";
 
         var metadata = new Dictionary<string, object>
         {
-            ["userId"] = scope.UserId,
-            ["sessionId"] = scope.SessionId,
             ["domain"] = record.Domain,
             ["key"] = record.Key
         };
@@ -57,7 +55,7 @@ public class MemoryTool(IKVStore kvStore)
             metadata["tags"] = record.Tags;
         }
 
-        await this._kvStore.UpsertAsync(storageKey, record.Value, metadata);
+        await this._kvStore.UpsertAsync(scope.UserId, scope.SessionId, storageKey, record.Value, metadata);
         return $"Memorized: {storageKey}";
     }
 
@@ -71,9 +69,34 @@ public class MemoryTool(IKVStore kvStore)
     [McpServerTool, Description("Deletes a memorized piece of information.")]
     public async Task<string> Forget(MemoryScope scope, string domain, string key)
     {
-        string storageKey = $"{scope.UserId}|{scope.SessionId}|{domain}|{key}";
-        bool removed = await this._kvStore.DeleteAsync(storageKey);
+        string storageKey = $"{domain}|{key}";
+        bool removed = await this._kvStore.DeleteAsync(scope.UserId, scope.SessionId, storageKey);
         return removed ? $"Removed: {storageKey}" : $"Not found: {storageKey}";
+    }
+
+    /// <summary>
+    /// Lists the distinct storage keys and tags for all entries in the global (user-wide) session.
+    /// </summary>
+    /// <param name="userId">The user whose global-session entries to index.</param>
+    /// <returns>A JSON object with <c>Keys</c> and <c>Tags</c> string arrays.</returns>
+    [McpServerTool, Description("Lists distinct keys and tags stored in the global (user-wide) session for a given user.")]
+    public async Task<string> ListGlobalKeys(string userId)
+    {
+        var query = new Query(userId, "*", null, null, null, int.MaxValue, true);
+        IReadOnlyList<SearchHit<string>> hits = await this._kvStore.SearchAsync<string>(query);
+
+        string[] keys = hits.Select(h => h.Key).Distinct().ToArray();
+        string[] tags = hits
+            .Where(h => h.Metadata?.ContainsKey("tags") == true)
+            .SelectMany(h =>
+                h.Metadata!["tags"] is List<object> tagList
+                    ? tagList.Select(t => t?.ToString() ?? string.Empty)
+                    : [])
+            .Where(t => !string.IsNullOrEmpty(t))
+            .Distinct()
+            .ToArray();
+
+        return JsonSerializer.Serialize(new { Keys = keys, Tags = tags });
     }
 
     /// <summary>
@@ -87,11 +110,7 @@ public class MemoryTool(IKVStore kvStore)
     [McpServerTool, Description("Recalls the memorized piece of information based on filter parameters.")]
     public async Task<string> Recall(MemoryScope scope, string? domain, string? key, string[]? tags)
     {
-        var metadataFilter = new Dictionary<string, object>
-        {
-            ["userId"] = scope.UserId,
-            ["sessionId"] = scope.SessionId
-        };
+        var metadataFilter = new Dictionary<string, object>();
 
         if (!string.IsNullOrWhiteSpace(domain))
         {
@@ -106,10 +125,10 @@ public class MemoryTool(IKVStore kvStore)
         string? queryKey = null;
         if (!string.IsNullOrWhiteSpace(domain) && !string.IsNullOrWhiteSpace(key))
         {
-            queryKey = $"{scope.UserId}|{scope.SessionId}|{domain}|{key}";
+            queryKey = $"{domain}|{key}";
         }
 
-        var query = new Query(queryKey, null, metadataFilter, 10, true);
+        var query = new Query(scope.UserId, scope.SessionId, queryKey, null, metadataFilter.Count > 0 ? metadataFilter : null, 10, true);
         IReadOnlyList<SearchHit<string>> hits = await this._kvStore.SearchAsync<string>(query);
         return JsonSerializer.Serialize(hits);
     }

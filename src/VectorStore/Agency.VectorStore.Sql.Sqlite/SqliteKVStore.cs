@@ -13,12 +13,12 @@ using System.Globalization;
 using System.Text.Json;
 
 /// <summary>
-/// An <see cref="IKVStore"/> backed by SQLite that stores embeddings as JSON-array TEXT columns
+/// An <see cref="IVectorStore"/> backed by SQLite that stores embeddings as JSON-array TEXT columns
 /// and uses a cosine-distance UDF registered via <see cref="RegisterVectorFunctions"/> for similarity search.
 /// Metadata filtering is applied in-process after the SQL query because SQLite has no native JSONB
 /// containment operator.
 /// </summary>
-public sealed class SqliteKVStore : IKVStore
+public sealed class SqliteKVStore : IVectorStore
 {
     /// <summary>The activity source name used for vector store telemetry.</summary>
     public const string ActivitySourceName = "Agency.VectorStore.Sql.Sqlite";
@@ -38,6 +38,9 @@ public sealed class SqliteKVStore : IKVStore
     private readonly ILogger<SqliteKVStore> _logger;
     private readonly IEmbeddingGenerator _embeddingGenerator;
     private readonly SqliteRunner _sqliteRunner;
+
+    private const string GlobalSession = "*";
+    private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
 
     /// <summary>
     /// Creates a new <see cref="SqliteKVStore"/>.
@@ -98,18 +101,16 @@ public sealed class SqliteKVStore : IKVStore
             await this._sqliteRunner.ExecuteAsync(
                 """
                 CREATE TABLE IF NOT EXISTS semantic_kv_store (
-                    key        TEXT PRIMARY KEY,
+                    user_id    TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    key        TEXT NOT NULL,
                     value      TEXT NOT NULL,
                     embedding  TEXT NOT NULL,
                     metadata   TEXT,
-                    updated_on TEXT DEFAULT (datetime('now'))
+                    updated_on TEXT DEFAULT (datetime('now')),
+                    PRIMARY KEY (user_id, session_id, key)
                 )
                 """,
-                null,
-                cancellationToken);
-
-            await this._sqliteRunner.ExecuteAsync(
-                "CREATE INDEX IF NOT EXISTS idx_kv_key ON semantic_kv_store (key)",
                 null,
                 cancellationToken);
 
@@ -162,16 +163,30 @@ public sealed class SqliteKVStore : IKVStore
             int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
             const string sql = """
-                SELECT key, value, metadata,
+                SELECT user_id, session_id, key, value, metadata,
                        CASE WHEN @qVector IS NULL THEN 0.0 ELSE vec_distance_cosine(embedding, @qVector) END AS distance,
                        updated_on
                 FROM semantic_kv_store
-                WHERE (@hasKey = 0 OR key = @k)
+                WHERE user_id = @uid
+                  AND (@hasSessionId = 0 OR session_id = @sid)
+                  AND (@hasKey       = 0 OR key = @k)
                 ORDER BY distance ASC
                 LIMIT @l
                 """;
 
             var parameters = new Dictionary<string, object?> { ["l"] = sqlLimit };
+            parameters["uid"] = query.UserId;
+
+            if (query.SessionId != null)
+            {
+                parameters["sid"] = query.SessionId;
+                parameters["hasSessionId"] = 1;
+            }
+            else
+            {
+                parameters["sid"] = string.Empty;
+                parameters["hasSessionId"] = 0;
+            }
 
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
@@ -238,15 +253,17 @@ public sealed class SqliteKVStore : IKVStore
     }
 
     /// <inheritdoc/>
-    public async Task UpsertAsync<TValue>(string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
+    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.upsert", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "upsert");
+        activity?.SetTag("vectorstore.userId", userId);
+        activity?.SetTag("vectorstore.sessionId", sessionId);
         activity?.SetTag("vectorstore.key", key);
         activity?.SetTag("vectorstore.has_metadata", metadata != null);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Upserting SQLite vector store entry with key {Key}", key);
+        this._logger.LogDebug("Upserting SQLite vector store entry with userId {UserId}, sessionId {SessionId}, key {Key}", userId, sessionId, key);
 
         try
         {
@@ -256,9 +273,9 @@ public sealed class SqliteKVStore : IKVStore
             string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
             const string upsertSql = """
-                INSERT INTO semantic_kv_store (key, value, embedding, metadata)
-                VALUES (@k, @v, @e, @m)
-                ON CONFLICT (key) DO UPDATE
+                INSERT INTO semantic_kv_store (user_id, session_id, key, value, embedding, metadata)
+                VALUES (@uid, @sid, @k, @v, @e, @m)
+                ON CONFLICT (user_id, session_id, key) DO UPDATE
                 SET value      = excluded.value,
                     embedding  = excluded.embedding,
                     metadata   = excluded.metadata,
@@ -269,6 +286,8 @@ public sealed class SqliteKVStore : IKVStore
                 upsertSql,
                 new Dictionary<string, object?>
                 {
+                    ["uid"] = userId,
+                    ["sid"] = ResolveSessionId(sessionId),
                     ["k"] = key,
                     ["v"] = contentToEmbed,
                     ["e"] = vectorLiteral,
@@ -281,7 +300,7 @@ public sealed class SqliteKVStore : IKVStore
             _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "upsert" } });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite vector store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogDebug("SQLite vector store upsert completed in {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId, key);
         }
         catch (Exception ex)
         {
@@ -297,22 +316,71 @@ public sealed class SqliteKVStore : IKVStore
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error upserting SQLite vector store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
+            this._logger.LogError(ex, "Error upserting SQLite vector store entry after {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId, key);
+            throw;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
+    {
+        using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
+        activity?.SetTag("vectorstore.operation", "delete");
+        activity?.SetTag("vectorstore.userId", userId);
+        activity?.SetTag("vectorstore.sessionId", sessionId);
+        activity?.SetTag("vectorstore.key", key);
+
+        var stopwatch = Stopwatch.StartNew();
+        this._logger.LogDebug("Deleting SQLite vector store entry with userId {UserId}, sessionId {SessionId}, key {Key}", userId, sessionId, key);
+
+        try
+        {
+            int rowsAffected = await this._sqliteRunner.ExecuteAsync(
+                "DELETE FROM semantic_kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
+                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
+                cancellationToken);
+
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "success" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
+
+            activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            this._logger.LogDebug("SQLite vector store delete completed in {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId, key, rowsAffected > 0);
+            return rowsAffected > 0;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "error" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
+
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+            {
+                { "exception.type", ex.GetType().FullName },
+                { "exception.message", ex.Message },
+                { "exception.stacktrace", ex.ToString() },
+            }));
+
+            this._logger.LogError(ex, "Error deleting SQLite vector store entry after {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId, key);
             throw;
         }
     }
 
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)
     {
-        string key = reader.GetString(0);
-        string valueJson = reader.GetString(1);
-        string? metadataJson = reader.IsDBNull(2) ? null : reader.GetString(2);
-        double distance = Convert.ToDouble(reader.GetValue(3));
+        string userId = reader.GetString(0);
+        string? sessionId = reader.GetString(1) == GlobalSession ? null : reader.GetString(1);
+        string key = reader.GetString(2);
+        string valueJson = reader.GetString(3);
+        string? metadataJson = reader.IsDBNull(4) ? null : reader.GetString(4);
+        double distance = Convert.ToDouble(reader.GetValue(5));
 
         DateTimeOffset updatedOn = DateTimeOffset.UtcNow;
-        if (!reader.IsDBNull(4))
+        if (!reader.IsDBNull(6))
         {
-            string raw = reader.GetString(4);
+            string raw = reader.GetString(6);
             if (DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
             {
@@ -321,6 +389,8 @@ public sealed class SqliteKVStore : IKVStore
         }
 
         return new SearchHit<TValue>(
+            UserId: userId,
+            SessionId: sessionId,
             Key: key,
             Value: JsonSerializer.Deserialize<TValue>(valueJson)!,
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),

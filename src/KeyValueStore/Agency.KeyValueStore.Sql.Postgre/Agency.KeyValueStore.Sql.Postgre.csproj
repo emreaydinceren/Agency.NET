@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
+    <ProjectReference Include="..\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />
+  </ItemGroup>
+</Project>

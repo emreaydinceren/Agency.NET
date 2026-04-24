@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Moq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Mcp.Memory\Agency.Mcp.Memory.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Sqlite\Agency.KeyValueStore.Sql.Sqlite.csproj" />
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
+  </ItemGroup>
+
+</Project>

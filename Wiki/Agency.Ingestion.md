@@ -6,15 +6,17 @@
 
 `Agency.Ingestion` defines the abstractions and default orchestration for the document ingestion pipeline — the process of loading raw documents, splitting them into chunks, and storing them in a vector store. It contains no provider-specific code.
 
+The project references [[Agency.VectorStore.Common]] and uses `Microsoft.Extensions.Logging.Abstractions` for the default pipeline logger integration.
+
 ## Key Types
 
 ### `Document`
 
 ```csharp
-public sealed record Document(
-    string SourceId,                        // unique identifier (e.g., file path)
-    string Content,                         // raw text of this document or chunk
-    Dictionary<string, object>? Metadata);  // arbitrary key-value pairs (file type, etc.)
+public record Document(
+    string Content,
+    string SourceId,
+    Dictionary<string, object>? Metadata = null);
 ```
 
 ### `IDocumentLoader`
@@ -49,35 +51,47 @@ public interface IIngestionPipeline<TValue>
     Task<IngestionResult> ExecuteAsync(
         IDocumentLoader loader,
         ITextSplitter splitter,
-        IKVStore store,
+        IVectorStore store,
+        string userId,
+        string? sessionId,
         CancellationToken ct = default);
 }
 ```
 
 ### `DefaultIngestionPipeline<TValue>`
 
-The default implementation uses `Parallel.ForEachAsync` with configurable parallelism. Chunk keys follow the pattern `{sourceId}:chunk:{index}`. Each chunk's metadata is augmented with `source_file`, `chunk_index`, and `ingested_at`.
+The default implementation uses `Parallel.ForEachAsync` with configurable parallelism. `maxDegreeOfParallelism` defaults to `Environment.ProcessorCount` when not provided. Chunk keys follow the pattern `{sourceId}:chunk:{index}`. Each chunk's metadata is augmented with `source_file`, `chunk_index`, and `ingested_at`.
 
 ```csharp
 var pipeline = new DefaultIngestionPipeline<string>(
-    chunkConverter: doc => doc.Content,    // store the text itself as TValue
-    maxDegreeOfParallelism: 4);
+    chunkConverter: chunk => chunk.Content,
+    maxDegreeOfParallelism: 4,
+    logger: logger);
 
 IngestionResult result = await pipeline.ExecuteAsync(
-    loader:   new DirectoryLoader("/docs", "*.md"),
-    splitter: new SemanticKernelTextSplitter(maxTokens: 512, overlapTokens: 64),
-    store:    kvStore);
+    loader: loader,
+    splitter: splitter,
+    store: vectorStore,
+    userId: "user-123",
+    sessionId: "session-abc",
+    ct: cancellationToken);
 
-Console.WriteLine($"Succeeded: {result.Succeeded}, Failed: {result.Failed}");
+if (!result.IsSuccess)
+{
+    Console.WriteLine(string.Join(", ", result.FailedKeys ?? []));
+}
 ```
 
 ### `IngestionResult`
 
 ```csharp
-public sealed record IngestionResult(
+public record IngestionResult(
     int Succeeded,
     int Failed,
-    IReadOnlyList<string>? FailedKeys);
+    IReadOnlyList<string>? FailedKeys = null)
+{
+    public bool IsSuccess => Failed == 0;
+}
 ```
 
 ## Observability
@@ -85,6 +99,7 @@ public sealed record IngestionResult(
 - **Activity** `ingestion.execute`
 - **Counter** `ingestion.documents_total` (tags: `status`)
 - **Histogram** `ingestion.duration_ms`
+- **Logs** start/completion info logs and per-chunk upsert error logs
 
 ActivitySource name: `Agency.Ingestion` | Meter name: `Agency.Ingestion`
 
@@ -92,8 +107,8 @@ ActivitySource name: `Agency.Ingestion` | Meter name: `Agency.Ingestion`
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Ingestion.FileSystem]] | Implements `IDocumentLoader` for files and directories |
-| [[Agency.Ingestion.SemanticKernel]] | Implements `ITextSplitter` using SK's `TextChunker` |
-| [[Agency.VectorStore.Common]] | `DefaultIngestionPipeline` calls `IKVStore.UpsertAsync` |
+| [[Agency.Ingestion.FileSystem]] | Provides `IDocumentLoader` implementations for ingestion sources |
+| [[Agency.Ingestion.SemanticKernel]] | Provides `ITextSplitter` implementations used by the pipeline |
+| [[Agency.VectorStore.Common]] | `DefaultIngestionPipeline` calls `IVectorStore.UpsertAsync` |
 | [[Agency.VectorStore.Sql.Postgre]] | Typical production store backend |
 | [[Agency.VectorStore.Sql.Sqlite]] | Typical dev/test store backend |

@@ -29,10 +29,16 @@ Map changed file paths to project names by extracting the top-level folder under
 
 ### Step 2 — For each project to update
 
+Step 2 must always be delegated to a subagent. Do not perform Step 2 directly in the parent agent.
+
+For each project, invoke one subagent and have that subagent do all of the following:
+
 1. Read all `.cs` files in `E:\Repos\Agency\src\<ProjectName>\` (excluding `obj/` subfolders).
 2. Read the existing wiki page at `E:\Repos\Agency\Wiki\<ProjectName>.md` if it exists.
 3. Identify what has changed: new types, renamed types, removed types, changed method signatures, new dependencies, new configuration options, or new observability signals.
 4. Rewrite the wiki page to reflect the current state of the code. Preserve the existing page structure (What It Is, How It Works, How It Relates, etc.) but update all content to match reality.
+
+After each subagent completes, verify the written wiki file exists and continue to the next project.
 
 ### Step 3 — Check for new projects
 

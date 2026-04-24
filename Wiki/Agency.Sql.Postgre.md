@@ -78,7 +78,8 @@ Host=localhost; Port=5432; Database=dev_db; Username=dev_user; Password=dev_pass
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Common]] | Returns `Dataset`; implements `IColumnMetadata` via `DbColumnAdapter` |
+| [[Agency.Sql.Common]] | `PostgreSqlRunner` extends `SqlRunnerBase`; inherits `ExecuteAsync` / `QueryAsync` with OTel |
+| [[Agency.Common]] | Returns `Dataset`; `IColumnMetadata` adapter lives in `Agency.Sql.Common` |
 | [[Agency.Embeddings.Common]] | `SQLQueryEmbedder` injects `IEmbeddingGenerator` |
 | [[Agency.VectorStore.Sql.Postgre]] | `PostgreKVStore` delegates all SQL to `PostgreSqlRunner` |
 | [[Agency.RagFormatter]] | Formats the `Dataset` returned by `QueryAsync` |

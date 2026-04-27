@@ -16,17 +16,17 @@ var client = new OpenAIClient(Options.Create(new LlmClientOptions
 }));
 
 // Simple prompt
-LlmResponse reply = await client.SendAsync("qwen/qwen3-coder-next", "system", "Explain HNSW indexes.");
+LlmResponse reply = await client.SendAsync("google/gemma-4-e2b", "system", "Explain HNSW indexes.");
 
 // Streaming simple prompt
-await foreach (LlmStreamChunk chunk in client.StreamAsync("qwen/qwen3-coder-next", "system", "prompt"))
+await foreach (LlmStreamChunk chunk in client.StreamAsync("google/gemma-4-e2b", "system", "prompt"))
 {
     if (chunk.Text is not null) Console.Write(chunk.Text);
 }
 
 // Agentic turn
 AgentLlmResponse response = await client.SendAgentAsync(
-    model:        "qwen/qwen3-coder-next",
+    model:        "google/gemma-4-e2b",
     systemPrompt: "You are a helpful assistant.",
     messages:     conversationHistory,
     tools:        toolDefinitions,

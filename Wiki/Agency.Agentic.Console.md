@@ -80,7 +80,7 @@ A single `sessionCts` covers the whole session. `Console.CancelKeyPress` cancels
     "OpenAI": {
       "BaseUrl": "http://llm-host.example:1234/v1",
       "ApiKey":  "lm-studio",
-      "Model":   "qwen/qwen3-coder-next"
+      "Model":   "google/gemma-4-e2b"
     },
     "Claude": {
       "ApiKey": "sk-ant-...",

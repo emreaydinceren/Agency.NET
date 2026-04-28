@@ -6,10 +6,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NpgsqlTypes;
+using System.Collections;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
+using static System.Net.WebRequestMethods;
 
 /// <summary>
 /// PostgreSQL-backed implementation of <see cref="IKVStore"/> that stores key-value entries without vector embeddings.
@@ -57,7 +59,7 @@ public class PostgreKVStore : IKVStore
     }
 
     /// <summary>
-    /// Creates the <c>kv_store</c> table and supporting GIN index if they do not already exist.
+    /// Creates the <c> kv_store</c> table and supporting GIN index if they do not already exist.
     /// </summary>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
@@ -140,7 +142,7 @@ public class PostgreKVStore : IKVStore
         try
         {
             const string sql = @"
-            SELECT user_id, session_id, key, value, metadata, 0.0::double precision AS distance, updated_on
+            SELECT session_id, key, value, metadata, updated_on
             FROM kv_store
             WHERE user_id = @uid
               AND (@hasSessionId = FALSE OR session_id = @sid)
@@ -344,13 +346,92 @@ public class PostgreKVStore : IKVStore
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default)
+    {
+        using var activity = _activitySource.StartActivity("kvstore.getMetadata", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "getMetadata");
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            const string sql = 
+                @"SELECT session_id, key, metadata, updated_on
+                FROM kv_store
+                    WHERE user_id = @uid
+                      AND(@hasSessionId = FALSE OR session_id = @sid)
+                    ORDER BY updated_on DESC";
+
+            var parameters = new Dictionary<string, object?>
+            {
+                ["uid"] = userId
+            };
+
+            if (sessionId != null)
+            {
+                parameters["sid"] = sessionId;
+                parameters["hasSessionId"] = true;
+            }
+            else
+            {
+                parameters["sid"] = DBNull.Value;
+                parameters["hasSessionId"] = false;
+            }
+
+
+            var results = await this._postgreSqlRunner.QueryAsync<SearchHit>(
+                sql,
+                async (reader) => await HydrateSearchHitAsync(reader),
+                parameters,
+                cancellationToken);
+
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
+
+            activity?.SetTag("kvstore.result_count", results.Count);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            this._logger.LogDebug("KV store search completed in {ElapsedMs}ms. Results returned: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
+            return results;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "error" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
+
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+            {
+                { "exception.type", ex.GetType().FullName },
+                { "exception.message", ex.Message },
+                { "exception.stacktrace", ex.ToString() },
+            }));
+
+            this._logger.LogError(ex, "Error searching KV store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            throw;
+        }
+    }
+
     private static async Task<SearchHit<TValue>> HydrateSearchHitAsync<TValue>(DbDataReader reader)
     {
-        string userId = reader.GetString(0);
-        string rawSession = reader.GetString(1);
+        //  session_id, key, value, metadata, updated_on
+
+        string rawSession = reader.GetString(0);
         string? sessionId = rawSession == GlobalSession ? null : rawSession;
 
-        string? valueJson = reader.GetValue(3) switch
+        string? valueJson = reader.GetValue(2) switch
+        {
+            null => null,
+            DBNull => null,
+            JsonDocument document => document.RootElement.GetRawText(),
+            JsonElement element => element.GetRawText(),
+            _ => reader.GetValue(2)?.ToString()
+        };
+
+        string? metadataJson = reader.GetValue(3) switch
         {
             null => null,
             DBNull => null,
@@ -359,23 +440,46 @@ public class PostgreKVStore : IKVStore
             _ => reader.GetValue(3)?.ToString()
         };
 
-        string? metadataJson = reader.GetValue(4) switch
+        return await Task.FromResult(new SearchHit<TValue>(
+            SessionId: sessionId,
+            Key: reader.GetString(1),
+            Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
+            Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
+            UpdatedOn: GetUpdatedOn(reader, 4)
+        ));
+    }
+
+    private static async Task<SearchHit> HydrateSearchHitAsync(DbDataReader reader)
+    {
+        //  session_id, key, metadata, updated_on
+
+        string rawSession = reader.GetString(0);
+        string? sessionId = rawSession == GlobalSession ? null : rawSession;
+
+        string? metadataJson = reader.GetValue(2) switch
         {
             null => null,
             DBNull => null,
             JsonDocument document => document.RootElement.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => reader.GetValue(4)?.ToString()
+            _ => reader.GetValue(2)?.ToString()
         };
 
-        return await Task.FromResult(new SearchHit<TValue>(
-            UserId: userId,
+        return await Task.FromResult(new SearchHit(
             SessionId: sessionId,
-            Key: reader.GetString(2),
-            Value: string.IsNullOrWhiteSpace(valueJson) ? default! : JsonSerializer.Deserialize<TValue>(valueJson)!,
+            Key: reader.GetString(1),
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
-            Distance: reader.GetDouble(5),
-            UpdatedOn: reader.IsDBNull(6) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(6), TimeSpan.Zero)
+            UpdatedOn: GetUpdatedOn(reader, 3)
         ));
+    }
+
+    private static DateTimeOffset GetUpdatedOn(DbDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+        DateTime dt = reader.GetDateTime(ordinal);
+        return new DateTimeOffset(dt, TimeSpan.Zero);
     }
 }

@@ -15,7 +15,9 @@ public interface IKVStore
     /// </summary>
     /// <typeparam name="TValue">The type of the value to store or update.</typeparam>
     /// <param name="userId">The user this entry belongs to. Cannot be null.</param>
-    /// <param name="sessionId">The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c>"*"</c>).</param>
+    /// <param name="sessionId">
+    /// The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c> "*"</c>).
+    /// </param>
     /// <param name="key">The key that identifies the value to insert or update. Cannot be null.</param>
     /// <param name="value">The value to insert or update for the specified key.</param>
     /// <param name="metadata">
@@ -38,12 +40,30 @@ public interface IKVStore
     /// Deletes the entry with the given key asynchronously.
     /// </summary>
     /// <param name="userId">The user this entry belongs to. Cannot be null.</param>
-    /// <param name="sessionId">The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c>"*"</c>).</param>
+    /// <param name="sessionId">
+    /// The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c> "*"</c>).
+    /// </param>
     /// <param name="key">The key that identifies the entry to delete. Cannot be null.</param>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     /// <returns>
-    /// A task that represents the asynchronous operation. The task result is <see langword="true"/> if an entry
-    /// was removed, or <see langword="false"/> if no entry existed for that key.
+    /// A task that represents the asynchronous operation. The task result is <see langword="true"/> if an entry was
+    /// removed, or <see langword="false"/> if no entry existed for that key.
     /// </returns>
     Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default);
+
+
+    /// <summary>
+    /// Gets a list of <![CDATA[Metadata]]> representing Domain and unique keys and metadata associated with the given
+    /// user and session. If sessionId is null, returns user-global entries (stored as "*").
+    /// </summary>
+    /// <param name="userId">The user this entry belongs to. Cannot be null.</param>
+    /// <param name="sessionId">
+    /// The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c> "*"</c>).
+    /// </param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result contains a read-only list of metadata entries
+    /// matching the query. The list is empty if no results are found.
+    /// </returns>
+    Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default);
 }

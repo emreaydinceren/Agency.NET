@@ -8,16 +8,25 @@ namespace Agency.Mcp.Memory;
 /// <summary>
 /// MCP server tool class that exposes memory operations (memorize, forget, recall) backed by an <see cref="IKVStore"/>.
 /// </summary>
-[McpServerToolType]
+[McpServerToolType, Description(ToolDescription.Text)]
 public class MemoryTool(IKVStore kvStore)
 {
     private readonly IKVStore _kvStore = kvStore;
+
+    private sealed class DomainMetadata
+    {
+        public HashSet<string> Keys { get; } = [];
+
+        public HashSet<string> Tags { get; } = [];
+    }
 
     /// <summary>
     /// Stores a piece of information in the memory store under a composite key derived from scope, domain, and key.
     /// </summary>
     /// <param name="record">The memory record to store, including scope, domain, key, value, and optional tags.</param>
-    /// <returns>A confirmation message including the composite storage key, or an error message if validation fails.</returns>
+    /// <returns>
+    /// A confirmation message including the composite storage key, or an error message if validation fails.
+    /// </returns>
     [McpServerTool, Description("Memorizes a provided piece of information.")]
     public async Task<string> Memorize(MemoryRecord record)
     {
@@ -80,31 +89,71 @@ public class MemoryTool(IKVStore kvStore)
     /// <param name="userId">The user whose global-session entries to index.</param>
     /// <returns>A JSON object with <c>Keys</c> and <c>Tags</c> string arrays.</returns>
     [McpServerTool, Description("Lists distinct keys and tags stored in the global (user-wide) session for a given user.")]
-    public async Task<string> ListGlobalKeys(string userId)
+    public async Task<string> ListGlobalKeys(MemoryScope memoryScope)
     {
-        var query = new Query(userId, "*", null, null, null, int.MaxValue, true);
-        IReadOnlyList<SearchHit<string>> hits = await this._kvStore.SearchAsync<string>(query);
+        IReadOnlyList<SearchHit> hits = await this._kvStore.GetMetadataAsync(memoryScope.UserId, memoryScope.SessionId);
 
-        string[] keys = hits.Select(h => h.Key).Distinct().ToArray();
-        string[] tags = hits
-            .Where(h => h.Metadata?.ContainsKey("tags") == true)
-            .SelectMany(h =>
-                h.Metadata!["tags"] is List<object> tagList
-                    ? tagList.Select(t => t?.ToString() ?? string.Empty)
-                    : [])
-            .Where(t => !string.IsNullOrEmpty(t))
-            .Distinct()
-            .ToArray();
+        Dictionary<string, DomainMetadata> items = new();
 
-        return JsonSerializer.Serialize(new { Keys = keys, Tags = tags });
+        foreach (var hit in hits)
+        {
+            if (hit.Metadata?.TryGetValue("domain", out object? domain) == true && string.IsNullOrWhiteSpace(domain?.ToString()) == false)
+            {
+                if (items.TryGetValue(domain.ToString()!, out DomainMetadata? data) == false)
+                {
+                    data = new DomainMetadata();
+                    items[domain.ToString()!] = data;
+                }
+
+                if (hit.Metadata?.TryGetValue("tags", out object? tags) == true)
+                {
+                    IEnumerable<string> tagValues = tags switch
+                    {
+                        string[] tagsArray => tagsArray,
+                        IEnumerable<object> objectTags => objectTags.Select(t => t?.ToString()).OfType<string>(),
+                        JsonElement { ValueKind: JsonValueKind.Array } tagsJson => tagsJson.EnumerateArray().Select(t => t.GetString()).OfType<string>(),
+                        _ => []
+                    };
+
+                    foreach (var tag in tagValues)
+                    {
+                        if (string.IsNullOrWhiteSpace(tag) == false)
+                        {
+                            data.Tags.Add(tag);
+                        }
+                    }
+                }
+
+                if (hit.Metadata?.TryGetValue("key", out object? key) == true)
+                {
+                    string? keyValue = key switch
+                    {
+                        string s => s,
+                        JsonElement { ValueKind: JsonValueKind.String } keyJson => keyJson.GetString(),
+                        _ => key?.ToString()
+                    };
+
+                    if (string.IsNullOrWhiteSpace(keyValue) == false)
+                    {
+                        data.Keys.Add(keyValue);
+                    }
+                }
+            }
+        }
+
+        return JsonSerializer.Serialize(items);
     }
 
     /// <summary>
     /// Searches the memory store for entries matching the provided scope, domain, key, and/or tags.
     /// </summary>
     /// <param name="scope">The scope (user and session) to filter by. Always applied.</param>
-    /// <param name="domain">The domain to filter by. If both domain and key are provided, an exact composite key match is used.</param>
-    /// <param name="key">The key to filter by. If both domain and key are provided, an exact composite key match is used.</param>
+    /// <param name="domain">
+    /// The domain to filter by. If both domain and key are provided, an exact composite key match is used.
+    /// </param>
+    /// <param name="key">
+    /// The key to filter by. If both domain and key are provided, an exact composite key match is used.
+    /// </param>
     /// <param name="tags">Optional tags to filter by. Entries must contain all specified tags.</param>
     /// <returns>A JSON-serialized array of <see cref="SearchHit{TValue}"/> results.</returns>
     [McpServerTool, Description("Recalls the memorized piece of information based on filter parameters.")]

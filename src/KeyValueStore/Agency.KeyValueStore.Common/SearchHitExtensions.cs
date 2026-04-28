@@ -19,8 +19,6 @@ public static class SearchHitExtensions
         {
             new ColumnMetadata("Key", 0),
             new ColumnMetadata("Value", 1),
-            new ColumnMetadata("Distance", 2),
-            new ColumnMetadata("SimilarityPercentage", 3),
             new ColumnMetadata("UpdatedOn", 4),
         };
 
@@ -28,8 +26,6 @@ public static class SearchHitExtensions
         {
             hit.Key,
             hit.Value,
-            hit.Distance,
-            hit.SimilarityPercentage,
             hit.UpdatedOn,
         }).ToList();
 

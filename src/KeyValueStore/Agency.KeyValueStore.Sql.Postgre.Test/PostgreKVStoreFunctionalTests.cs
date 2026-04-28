@@ -257,6 +257,194 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         Assert.True(newIndex < oldIndex, $"Expected newer entry (index {newIndex}) to appear before older entry (index {oldIndex})");
     }
 
+    // ── Functional: Metadata listing ───────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that GetMetadataAsync returns metadata entries for the specified user and session.
+    /// </summary>
+    [Fact]
+    public async Task GetMetadataAsync_WithSessionId_ReturnsMatchingEntries()
+    {
+        var kvStore = this._fixture.KVStore;
+
+        var keyA = this._fixture.UniqueName("metadata_session_a");
+        var keyB = this._fixture.UniqueName("metadata_session_b");
+
+        await kvStore.UpsertAsync(
+            "test-user",
+            "metadata-session",
+            keyA,
+            new { content = "a" },
+            new Dictionary<string, object> { ["source"] = "alpha" },
+            TestContext.Current.CancellationToken);
+
+        await kvStore.UpsertAsync(
+            "test-user",
+            "metadata-session",
+            keyB,
+            new { content = "b" },
+            new Dictionary<string, object> { ["source"] = "beta" },
+            TestContext.Current.CancellationToken);
+
+        var results = await kvStore.GetMetadataAsync("test-user", "metadata-session", TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == keyA && r.Metadata != null && Equals(r.Metadata["source"], "alpha"));
+        Assert.Contains(results, r => r.Key == keyB && r.Metadata != null && Equals(r.Metadata["source"], "beta"));
+    }
+
+    /// <summary>
+    /// Verifies that GetMetadataAsync with a null sessionId returns entries across sessions,
+    /// including both user-global and session-scoped entries.
+    /// </summary>
+    [Fact]
+    public async Task GetMetadataAsync_NullSessionId_ReturnsEntriesAcrossAllSessions()
+    {
+        var kvStore = this._fixture.KVStore;
+
+        var keyGlobal = this._fixture.UniqueName("metadata_scope_global");
+        var keySession = this._fixture.UniqueName("metadata_scope_session");
+
+        await kvStore.UpsertAsync("test-user", null, keyGlobal, new { note = "global" }, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "metadata-session", keySession, new { note = "session" }, cancellationToken: TestContext.Current.CancellationToken);
+
+        var results = await kvStore.GetMetadataAsync("test-user", null, TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == keyGlobal && r.SessionId == null);
+        Assert.Contains(results, r => r.Key == keySession && r.SessionId == "metadata-session");
+    }
+
+    /// <summary>
+    /// Verifies that GetMetadataAsync returns entries whose keys are domain-prefixed and whose metadata
+    /// preserves the Domain and Tags hierarchy.
+    /// </summary>
+    [Fact]
+    public async Task GetMetadataAsync_WithDomainPrefixedKeysAndTags_ReturnsExpectedMetadata()
+    {
+        var kvStore = this._fixture.KVStore;
+        var sessionId = "metadata-domain-tags";
+
+        var entities = new[]
+        {
+            new
+            {
+                Domain = "Work",
+                Key = $"Work:Address:{this._fixture.UniqueName("domain_work_address")}",
+                Value = new { text = "HQ address and parking instructions", category = "logistics", importance = 3 },
+                Tags = new[] { "transportation", "taxes" }
+            },
+            new
+            {
+                Domain = "Work",
+                Key = $"Work:ExpensePolicy:{this._fixture.UniqueName("domain_work_expense")}",
+                Value = new { text = "Expense reimbursement and quarterly tax checklist", category = "finance", importance = 5 },
+                Tags = new[] { "taxes", "shopping", "compliance" }
+            },
+            new
+            {
+                Domain = "School",
+                Key = $"School:Address:{this._fixture.UniqueName("domain_school_address")}",
+                Value = new { text = "Campus office location and public transit stop", category = "location", importance = 2 },
+                Tags = new[] { "transportation", "family" }
+            },
+            new
+            {
+                Domain = "School",
+                Key = $"School:Supplies:{this._fixture.UniqueName("domain_school_supplies")}",
+                Value = new { text = "Back-to-school supplies and semester shopping list", category = "planning", importance = 4 },
+                Tags = new[] { "shopping", "family" }
+            },
+            new
+            {
+                Domain = "Home",
+                Key = $"Home:Address:{this._fixture.UniqueName("domain_home_address")}",
+                Value = new { text = "Home address, nearest grocery and pharmacy", category = "household", importance = 1 },
+                Tags = new[] { "family", "shopping" }
+            },
+            new
+            {
+                Domain = "Home",
+                Key = $"Home:Vehicle:{this._fixture.UniqueName("domain_home_vehicle")}",
+                Value = new { text = "Car registration renewal and commute notes", category = "personal", importance = 3 },
+                Tags = new[] { "transportation", "taxes" }
+            },
+            new
+            {
+                Domain = "Health",
+                Key = $"Health:Insurance:{this._fixture.UniqueName("domain_health_insurance")}",
+                Value = new { text = "Insurance claim docs and annual deductible tracking", category = "records", importance = 5 },
+                Tags = new[] { "family", "taxes", "medical" }
+            }
+        };
+
+        foreach (var entity in entities)
+        {
+            var metadata = new Dictionary<string, object>
+            {
+                ["Domain"] = entity.Domain,
+                ["Tags"] = entity.Tags
+            };
+
+            await kvStore.UpsertAsync(
+                "test-user",
+                sessionId,
+                entity.Key,
+                entity.Value,
+                metadata,
+                TestContext.Current.CancellationToken);
+        }
+
+        var results = await kvStore.GetMetadataAsync("test-user", sessionId, TestContext.Current.CancellationToken);
+
+        Assert.True(results.Count >= entities.Length, $"Expected at least {entities.Length} results, got {results.Count}");
+
+        foreach (var entity in entities)
+        {
+            var hit = Assert.Single(results, r => r.Key == entity.Key);
+
+            Assert.NotNull(hit.Metadata);
+            Assert.Equal(entity.Domain, hit.Metadata["Domain"]?.ToString());
+
+            var tags = Assert.IsAssignableFrom<IEnumerable<object>>(hit.Metadata["Tags"])
+                .Select(t => t?.ToString())
+                .ToList();
+
+            foreach (var expectedTag in entity.Tags)
+            {
+                Assert.Contains(expectedTag, tags);
+            }
+        }
+
+        Assert.Contains(results, r => r.Key.StartsWith("Work:", StringComparison.Ordinal));
+        Assert.Contains(results, r => r.Key.StartsWith("School:", StringComparison.Ordinal));
+        Assert.Contains(results, r => r.Key.StartsWith("Home:", StringComparison.Ordinal));
+        Assert.Contains(results, r => r.Key.StartsWith("Health:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies that GetMetadataAsync returns entries ordered by updated_on descending (newest first).
+    /// </summary>
+    [Fact]
+    public async Task GetMetadataAsync_OrderedByUpdatedOnDesc()
+    {
+        var kvStore = this._fixture.KVStore;
+
+        var keyOld = this._fixture.UniqueName("metadata_order_old");
+        var keyNew = this._fixture.UniqueName("metadata_order_new");
+
+        await kvStore.UpsertAsync("test-user", "metadata-order", keyOld, new { seq = 1 }, cancellationToken: TestContext.Current.CancellationToken);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "metadata-order", keyNew, new { seq = 2 }, cancellationToken: TestContext.Current.CancellationToken);
+
+        var results = await kvStore.GetMetadataAsync("test-user", "metadata-order", TestContext.Current.CancellationToken);
+
+        var oldIndex = results.ToList().FindIndex(r => r.Key == keyOld);
+        var newIndex = results.ToList().FindIndex(r => r.Key == keyNew);
+
+        Assert.True(oldIndex >= 0, "Old key not found in metadata results");
+        Assert.True(newIndex >= 0, "New key not found in metadata results");
+        Assert.True(newIndex < oldIndex, $"Expected newer entry (index {newIndex}) to appear before older entry (index {oldIndex})");
+    }
+
     // ── Null sessionId (global / no-session) ────────────────────────────────
 
     /// <summary>
@@ -277,7 +465,6 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
 
         var hit = Assert.Single(results, r => r.Key == key);
         Assert.Null(hit.SessionId);
-        Assert.Equal("test-user", hit.UserId);
     }
 
     /// <summary>

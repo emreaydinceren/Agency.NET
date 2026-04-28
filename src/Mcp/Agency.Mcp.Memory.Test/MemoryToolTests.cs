@@ -30,7 +30,7 @@ public sealed class MemoryToolTests
     {
         var record = new MemoryRecord
         {
-            Scope = new MemoryScope { UserId = "u1", SessionId = "s1" },
+            Scope = new MemoryScope("u1", "s1"),
             Domain = "notes",
             Key = "k1",
             Value = "hello",
@@ -87,7 +87,7 @@ public sealed class MemoryToolTests
     {
         var record = new MemoryRecord
         {
-            Scope = new MemoryScope { UserId = "u1", SessionId = "s1" },
+            Scope = new MemoryScope("u1", "s1"),
             Domain = "",
             Key = "k1",
             Value = "hello"
@@ -109,7 +109,7 @@ public sealed class MemoryToolTests
     {
         var record = new MemoryRecord
         {
-            Scope = new MemoryScope { UserId = "u1", SessionId = "s1" },
+            Scope = new MemoryScope("u1", "s1"),
             Domain = "notes",
             Key = "",
             Value = "hello"
@@ -131,7 +131,7 @@ public sealed class MemoryToolTests
     {
         var record = new MemoryRecord
         {
-            Scope = new MemoryScope { UserId = "u1", SessionId = "s1" },
+            Scope = new MemoryScope("u1", "s1"),
             Domain = "notes",
             Key = "k1",
             Value = ""
@@ -153,7 +153,7 @@ public sealed class MemoryToolTests
     [Fact]
     public async Task Forget_ExistingEntry_ReportsRemoved()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
+        var scope = new MemoryScope("u1", "s1");
 
         this._kvStoreMock
             .Setup(s => s.DeleteAsync("u1", "s1", "notes|k1", It.IsAny<CancellationToken>()))
@@ -171,7 +171,7 @@ public sealed class MemoryToolTests
     [Fact]
     public async Task Forget_NonExistingEntry_ReportsNotFound()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
+        var scope = new MemoryScope("u1", "s1");
 
         this._kvStoreMock
             .Setup(s => s.DeleteAsync("u1", "s1", "notes|missing", It.IsAny<CancellationToken>()))
@@ -185,46 +185,90 @@ public sealed class MemoryToolTests
     // ── ListGlobalKeys ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// SearchAsync must be called with SessionId = "*" so only user-global entries are returned.
+    /// GetMetadataAsync must be called with the provided user and session values.
     /// </summary>
     [Fact]
-    public async Task ListGlobalKeys_QueriesGlobalSessionId()
+    public async Task ListGlobalKeys_QueriesProvidedScope()
     {
+        var scope = new MemoryScope("u1", "s1");
+
         this._kvStoreMock
-            .Setup(s => s.SearchAsync<string>(It.IsAny<Query>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<SearchHit<string>>());
+            .Setup(s => s.GetMetadataAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SearchHit>());
 
-        _ = await this._tool.ListGlobalKeys("u1");
+        _ = await this._tool.ListGlobalKeys(scope);
 
-        this._kvStoreMock.Verify(s => s.SearchAsync<string>(
-            It.Is<Query>(q => q.UserId == "u1" && q.SessionId == "*"),
-            It.IsAny<CancellationToken>()),
-            Times.Once);
+        this._kvStoreMock.Verify(s => s.GetMetadataAsync("u1", "s1", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
-    /// Keys must be distinct and tags must be de-duplicated across all returned hits.
+    /// Keys and tags should be grouped per domain, with de-duplication for each domain bucket.
     /// </summary>
     [Fact]
-    public async Task ListGlobalKeys_ReturnsDistinctKeysAndTags()
+    public async Task ListGlobalKeys_WithDomainPrefixedKeysAndTags_ReturnsGroupedDistinctMetadata()
     {
-        var hit1 = new SearchHit<string>("u1", null, "notes|k1", "v1",
-            new Dictionary<string, object> { ["tags"] = new List<object> { "tagA", "tagB" } }, 0.0, DateTimeOffset.UtcNow);
-        var hit2 = new SearchHit<string>("u1", null, "notes|k2", "v2",
-            new Dictionary<string, object> { ["tags"] = new List<object> { "tagB", "tagC" } }, 0.0, DateTimeOffset.UtcNow);
+        var scope = new MemoryScope("u1", "metadata-domain-tags");
+
+        var entities = new[]
+        {
+            new { Domain = "Work", Key = "Work:Address:domain_work_address", Tags = new[] { "transportation", "taxes" } },
+            new { Domain = "Work", Key = "Work:ExpensePolicy:domain_work_expense", Tags = new[] { "taxes", "shopping", "compliance" } },
+            new { Domain = "School", Key = "School:Address:domain_school_address", Tags = new[] { "transportation", "family" } },
+            new { Domain = "School", Key = "School:Supplies:domain_school_supplies", Tags = new[] { "shopping", "family" } },
+            new { Domain = "Home", Key = "Home:Address:domain_home_address", Tags = new[] { "family", "shopping" } },
+            new { Domain = "Home", Key = "Home:Vehicle:domain_home_vehicle", Tags = new[] { "transportation", "taxes" } },
+            new { Domain = "Health", Key = "Health:Insurance:domain_health_insurance", Tags = new[] { "family", "taxes", "medical" } }
+        };
+
+        var hits = entities
+            .Select(entity => new SearchHit(
+                scope.SessionId,
+                entity.Key,
+                new Dictionary<string, object>
+                {
+                    ["domain"] = entity.Domain,
+                    ["key"] = entity.Key,
+                    ["tags"] = entity.Tags
+                },
+                DateTimeOffset.UtcNow))
+            .ToList();
 
         this._kvStoreMock
-            .Setup(s => s.SearchAsync<string>(It.IsAny<Query>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<SearchHit<string>> { hit1, hit2 });
+            .Setup(s => s.GetMetadataAsync(scope.UserId, scope.SessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hits);
 
-        string result = await this._tool.ListGlobalKeys("u1");
+        string result = await this._tool.ListGlobalKeys(scope);
 
         using var doc = System.Text.Json.JsonDocument.Parse(result);
-        string[] keys = doc.RootElement.GetProperty("Keys").EnumerateArray().Select(e => e.GetString()!).ToArray();
-        string[] tags = doc.RootElement.GetProperty("Tags").EnumerateArray().Select(e => e.GetString()!).ToArray();
+        var root = doc.RootElement;
 
-        Assert.Equal(["notes|k1", "notes|k2"], keys.Order().ToArray());
-        Assert.Equal(["tagA", "tagB", "tagC"], tags.Order().ToArray());
+        var expected = entities
+            .GroupBy(e => e.Domain)
+            .ToDictionary(
+                g => g.Key,
+                g => new
+                {
+                    Keys = g.Select(e => e.Key).Distinct().Order().ToArray(),
+                    Tags = g.SelectMany(e => e.Tags).Distinct().Order().ToArray()
+                });
+
+        foreach ((string domain, var expectedDomain) in expected)
+        {
+            Assert.True(root.TryGetProperty(domain, out var domainElement), $"Expected domain '{domain}' was not found in JSON result.");
+
+            System.Text.Json.JsonElement keysElement = domainElement.TryGetProperty("Keys", out var namedKeys)
+                ? namedKeys
+                : domainElement.GetProperty("Item1");
+            System.Text.Json.JsonElement tagsElement = domainElement.TryGetProperty("Tags", out var namedTags)
+                ? namedTags
+                : domainElement.GetProperty("Item2");
+
+            string[] actualKeys = keysElement.EnumerateArray().Select(e => e.GetString()!).Order().ToArray();
+            string[] actualTags = tagsElement.EnumerateArray().Select(e => e.GetString()!).Order().ToArray();
+
+            Assert.Equal(expectedDomain.Keys, actualKeys);
+            Assert.Equal(expectedDomain.Tags, actualTags);
+        }
     }
 
     // ── Recall ────────────────────────────────────────────────────────────────
@@ -235,7 +279,7 @@ public sealed class MemoryToolTests
     [Fact]
     public async Task Recall_AllFiltersProvided_UsesExactCompositeKey()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
+        var scope = new MemoryScope("u1", "s1");
 
         this._kvStoreMock
             .Setup(s => s.SearchAsync<string>(It.IsAny<Query>(), It.IsAny<CancellationToken>()))
@@ -255,7 +299,7 @@ public sealed class MemoryToolTests
     [Fact]
     public async Task Recall_OnlyScope_UsesMetadataFilterForScope()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
+        var scope = new MemoryScope("u1", "s1");
 
         this._kvStoreMock
             .Setup(s => s.SearchAsync<string>(It.IsAny<Query>(), It.IsAny<CancellationToken>()))
@@ -278,7 +322,7 @@ public sealed class MemoryToolTests
     [Fact]
     public async Task Recall_WithTags_AddsTagsToMetadataFilter()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
+        var scope = new MemoryScope("u1", "s1");
         string[] tags = ["important", "work"];
 
         this._kvStoreMock
@@ -305,8 +349,8 @@ public sealed class MemoryToolTests
     [Fact]
     public async Task Recall_SerializesSearchHitsAsJson()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
-        var hit = new SearchHit<string>("u1", "s1", "notes|k1", "hello", null, 0.0, DateTimeOffset.UtcNow);
+        var scope = new MemoryScope("u1", "s1");
+        var hit = new SearchHit<string>( "s1", "notes|k1", "hello", null, DateTimeOffset.UtcNow);
 
         this._kvStoreMock
             .Setup(s => s.SearchAsync<string>(It.IsAny<Query>(), It.IsAny<CancellationToken>()))

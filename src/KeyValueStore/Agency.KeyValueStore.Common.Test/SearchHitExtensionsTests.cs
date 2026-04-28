@@ -16,7 +16,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-session", "key1", "value1", null, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -33,9 +33,9 @@ public sealed class SearchHitExtensionsTests
         var now = DateTimeOffset.UtcNow;
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.1, now),
-            new SearchHit<string>("test-user", "test-session", "key2", "value2", null, 0.2, now),
-            new SearchHit<string>("test-user", "test-session", "key3", "value3", null, 0.3, now),
+            new SearchHit<string>("test-session", "key1", "value1", null, now),
+            new SearchHit<string>("test-session", "key2", "value2", null, now),
+            new SearchHit<string>("test-session", "key3", "value3", null, now),
         };
 
         var dataset = hits.ToDataset();
@@ -51,17 +51,15 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-session", "key", "value", null, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
 
         var columnNames = dataset.Columns.Select(c => c.ColumnName).ToList();
-        Assert.Equal(5, columnNames.Count);
+        Assert.Equal(3, columnNames.Count);
         Assert.Contains("Key", columnNames);
         Assert.Contains("Value", columnNames);
-        Assert.Contains("Distance", columnNames);
-        Assert.Contains("SimilarityPercentage", columnNames);
         Assert.Contains("UpdatedOn", columnNames);
     }
 
@@ -77,7 +75,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "test-key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-session", "test-key", "value", null, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -94,81 +92,13 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key", "test-value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-session", "key", "test-value", null, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
 
         var valueData = dataset[1, 0];
         Assert.Equal("test-value", valueData);
-    }
-
-    /// <summary>
-    /// Verifies that the Distance column contains the correct value from the search hit.
-    /// </summary>
-    [Fact]
-    public void ToDataset_SingleHit_DistanceColumnHasCorrectValue()
-    {
-        var hits = new List<SearchHit<string>>
-        {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.25, DateTimeOffset.UtcNow)
-        };
-
-        var dataset = hits.ToDataset();
-
-        var distanceValue = dataset[2, 0];
-        Assert.Equal(0.25, distanceValue);
-    }
-
-    /// <summary>
-    /// Verifies that the SimilarityPercentage column is calculated correctly.
-    /// </summary>
-    [Fact]
-    public void ToDataset_SingleHit_SimilarityPercentageColumnIsCalculatedCorrectly()
-    {
-        var hits = new List<SearchHit<string>>
-        {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.0, DateTimeOffset.UtcNow)
-        };
-
-        var dataset = hits.ToDataset();
-
-        var similarityValue = dataset[3, 0];
-        Assert.Equal(100.0, similarityValue);
-    }
-
-    /// <summary>
-    /// Verifies that SimilarityPercentage handles maximum distance correctly (2.0 → 0%).
-    /// </summary>
-    [Fact]
-    public void ToDataset_MaxDistance_SimilarityPercentageIsZero()
-    {
-        var hits = new List<SearchHit<string>>
-        {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 2.0, DateTimeOffset.UtcNow)
-        };
-
-        var dataset = hits.ToDataset();
-
-        var similarityValue = dataset[3, 0];
-        Assert.Equal(0.0, similarityValue);
-    }
-
-    /// <summary>
-    /// Verifies that SimilarityPercentage handles mid-range distance correctly.
-    /// </summary>
-    [Fact]
-    public void ToDataset_MidRangeDistance_SimilarityPercentageIsCorrect()
-    {
-        var hits = new List<SearchHit<string>>
-        {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 1.0, DateTimeOffset.UtcNow)
-        };
-
-        var dataset = hits.ToDataset();
-
-        var similarityValue = dataset[3, 0];
-        Assert.Equal(0.0, similarityValue);
     }
 
     /// <summary>
@@ -180,12 +110,12 @@ public sealed class SearchHitExtensionsTests
         var timestamp = new DateTimeOffset(2026, 3, 15, 10, 30, 45, TimeSpan.Zero);
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, timestamp)
+            new SearchHit<string>("test-session", "key", "value", null, timestamp)
         };
 
         var dataset = hits.ToDataset();
 
-        var updatedOnValue = dataset[4, 0];
+        var updatedOnValue = dataset[2, 0];
         Assert.Equal(timestamp, updatedOnValue);
     }
 
@@ -202,19 +132,17 @@ public sealed class SearchHitExtensionsTests
         var now = DateTimeOffset.UtcNow;
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.1, now),
-            new SearchHit<string>("test-user", "test-session", "key2", "value2", null, 0.2, now),
+            new SearchHit<string>("test-session", "key1", "value1", null, now),
+            new SearchHit<string>("test-session", "key2", "value2", null, now),
         };
 
         var dataset = hits.ToDataset();
 
         Assert.Equal("key1", dataset[0, 0]);
         Assert.Equal("value1", dataset[1, 0]);
-        Assert.Equal(0.1, dataset[2, 0]);
 
         Assert.Equal("key2", dataset[0, 1]);
         Assert.Equal("value2", dataset[1, 1]);
-        Assert.Equal(0.2, dataset[2, 1]);
     }
 
     // -------------------------------------------------------------------------
@@ -229,8 +157,8 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<int>>
         {
-            new SearchHit<int>("test-user", "test-session", "key1", 42, null, 0.5, DateTimeOffset.UtcNow),
-            new SearchHit<int>("test-user", "test-session", "key2", 100, null, 0.3, DateTimeOffset.UtcNow),
+            new SearchHit<int>("test-session", "key1", 42, null, DateTimeOffset.UtcNow),
+            new SearchHit<int>("test-session", "key2", 100, null, DateTimeOffset.UtcNow),
         };
 
         var dataset = hits.ToDataset();
@@ -251,8 +179,8 @@ public sealed class SearchHitExtensionsTests
 
         var hits = new List<SearchHit<object>>
         {
-            new SearchHit<object>("test-user", "test-session", "key1", obj1, null, 0.5, DateTimeOffset.UtcNow),
-            new SearchHit<object>("test-user", "test-session", "key2", obj2, null, 0.3, DateTimeOffset.UtcNow),
+            new SearchHit<object>("test-session", "key1", obj1, null, DateTimeOffset.UtcNow),
+            new SearchHit<object>("test-session", "key2", obj2, null, DateTimeOffset.UtcNow),
         };
 
         var dataset = hits.ToDataset();
@@ -277,7 +205,7 @@ public sealed class SearchHitExtensionsTests
         var dataset = hits.ToDataset();
 
         Assert.Empty(dataset.Rows);
-        Assert.Equal(5, dataset.Columns.Count);
+        Assert.Equal(3, dataset.Columns.Count);
     }
 
     // -------------------------------------------------------------------------
@@ -292,7 +220,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-session", "key", "value", null, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -300,9 +228,7 @@ public sealed class SearchHitExtensionsTests
         var columns = dataset.Columns.ToList();
         Assert.Equal("Key", columns[0].ColumnName);
         Assert.Equal("Value", columns[1].ColumnName);
-        Assert.Equal("Distance", columns[2].ColumnName);
-        Assert.Equal("SimilarityPercentage", columns[3].ColumnName);
-        Assert.Equal("UpdatedOn", columns[4].ColumnName);
+        Assert.Equal("UpdatedOn", columns[2].ColumnName);
     }
 
     /// <summary>
@@ -313,7 +239,7 @@ public sealed class SearchHitExtensionsTests
     {
         var hits = new List<SearchHit<string>>
         {
-            new SearchHit<string>("test-user", "test-session", "key", "value", null, 0.5, DateTimeOffset.UtcNow)
+            new SearchHit<string>("test-session", "key", "value", null, DateTimeOffset.UtcNow)
         };
 
         var dataset = hits.ToDataset();
@@ -321,47 +247,6 @@ public sealed class SearchHitExtensionsTests
         var columns = dataset.Columns.ToList();
         Assert.Equal(0, columns[0].ColumnOrdinal);
         Assert.Equal(1, columns[1].ColumnOrdinal);
-        Assert.Equal(2, columns[2].ColumnOrdinal);
-        Assert.Equal(3, columns[3].ColumnOrdinal);
-        Assert.Equal(4, columns[4].ColumnOrdinal);
-    }
-
-    // -------------------------------------------------------------------------
-    // ToDataset - Metadata Handling
-    // -------------------------------------------------------------------------
-
-    /// <summary>
-    /// Verifies that ToDataset works correctly with search hits containing metadata.
-    /// </summary>
-    [Fact]
-    public void ToDataset_WithMetadata_CreatesDatasetCorrectly()
-    {
-        var metadata = new Dictionary<string, object> { { "type", "document" }, { "source", "test" } };
-        var hits = new List<SearchHit<string>>
-        {
-            new SearchHit<string>("test-user", "test-session", "key1", "value1", metadata, 0.5, DateTimeOffset.UtcNow)
-        };
-
-        var dataset = hits.ToDataset();
-
-        Assert.Single(dataset.Rows);
-        Assert.Equal("key1", dataset[0, 0]);
-    }
-
-    /// <summary>
-    /// Verifies that ToDataset works correctly with search hits containing null metadata.
-    /// </summary>
-    [Fact]
-    public void ToDataset_WithNullMetadata_CreatesDatasetCorrectly()
-    {
-        var hits = new List<SearchHit<string>>
-        {
-            new SearchHit<string>("test-user", "test-session", "key1", "value1", null, 0.5, DateTimeOffset.UtcNow)
-        };
-
-        var dataset = hits.ToDataset();
-
-        Assert.Single(dataset.Rows);
-        Assert.Equal("key1", dataset[0, 0]);
+        Assert.Equal(4, columns[2].ColumnOrdinal);
     }
 }

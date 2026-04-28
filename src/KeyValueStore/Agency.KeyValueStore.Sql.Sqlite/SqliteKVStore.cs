@@ -4,6 +4,7 @@ using Agency.KeyValueStore.Common;
 using Agency.Sql.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Collections;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -11,10 +12,10 @@ using System.Globalization;
 using System.Text.Json;
 
 /// <summary>
-/// An <see cref="IKVStore"/> backed by SQLite that stores key/value entries in a plain TEXT column
-/// and supports substring-based value filtering via the SQLite <c>instr</c> function.
-/// Metadata filtering is applied in-process after the SQL query because SQLite has no native JSONB
-/// containment operator. Results are ordered by recency (newest first).
+/// An <see cref="IKVStore"/> backed by SQLite that stores key/value entries in a plain TEXT column and supports
+/// substring-based value filtering via the SQLite <c> instr</c> function. Metadata filtering is applied in-process
+/// after the SQL query because SQLite has no native JSONB containment operator. Results are ordered by recency (newest
+/// first).
 /// </summary>
 public sealed class SqliteKVStore : IKVStore
 {
@@ -53,7 +54,7 @@ public sealed class SqliteKVStore : IKVStore
     }
 
     /// <summary>
-    /// Creates the <c>kv_store</c> table and a key index if they do not already exist.
+    /// Creates the <c> kv_store</c> table and a key index if they do not already exist.
     /// </summary>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
@@ -130,7 +131,7 @@ public sealed class SqliteKVStore : IKVStore
             int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
             const string sql = """
-                SELECT user_id, session_id, key, value, metadata, 0.0 AS distance, updated_on
+                SELECT session_id, key, value, metadata, updated_on
                 FROM kv_store
                 WHERE user_id = @uid
                   AND (@hasSessionId = 0 OR session_id = @sid)
@@ -331,40 +332,54 @@ public sealed class SqliteKVStore : IKVStore
 
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)
     {
-        string userId = reader.GetString(0);
-        string? sessionId = reader.GetString(1) == GlobalSession ? null : reader.GetString(1);
-        string key = reader.GetString(2);
-        string valueJson = reader.GetString(3);
-        string? metadataJson = reader.IsDBNull(4) ? null : reader.GetString(4);
-        double distance = Convert.ToDouble(reader.GetValue(5));
-
-        DateTimeOffset updatedOn = DateTimeOffset.UtcNow;
-        if (!reader.IsDBNull(6))
-        {
-            string raw = reader.GetString(6);
-            if (DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
-            {
-                updatedOn = new DateTimeOffset(dt, TimeSpan.Zero);
-            }
-        }
+        // session_id, key, value, metadata, updated_on
+        string? sessionId = reader.GetString(0) == GlobalSession ? null : reader.GetString(0);
+        string key = reader.GetString(1);
+        string valueJson = reader.GetString(2);
+        string? metadataJson = reader.IsDBNull(3) ? null : reader.GetString(3);
 
         return new SearchHit<TValue>(
-            UserId: userId,
             SessionId: sessionId,
             Key: key,
             Value: JsonSerializer.Deserialize<TValue>(valueJson)!,
             Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
-            Distance: distance,
-            UpdatedOn: updatedOn);
+            UpdatedOn: GetUpdatedOn(reader, 4));
+    }
+
+    private static SearchHit HydrateSearchHit(DbDataReader reader)
+    {
+        // session_id, key, metadata, updated_on
+        string? sessionId = reader.GetString(0) == GlobalSession ? null : reader.GetString(0);
+        string key = reader.GetString(1);
+        string? metadataJson = reader.IsDBNull(2) ? null : reader.GetString(2);
+
+        return new SearchHit(
+            SessionId: sessionId,
+            Key: key,
+            Metadata: JsonMetadataHelpers.DeserializeMetadata(metadataJson),
+            UpdatedOn: GetUpdatedOn(reader, 3));
+    }
+
+    private static DateTimeOffset GetUpdatedOn(DbDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+        string raw = reader.GetString(ordinal);
+        if (DateTime.TryParseExact(raw, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
+        {
+            return new DateTimeOffset(dt, TimeSpan.Zero);
+        }
+        return DateTimeOffset.UtcNow;
     }
 
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="metadata"/> satisfies every constraint in
-    /// <paramref name="filter"/>.
-    /// For array-valued filter entries (e.g. <c>{"tags": ["medical"]}</c>), each element in the filter
-    /// array must appear somewhere in the corresponding metadata array (subset containment).
-    /// For scalar entries, the values are compared as strings.
+    /// <paramref name="filter"/>. For array-valued filter entries (e.g. <c> {"tags": ["medical"]}</c>), each element in
+    /// the filter array must appear somewhere in the corresponding metadata array (subset containment). For scalar
+    /// entries, the values are compared as strings.
     /// </summary>
     /// <param name="metadata">The metadata dictionary from a search hit.</param>
     /// <param name="filter">The filter criteria to match against.</param>
@@ -392,9 +407,8 @@ public sealed class SqliteKVStore : IKVStore
     }
 
     /// <summary>
-    /// Checks whether a single metadata value satisfies a filter value.
-    /// Supports array containment (all filter elements must appear in the metadata collection)
-    /// and scalar string equality.
+    /// Checks whether a single metadata value satisfies a filter value. Supports array containment (all filter elements
+    /// must appear in the metadata collection) and scalar string equality.
     /// </summary>
     /// <param name="metaValue">The value from the stored metadata.</param>
     /// <param name="filterValue">The value specified in the filter.</param>
@@ -417,5 +431,75 @@ public sealed class SqliteKVStore : IKVStore
 
         // Scalar equality
         return string.Equals(metaValue?.ToString(), filterValue?.ToString(), StringComparison.Ordinal);
+    }
+
+    public async Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default)
+    {
+        if (userId == null)
+        {
+            throw new ArgumentNullException(nameof(userId));
+        }
+
+        using var activity = _activitySource.StartActivity("kvstore.getMetadata", ActivityKind.Client);
+        activity?.SetTag("kvstore.operation", "getMetadata");
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            const string sql = """
+                SELECT session_id, key, metadata, updated_on
+                FROM kv_store
+                WHERE user_id = @uid
+                  AND (@hasSessionId = 0 OR session_id = @sid)
+                ORDER BY updated_on DESC
+                """;
+
+            var parameters = new Dictionary<string, object?> { ["uid"] = userId };
+
+            if (sessionId != null)
+            {
+                parameters["sid"] = sessionId;
+                parameters["hasSessionId"] = 1;
+            }
+            else
+            {
+                parameters["sid"] = string.Empty;
+                parameters["hasSessionId"] = 0;
+            }
+
+            List<SearchHit> results = await this._sqliteRunner.QueryAsync<SearchHit>(
+                sql,
+                reader => Task.FromResult(HydrateSearchHit(reader)),
+                parameters,
+                cancellationToken);
+
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
+
+            activity?.SetTag("kvstore.result_count", results.Count);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
+            return results;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "error" } });
+            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
+
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+            {
+                { "exception.type", ex.GetType().FullName },
+                { "exception.message", ex.Message },
+                { "exception.stacktrace", ex.ToString() },
+            }));
+
+            this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            throw;
+        }
     }
 }

@@ -32,7 +32,7 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
     [Fact]
     public async Task Memorize_Then_Recall_ReturnsStoredValue()
     {
-        var scope = new MemoryScope { UserId = "u1", SessionId = "s1" };
+        var scope = new MemoryScope("u1", "s1");
         var record = new MemoryRecord
         {
             Scope = scope,
@@ -56,7 +56,7 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
     [Fact]
     public async Task Memorize_Then_Forget_Then_Recall_ReturnsNoHits()
     {
-        var scope = new MemoryScope { UserId = "u2", SessionId = "s2" };
+        var scope = new MemoryScope("u2", "s2");
         string key = this._fixture.UniqueName("forget-key");
         var record = new MemoryRecord
         {
@@ -80,8 +80,8 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
     [Fact]
     public async Task Recall_BySessionScope_ReturnsAllEntriesForSession()
     {
-        var scopeA = new MemoryScope { UserId = "u3", SessionId = "sess-a" };
-        var scopeB = new MemoryScope { UserId = "u3", SessionId = "sess-b" };
+        var scopeA = new MemoryScope("u3", "sess-a");
+        var scopeB = new MemoryScope("u3", "sess-b");
 
         string suffix = this._fixture.UniqueName("scope");
 
@@ -106,7 +106,7 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
     [Fact]
     public async Task Recall_ByTags_NarrowsResults()
     {
-        var scope = new MemoryScope { UserId = "u4", SessionId = "s4" };
+        var scope = new MemoryScope("u4", "s4");
         string suffix = this._fixture.UniqueName("tags");
 
         await this._fixture.Tool.Memorize(new MemoryRecord
@@ -142,7 +142,7 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
     [Fact]
     public async Task Memorize_OverwritesExistingKey()
     {
-        var scope = new MemoryScope { UserId = "u5", SessionId = "s5" };
+        var scope = new MemoryScope("u5", "s5");
         string key = this._fixture.UniqueName("overwrite");
 
         await this._fixture.Tool.Memorize(new MemoryRecord
@@ -167,6 +167,66 @@ public sealed class MemoryToolFunctionalTests : IClassFixture<MemoryToolFunction
         var hits = doc.RootElement.EnumerateArray().ToList();
         Assert.Single(hits);
         Assert.Equal("second-value", hits[0].GetProperty("Value").GetString());
+    }
+
+    /// <summary>
+    /// Memorizing domain-prefixed keys with tags and then listing metadata should return
+    /// grouped distinct keys and tags per domain.
+    /// </summary>
+    [Fact]
+    public async Task Memorize_Then_ListGlobalKeys_WithDomainPrefixedKeysAndTags_ReturnsExpectedMetadata()
+    {
+        var scope = new MemoryScope("u6", "metadata-domain-tags");
+        //string suffix = this._fixture.UniqueName("domain-tags");
+
+        var entities = new[]
+        {
+            new { Domain = "Work", Key = $"Work:Address", Value = "HQ address and parking instructions", Tags = new[] { "transportation", "taxes" } },
+            new { Domain = "Work", Key = $"Work:ExpensePolicy", Value = "Expense reimbursement and quarterly tax checklist", Tags = new[] { "taxes", "shopping", "compliance" } },
+            new { Domain = "School", Key = $"School:Address", Value = "Campus office location and public transit stop", Tags = new[] { "transportation", "family" } },
+            new { Domain = "School", Key = $"School:Supplies", Value = "Back-to-school supplies and semester shopping list", Tags = new[] { "shopping", "family" } },
+            new { Domain = "Home", Key = $"Home:Address", Value = "Home address, nearest grocery and pharmacy", Tags = new[] { "family", "shopping" } },
+            new { Domain = "Home", Key = $"Home:Vehicle", Value = "Car registration renewal and commute notes", Tags = new[] { "transportation", "taxes" } },
+            new { Domain = "Health", Key = $"Health:Insurance", Value = "Insurance claim docs and annual deductible tracking", Tags = new[] { "family", "taxes", "medical" } }
+        };
+
+        foreach (var entity in entities)
+        {
+            await this._fixture.Tool.Memorize(new MemoryRecord
+            {
+                Scope = scope,
+                Domain = entity.Domain,
+                Key = entity.Key,
+                Value = entity.Value,
+                Tags = entity.Tags
+            });
+        }
+
+        string result = await this._fixture.Tool.ListGlobalKeys(scope);
+
+        using var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        var expected = entities
+            .GroupBy(e => e.Domain)
+            .ToDictionary(
+                g => g.Key,
+                g => new
+                {
+                    Keys = g.Select(e => e.Key).Distinct().Order().ToArray(),
+                    Tags = g.SelectMany(e => e.Tags).Distinct().Order().ToArray()
+                });
+
+        foreach ((string domain, var expectedDomain) in expected)
+        {
+            Assert.True(root.TryGetProperty(domain, out var domainElement), $"Expected domain '{domain}' was not found in JSON result.");
+
+            string[] actualKeys = domainElement.GetProperty("Keys").EnumerateArray().Select(e => e.GetString()!).Order().ToArray();
+            string[] actualTags = domainElement.GetProperty("Tags").EnumerateArray().Select(e => e.GetString()!).Order().ToArray();
+
+            Assert.Equal(expectedDomain.Keys, actualKeys);
+            Assert.Equal(expectedDomain.Tags, actualTags);
+        }
     }
 
     // ── Fixture ───────────────────────────────────────────────────────────────

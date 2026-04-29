@@ -10,7 +10,7 @@ The project currently exposes one concrete type:
 
 - `PostgreKVStore`
 
-It stores values and metadata as `JSONB`, scopes records by `user_id` and `session_id`, and orders search results by `updated_on DESC`.
+It stores values and metadata as `JSONB`, scopes records by `user_id` and `session_id`, and orders search results by `updated_on DESC`. Null session IDs are resolved to the sentinel `"*"` for user-global entries.
 
 It depends on [[Agency.Sql.Postgre]] for SQL execution and `Npgsql` parameter types used for JSONB values and filters.
 
@@ -44,6 +44,11 @@ public class PostgreKVStore : IKVStore
         string userId,
         string? sessionId,
         string key,
+        CancellationToken cancellationToken = default);
+
+    public Task<IReadOnlyList<SearchHit>> GetMetadataAsync(
+        string userId,
+        string? sessionId,
         CancellationToken cancellationToken = default);
 }
 ```
@@ -81,6 +86,11 @@ bool deleted = await store.DeleteAsync(
     sessionId: "session-a",
     key: "profile",
     cancellationToken: cancellationToken);
+
+var metadata = await store.GetMetadataAsync(
+    userId: "user-42",
+    sessionId: "session-a",
+    cancellationToken: cancellationToken);
 ```
 
 ## Configuration
@@ -109,3 +119,4 @@ Operations instrumented:
 - `kvstore.search`
 - `kvstore.upsert`
 - `kvstore.delete`
+- `kvstore.getMetadata`

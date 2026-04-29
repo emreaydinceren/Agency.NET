@@ -10,9 +10,9 @@ The project currently exposes one concrete type:
 
 - `SqliteKVStore`
 
-`SqliteKVStore` stores `value` as JSON text (`TEXT`) and optional `metadata` as JSON text (`TEXT`) in a `kv_store` table keyed by `(user_id, session_id, key)`. It applies value filtering in SQL via `instr(value, @v) > 0`, applies metadata filtering in-process, and returns results ordered by `updated_on DESC`.
+`SqliteKVStore` stores `value` as JSON text (`TEXT`) and optional `metadata` as JSON text (`TEXT`) in a `kv_store` table keyed by `(user_id, session_id, key)`. It applies value filtering in SQL via `instr(value, @v) > 0`, applies metadata filtering in-process (because SQLite has no native JSONB containment), and returns results ordered by `updated_on DESC`.
 
-It depends on [[Agency.Sql.Sqlite]] for SQL execution, plus `Microsoft.Data.Sqlite` and `Microsoft.Extensions.Logging.Abstractions`.
+It depends on [[Agency.Sql.Sqlite]] for SQL execution, [[Agency.KeyValueStore.Common]] for `IKVStore`, `Query`, and `SearchHit<TValue>`, plus `Microsoft.Data.Sqlite` and `Microsoft.Extensions.Logging.Abstractions`.
 
 ## Key Types
 
@@ -46,6 +46,11 @@ public sealed class SqliteKVStore : IKVStore
         string userId,
         string? sessionId,
         string key,
+        CancellationToken cancellationToken = default);
+
+    public Task<IReadOnlyList<SearchHit>> GetMetadataAsync(
+        string userId,
+        string? sessionId,
         CancellationToken cancellationToken = default);
 }
 ```
@@ -92,6 +97,11 @@ bool deleted = await store.DeleteAsync(
     sessionId: "session-a",
     key: "profile",
     cancellationToken: cancellationToken);
+
+var metadata = await store.GetMetadataAsync(
+    userId: "user-42",
+    sessionId: "session-a",
+    cancellationToken: cancellationToken);
 ```
 
 ## Configuration
@@ -122,3 +132,4 @@ Operations instrumented:
 - `kvstore.search`
 - `kvstore.upsert`
 - `kvstore.delete`
+- `kvstore.getMetadata`

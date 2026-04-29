@@ -123,6 +123,86 @@ StopConditions.Any(
 | `TextDeltaEvent` | Streaming path only — each text token chunk |
 | `AgentResultEvent` | Last event — contains status, final text, total usage |
 
+## Tools Layer
+
+`ToolContext` holds the `IToolRegistry` that the agent dispatches tool calls against. The registry manages tool definitions, filtering, and invocation.
+
+### Tool Registry
+
+`ToolRegistry` tracks tools by name and supports selective disabling:
+
+```csharp
+// Get the registry from a ToolContext
+var registry = context.Tools.Registry;
+
+// List all tool definitions (excluding system-disabled tools)
+IReadOnlyList<ToolDefinition> defs = registry.ListDefinitions();
+
+// List every registered tool with its enabled status
+IReadOnlyList<(bool Enabled, ToolDefinition Definition)> all = registry.ListAllDefinitions();
+
+// Disable/enable tools
+registry.DisableToolByUser("execute_powershell");  // user can re-enable later
+registry.EnableToolByUser("execute_powershell");
+registry.DisabledToolBySystem("read_file");         // system-level, harder to re-enable
+registry.EnableToolBySystem("read_file");
+```
+
+`ToolRegistry.Empty` is a no-op registry that returns errors for any invocation.
+
+### Tool Types
+
+| Tool | Kind | Description |
+|---|---|---|
+| `AgentTool` | Public | Delegates a focused task to a subagent. Tool name: `subagent_tool`. Schema takes `prompt` (required), `clientName` (optional), `model` (optional). |
+| `McpProxyTool` | Internal | Adapts an MCP SDK `McpClientTool` to the `ITool` interface. Each instance wraps one tool discovered from a connected MCP server. |
+| `ExecutePowershellTool` | Public | Executes PowerShell commands via a fresh `Runspace`. Outputs Markdown tables for multi-result commands. |
+| `ReadFileTool` | Public | Reads file contents at a specified path. |
+| `WriteFileTool` | Public | Writes content to a file at a specified path. |
+
+### MCP Integration
+
+`McpClientPool` manages MCP server connections and exposes discovered tools for registration. Supports two transport types:
+
+```csharp
+McpClientOptions options = new()
+{
+    Servers = new[]
+    {
+        new McpServerConfig
+        {
+            Name = "filesystem",
+            Transport = McpTransportKind.Stdio,
+            Command = "npx",
+            Arguments = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        },
+        new McpServerConfig
+        {
+            Name = "github",
+            Transport = McpTransportKind.Http,
+            Url = "http://localhost:3001",
+        }
+    }
+};
+
+using var pool = await McpClientPool.CreateAsync(options, ct);
+// pool.Tools contains all discovered ITool instances
+```
+
+Configuration types:
+
+| Type | Purpose |
+|---|---|
+| `McpTransportKind` | Enum: `Stdio` (subprocess) or `Http` (remote endpoint) |
+| `McpServerConfig` | Single server config: `Name`, `Transport`, `Command`/`Arguments`/`EnvironmentVariables` (for Stdio) or `Url` (for Http) |
+| `McpClientOptions` | Top-level config containing `McpServerConfig[] Servers` |
+
+`McpClientPool` implements `IAsyncDisposable` and connects to each configured server on creation, listing available tools from each.
+
+### Tool Discovery
+
+`ToolDefinitionFunction` converts `ToolDefinition` objects to `AIFunctionDeclaration` instances for use with `ChatOptions.Tools`. `Extensions` provides `ToMarkdownTable()` and `ToMarkdown()` helpers for converting PowerShell `PSObject` results into Markdown formatting.
+
 ## How It Relates to Other Projects
 
 | Project | Relationship |

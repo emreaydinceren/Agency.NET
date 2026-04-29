@@ -27,6 +27,10 @@ git -C E:/Repos/Agency diff --cached --name-only
 
 Map changed file paths to project names by extracting the top-level folder under `src/` (e.g. `src/Agency.Agentic/Agent.cs` → `Agency.Agentic`). Skip test projects (names ending in `.Test`).
 
+
+Act as orchestrator, do not perform Step 2 directly. Instead, delegate Step 2 to a subagent for each project that needs updating.
+
+
 ### Step 2 — For each project to update
 
 Step 2 must always be delegated to a subagent. Do not perform Step 2 directly in the parent agent.

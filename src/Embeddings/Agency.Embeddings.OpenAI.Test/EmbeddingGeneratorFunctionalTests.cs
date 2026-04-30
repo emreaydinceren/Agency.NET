@@ -1,10 +1,13 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+
 namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>
-/// Functional tests that call the real LM Studio server at the default address.
+/// Functional tests that call the real LM Studio server configured in <see cref="appsettings.json"/>.
 /// Run with: dotnet test --filter "Category=Functional"
 /// Skip with: dotnet test --filter "Category!=Functional"
-/// Requires LM Studio running with text-embedding-qwen3-embedding-8b loaded.
+/// Requires LM Studio running with text-embedding-qwen3-embedding-8b loaded. Configure the endpoint in appsettings.json.
 /// </summary>
 [Trait("Category", "Functional")]
 /// <summary>
@@ -12,7 +15,27 @@ namespace Agency.Embeddings.OpenAI.Test;
 /// </summary>
 public sealed class EmbeddingGeneratorFunctionalTests
 {
-    private static readonly EmbeddingGenerator Generator = new(EmbeddingOptions.LMStudioDefaults);
+    private static readonly EmbeddingGenerator Generator = CreateGenerator();
+
+    private static EmbeddingGenerator CreateGenerator()
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddUserSecrets<EmbeddingGeneratorFunctionalTests>(optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        var options = new EmbeddingOptions
+        {
+            BaseUrl = configuration[$"{EmbeddingOptions.SectionName}:BaseUrl"],
+            ModelId = configuration[$"{EmbeddingOptions.SectionName}:ModelId"],
+            ApiKey = configuration[$"{EmbeddingOptions.SectionName}:ApiKey"],
+        };
+
+        return new EmbeddingGenerator(options);
+    }
 
     // -------------------------------------------------------------------------
     // Different texts produce different vectors

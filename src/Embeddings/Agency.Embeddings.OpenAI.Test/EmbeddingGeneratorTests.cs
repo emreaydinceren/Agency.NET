@@ -1,10 +1,29 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace Agency.Embeddings.OpenAI.Test;
 
 public sealed class EmbeddingGeneratorTests
 {
-    private static readonly EmbeddingOptions DefaultOptions = EmbeddingOptions.LMStudioDefaults;
+    private static readonly EmbeddingOptions DefaultOptions = LoadOptions();
+
+    private static EmbeddingOptions LoadOptions()
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddUserSecrets<EmbeddingGeneratorTests>(optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        return new EmbeddingOptions
+        {
+            BaseUrl = configuration[$"{EmbeddingOptions.SectionName}:BaseUrl"],
+            ModelId = configuration[$"{EmbeddingOptions.SectionName}:ModelId"],
+            ApiKey = configuration[$"{EmbeddingOptions.SectionName}:ApiKey"],
+        };
+    }
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -52,7 +71,7 @@ public sealed class EmbeddingGeneratorTests
     {
         var custom = new EmbeddingOptions
         {
-            BaseUrl = "http://llm-host.example:9999/v1",
+            BaseUrl = "http://localhost:9999/v1",
             ModelId = "custom-model",
             ApiKey = "test-key",
         };

@@ -1,10 +1,33 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+
 namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>
-/// Tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingOptions"/> defaults.
+/// Tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingOptions"/> configuration loading.
 /// </summary>
 public sealed class EmbeddingOptionsTests
 {
+    private static readonly EmbeddingOptions Sut = LoadFromConfig();
+
+    private static EmbeddingOptions LoadFromConfig()
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddUserSecrets<EmbeddingOptionsTests>(optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        return Options.Create(new EmbeddingOptions
+        {
+            BaseUrl = configuration[$"{EmbeddingOptions.SectionName}:BaseUrl"],
+            ModelId = configuration[$"{EmbeddingOptions.SectionName}:ModelId"],
+            ApiKey = configuration[$"{EmbeddingOptions.SectionName}:ApiKey"],
+        }).Value;
+    }
+
     /// <summary>
     /// Verifies the configuration section name.
     /// </summary>
@@ -15,35 +38,29 @@ public sealed class EmbeddingOptionsTests
     }
 
     /// <summary>
-    /// Verifies the default LM Studio base URL.
+    /// Verifies that the configured LM Studio base URL is loaded correctly.
     /// </summary>
     [Fact]
-    public void DefaultBaseUrl_PointsToLocalLmStudio()
+    public void BaseUrl_IsLoadedFromConfig()
     {
-        var options = EmbeddingOptions.LMStudioDefaults;
-
-        Assert.Equal("http://llm-host.example:1234/v1", options.BaseUrl);
+        Assert.Equal("http://llm-host.example:1234/v1", Sut.BaseUrl);
     }
 
     /// <summary>
-    /// Verifies the default LM Studio model identifier.
+    /// Verifies that the configured LM Studio model identifier is loaded correctly.
     /// </summary>
     [Fact]
-    public void DefaultModelId_IsQwen3VlEmbedding8B()
+    public void ModelId_IsLoadedFromConfig()
     {
-        var options = EmbeddingOptions.LMStudioDefaults;
-
-        Assert.Equal("text-embedding-qwen3-embedding-8b", options.ModelId);
+        Assert.Equal("text-embedding-qwen3-embedding-8b", Sut.ModelId);
     }
 
     /// <summary>
-    /// Verifies the default LM Studio API key.
+    /// Verifies that the configured LM Studio API key is loaded correctly.
     /// </summary>
     [Fact]
-    public void DefaultApiKey_IsLmStudio()
+    public void ApiKey_IsLoadedFromConfig()
     {
-        var options = EmbeddingOptions.LMStudioDefaults;
-
-        Assert.Equal("lmstudio", options.ApiKey);
+        Assert.Equal("lmstudio", Sut.ApiKey);
     }
 }

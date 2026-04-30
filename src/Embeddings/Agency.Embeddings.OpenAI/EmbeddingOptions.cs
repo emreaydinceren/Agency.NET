@@ -29,13 +29,4 @@ public sealed class EmbeddingOptions
     /// </summary>
     public string? ApiKey { get; set; }
 
-    /// <summary>
-    /// Gets default settings for a local LM Studio instance.
-    /// </summary>
-    public static EmbeddingOptions LMStudioDefaults => new EmbeddingOptions
-    {
-        BaseUrl = "http://llm-host.example:1234/v1",
-        ModelId = "text-embedding-qwen3-embedding-8b",
-        ApiKey = "lmstudio"
-    };
 }

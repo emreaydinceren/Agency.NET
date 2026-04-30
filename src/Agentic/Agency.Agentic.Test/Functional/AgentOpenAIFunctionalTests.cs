@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 /// <para>
 /// Run with:  <c>dotnet test --filter "Category=Functional"</c><br/>
 /// Skip with: <c>dotnet test --filter "Category!=Functional"</c><br/>
-/// Requires LM Studio running with a compatible model loaded at http://llm-host.example:1234.
+/// Requires LM Studio running with a compatible model loaded. Configure the endpoint in <see cref="OpenAIAgentFixture"/> appsettings.json.
 /// </para>
 /// </summary>
 [Trait("Category", "Functional")]

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 /// Functional tests for <see cref="Agency.Llm.OpenAI.OpenAIClient"/> exercised via
 /// <see cref="IChatClient"/>. Run with: <c>dotnet test --filter "Category=Functional"</c>.
 /// Skip with: <c>dotnet test --filter "Category!=Functional"</c>.
-/// Requires LM Studio running with a compatible model loaded at http://llm-host.example:1234.
+/// Requires LM Studio running with a compatible model loaded. Configure the endpoint in appsettings.json.
 /// </summary>
 [Trait("Category", "Functional")]
 public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fixture)

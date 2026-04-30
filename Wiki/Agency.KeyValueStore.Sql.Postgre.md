@@ -4,21 +4,23 @@
 
 ## What It Is
 
-`Agency.KeyValueStore.Sql.Postgre` provides a PostgreSQL implementation of [[Agency.KeyValueStore.Common]] `IKVStore`.
+Agency.KeyValueStore.Sql.Postgre is the PostgreSQL-backed implementation of [[Agency.KeyValueStore.Common]]'s `IKVStore` that stores, retrieves, and deletes typed key-value entries with optional JSONB metadata in a `kv_store` table scoped by `user_id` and `session_id`.
 
-The project currently exposes one concrete type:
+**Namespace:** `Agency.KeyValueStore.Sql.Postgre`
 
-- `PostgreKVStore`
+## Prerequisites
 
-It stores values and metadata as `JSONB`, scopes records by `user_id` and `session_id`, and orders search results by `updated_on DESC`. Null session IDs are resolved to the sentinel `"*"` for user-global entries.
+- A running PostgreSQL instance accessible via a configured [[Agency.Sql.Postgre]] `PostgreSqlRunner`
+- `InitializeSchemaAsync` must be called once before first use to create the `kv_store` table and its GIN index
 
-It depends on [[Agency.Sql.Postgre]] for SQL execution and `Npgsql` parameter types used for JSONB values and filters.
-
-## Key Types
-
-### `PostgreKVStore`
+## API Surface
 
 ```csharp
+// File: src/KeyValueStore/Agency.KeyValueStore.Sql.Postgre/PostgreKVStore.cs
+using Agency.KeyValueStore.Common;
+using Agency.Sql.Postgre;
+using Microsoft.Extensions.Logging;
+
 public class PostgreKVStore : IKVStore
 {
     public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Postgre";
@@ -26,8 +28,12 @@ public class PostgreKVStore : IKVStore
 
     public PostgreKVStore(PostgreSqlRunner postgreSqlRunner, ILogger<PostgreKVStore> logger);
 
+    // Creates the kv_store table and GIN index on metadata if not already present.
+    // Drops legacy table shapes that lack the user_id column.
     public Task InitializeSchemaAsync(CancellationToken cancellationToken = default);
 
+    // Inserts or updates an entry identified by (userId, sessionId, key).
+    // value and metadata are serialized as JSONB. Null sessionId is stored as "*".
     public Task UpsertAsync<TValue>(
         string userId,
         string? sessionId,
@@ -36,16 +42,20 @@ public class PostgreKVStore : IKVStore
         IDictionary<string, object>? metadata = null,
         CancellationToken cancellationToken = default);
 
+    // Queries entries for userId with optional session, key, value substring, and metadata containment filters.
+    // Results are ordered by updated_on DESC and capped by Query.Limit (default 10).
     public Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(
         Query query,
         CancellationToken cancellationToken = default);
 
+    // Deletes the entry at (userId, sessionId, key). Returns true if a row was removed.
     public Task<bool> DeleteAsync(
         string userId,
         string? sessionId,
         string key,
         CancellationToken cancellationToken = default);
 
+    // Returns metadata-only records (no value payload) for all keys belonging to userId/sessionId.
     public Task<IReadOnlyList<SearchHit>> GetMetadataAsync(
         string userId,
         string? sessionId,
@@ -53,70 +63,36 @@ public class PostgreKVStore : IKVStore
 }
 ```
 
-`InitializeSchemaAsync` creates the `kv_store` table when needed, adds a GIN index on `metadata`, and drops an old incompatible `kv_store` shape that does not contain `user_id`.
+## How It Works
 
-## Usage
+1. **Schema initialization** — `InitializeSchemaAsync` runs a `DO $$ … END $$` guard that drops any existing `kv_store` table that lacks the `user_id` column (legacy schema), then issues `CREATE TABLE IF NOT EXISTS` with a composite primary key `(user_id, session_id, key)` and a GIN index on `metadata` for fast containment queries.
+2. **Null session sentinel** — `null` session IDs are mapped to the literal string `"*"` before every write and mapped back to `null` on read. This allows `session_id` to participate in the `NOT NULL` primary key.
+3. **Upsert** — values and metadata are serialized via `System.Text.Json` and passed as `NpgsqlDbType.Jsonb` parameters. The SQL uses `INSERT … ON CONFLICT DO UPDATE` to refresh both `value` and `metadata` in place while advancing `updated_on` to `NOW()`.
+4. **Search** — boolean flag parameters (`@hasSessionId`, `@hasKey`, `@hasValue`, `@hasFilter`) enable each filter independently within a single parameterized query. Value search uses `ILIKE '%…%'` for case-insensitive substring matching; metadata search uses the JSONB containment operator `@>`.
+5. **Delete** — issues a single `DELETE` by composite key and returns whether `rowsAffected > 0`.
+6. **GetMetadata** — returns `SearchHit` (non-generic, no value payload) ordered by `updated_on DESC`; session scoping is optional.
 
-```csharp
-var store = new PostgreKVStore(postgreSqlRunner, logger);
+## Observability
 
-await store.InitializeSchemaAsync(cancellationToken);
+`PostgreKVStore` emits OpenTelemetry traces and metrics for every operation:
 
-await store.UpsertAsync(
-    userId: "user-42",
-    sessionId: "session-a",
-    key: "profile",
-    value: new { Name = "Emre", Role = "Admin" },
-    metadata: new Dictionary<string, object> { ["source"] = "seed" },
-    cancellationToken: cancellationToken);
+- **ActivitySource:** `Agency.KeyValueStore.Sql.Postgre`
+- **Meter:** `Agency.KeyValueStore.Sql.Postgre`
+- **Counter:** `kvstore.operations` — tags: `operation`, `status` (`success` / `error`)
+- **Histogram:** `kvstore.duration` (ms) — tag: `operation`
 
-var hits = await store.SearchAsync<object>(
-    new Query(
-        UserId: "user-42",
-        SessionId: "session-a",
-        Key: null,
-        Value: "Emre",
-        MetadataFilter: new Dictionary<string, object> { ["source"] = "seed" },
-        Limit: 10,
-        IncludeMetadataInResults: true),
-    cancellationToken);
-
-bool deleted = await store.DeleteAsync(
-    userId: "user-42",
-    sessionId: "session-a",
-    key: "profile",
-    cancellationToken: cancellationToken);
-
-var metadata = await store.GetMetadataAsync(
-    userId: "user-42",
-    sessionId: "session-a",
-    cancellationToken: cancellationToken);
-```
-
-## Configuration
-
-This project does not define an options class. `PostgreKVStore` receives a configured `PostgreSqlRunner`, so connection settings come from the runner's connection string setup.
+Operations instrumented: `kvstore.initialize`, `kvstore.upsert`, `kvstore.search`, `kvstore.delete`, `kvstore.getMetadata`.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.KeyValueStore.Common]] | Provides `IKVStore`, `Query`, and `SearchHit<TValue>` contracts implemented and returned by `PostgreKVStore` |
-| [[Agency.Sql.Postgre]] | Supplies `PostgreSqlRunner`, which executes all SQL used by `PostgreKVStore` |
+| [[Agency.KeyValueStore.Common]] | Defines `IKVStore`, `Query`, `SearchHit`, and `SearchHit<TValue>` — the contracts this project implements |
+| [[Agency.Sql.Postgre]] | Supplies `PostgreSqlRunner`, which executes all DDL and DML issued by `PostgreKVStore` |
+| [[Agency.KeyValueStore.Sql.Sqlite]] | Sibling SQLite implementation of the same `IKVStore` contract |
 
-## Observability
+## Design Notes
 
-`PostgreKVStore` emits OpenTelemetry traces and metrics:
-
-- `ActivitySource` name: `Agency.KeyValueStore.Sql.Postgre`
-- `Meter` name: `Agency.KeyValueStore.Sql.Postgre`
-- Counter: `kvstore.operations` (operation/status tags)
-- Histogram: `kvstore.duration` in milliseconds
-
-Operations instrumented:
-
-- `kvstore.initialize`
-- `kvstore.search`
-- `kvstore.upsert`
-- `kvstore.delete`
-- `kvstore.getMetadata`
+- **Sentinel session ID** — PostgreSQL does not permit `NULL` in primary key columns. Mapping `null` to `"*"` preserves a simple composite PK while still modelling the concept of user-global (session-less) entries cleanly, without a nullable column or a surrogate key.
+- **Schema migration guard** — the `DO $$ … END $$` block in `InitializeSchemaAsync` detects and drops only old table shapes that are structurally incompatible (missing `user_id`). This avoids requiring a separate migration script for deployments upgrading from early schema versions.
+- **ILIKE substring search over vector similarity** — `SearchAsync` deliberately uses plain text substring matching rather than embedding-based similarity. This keeps the KV store dependency-free from the embeddings pipeline and suitable for exact or partial lookup patterns (e.g. retrieving stored user profile fields by value fragment).

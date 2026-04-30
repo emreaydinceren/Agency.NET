@@ -5,6 +5,18 @@
     <Project Path="Agentic\Agency.Agentic.Test\Agency.Agentic.Test.csproj" Id="57db7c5d-6ae9-42f0-b756-9d11fc02d6c5" />
     <Project Path="Agentic\Agency.Agentic\Agency.Agentic.csproj" />
   </Folder>
+  <Folder Name="/GraphRAG.Code/">
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code\Agency.GraphRAG.Code.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Test\Agency.GraphRAG.Code.Test.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Sqlite\Agency.GraphRAG.Code.Sqlite.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Sqlite.Test\Agency.GraphRAG.Code.Sqlite.Test.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Postgres\Agency.GraphRAG.Code.Postgres.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Postgres.Test\Agency.GraphRAG.Code.Postgres.Test.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.TreeSitter\Agency.GraphRAG.Code.TreeSitter.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Cli\Agency.GraphRAG.Code.Cli.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.Cli.Test\Agency.GraphRAG.Code.Cli.Test.csproj" />
+    <Project Path="GraphRAG.Code\Agency.GraphRAG.Code.E2E.Test\Agency.GraphRAG.Code.E2E.Test.csproj" />
+  </Folder>
   <Folder Name="/Embeddings/">
     <Project Path="Embeddings\Agency.Embeddings.Common.Test\Agency.Embeddings.Common.Test.csproj" />
     <Project Path="Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />

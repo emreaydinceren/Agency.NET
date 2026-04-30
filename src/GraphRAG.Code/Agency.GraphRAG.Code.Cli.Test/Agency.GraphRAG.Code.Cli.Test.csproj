@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.GraphRAG.Code.Cli\Agency.GraphRAG.Code.Cli.csproj" />
+  </ItemGroup>
+
+</Project>

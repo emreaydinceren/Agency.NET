@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agentic\Agency.Agentic\Agency.Agentic.csproj" />
+    <ProjectReference Include="..\Agency.GraphRAG.Code\Agency.GraphRAG.Code.csproj" />
+    <ProjectReference Include="..\Agency.GraphRAG.Code.Postgres\Agency.GraphRAG.Code.Postgres.csproj" />
+    <ProjectReference Include="..\Agency.GraphRAG.Code.Sqlite\Agency.GraphRAG.Code.Sqlite.csproj" />
+    <ProjectReference Include="..\Agency.GraphRAG.Code.TreeSitter\Agency.GraphRAG.Code.TreeSitter.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Chunker\Fixtures\csharp\**\*.cs" />
+    <None Include="Chunker\Fixtures\csharp\**\*.cs" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Remove="Chunker\Fixtures\typescript\**\*.ts" />
+    <Compile Remove="Chunker\Fixtures\typescript\**\*.tsx" />
+    <Compile Remove="Chunker\Fixtures\typescript\**\*.js" />
+    <None Include="Chunker\Fixtures\typescript\**\*.ts" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Chunker\Fixtures\typescript\**\*.tsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Chunker\Fixtures\typescript\**\*.js" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Remove="Chunker\Fixtures\python\**\*.py" />
+    <None Include="Chunker\Fixtures\python\**\*.py" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -4,82 +4,115 @@
 
 ## What It Is
 
-`Agency.Sql.Postgre` provides two classes for working with PostgreSQL (including the `pgvector` extension):
+Agency.Sql.Postgre is the PostgreSQL adapter that executes raw SQL against a PostgreSQL/pgvector database and resolves `vectorize('...')` macros in SQL text into real embedding vectors before execution.
 
-1. **`PostgreSqlRunner`** — a general-purpose async SQL runner that returns [[Agency.Common]] `Dataset` objects.
-2. **`SQLQueryEmbedder`** — a preprocessor that replaces `vectorize('text')` placeholders in SQL strings with real embedding vectors before execution.
+**Namespace:** `Agency.Sql.Postgre`
 
-## `PostgreSqlRunner`
+## Prerequisites
 
-```csharp
-var runner = new PostgreSqlRunner(
-    connectionString: "Host=localhost;Database=dev_db;Username=dev_user;Password=dev_password",
-    logger: loggerFactory.CreateLogger<PostgreSqlRunner>());
+- A reachable PostgreSQL instance with the `pgvector` extension installed.
+- A valid Npgsql connection string, e.g. `Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password`.
+- For local development, start the bundled PostgreSQL container: `cd src && docker-compose up -d` (see `src/docker-compose.yml`).
+- `SQLQueryEmbedder` additionally requires an [[Agency.Embeddings.Common]] `IEmbeddingGenerator` implementation at runtime.
 
-// DDL / DML
-await runner.ExecuteAsync("CREATE TABLE IF NOT EXISTS docs (id serial PRIMARY KEY, content text)");
+## API Surface
 
-// Query → Dataset
-Dataset results = await runner.QueryAsync(
-    "SELECT id, content FROM docs WHERE id = @id",
-    parameters: new() { ["id"] = 42 });
+### `PostgreSqlRunner`
 
-// Query → strongly-typed list
-List<Doc> docs = await runner.QueryAsync<Doc>(
-    "SELECT id, content FROM docs",
-    predicate: async reader => new Doc(reader.GetInt32(0), reader.GetString(1)));
-```
-
-Every method opens a fresh `NpgsqlDataSource` with `UseVector()` enabled, so `pgvector` column types are transparently supported.
-
-## `SQLQueryEmbedder`
-
-Allows writing semantic vector queries in plain SQL using a `vectorize('...')` macro that is resolved at runtime:
+Sealed, async-disposable SQL runner that owns a singleton `NpgsqlDataSource` with `pgvector` support. Inherits `ExecuteAsync` and `QueryAsync` from [[Agency.Sql.Common]] `SqlRunnerBase`.
 
 ```csharp
-var embedder = new SQLQueryEmbedder(embeddingGenerator);
+// File: src/Sql/Agency.Sql.Postgre/PostgreSqlRunner.cs
+using Agency.Sql.Common;
+using Agency.Common;
+using Microsoft.Extensions.Logging;
+using Npgsql;
+using System.Data.Common;
 
-string rawSql = """
-    SELECT title, body
-    FROM documents
-    ORDER BY embedding <-> vectorize('what is RAG?')
-    LIMIT 5
-    """;
+namespace Agency.Sql.Postgre;
 
-string embeddedSql = await embedder.EmbedVectorsInQueryAsync(rawSql);
-// embedding <-> vectorize('what is RAG?')  becomes:
-// embedding <-> '[0.023,-0.411,...]'::vector
+public sealed class PostgreSqlRunner : SqlRunnerBase, IAsyncDisposable
+{
+    public const string ActivitySourceName = "Agency.Sql.Postgre";
+    public const string MeterName = "Agency.Sql.Postgre";
 
-Dataset results = await runner.QueryAsync(embeddedSql);
+    // Constructor
+    public PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null);
+
+    // Inherited from SqlRunnerBase
+    public Task<int> ExecuteAsync(
+        string sql,
+        Dictionary<string, object?>? parameters = null,
+        CancellationToken cancellationToken = default);
+
+    public Task<Dataset> QueryAsync(
+        string sql,
+        Dictionary<string, object?>? parameters = null,
+        CancellationToken cancellationToken = default);
+
+    public Task<List<TResult>> QueryAsync<TResult>(
+        string sql,
+        Func<DbDataReader, Task<TResult>> predicate,
+        Dictionary<string, object?>? parameters = null,
+        CancellationToken cancellationToken = default);
+
+    public ValueTask DisposeAsync();
+}
 ```
 
-The regex handles escaped single-quotes inside the text (`''` → `'`) and multiple `vectorize()` calls in a single query, replacing them right-to-left to preserve character offsets.
+### `SQLQueryEmbedder`
+
+Preprocesses SQL text by replacing all `vectorize('<text>')` macro calls with pgvector literal strings before the query is sent to PostgreSQL.
+
+```csharp
+// File: src/Sql/Agency.Sql.Postgre/SQLQueryEmbedder.cs
+using Agency.Embeddings.Common;
+
+namespace Agency.Sql.Postgre;
+
+public partial class SQLQueryEmbedder
+{
+    public SQLQueryEmbedder(IEmbeddingGenerator embeddingGenerator);
+
+    public Task<string> EmbedVectorsInQueryAsync(
+        string sqlQuery,
+        CancellationToken cancellationToken = default);
+}
+```
+
+## How It Works
+
+**`PostgreSqlRunner`** builds a single `NpgsqlDataSource` at construction time using `NpgsqlDataSourceBuilder.UseVector()`, which registers pgvector type mappings. Every `ExecuteAsync` or `QueryAsync` call opens a connection from that pool, creates an `NpgsqlCommand`, and closes the connection on completion. Parameters may be passed as a `Dictionary<string, object?>` or as pre-built `NpgsqlParameter` instances (for typed pgvector columns). The generic overload of `QueryAsync<TResult>` accepts an async row-mapping delegate instead of returning a `Dataset`.
+
+**`SQLQueryEmbedder`** applies a source-generated `[GeneratedRegex]` to find every `vectorize('<text>')` call in the SQL string. It processes matches right-to-left so that earlier character offsets remain valid after each substitution. For each match it calls `IEmbeddingGenerator.GenerateEmbeddingAsync`, then formats the resulting `ReadOnlySpan<float>` as a pgvector SQL literal (`'[f1,f2,...]'`). Escaped single-quotes inside the argument text (`''`) are unescaped before embedding.
 
 ## Observability
 
-`PostgreSqlRunner` instruments every call with:
+`PostgreSqlRunner` instruments every operation via the [[Agency.Sql.Common]] base class pattern:
 
-- **Activity** `postgresql.execute` / `postgresql.query` tagged with `db.system`, `db.operation`, `db.statement`
-- **Counter** `postgresql.executions` (tags: `operation`, `status`)
-- **Histogram** `postgresql.duration` (ms)
+| Signal | Name | Tags |
+|---|---|---|
+| Activity | `postgresql.execute` / `postgresql.query` | `db.system`, `db.operation`, `db.statement` |
+| Counter | `postgresql.executions` | `operation`, `status` |
+| Histogram | `postgresql.duration` (ms) | `operation` |
 
-ActivitySource name: `Agency.Sql.Postgre` | Meter name: `Agency.Sql.Postgre`
-
-## Infrastructure
-
-PostgreSQL runs via Docker (`src/docker-compose.yml`):
-
-```yaml
-# Connection details for local dev:
-Host=localhost; Port=5432; Database=dev_db; Username=dev_user; Password=dev_password
-```
+- **ActivitySource name:** `Agency.Sql.Postgre`
+- **Meter name:** `Agency.Sql.Postgre`
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Sql.Common]] | `PostgreSqlRunner` extends `SqlRunnerBase`; inherits `ExecuteAsync` / `QueryAsync` with OTel |
-| [[Agency.Common]] | Returns `Dataset`; `IColumnMetadata` adapter lives in `Agency.Sql.Common` |
-| [[Agency.Embeddings.Common]] | `SQLQueryEmbedder` injects `IEmbeddingGenerator` |
-| [[Agency.VectorStore.Sql.Postgre]] | `PostgreKVStore` delegates all SQL to `PostgreSqlRunner` |
-| [[Agency.RagFormatter]] | Formats the `Dataset` returned by `QueryAsync` |
+| [[Agency.Sql.Common]] | `PostgreSqlRunner` extends `SqlRunnerBase`, which provides the full telemetry skeleton and the `ExecuteAsync` / `QueryAsync` implementations |
+| [[Agency.Common]] | `QueryAsync` returns `Dataset`; column schema is adapted via `DbColumnAdapter` defined in [[Agency.Sql.Common]] |
+| [[Agency.Embeddings.Common]] | `SQLQueryEmbedder` depends on `IEmbeddingGenerator` to resolve `vectorize()` macros |
+| [[Agency.VectorStore.Sql.Postgre]] | Uses `PostgreSqlRunner` for all database access |
+| [[Agency.KeyValueStore.Sql.Postgre]] | Uses `PostgreSqlRunner` for all database access |
+| [[Agency.RagFormatter]] | Formats the `Dataset` objects returned by `QueryAsync` into Markdown tables for LLM context |
+
+## Design Notes
+
+- `PostgreSqlRunner` is sealed and owns its `NpgsqlDataSource` lifetime; callers must dispose it with `await using` or `DisposeAsync()` to return pooled connections cleanly.
+- The `vectorize()` macro substitution is intentionally a pure text transformation with no SQL parsing, keeping `SQLQueryEmbedder` independent of query structure and composable with any SQL dialect that pgvector supports.
+- Passing a `NpgsqlParameter` directly as a dictionary value (instead of a raw object) allows callers to specify strongly-typed pgvector parameters (e.g. `Vector`) without going through the generic `AddWithValue` path.
+- Both `ActivitySourceName` and `MeterName` are exposed as `public const string` fields so that host applications can subscribe to the exact source/meter names when configuring OpenTelemetry pipelines.

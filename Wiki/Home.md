@@ -28,7 +28,7 @@ Documents
    Agency.RagFormatter                     (Dataset → Markdown table)
           │
           ▼
-   Agency.Llm.Common                  (ILlmClient interface + message types)
+   Agency.Llm.Common                  (IModelProvider interface + tool types)
    Agency.Llm.Claude                  (Anthropic SDK implementation)
    Agency.Llm.OpenAI                  (OpenAI SDK implementation)
           │
@@ -36,6 +36,13 @@ Documents
    Agency.Agentic                     (autonomous agent loop)
    Agency.Agentic.Console             (interactive REPL chat harness)
    Agency.Console                     (one-shot RAG demo stub)
+          │
+          ▼
+   Agency.GraphRAG.Code               (code graph indexing, clustering, query)
+   Agency.GraphRAG.Code.Sqlite        (SQLite IGraphStore + FTS5 + sqlite-vec)
+   Agency.GraphRAG.Code.Postgres      (PostgreSQL IGraphStore + pgvector)
+   Agency.GraphRAG.Code.Cli           (index / query CLI)
+   Agency.GraphRAG.Code.TreeSitter    (Tree-sitter sidecar: AST parsing)
           │
           ▼
    Agency.Mcp.Memory                  (MCP server: Memorize / Recall / Forget via IKVStore)
@@ -46,7 +53,7 @@ Documents
 ### Foundations
 - [[Agency.Common]] — `Dataset` and `IColumnMetadata`; zero-dependency shared types
 - [[Agency.Embeddings.Common]] — `IEmbeddingGenerator` interface
-- [[Agency.Llm.Common]] — `ILlmClient`, message types, tool types
+- [[Agency.Llm.Common]] — `IModelProvider`, tool types
 
 ### Embeddings
 - [[Agency.Embeddings.OpenAI]] — OpenAI-compatible embedding generator with OTel
@@ -63,6 +70,13 @@ Documents
 
 ### RAG
 - [[Agency.RagFormatter]] — `Dataset.ToMarkdownTable()` for LLM context injection
+
+### Code Graph RAG
+- [[Agency.GraphRAG.Code]] — code graph indexing, retrieval, and agent-facing query capability
+- [[Agency.GraphRAG.Code.Sqlite]] — SQLite-backed `IGraphStore` with FTS5 and `sqlite-vec`
+- [[Agency.GraphRAG.Code.Postgres]] — PostgreSQL-backed `IGraphStore` with pgvector and trigram search
+- [[Agency.GraphRAG.Code.Cli]] — `index` / `query` CLI for local and PostgreSQL-backed code graphs
+- [[Agency.GraphRAG.Code.TreeSitter]] — Tree-sitter sidecar client for AST parsing
 
 ### Ingestion
 - [[Agency.Ingestion]] — abstractions + `DefaultIngestionPipeline<T>`

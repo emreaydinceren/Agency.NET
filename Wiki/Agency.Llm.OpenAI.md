@@ -1,100 +1,107 @@
 # Agency.Llm.OpenAI
 
-#llm #openai #implementation #observability #lmstudio
+#llm #openai #factory #meai #observability
 
 ## What It Is
 
-`Agency.Llm.OpenAI` is the OpenAI-compatible implementation of [[Agency.Llm.Common]]'s `ILlmClient`. It works with any OpenAI-protocol-compatible endpoint: OpenAI cloud, Azure OpenAI, LM Studio, Ollama, and others. The project uses the official `Azure.AI.OpenAI` / `OpenAI` .NET SDK.
+Agency.Llm.OpenAI is the OpenAI-compatible `IChatClient` factory that wraps the official `OpenAI` .NET SDK and wires in OpenTelemetry and logging middleware via `Microsoft.Extensions.AI`. It works with any OpenAI-protocol-compatible endpoint: OpenAI cloud, Azure OpenAI, LM Studio, Ollama, and others.
+
+**Namespace:** `Agency.Llm.OpenAI`
+
+## Prerequisites
+
+- An API key supplied via `LlmClientOptions.ApiKey`. For local endpoints (LM Studio, Ollama) any non-empty placeholder such as `"lm-studio"` is accepted.
+- Optionally a `BaseUrl` in `LlmClientOptions` pointing to the endpoint's `/v1` root (e.g. `http://llm-host.example:1234/v1`). When omitted, the official OpenAI API endpoint is used.
+- The `OpenAI` NuGet package and `Microsoft.Extensions.AI.OpenAI` are required dependencies (managed centrally via `Directory.Build.props`).
+
+## API Surface
+
+### `OpenAIClient`
+
+```csharp
+// File: src/Llm/Agency.Llm.OpenAI/OpenAIClient.cs
+using Agency.Llm.Common;
+using Agency.Llm.OpenAI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+public sealed class OpenAIClient : IModelProvider
+{
+    // Constructors
+    public OpenAIClient(IOptions<LlmClientOptions> options, ILoggerFactory? loggerFactory = null);
+    public OpenAIClient(LlmClientOptions options, ILoggerFactory? loggerFactory = null);
+
+    /// <summary>
+    /// Creates an IChatClient wired with OpenTelemetry and logging middleware.
+    /// The model is selected per-request via ChatOptions.ModelId.
+    /// </summary>
+    public IChatClient CreateChatClient();
+
+    /// <inheritdoc cref="IModelProvider"/>
+    public Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default);
+}
+```
 
 ## How It Works
 
+`OpenAIClient` is a factory, not a chat client itself. Each call to `CreateChatClient()` constructs an underlying `OpenAI.OpenAIClient`, obtains its `ChatClient` via `GetChatClient("default")`, converts it to `IChatClient` (MEAI abstraction), then chains:
+
+1. `UseOpenTelemetry()` — records spans and gen_ai semantic-convention metrics automatically.
+2. `UseLogging(loggerFactory)` — emits request/response log entries.
+
+The `"default"` model placeholder is overridden at call time by setting `ChatOptions.ModelId`, so a single factory instance serves any model the caller names.
+
 ```csharp
-var client = new OpenAIClient(Options.Create(new LlmClientOptions
+// File: src/Llm/Agency.Llm.OpenAI/OpenAIClient.cs
+using Agency.Llm.Common;
+using Agency.Llm.OpenAI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+
+// Create the factory
+var factory = new OpenAIClient(new LlmClientOptions
 {
     ApiKey  = "lm-studio",
-    BaseUrl = "http://llm-host.example:1234/v1",   // LM Studio
-}));
+    BaseUrl = "http://llm-host.example:1234/v1",
+});
 
-// Simple prompt
-LlmResponse reply = await client.SendAsync("google/gemma-4-e2b", "system", "Explain HNSW indexes.");
+// Obtain an IChatClient
+IChatClient chat = factory.CreateChatClient();
 
-// Streaming simple prompt
-await foreach (LlmStreamChunk chunk in client.StreamAsync("google/gemma-4-e2b", "system", "prompt"))
-{
-    if (chunk.Text is not null) Console.Write(chunk.Text);
-}
+// Send a prompt — model selected via ChatOptions
+ChatResponse response = await chat.GetResponseAsync(
+    "Explain HNSW indexes.",
+    new ChatOptions { ModelId = "google/gemma-4-e2b" });
 
-// Agentic turn
-AgentLlmResponse response = await client.SendAgentAsync(
-    model:        "google/gemma-4-e2b",
-    systemPrompt: "You are a helpful assistant.",
-    messages:     conversationHistory,
-    tools:        toolDefinitions,
-    ct:           cancellationToken);
-
-// Streaming agentic turn — tool-use blocks are yielded after the stream ends (OpenAI protocol)
-await foreach (AgentStreamChunk chunk in client.StreamAgentAsync("qwen3", systemPrompt, messages, tools, ct))
-{
-    if (chunk.Text is not null)       Console.Write(chunk.Text);
-    if (chunk.ToolUse is not null)    HandleToolUse(chunk.ToolUse);
-    if (chunk.StopReason is not null) Console.WriteLine(chunk.Usage);
-}
-
-// List available models
-IReadOnlyList<Model> models = await client.GetModelsAsync();
+// Enumerate available models
+IReadOnlyList<Model> models = await factory.GetModelsAsync();
 ```
 
-`ClientType` returns `"OpenAI"`.
-
-## OpenAI SDK Mapping
-
-The OpenAI SDK has a different protocol structure from Anthropic — especially for tool results:
-
-| Our type | OpenAI SDK type | Notes |
-|---|---|---|
-| `TextBlock` | `ChatMessageContentPart.Text` | |
-| `ToolUseBlock` | `ChatToolCall.CreateFunctionToolCall(id, name, BinaryData)` | Input serialized to JSON |
-| `ToolResultBlock` | `ToolChatMessage(toolCallId, content)` | **Each result is a separate message**, unlike Anthropic's single user message |
-| `ToolDefinition` | `ChatTool.CreateFunctionTool(name, desc, BinaryData)` | Schema passed as `BinaryData` from `JsonElement.GetRawText()` |
-
-### Multi-message tool result expansion
-
-```csharp
-// One ToolResultBlock → one separate ToolChatMessage
-private static IEnumerable<ChatMessage> ConvertToOpenAIMessages(AgentMessage message)
-{
-    if (message.Role == MessageRole.User)
-    {
-        var toolResults = message.Content.OfType<ToolResultBlock>().ToList();
-        if (toolResults.Count > 0)
-        {
-            foreach (var trb in toolResults)
-                yield return new ToolChatMessage(trb.ToolUseId, trb.Content);
-        }
-        else
-        {
-            yield return new UserChatMessage(...);
-        }
-    }
-    // ...
-}
-```
+Optional `Timeout` and `MaxRetries` on `LlmClientOptions` are forwarded to `OpenAIClientOptions.NetworkTimeout` and retry policy respectively.
 
 ## Observability
 
-Same pattern as [[Agency.Llm.Claude]]:
-- `ActivitySource` name: `Agency.Llm.OpenAI`
-- `Meter` name: `Agency.Llm.OpenAI`
-- Metrics: `llm.client.requests`, `llm.client.errors`, `llm.client.duration`, `llm.client.tokens`
-- Tags: `gen_ai.system=openai`, `gen_ai.request.model`, `llm.method`, `gen_ai.token.type`
+OpenTelemetry instrumentation is provided by the `UseOpenTelemetry()` middleware from `Microsoft.Extensions.AI.OpenAI`, which follows the OpenTelemetry Generative AI semantic conventions:
 
-> **Note**: For OpenAI, `StreamAgentAsync` accumulates all tool-call argument chunks before yielding `ToolUse` blocks (they all arrive after the terminal chunk). Claude's `StreamAgentAsync` yields each tool block as soon as its JSON is fully received.
+- Distributed traces recorded under the `OpenAI` activity source name.
+- Tags include `gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`.
+
+No additional `ActivitySource` or `Meter` is declared in this project; telemetry is entirely delegated to the MEAI middleware pipeline.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Llm.Common]] | Implements `ILlmClient`; uses all message and tool types |
-| [[Agency.Agentic]] | `Agent` calls `SendAgentAsync` on every loop iteration |
-| [[Agency.Agentic.Console]] | Default provider when `Agent:Provider = "OpenAI"` in config |
-| [[Agency.Embeddings.OpenAI]] | Sibling project — both talk to OpenAI-compatible APIs but for different purposes (chat vs. embeddings) |
+| [[Agency.Llm.Common]] | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` |
+| [[Agency.Agentic]] | `Models.cs` calls `new OpenAIClient(options).CreateChatClient()` when `ClientType` is `"OpenAI"` |
+| [[Agency.Agentic.Console]] | Configures `ClientType = "OpenAI"` in `appsettings.json` to select this factory |
+| [[Agency.Embeddings.OpenAI]] | Sibling project — both wrap OpenAI-compatible APIs, but for embeddings rather than chat |
+| [[Agency.Llm.Claude]] | Peer factory implementing the same `IModelProvider` pattern for the Anthropic SDK |
+
+## Design Notes
+
+- `OpenAIClient` follows the factory pattern: it is not itself an `IChatClient` but creates one on demand. This allows the MEAI middleware pipeline to be assembled fresh per usage site and keeps `OpenAIClient` lightweight and DI-friendly.
+- The model is resolved per-request via `ChatOptions.ModelId` rather than at construction time, so a single `OpenAIClient` instance can serve requests to different models without re-instantiation.
+- The `"default"` string passed to `GetChatClient("default")` is a placeholder required by the SDK; it is always overridden by `ChatOptions.ModelId` at the call site.
+- Both constructor overloads (`IOptions<LlmClientOptions>` and plain `LlmClientOptions`) are provided so the class works equally well with Microsoft DI and in manual/test scenarios.

@@ -1,127 +1,109 @@
 # Agency.Llm.Common
 
-#llm #abstractions #interface #messages #tools
+#llm #abstractions #options #tools #models
 
 ## What It Is
 
-`Agency.Llm.Common` is the LLM abstraction layer. It defines:
+Agency.Llm.Common is the shared contract library that defines provider-agnostic types for configuring LLM clients, describing available models, and declaring the tool-calling surface used across the agentic pipeline.
 
-1. **`ILlmClient`** — the single interface all LLM provider implementations must satisfy.
-2. **Message types** — provider-agnostic conversation objects (`AgentMessage`, `TextBlock`, `ToolUseBlock`, `ToolResultBlock`, `ThinkingBlock`, `ContentBlock`).
-3. **Tool types** — `ToolDefinition`, `ToolResult`, `ITool`, `IToolRegistry`, `LlmTokenUsage`.
+**Namespace:** `Agency.Llm.Common` · `Agency.Llm.Common.Tools`
 
-All other projects communicate with LLM providers through these abstractions, keeping the call sites completely provider-agnostic.
+## API Surface
 
-## Key Types
-
-### `ILlmClient`
+### `IModelProvider`
 
 ```csharp
-public interface ILlmClient
+// File: src/Llm/Agency.Llm.Common/IModelProvider.cs
+using Agency.Llm.Common;
+
+public interface IModelProvider
 {
-    /// <summary>Provider display name ("Claude", "OpenAI", …).</summary>
-    string ClientType { get; }
-
-    /// <summary>Single-turn request/response (non-agentic).</summary>
-    Task<LlmResponse> SendAsync(
-        string model, string systemPrompt, string userPrompt,
-        long? maxTokens = 1024, float? temperature = null,
-        CancellationToken ct = default);
-
-    /// <summary>Streaming single-turn — yields text-delta chunks, then a terminal chunk with usage.</summary>
-    IAsyncEnumerable<LlmStreamChunk> StreamAsync(
-        string model, string systemPrompt, string userPrompt,
-        long? maxTokens = 1024, float? temperature = null,
-        CancellationToken ct = default);
-
-    /// <summary>Full agentic turn — system prompt + conversation history + tools.</summary>
-    Task<AgentLlmResponse> SendAgentAsync(
-        string model, string systemPrompt,
-        IReadOnlyList<AgentMessage> messages,
-        IReadOnlyList<ToolDefinition> tools,
-        CancellationToken ct = default);
-
-    /// <summary>Streaming agentic turn — yields text deltas live and complete tool-use blocks.</summary>
-    IAsyncEnumerable<AgentStreamChunk> StreamAgentAsync(
-        string model, string systemPrompt,
-        IReadOnlyList<AgentMessage> messages,
-        IReadOnlyList<ToolDefinition> tools,
-        CancellationToken ct = default);
-
-    /// <summary>Lists available models from the provider.</summary>
-    Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken ct = default);
+    /// <summary>Returns all models available through this provider.</summary>
+    Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default);
 }
 ```
 
-### Streaming Chunk Types
+### `Model`
 
 ```csharp
-// Simple streaming (SendAsync → StreamAsync)
-record LlmStreamChunk(string? Text, StopReason? StopReason, LlmTokenUsage? Usage);
-// Text chunks: Text set, others null.
-// Terminal chunk: Text null, StopReason + Usage set.
-
-// Agentic streaming (StreamAgentAsync)
-record AgentStreamChunk(string? Text, ToolUseBlock? ToolUse, StopReason? StopReason, LlmTokenUsage? Usage);
-// Text delta chunks: Text set, others null.
-// Tool-use chunks: ToolUse set, others null (emitted once a full tool-call JSON is received).
-// Terminal chunk: StopReason + Usage set, Text + ToolUse null.
-```
-
-### Message Types
-
-```csharp
-// Conversation building blocks
-AgentMessage message = new(MessageRole.User, [new TextBlock("Hello!")]);
-AgentMessage assistant = new(MessageRole.Assistant, [
-    new TextBlock("I'll look that up."),
-    new ToolUseBlock(id: "call_1", name: "search", input: jsonElement),
-]);
-AgentMessage toolResult = new(MessageRole.User, [
-    new ToolResultBlock(toolUseId: "call_1", content: "Result text", isError: false),
-]);
-```
-
-### Tool Types
-
-```csharp
-// Defining a tool
-var tool = new ToolDefinition(
-    Name: "get_weather",
-    Description: "Returns current weather for a city.",
-    InputSchema: JsonDocument.Parse("""{"type":"object","properties":{"city":{"type":"string"}}}""").RootElement);
-
-// Implementing a tool
-public sealed class WeatherTool : ITool
-{
-    public string Name => "get_weather";
-    public string Description => "Returns current weather for a city.";
-    public JsonElement InputSchema => ...;
-    public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
-        => Task.FromResult(new ToolResult("Sunny, 22°C"));
-}
-```
-
-### `LlmTokenUsage` and `Model`
-
-```csharp
-public sealed record LlmTokenUsage(long InputTokens, long OutputTokens)
-{
-    public long TotalTokens => InputTokens + OutputTokens;
-}
+// File: src/Llm/Agency.Llm.Common/Model.cs
+using Agency.Llm.Common;
 
 public sealed record Model(string Id, string Name);
 ```
 
-### `StopReason`
+### `LlmClientOptions`
 
-Values include `Stop`, `EndTurn`, `MaxTokens`, `ToolUse`, `ToolCalls`, `FunctionCall`, `ContentFilter`, `Refusal`, `PauseTurn`, and `Unknown`.
+```csharp
+// File: src/Llm/Agency.Llm.Common/LlmClientOptions.cs
+using Agency.Llm.Common;
+
+public record class LlmClientOptions
+{
+    public string Name        { get; set; } = string.Empty;
+    public string ClientType  { get; set; } = string.Empty;
+    public string ApiKey      { get; set; } = string.Empty;
+    public string? BaseUrl    { get; set; }
+    public int?   MaxRetries  { get; set; }
+    public TimeSpan? Timeout  { get; set; }
+    public long? MaxTokens    { get; set; }
+}
+```
+
+### Tool types (`Agency.Llm.Common.Tools`)
+
+```csharp
+// File: src/Llm/Agency.Llm.Common/Tools/ToolTypes.cs
+using System.Text.Json;
+using Agency.Llm.Common.Tools;
+
+/// <summary>JSON-schema description of a tool exposed to the LLM.</summary>
+public sealed record ToolDefinition(string Name, string Description, JsonElement InputSchema);
+
+/// <summary>The result returned by a tool invocation.</summary>
+public sealed record ToolResult(string Content, bool IsError = false);
+
+/// <summary>A callable tool that can be registered with an <see cref="IToolRegistry"/>.</summary>
+public interface ITool
+{
+    ToolDefinition Definition { get; }
+    Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct);
+}
+
+/// <summary>Catalogue of available tools; supports per-tool enable/disable by system or user.</summary>
+public interface IToolRegistry
+{
+    IReadOnlyList<ToolDefinition> ListDefinitions();
+    IReadOnlyList<(bool Enabled, ToolDefinition Definition)> ListAllDefinitions();
+
+    void DisabledToolBySystem(string name);
+    void EnableToolBySystem(string name);
+    void DisableToolByUser(string name);
+    void EnableToolByUser(string name);
+
+    Task<ToolResult> InvokeAsync(string name, JsonElement input, CancellationToken ct);
+}
+```
+
+## How It Works
+
+`Agency.Llm.Common` is a pure type library — it contains no runtime logic. Provider implementations ([[Agency.Llm.Claude]] and [[Agency.Llm.OpenAI]]) reference this project and expose `LlmClientOptions` subclasses bound via `IOptions<T>`. The `IModelProvider` interface is also implemented by both providers and exposed via their registered services.
+
+The `Tools` sub-namespace contains the tool-calling contract. [[Agency.Agentic]] drives the agentic loop by calling `IToolRegistry.InvokeAsync` after the LLM returns a tool-use request, and passes `IToolRegistry.ListDefinitions()` to the provider on each turn.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Llm.Claude]] | Implements `ILlmClient` using the Anthropic SDK |
-| [[Agency.Llm.OpenAI]] | Implements `ILlmClient` using the OpenAI SDK |
-| [[Agency.Agentic]] | `Agent` takes `ILlmClient` and calls `SendAgentAsync` on each iteration |
-| [[Agency.Agentic.Console]] | Wires up a concrete client and passes it to `Agent` |
+| [[Agency.Llm.Claude]] | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
+| [[Agency.Llm.OpenAI]] | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
+| [[Agency.Agentic]] | Depends on `ITool`, `IToolRegistry`, `ToolDefinition`, `ToolResult`, `Model` |
+| [[Agency.Agentic.Console]] | References `LlmClientOptions` and `Model` for CLI configuration |
+| [[Agency.GraphRAG.Code]] | Consumes `ToolDefinition` and `ToolResult` for code-graph tool calls |
+
+## Design Notes
+
+- **No runtime dependencies** — the `.csproj` is intentionally empty; `Agency.Llm.Common` has zero NuGet package references, keeping the shared contract portable and fast to compile.
+- **Dual enable/disable authority** — `IToolRegistry` distinguishes system-controlled disable (`DisabledToolBySystem` / `EnableToolBySystem`) from user-controlled disable (`DisableToolByUser` / `EnableToolByUser`), so a tool is only included in `ListDefinitions()` when both authorities agree it is enabled.
+- **`LlmClientOptions` is provider-neutral** — the record covers fields common to any HTTP-based LLM API (key, base URL, retries, timeout, max tokens); provider projects extend it with provider-specific fields rather than duplicating the base properties.
+

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="FluentMigrator" />
+    <PackageReference Include="FluentMigrator.Runner" />
+    <PackageReference Include="FluentMigrator.Runner.Postgres" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="pgvector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.GraphRAG.Code\Agency.GraphRAG.Code.csproj" />
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Agency.GraphRAG.Code.Postgres.Test" />
+  </ItemGroup>
+
+</Project>

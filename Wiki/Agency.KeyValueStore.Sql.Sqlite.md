@@ -4,30 +4,28 @@
 
 ## What It Is
 
-`Agency.KeyValueStore.Sql.Sqlite` provides a SQLite implementation of [[Agency.KeyValueStore.Common]] `IKVStore`.
+Agency.KeyValueStore.Sql.Sqlite is the SQLite-backed implementation of the `IKVStore` contract that stores, searches, and deletes typed key/value entries with optional JSON metadata in a local SQLite database.
 
-The project currently exposes one concrete type:
+**Namespace:** `Agency.KeyValueStore.Sql.Sqlite`
 
-- `SqliteKVStore`
-
-`SqliteKVStore` stores `value` as JSON text (`TEXT`) and optional `metadata` as JSON text (`TEXT`) in a `kv_store` table keyed by `(user_id, session_id, key)`. It applies value filtering in SQL via `instr(value, @v) > 0`, applies metadata filtering in-process (because SQLite has no native JSONB containment), and returns results ordered by `updated_on DESC`.
-
-It depends on [[Agency.Sql.Sqlite]] for SQL execution, [[Agency.KeyValueStore.Common]] for `IKVStore`, `Query`, and `SearchHit<TValue>`, plus `Microsoft.Data.Sqlite` and `Microsoft.Extensions.Logging.Abstractions`.
-
-## Key Types
-
-### `SqliteKVStore`
+## API Surface
 
 ```csharp
+// File: src/KeyValueStore/Agency.KeyValueStore.Sql.Sqlite/SqliteKVStore.cs
+using Agency.KeyValueStore.Common;
+using Agency.Sql.Sqlite;
+using Microsoft.Extensions.Logging;
+
 public sealed class SqliteKVStore : IKVStore
 {
     public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Sqlite";
-    public const string MeterName = "Agency.KeyValueStore.Sql.Sqlite";
+    public const string MeterName          = "Agency.KeyValueStore.Sql.Sqlite";
 
     public SqliteKVStore(
         SqliteRunner sqliteRunner,
         ILogger<SqliteKVStore>? logger = null);
 
+    /// <summary>Creates the kv_store table and key index if they do not already exist.</summary>
     public Task InitializeSchemaAsync(CancellationToken cancellationToken = default);
 
     public Task UpsertAsync<TValue>(
@@ -55,81 +53,36 @@ public sealed class SqliteKVStore : IKVStore
 }
 ```
 
-`InitializeSchemaAsync` creates `kv_store` if needed:
+## How It Works
 
-- `user_id TEXT NOT NULL`
-- `session_id TEXT NOT NULL`
-- `key TEXT NOT NULL`
-- `value TEXT NOT NULL`
-- `metadata TEXT`
-- `updated_on TEXT DEFAULT (datetime('now'))`
-- `PRIMARY KEY (user_id, session_id, key)`
+1. **Schema bootstrap** — `InitializeSchemaAsync` issues a `CREATE TABLE IF NOT EXISTS kv_store` DDL via `SqliteRunner`. The table has columns `user_id`, `session_id`, `key`, `value` (JSON text), `metadata` (JSON text, nullable), and `updated_on` (text, default `datetime('now')`). The primary key is `(user_id, session_id, key)`.
+2. **Session resolution** — a `null` `sessionId` is stored as the sentinel value `"*"`, representing a user-global entry that is not tied to any specific session.
+3. **Upsert** — serializes `value` to JSON and `metadata` to JSON, then issues an `INSERT … ON CONFLICT … DO UPDATE` that also refreshes `updated_on`.
+4. **Search** — builds a parameterised SQL query with optional `session_id`, `key`, and `instr(value, @v) > 0` clauses, ordered by `updated_on DESC`. When a `MetadataFilter` is present, the SQL `LIMIT` is removed and post-query C# filtering applies array-containment or scalar-equality checks before the final limit is enforced.
+5. **Delete** — issues a targeted `DELETE` by `(user_id, session_id, key)` and returns `true` if a row was removed.
+6. **Metadata-only read** — `GetMetadataAsync` selects `session_id`, `key`, `metadata`, and `updated_on` without fetching the value column, for lightweight enumeration.
 
-## Usage
+## Observability
 
-```csharp
-var runner = new SqliteRunner("Data Source=kvstore.db");
-var store = new SqliteKVStore(runner, logger);
+`SqliteKVStore` instruments every operation with OpenTelemetry traces and metrics.
 
-await store.InitializeSchemaAsync(cancellationToken);
+- **ActivitySource name:** `Agency.KeyValueStore.Sql.Sqlite`
+- **Meter name:** `Agency.KeyValueStore.Sql.Sqlite`
+- **Counter:** `kvstore.operations` — tags `operation` and `status` (`success` / `error`)
+- **Histogram:** `kvstore.duration` (milliseconds) — tag `operation`
 
-await store.UpsertAsync(
-    userId: "user-42",
-    sessionId: "session-a",
-    key: "profile",
-    value: "Emre",
-    metadata: new Dictionary<string, object> { ["source"] = "seed" },
-    cancellationToken: cancellationToken);
+Operations covered: `kvstore.initialize`, `kvstore.upsert`, `kvstore.search`, `kvstore.delete`, `kvstore.getMetadata`.
 
-var hits = await store.SearchAsync<string>(
-    new Query(
-        UserId: "user-42",
-        SessionId: "session-a",
-        Key: null,
-        Value: "Em",
-        MetadataFilter: new Dictionary<string, object> { ["source"] = "seed" },
-        Limit: 10,
-        IncludeMetadataInResults: true),
-    cancellationToken);
-
-bool deleted = await store.DeleteAsync(
-    userId: "user-42",
-    sessionId: "session-a",
-    key: "profile",
-    cancellationToken: cancellationToken);
-
-var metadata = await store.GetMetadataAsync(
-    userId: "user-42",
-    sessionId: "session-a",
-    cancellationToken: cancellationToken);
-```
-
-## Configuration
-
-This project does not define an options class. `SqliteKVStore` receives a configured `SqliteRunner`, so connection settings come from the runner's SQLite connection string.
-
-`sessionId` values of `null` are stored as `"*"` for user-global entries.
+Each activity span sets `kvstore.operation`, captures result counts and key metadata as span tags, and records a structured exception event on failure.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.KeyValueStore.Common]] | Provides `IKVStore`, `Query`, and `SearchHit<TValue>` contracts implemented and returned by `SqliteKVStore` |
-| [[Agency.Sql.Sqlite]] | Supplies `SqliteRunner`, which executes all SQL used by `SqliteKVStore` |
+| [[Agency.KeyValueStore.Common]] | Defines `IKVStore`, `Query`, `SearchHit<TValue>`, and `SearchHit` — the contracts that `SqliteKVStore` implements and returns |
+| [[Agency.Sql.Sqlite]] | Provides `SqliteRunner`, which `SqliteKVStore` delegates all SQL execution to |
 
-## Observability
+## Design Notes
 
-`SqliteKVStore` emits OpenTelemetry traces and metrics:
-
-- `ActivitySource` name: `Agency.KeyValueStore.Sql.Sqlite`
-- `Meter` name: `Agency.KeyValueStore.Sql.Sqlite`
-- Counter: `kvstore.operations` (operation/status tags)
-- Histogram: `kvstore.duration` in milliseconds
-
-Operations instrumented:
-
-- `kvstore.initialize`
-- `kvstore.search`
-- `kvstore.upsert`
-- `kvstore.delete`
-- `kvstore.getMetadata`
+- Value filtering uses SQLite's `instr()` function for in-database substring matching, keeping result sets small before they reach C#; metadata filtering is intentionally deferred to C# because SQLite has no native JSONB containment operator.
+- The `"*"` sentinel for `null` session IDs allows a single schema column to represent both session-scoped and user-global entries without a nullable primary key, which SQLite does not support.

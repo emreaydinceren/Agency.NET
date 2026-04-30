@@ -1,113 +1,236 @@
 # Agency.Agentic.Console
 
-#console #repl #chat #harness #interactive
+#console #repl #chat #agentic #interactive #telemetry
 
 ## What It Is
 
-`Agency.Agentic.Console` is an interactive REPL (Read-Eval-Print Loop) chat harness that drives [[Agency.Agentic]]'s `Agent` loop from a terminal. It supports:
+`Agency.Agentic.Console` is the terminal entry point that wires [[Agency.Agentic]]'s `Agent` and `ChatSession` into an interactive Spectre.Console REPL, handling multi-turn input, slash-command dispatch, inline model switching, streaming Markdown rendering, Ctrl+C interruption, and structured OpenTelemetry file export through the .NET Generic Host.
 
-- **Multi-turn conversation** — each message in the session is appended to the same `Context`, so the model remembers what was said earlier.
-- **Ctrl+C interruption** — cancels only the current LLM turn; the session continues.
-- **Provider switching** — configure `Agent:Provider` in `appsettings.json` to use `"OpenAI"` or `"Claude"`.
-- **Per-turn token delta** — prints `↳ +N in, +N out [Success]` after each response.
-- **Session summary** — prints total turns and total tokens on exit.
+**Namespace:** `Agency.Agentic.Console`
 
-## How It Works
+## API Surface
 
-On startup the console reads `appsettings.json` to select the provider and model, constructs the appropriate `ILlmClient` (`OpenAIClient` or `ClaudeClient`), and enters a REPL loop:
+This is an executable project (`<OutputType>Exe</OutputType>`). All types are `internal`, exposed to the test project via `[assembly: InternalsVisibleTo("Agency.Agentic.Console.Test")]`. There are no public APIs for consumption by other libraries.
 
-```
-> [user types a message]
-[Agent] responds here (rendered as Markdown)
-  ↳ +230 in, +47 out  [Success]
-
-> /exit
-Session ended  ·  3 turns  ·  1,234 in, 321 out total
-```
-
-### Multi-Turn Architecture
-
-Multi-turn state is managed by `Agent.ChatAsync`. The console calls it with the current `Context` on every turn; the method handles seeding on the first turn and appending on subsequent turns:
+`IChatOutput` is the primary internal abstraction for all console rendering:
 
 ```csharp
-ctx ??= Agent.CreateContext(input);
-
-await foreach (AgentEvent evt in _agent.ChatAsync(input, ctx, _options, sessionCts.Token))
+// File: src/Agentic/Agency.Agentic.Console/IChatOutput.cs
+internal interface IChatOutput
 {
-    // handle events ...
+    void WriteLine();
+    void WriteLine(string? colorName, string text);
+    void WriteLine(string text);
+    void Write(string? colorName, string text);
+    void Write(string text);
+    void WriteLineMarkdown(string text);
+    void WriteMarkup(string text);
+    void WriteLineMarkup(string text);
+    void StartSpinner(string markup = "[yellow]Thinking...[/]");
+    void StopSpinner();
+    void WriteMarkdownInBorderedPanel(string header, string text);
 }
 ```
 
-### Streaming Display
-
-When `Agent` is configured with `stream=true` (the default), the console receives `TextDeltaEvent`s and buffers them internally. When `AssistantTurnEvent` arrives, the buffer is flushed and rendered as Markdown via `NTokenizers.Extensions.Spectre.Console`:
+`IAgentFactory` is the internal abstraction for creating `Agent` instances by client name and model:
 
 ```csharp
-case TextDeltaEvent delta:
-    streamingBuffer.Append(delta.Delta);   // accumulate live tokens
-    break;
+// File: src/Agentic/Agency.Agentic.Console/IAgentFactory.cs
+using Agency.Agentic;
 
-case AssistantTurnEvent:
-    // flush + render the full buffered text as Markdown
-    await AnsiConsole.Console.WriteMarkdownAsync(ms, MarkdownStyles.Default, ...);
-    break;
+internal interface IAgentFactory
+{
+    Agent CreateAgent(string? clientName, string? modelName, bool stream);
+}
 ```
 
-If streaming was not used (batch mode), `AssistantTurnEvent` is handled directly with `PrintAssistantTurnAsync`.
+## Registration
 
-### Command System
+`Program.Main` builds a Generic Host and registers all services before creating a single DI scope to run the session:
 
-Input lines starting with `/` are dispatched to `CommandManager`, which matches against `CommandRegistery.Commands`:
+```csharp
+// File: src/Agentic/Agency.Agentic.Console/Program.cs
+using Agency.Agentic;
+using Agency.Agentic.Console.Telemetry;
+using Agency.Agentic.Contexts;
+using Agency.Agentic.Tools;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
-| Command | Behaviour |
-|---|---|
-| `/exit` | Returns `CommandContinuation.ExitSession` — terminates the REPL |
-| `/help` | Returns `CommandContinuation.Continue` (no-op placeholder) |
-| `/model` | Opens `ConsolePicker` to select from all available models |
+var builder = Host.CreateApplicationBuilder(args);
 
-When the user types `/`, `ConsolePicker` appears inline to autocomplete from the registered command list. Selecting a model via `/model` calls `session.SetAgent(newAgent)` to hot-swap the active `Agent`.
+builder.Services.AddTelemetry(builder.Configuration);          // traces, metrics, Serilog
+builder.Services.AddSingleton<IChatOutput, ConsoleOutput>();
+builder.Services.AddTransient<Models>();
+builder.Services.AddOptions<AgentOptions>().BindConfiguration("Agent").ValidateOnStart();
+builder.Services.AddScoped<IAgentFactory, AgentFactory>();
 
-### Ctrl+C Handling
+// Default Agent resolved from config
+builder.Services.AddScoped(sp =>
+{
+    var agentFactory = sp.GetRequiredService<IAgentFactory>();
+    var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
+    return agentFactory.CreateAgent(null, null, options.Stream);
+});
 
-A single `sessionCts` covers the whole session. `Console.CancelKeyPress` cancels it but suppresses process termination (`e.Cancel = true`). Subsequent turns re-check `sessionCts.IsCancellationRequested` to decide whether to exit the REPL.
+// ToolContext with pre-registered tools (including recursive AgentTool)
+builder.Services.AddScoped(sp =>
+{
+    var agentFactory = sp.GetRequiredService<IAgentFactory>();
+    var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
+    var registry = new ToolRegistry();
+    registry.Register(new ExecutePowershellTool());
+    registry.Register(new ReadFileTool());
+    registry.Register(new WriteFileTool());
+    registry.Register(new AgentTool((clientName, modelName, stream) =>
+        (options, agentFactory.CreateAgent(clientName, modelName, stream), registry)));
+    return new ToolContext { Registry = registry };
+});
 
-## Configuration
+builder.Services.AddScoped<ConsoleChatSession>();
+```
+
+### Configuration
 
 ```json
 {
   "Agent": {
-    "Provider": "OpenAI",
-    "OpenAI": {
-      "BaseUrl": "http://llm-host.example:1234/v1",
-      "ApiKey":  "lm-studio",
-      "Model":   "google/gemma-4-e2b"
-    },
-    "Claude": {
-      "ApiKey": "sk-ant-...",
-      "Model":  "claude-opus-4-6"
+    "DefaultClientName": "LocalVia-OpenAI-API",
+    "DefaultModel": "google/gemma-4-e2b",
+    "LLmClients": [
+      {
+        "Name": "LocalVia-OpenAI-API",
+        "ClientType": "OpenAI",
+        "BaseUrl": "http://llm-host.example:1234/v1",
+        "ApiKey": "lm-studio",
+        "Timeout": "00:10:00"
+      },
+      {
+        "Name": "LocalVia-Claude-API",
+        "ClientType": "Claude",
+        "BaseUrl": "http://llm-host.example:1234",
+        "ApiKey": "lm-studio"
+      }
+    ]
+  },
+  "OpenTelemetry": {
+    "ServiceName": "Agency.Agentic.Console",
+    "FileExport": {
+      "OutputDirectory": "./logs"
     }
   }
 }
 ```
 
-Switch provider by changing `"Provider"` — no code changes needed.
+## How It Works
 
-## Color Scheme
+`Program.Main` resolves `ConsoleChatSession` from the DI scope and calls `RunAsync`. The session enters a REPL until the user exits.
 
-| Color | Meaning |
+```
+❯ [user types a message]
+● response rendered as Markdown here
+  ↳ +230 in, +47 out  [Success]
+
+❯ /exit
+Session ended  ·  3 turns  ·  1,234 in, 321 out total
+```
+
+### REPL loop
+
+Each iteration:
+1. `ConsoleInputReader.ReadLineAsync` renders a bordered Spectre.Console prompt and reads input with history navigation and `/`-autocomplete.
+2. Bare `exit` or `quit` text terminates the session immediately.
+3. Input starting with `/` is dispatched to `CommandManager.ExecuteCommandAsync`, which matches a `Command` from `CommandRegistry.Commands` and returns a `CommandContinuation`.
+4. All other input is forwarded to `ChatSession.SendAsync`, which yields `IAsyncEnumerable<AgentEvent>`.
+
+### Event handling
+
+| Event | Console behaviour |
 |---|---|
-| Cyan | Prompt `>` and banner borders |
-| Green | `[Agent]` response prefix |
-| Yellow | Provider/model names; tool names |
-| Magenta | `→ calling <tool>` |
-| DarkGray | Token stats and session summary |
-| DarkYellow | `[interrupted]` on Ctrl+C |
+| `TextDeltaEvent` | Appended to `streamingBuffer` (`StringBuilder`) |
+| `AssistantTurnEvent` (streaming) | Flushes `streamingBuffer` through `MarkdownRenderer.Print`; stops spinner |
+| `AssistantTurnEvent` (batch) | Prints message content directly; stops spinner |
+| `ToolInvokedEvent` | Prints a rounded bordered panel with tool name and truncated result (100 chars, 3 lines); errors printed in red |
+| `AgentResultEvent` | Prints per-turn `↳ +N in, +N out [Status]` delta |
+
+### Ctrl+C handling
+
+A single `CancellationTokenSource` (`sessionCts`) covers the whole session. `Console.CancelKeyPress` cancels the token but sets `e.Cancel = true` to suppress process termination. The REPL checks `sessionCts.IsCancellationRequested` after each turn and breaks out if set. Once cancelled, the session ends; `sessionCts` is never recreated.
+
+### Slash commands
+
+Built-in commands are registered in `CommandRegistry`'s static constructor and shared across all `CommandManager` instances:
+
+| Command | Behaviour |
+|---|---|
+| `/clear` | Clears the console and resets `ChatSession` history |
+| `/exit` | Exits the session (`CommandContinuation.ExitSession`) |
+| `/quit` | Exits the session (`CommandContinuation.ExitSession`) |
+| `/help` | Returns `CommandContinuation.Continue` (no-op currently) |
+| `/model` | Opens `ConsolePicker` to hot-swap the active `Agent` |
+
+New commands can be added via `CommandRegistry.RegisterCommand` or `RegisterAsyncCommand` without modifying `CommandManager`.
+
+### Model switching
+
+`/model` invokes `ModelsCommand.RunSelectModelCommandAsync`, which calls `Models.GetAllAsync()` to list all configured LLM clients and their models, presents them in a searchable `ConsolePicker` grouped by client, and calls `ConsoleChatSession.SetAgent(newAgent)` to hot-swap the active `Agent` without restarting the session.
+
+## Agent Tools
+
+The `ToolContext` registered in DI includes four tools sourced from [[Agency.Agentic]]:
+
+| Tool | Purpose |
+|---|---|
+| `ExecutePowershellTool` | Executes PowerShell commands and returns stdout/stderr |
+| `ReadFileTool` | Reads file content from the local file system |
+| `WriteFileTool` | Writes content to the local file system |
+| `AgentTool` | Spawns a sub-`Agent` with the shared `ToolRegistry`, enabling recursive agent calls |
+
+`AgentTool` receives a factory lambda that captures both `AgentOptions` and the current `ToolRegistry`, so sub-agents share the same tool set as the parent.
+
+## Observability
+
+`ConsoleChatSession` declares its own `ActivitySource` and `Meter`, both named `"Agency.Agentic.Console"`.
+
+**Traces**
+
+| Span | Tags |
+|---|---|
+| `ConsoleChatSession.RunAsync` | `agent.client_type`, `agent.model` |
+
+**Metrics**
+
+| Instrument | Type | Description |
+|---|---|---|
+| `agent.console.sessions` | Counter | Total sessions started |
+| `agent.console.errors` | Counter | Sessions that ended with an unhandled exception |
+| `agent.console.commands` | Counter | Slash commands executed |
+| `agent.console.turns` | Counter | Successful (non-interrupted) turns |
+| `agent.console.tokens` | Counter | Tokens observed; tagged `agent.token.type` = `input` or `output` |
+| `agent.console.session.duration` | Histogram (ms) | Wall-clock duration of the session |
+
+All instruments carry `agent.client_type` and `agent.model` tags.
+
+`AddTelemetry(IConfiguration)` reads the `OpenTelemetry` config section and wires:
+- `FileSpanExporter` — daily-rolling JSON trace files under `./logs`
+- `FileMetricExporter` — daily-rolling JSON metric files under `./logs`
+- Serilog `File` sink — structured log files under `./logs`
+
+Trace sampling ratio and per-signal enable flags are configurable via `TelemetryOptions` / `TraceFileOptions` / `MetricFileOptions` / `LogFileOptions`.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Agentic]] | Drives `Agent.RunAsync`; handles all `AgentEvent` variants |
-| [[Agency.Llm.Claude]] | Instantiated when `Provider = "Claude"` |
-| [[Agency.Llm.OpenAI]] | Instantiated when `Provider = "OpenAI"` (default) |
-| [[Agency.Llm.Common]] | Uses `AgentMessage`, `TextBlock`, `MessageRole` |
+| [[Agency.Agentic]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes, `AgentOptions`, `ToolContext`, `ToolRegistry`, and all built-in tool types (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`) |
+| [[Agency.Llm.Common]] | `Models` (from `Agency.Llm.Common`) enumerates configured LLM clients; `AgentFactory` calls `Models.CreateChatClient` to resolve the concrete `IChatClient` |
+| [[Agency.Llm.OpenAI]] | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"` |
+| [[Agency.Llm.Claude]] | Instantiated by `Models.CreateChatClient` when `ClientType = "Claude"` |
+
+## Design Notes
+
+- **`IChatOutput` abstraction** — `ConsoleOutput` (Spectre.Console) and `TextWriterChatOutput` (plain `TextWriter`) both implement `IChatOutput`. `Agency.Agentic.Console.Test` injects `TextWriterChatOutput` to assert on rendered output without a real terminal. The `[assembly: InternalsVisibleTo("Agency.Agentic.Console.Test")]` attribute in `Program.cs` grants this access.
+- **Streaming buffer instead of live print** — `TextDeltaEvent` tokens are accumulated in a `StringBuilder` (`streamingBuffer`) and flushed only when the `AssistantTurnEvent` arrives. This prevents partial streaming text from interleaving with `ToolInvokedEvent` bordered panels that may fire mid-turn.
+- **`CommandRegistry` uses a static constructor** — commands are registered once at class-load time and the resulting `IReadOnlyList<Command>` is shared across all `CommandManager` instances. Adding a command only requires calling `RegisterCommand` or `RegisterAsyncCommand` in the static constructor; no change to `CommandManager` is needed.
+- **`sessionCts` is never recreated** — once Ctrl+C fires, `sessionCts.Cancel()` is called and `sessionCts.IsCancellationRequested` remains `true`. The REPL detects this after the interrupted turn and exits. The session is not designed to be restartable after cancellation.

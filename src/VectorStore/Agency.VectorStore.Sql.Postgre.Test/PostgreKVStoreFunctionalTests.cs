@@ -423,7 +423,7 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 throw new InvalidOperationException(
-                    "Connection string is not configured. Please set it in user secrets or environment variables with the key 'PostgreSql:ConnectionString'.");
+                    "Connection string is not configured. Please set it in user secrets or environment variables with the key 'ConnectionStrings:PostgreSql'.");
             }
 
             this._sqlRunner = new PostgreSqlRunner(connectionString);

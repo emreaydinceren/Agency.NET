@@ -1,58 +1,74 @@
 # Agency.Common
-
 #common #foundation #dataset #abstractions
 
 ## What It Is
 
-`Agency.Common` is the foundational shared-types library for the entire Agency solution. It defines the core data structures used across the RAG pipeline — from SQL query results through to the formatter and LLM context builder. All other projects depend on this library either directly or transitively; it has no dependencies of its own (other than the .NET BCL).
+Agency.Common is the shared contract library that defines tabular dataset types used by other projects.
 
-## Key Types
+Namespace: Agency.Common
 
-### `Dataset`
-
-A lightweight, immutable tabular result set returned by SQL runners. It wraps an ordered list of column descriptors (`IColumnMetadata`) and a list of rows, where each row is an `object?[]` array indexed by column ordinal.
+## API Surface
 
 ```csharp
-// Constructing a Dataset (done internally by SQL runners)
-var dataset = new Dataset(columns, rows);
+using Agency.Common;
+// File: src/Agency.Common/Dataset.cs
 
-// Reading rows
-foreach (object?[] row in dataset.Rows)
-{
-    string? name = row[0]?.ToString();
-}
+namespace Agency.Common;
 
-// Reading column metadata
-foreach (IColumnMetadata col in dataset.Columns)
-{
-    Console.WriteLine($"{col.ColumnOrdinal}: {col.ColumnName}");
-}
-```
-
-### `IColumnMetadata`
-
-A thin interface describing a single column in a `Dataset`. SQL runners adapt their provider-specific `DbColumn` to this interface so consumers remain provider-agnostic.
-
-```csharp
 public interface IColumnMetadata
 {
-    string? ColumnName  { get; }
-    int?    ColumnOrdinal { get; }
+    string? ColumnName { get; }
+    int? ColumnOrdinal { get; }
 }
 ```
+
+| Type | Member | Signature |
+|---|---|---|
+| Dataset | Constructor | Dataset(IReadOnlyCollection<IColumnMetadata> columns, IReadOnlyList<object?[]> rows) |
+| Dataset | Constructor | Dataset(IReadOnlyCollection<IColumnMetadata> columns) |
+| Dataset | Property | IReadOnlyCollection<IColumnMetadata> Columns { get; init; } |
+| Dataset | Property | IReadOnlyList<object?[]> Rows { get; init; } |
+| Dataset | Method | void AddRow(object?[] values) |
+| Dataset | Indexer | object? this[int columnIndex, int rowIndex] { get; } |
+| Dataset | Indexer | object? this[string columnName, int rowIndex] { get; } |
+
+```csharp
+using Agency.Common;
+// File: src/Agency.Common/Dataset.cs
+
+namespace Agency.Common;
+
+public class Dataset
+{
+    public Dataset(IReadOnlyCollection<IColumnMetadata> columns, IReadOnlyList<object?[]> rows);
+    public Dataset(IReadOnlyCollection<IColumnMetadata> columns);
+
+    public IReadOnlyCollection<IColumnMetadata> Columns { get; init; }
+    public IReadOnlyList<object?[]> Rows { get; init; }
+
+    public void AddRow(object?[] values);
+
+    public object? this[int columnIndex, int rowIndex] { get; }
+    public object? this[string columnName, int rowIndex] { get; }
+}
+```
+
+## How It Works
+
+`Dataset` stores column metadata and row values together.
+
+- The two-argument constructor accepts prebuilt rows.
+- The one-argument constructor starts with an empty internal row list that `AddRow` appends to.
+- The integer indexer validates row and column bounds and then returns `Rows[rowIndex][columnIndex]`.
+- The string indexer resolves a case-insensitive column name to `IColumnMetadata.ColumnOrdinal` and delegates to the integer indexer.
 
 ## How It Relates to Other Projects
 
-| Project | Relationship |
-|---|---|
-| [[Agency.Sql.Postgre]] | Returns `Dataset` from `QueryAsync` |
-| [[Agency.Sql.Sqlite]] | Returns `Dataset` from `QueryAsync` |
-| [[Agency.RagFormatter]] | Formats a `Dataset` into Markdown using `ToMarkdownTable()` |
-| [[Agency.Embeddings.Common]] | Sibling foundational library; no direct dependency |
-| [[Agency.Llm.Common]] | No direct dependency; sits on a parallel branch |
+- [[Agency.Common]] defines reusable contracts in namespace `Agency.Common`.
+- [[Agency.Common]] has no project-to-project references declared in its project file.
 
 ## Design Notes
 
-- **Zero dependencies** — deliberately kept dependency-free so it can be referenced by any layer without pulling in provider-specific NuGet packages.
-- **`object?[]` rows** — the raw ADO.NET representation is preserved rather than being eagerly converted to `Dictionary<string, object?>`. This avoids per-row allocation overhead when only a subset of columns is needed.
-- **`IColumnMetadata`** uses `int?` / `string?` (nullable) to faithfully mirror `DbColumn`, which can have null names in edge cases (e.g. computed expressions without an alias).
+- `IColumnMetadata` keeps both `ColumnName` and `ColumnOrdinal` nullable, so callers can represent incomplete metadata.
+- `Dataset` supports both batch initialization and incremental row appends via separate constructors.
+- `Dataset` uses a case-insensitive column dictionary internally for name-based lookups.

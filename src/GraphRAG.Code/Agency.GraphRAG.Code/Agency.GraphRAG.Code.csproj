@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Tomlyn" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agency.Common\Agency.Common.csproj" />
+    <ProjectReference Include="..\..\Agentic\Agency.Agentic\Agency.Agentic.csproj" />
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+    <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Agency.GraphRAG.Code.Test" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.GraphRAG.Code.Sqlite\Agency.GraphRAG.Code.Sqlite.csproj" />
+    <ProjectReference Include="..\Agency.GraphRAG.Code.Test\Agency.GraphRAG.Code.Test.csproj" />
+  </ItemGroup>
+
+</Project>

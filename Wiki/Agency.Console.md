@@ -1,56 +1,37 @@
 # Agency.Console
-
-#console #stub #demo
+#console #dotnet #entrypoint
 
 ## What It Is
 
-`Agency.Console` is the original (non-agentic) console application stub for the Agency solution. It currently contains a minimal entry point and serves as a placeholder for a RAG demo harness that wires together the full pipeline: embed a query → run a vector similarity search → format results → send to an LLM.
+Agency.Console is the console executable project that writes Hello, World! and exits.
 
-## Current State
+**Namespace:** None (top-level statements in Program.cs)
 
-The project currently only prints `Hello, World!` — it is a scaffold waiting to be built into a full RAG demonstration.
+## API Surface
 
-## Intended Purpose
+Agency.Console exposes no public types, interfaces, or extension methods. Its source contains a single top-level statement in Program.cs.
 
-The planned usage pattern is:
+## How It Works
+
+Runtime flow:
+
+1. The process starts in top-level statements.
+2. It writes Hello, World! to standard output.
+3. It exits.
 
 ```csharp
-// 1. Generate embedding for the user's question
-var embedding = await embeddingGenerator.GenerateEmbeddingAsync("What is pgvector?");
+using System;
 
-// 2. Query the vector store
-var hits = await kvStore.SearchAsync<Doc>(new Query(Value: "What is pgvector?", Limit: 5));
-
-// 3. Format results as Markdown context
-Dataset dataset = hits.ToDataset();
-string context = dataset.ToMarkdownTable();
-
-// 4. Send to LLM with the context
-string answer = await llmClient.SendAsync(model, $"""
-    Answer the following question using only the provided context.
-    Context:
-    {context}
-    Question: What is pgvector?
-    """);
-
-Console.WriteLine(answer);
+Console.WriteLine("Hello, World!");
 ```
-
-## How It Differs from `Agency.Agentic.Console`
-
-| | `Agency.Console` | [[Agency.Agentic.Console]] |
-|---|---|---|
-| Purpose | One-shot RAG demo | Multi-turn agentic REPL chat |
-| Loop | None (single request) | Full agent loop with tools |
-| State | Stateless | Persistent `Context` across turns |
-| Status | Stub | Fully implemented |
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Embeddings.OpenAI]] | Would generate query embeddings |
-| [[Agency.VectorStore.Sql.Postgre]] | Would retrieve relevant documents |
-| [[Agency.RagFormatter]] | Would format retrieved `Dataset` as Markdown |
-| [[Agency.Llm.OpenAI]] | Would send the RAG prompt to the LLM |
-| [[Agency.Agentic.Console]] | The more complete agentic successor |
+| [[Agency.Agentic.Console]] | Provides another console entry point in the same solution with a different runtime purpose. |
+
+## Design Notes
+
+- Top-level statements keep the executable entry point minimal and readable for a single-line behavior.
+- The project currently keeps its contract intentionally empty by exposing no public API surface.

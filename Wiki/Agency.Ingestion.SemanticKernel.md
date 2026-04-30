@@ -4,73 +4,74 @@
 
 ## What It Is
 
-`Agency.Ingestion.SemanticKernel` provides a `ITextSplitter` implementation backed by Microsoft Semantic Kernel's `TextChunker`. It automatically detects Markdown documents (via the `file_extension` metadata key set by [[Agency.Ingestion.FileSystem]]) and applies the appropriate splitting strategy.
+`Agency.Ingestion.SemanticKernel` is the `ITextSplitter` implementation that splits documents into overlapping token-bounded chunks using Microsoft Semantic Kernel's `TextChunker`, with automatic Markdown-aware splitting when the document carries a `.md` or `.markdown` file extension in its metadata.
+
+**Namespace:** `Agency.Ingestion.SemanticKernel`
+
+## API Surface
+
+```csharp
+// File: src/Ingestion/Agency.Ingestion.SemanticKernel/SemanticKernelTextSplitter.cs
+using Agency.Ingestion;
+using Microsoft.SemanticKernel.Text;
+
+namespace Agency.Ingestion.SemanticKernel;
+
+/// <summary>Splits documents into chunks using <see cref="TextChunker"/>.</summary>
+public sealed class SemanticKernelTextSplitter : ITextSplitter
+{
+    /// <param name="maxTokens">Maximum tokens per chunk. Must be greater than zero.</param>
+    /// <param name="overlapTokens">Overlapping tokens between adjacent chunks. Must be non-negative.</param>
+    /// <param name="tokenCounter">
+    ///   Optional custom token counting delegate.
+    ///   When null, <see cref="TextChunker"/> uses its default approximation (characters ÷ 4).
+    /// </param>
+    public SemanticKernelTextSplitter(
+        int maxTokens,
+        int overlapTokens,
+        TextChunker.TokenCounter? tokenCounter = null);
+
+    /// <summary>
+    ///   Produces zero or more chunk <see cref="Document"/> values from <paramref name="document"/>.
+    ///   Each chunk inherits a shallow copy of the source document's metadata.
+    /// </summary>
+    public IEnumerable<Document> Split(Document document);
+}
+```
 
 ## How It Works
 
+1. `Split` checks `document.Metadata["file_extension"]`. If the value equals `.md` or `.markdown` (case-insensitive) it routes to the Markdown path; otherwise plain text.
+2. **Plain-text path** — `TextChunker.SplitPlainTextLines` then `TextChunker.SplitPlainTextParagraphs`.
+3. **Markdown path** — `TextChunker.SplitMarkDownLines` then `TextChunker.SplitMarkdownParagraphs`, which respects heading boundaries.
+4. Each resulting paragraph string is returned as a new `Document` record (`document with { Content = paragraph, Metadata = shallowCopy }`). No `chunk_index` key is injected by this class — that augmentation belongs to the pipeline layer.
+
+### Custom token counter
+
+By default SK approximates token count as `characters ÷ 4`. Pass a `TextChunker.TokenCounter` delegate to use a real tokenizer:
+
 ```csharp
+using Agency.Ingestion.SemanticKernel;
+using Microsoft.SemanticKernel.Text;
+
+TextChunker.TokenCounter counter = text => myTokenizer.CountTokens(text);
+
 var splitter = new SemanticKernelTextSplitter(
-    maxTokens:    512,   // maximum tokens per chunk
-    overlapTokens: 64);  // tokens shared between adjacent chunks
-
-// Plain text: SplitPlainTextLines + SplitPlainTextParagraphs
-// Markdown:   SplitMarkDownLines + SplitMarkdownParagraphs
-IEnumerable<Document> chunks = splitter.Split(document);
-```
-
-### Markdown Detection
-
-The splitter checks `document.Metadata["file_extension"]`. If the value is `.md` or `.markdown` (case-insensitive), it uses the Markdown-aware SK splitter, which respects heading boundaries. Otherwise it uses plain text splitting.
-
-```csharp
-// Markdown-aware (preserves heading structure)
-var lines = TextChunker.SplitMarkDownLines(content, maxTokens, tokenCounter);
-return TextChunker.SplitMarkdownParagraphs(lines, maxTokens, overlapTokens, tokenCounter: tokenCounter);
-
-// Plain text (paragraph-based)
-var lines = TextChunker.SplitPlainTextLines(content, maxTokens, tokenCounter);
-return TextChunker.SplitPlainTextParagraphs(lines, maxTokens, overlapTokens, tokenCounter: tokenCounter);
-```
-
-### Custom Token Counter
-
-For accurate token counts, inject a model-specific tokenizer:
-
-```csharp
-// Using TiktokenSharp (example)
-var splitter = new SemanticKernelTextSplitter(
-    maxTokens:    512,
+    maxTokens: 512,
     overlapTokens: 64,
-    tokenCounter: text => TiktokenSharp.TikToken.EncodingForModel("gpt-4").Encode(text).Count);
-```
-
-When `null`, SK's default approximation (characters ÷ 4) is used.
-
-### Chunk Metadata
-
-Each produced chunk inherits the source document's metadata and gets an additional `chunk_index` key:
-
-```csharp
-// Original metadata: { file_extension: ".md", file_name: "readme" }
-// Chunk metadata:    { file_extension: ".md", file_name: "readme", chunk_index: 3 }
-```
-
-The `DefaultIngestionPipeline` further augments chunk metadata with `source_file`, `chunk_index` (overwriting), and `ingested_at`.
-
-## Integration
-
-```csharp
-var loader   = new DirectoryLoader("/knowledge-base", "*.md");
-var splitter = new SemanticKernelTextSplitter(maxTokens: 512, overlapTokens: 64);
-var pipeline = new DefaultIngestionPipeline<string>(doc => doc.Content);
-
-await pipeline.ExecuteAsync(loader, splitter, kvStore);
+    tokenCounter: counter);
 ```
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Ingestion]] | Implements `ITextSplitter` defined there |
-| [[Agency.Ingestion.FileSystem]] | Relies on `file_extension` metadata set by `FileLoader.BuildDocument` |
-| [[Agency.VectorStore.Common]] | Chunks are ultimately stored via `IKVStore.UpsertAsync` |
+| [[Agency.Ingestion]] | Implements `ITextSplitter` defined there; depends on the `Document` record |
+| [[Agency.Ingestion.FileSystem]] | `FileLoader` sets `file_extension` in metadata, which drives Markdown detection |
+| [[Agency.VectorStore.Common]] | Chunks produced here are ultimately stored via an `IVectorStore` or `IKVStore` in the pipeline |
+
+## Design Notes
+
+- `TextChunker` is marked experimental (`SKEXP0050`) in `Microsoft.SemanticKernel.Core`; the project explicitly suppresses this warning because it is the required API.
+- The class is `sealed` with no DI registration helper — it is constructed directly, keeping the API surface minimal and dependency-injection-framework-agnostic.
+- Metadata copying is a shallow clone (`new Dictionary<string, object>(source)`) so callers that further enrich chunk metadata do not mutate the source document's dictionary.

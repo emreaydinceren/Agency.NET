@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="FluentMigrator" />
+    <PackageReference Include="FluentMigrator.Runner" />
+    <PackageReference Include="FluentMigrator.Runner.SQLite" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="sqlite-vec" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.GraphRAG.Code\Agency.GraphRAG.Code.csproj" />
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Agency.GraphRAG.Code.Sqlite.Test" />
+  </ItemGroup>
+
+</Project>

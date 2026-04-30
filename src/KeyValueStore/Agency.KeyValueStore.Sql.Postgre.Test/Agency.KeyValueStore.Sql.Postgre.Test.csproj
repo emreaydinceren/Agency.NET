@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <UserSecretsId>Agency-VectorStore-Sql-Postgre-Test-LocalSecrets</UserSecretsId>
+    <UserSecretsId>AgencySecrets</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="coverlet.collector">

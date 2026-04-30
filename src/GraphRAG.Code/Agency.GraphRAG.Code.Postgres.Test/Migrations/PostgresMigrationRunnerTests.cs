@@ -175,7 +175,7 @@ public sealed class PostgresMigrationRunnerTests : IClassFixture<PostgresMigrati
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 throw new InvalidOperationException(
-                    "Connection string is not configured. Please set it in user secrets or environment variables with the key 'PostgreSql:ConnectionString'.");
+                    "Connection string is not configured. Please set it in user secrets or environment variables with the key 'ConnectionStrings:PostgreSql'.");
             }
 
             this.Schema = $"graphrag_migration_{Guid.NewGuid():N}";

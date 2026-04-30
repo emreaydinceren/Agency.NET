@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <UserSecretsId>Agency-Sql-Postgre-Test-LocalSecrets</UserSecretsId>
+    <UserSecretsId>AgencySecrets</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

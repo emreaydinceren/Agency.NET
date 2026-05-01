@@ -5,73 +5,126 @@ using Agency.GraphRAG.Code.Query;
 using Agency.GraphRAG.Code.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System.CommandLine;
+using Spectre.Console.Cli;
 
 namespace Agency.GraphRAG.Code.Cli;
 
 /// <summary>
-/// Builds the GraphRAG.Code command-line surface.
+/// Builds the GraphRAG.Code command-line surface using Spectre.Console.
 /// </summary>
 public static class CliApplication
 {
     /// <summary>
-    /// Creates the root command for the CLI.
+    /// Creates and configures the CLI application.
     /// </summary>
     /// <param name="workingDirectory">The working directory used for default SQLite selection.</param>
-    /// <returns>The configured root command.</returns>
-    public static RootCommand BuildRootCommand(string workingDirectory)
+    /// <returns>The configured command app ready to execute.</returns>
+    public static CommandApp BuildApplication(string workingDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 
-        var storeOption = new Option<string>("--store", () => "sqlite", "Graph store provider: sqlite or postgres.");
-        var connectionOption = new Option<string?>("--connection", "Explicit connection string.");
+        var app = new CommandApp();
+        app.Configure(config =>
+        {
+            config.SetApplicationName("graphrag-code");
+            config.SetApplicationVersion("1.0.0");
+            config.AddCommand<IndexCommand>("index")
+                .WithDescription("Indexes a repository into the code graph");
+            config.AddCommand<QueryCommand>("query")
+                .WithDescription("Queries the indexed code graph");
+        });
 
-        var indexCommand = new Command("index", "Indexes a repository into the code graph.");
-        var repoArgument = new Argument<string>("repo", "The repository path to index.");
-        indexCommand.AddArgument(repoArgument);
-        indexCommand.AddOption(storeOption);
-        indexCommand.AddOption(connectionOption);
-        indexCommand.SetHandler(
-            async (string repo, string store, string? connection) =>
-            {
-                CliInvocation invocation = CreateIndexInvocation(repo, store, connection, workingDirectory);
-                using IHost host = CreateHost(invocation);
-                IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
-                await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
-                await host.Services.GetRequiredService<IndexingPipeline>().RunAsync(invocation.Repo!, CancellationToken.None).ConfigureAwait(false);
-            },
-            repoArgument,
-            storeOption,
-            connectionOption);
+        return app;
+    }
 
-        var queryCommand = new Command("query", "Queries the indexed code graph.");
-        var questionArgument = new Argument<string>("question", "The question to ask.");
-        var topKOption = new Option<int>("--top-k", () => 5, "Maximum number of results.");
-        queryCommand.AddArgument(questionArgument);
-        queryCommand.AddOption(storeOption);
-        queryCommand.AddOption(connectionOption);
-        queryCommand.AddOption(topKOption);
-        queryCommand.SetHandler(
-            async (string question, string store, string? connection, int topK) =>
-            {
-                CliInvocation invocation = CreateQueryInvocation(question, store, connection, topK, workingDirectory);
-                using IHost host = CreateHost(invocation);
-                IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
-                await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
-                string response = (await host.Services.GetRequiredService<QueryPipeline>()
-                    .ExecuteAsync(invocation.Question!)
-                    .ConfigureAwait(false)).Answer;
-                Console.Out.WriteLine(response);
-            },
-            questionArgument,
-            storeOption,
-            connectionOption,
-            topKOption);
+    /// <summary>
+    /// Command for indexing a repository.
+    /// </summary>
+    private sealed class IndexCommand : Command<IndexSettings>
+    {
+        protected override int Execute(CommandContext context, IndexSettings settings, CancellationToken cancellationToken)
+        {
+            return ExecuteAsync(settings, cancellationToken).GetAwaiter().GetResult();
+        }
 
-        var rootCommand = new RootCommand("GraphRAG.Code CLI");
-        rootCommand.AddCommand(indexCommand);
-        rootCommand.AddCommand(queryCommand);
-        return rootCommand;
+        private static async Task<int> ExecuteAsync(IndexSettings settings, CancellationToken cancellationToken)
+        {
+            string workingDirectory = Directory.GetCurrentDirectory();
+            CliInvocation invocation = CreateIndexInvocation(
+                settings.Repo!,
+                settings.Store,
+                settings.Connection,
+                workingDirectory);
+
+            using IHost host = CreateHost(invocation);
+            IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
+            await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
+            await host.Services.GetRequiredService<IndexingPipeline>()
+                .RunAsync(invocation.Repo!, cancellationToken)
+                .ConfigureAwait(false);
+
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Settings for the index command.
+    /// </summary>
+    private sealed class IndexSettings : CommandSettings
+    {
+        [CommandArgument(0, "[repo]")]
+        public string? Repo { get; init; }
+
+        [CommandOption("--store")]
+        public string Store { get; init; } = "sqlite";
+
+        [CommandOption("--connection")]
+        public string? Connection { get; init; }
+    }
+
+    /// <summary>
+    /// Command for querying the code graph.
+    /// </summary>
+    private sealed class QueryCommand : AsyncCommand<QuerySettings>
+    {
+        protected override async Task<int> ExecuteAsync(CommandContext context, QuerySettings settings, CancellationToken cancellationToken)
+        {
+            string workingDirectory = Directory.GetCurrentDirectory();
+            CliInvocation invocation = CreateQueryInvocation(
+                settings.Question!,
+                settings.Store,
+                settings.Connection,
+                settings.TopK,
+                workingDirectory);
+
+            using IHost host = CreateHost(invocation);
+            IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
+            await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
+            string response = (await host.Services.GetRequiredService<QueryPipeline>()
+                .ExecuteAsync(invocation.Question!, cancellationToken)
+                .ConfigureAwait(false)).Answer;
+            Console.Out.WriteLine(response);
+
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Settings for the query command.
+    /// </summary>
+    private sealed class QuerySettings : CommandSettings
+    {
+        [CommandArgument(0, "[question]")]
+        public string? Question { get; init; }
+
+        [CommandOption("--store")]
+        public string Store { get; init; } = "sqlite";
+
+        [CommandOption("--connection")]
+        public string? Connection { get; init; }
+
+        [CommandOption("--top-k")]
+        public int TopK { get; init; } = 5;
     }
 
     /// <summary>

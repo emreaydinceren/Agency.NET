@@ -67,7 +67,8 @@ public sealed class PythonManifestParser : IManifestParser
     {
         string manifestDirectory = Path.GetDirectoryName(manifestPath)
             ?? throw new InvalidOperationException("Manifest directory could not be determined.");
-        TomlTable model = Toml.ToModel(File.ReadAllText(manifestPath)) as TomlTable
+        string tomlContent = File.ReadAllText(manifestPath);
+        TomlTable model = Tomlyn.TomlSerializer.Deserialize<TomlTable>(tomlContent)
             ?? throw new InvalidOperationException("pyproject.toml could not be parsed.");
 
         List<ManifestPackageDependency> dependencies = [];

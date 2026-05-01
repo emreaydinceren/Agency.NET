@@ -6,6 +6,14 @@
     <PackageReference Include="FluentMigrator.Runner.SQLite" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="sqlite-vec" />
+    <PackageReference Include="FluentMigrator.Runner.Db2" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.Firebird" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.Hana" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.Oracle" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.Redshift" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.Snowflake" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.SqlServer" ExcludeAssets="All" PrivateAssets="All" />
+    <PackageReference Include="FluentMigrator.Runner.MySql" ExcludeAssets="All" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

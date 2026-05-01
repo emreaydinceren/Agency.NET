@@ -1,5 +1,5 @@
 # Agency.GraphRAG.Code.Postgres
-#graphrag #postgresql #pgvector #codegraph #observability
+#graphrag #postgresql #pgvector #codegraph #observability 
 
 ## What It Is
 

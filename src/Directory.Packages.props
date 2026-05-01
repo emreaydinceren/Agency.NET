@@ -37,7 +37,15 @@
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="FluentMigrator" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Db2" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Firebird" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Hana" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Oracle" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Redshift" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.Snowflake" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.SqlServer" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner.MySql" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.SQLite" Version="8.0.1" />
     <PackageVersion Include="sqlite-vec" Version="0.1.7-alpha.2.1" />
     <PackageVersion Include="Tomlyn" Version="2.3.2" />

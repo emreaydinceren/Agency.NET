@@ -1,6 +1,6 @@
 # Agency.GraphRAG.Code
 
-#graphrag #code-index #codegraph #rag
+#graphrag #postgresql #pgvector
 
 ## What It Is
 

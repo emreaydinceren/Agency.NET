@@ -1,4 +1,4 @@
-# Agency — Solution Wiki
+# Agency — Context Map
 
 #agency #index #rag #agentic #dotnet
 

@@ -5,7 +5,7 @@ argument-hint: "[ProjectName1] [ProjectName2] ..."
 allowed-tools: Glob Grep Read Write Bash
 ---
 
-Update the Agency solution wiki in `E:\Repos\Agency\Wiki\`.
+Update the Agency solution wiki in `E:\Repos\Agency\Docs\`.
 
 ## Your Task
 
@@ -37,7 +37,7 @@ Step 2 must always be delegated to a subagent. Do not perform Step 2 directly in
 For each project, invoke one subagent and have that subagent do all of the following:
 
 1. Read all `.cs` files in `E:\Repos\Agency\src\<ProjectName>\` (excluding `obj/` subfolders).
-2. Read the existing wiki page at `E:\Repos\Agency\Wiki\<ProjectName>.md` if it exists.
+2. Read the existing wiki page at `E:\Repos\Agency\Docs\<ProjectName>.md` if it exists.
 3. Identify what has changed: new types, renamed types, removed types, changed method signatures, new dependencies, new configuration options, or new observability signals.
 4. Rewrite the wiki page following the **Required Page Structure** below. Preserve any sections that are still accurate; update only what has changed.
 
@@ -53,7 +53,7 @@ If any wiki page references a project that no longer exists under `src/`, note t
 
 ### Step 5 — Update Home.md if needed
 
-If any projects were added or removed, or if the architecture diagram changed, update `E:\Repos\Agency\Wiki\Home.md`:
+If any projects were added or removed, or if the architecture diagram changed, update `E:\Repos\Agency\Docs\Home.md`:
 - Keep the ASCII architecture diagram accurate
 - Keep the **Project Pages** index list complete and sorted by layer
 

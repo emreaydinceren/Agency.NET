@@ -40,6 +40,6 @@
     <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
     <PackageVersion Include="FluentMigrator.Runner.SQLite" Version="8.0.1" />
     <PackageVersion Include="sqlite-vec" Version="0.1.7-alpha.2.1" />
-    <PackageVersion Include="Tomlyn" Version="0.20.0" />
+    <PackageVersion Include="Tomlyn" Version="2.3.2" />
   </ItemGroup>
 </Project>

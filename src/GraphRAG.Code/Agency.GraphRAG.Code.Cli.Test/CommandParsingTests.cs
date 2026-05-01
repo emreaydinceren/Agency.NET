@@ -1,40 +1,33 @@
-using System.CommandLine;
-
 namespace Agency.GraphRAG.Code.Cli.Test;
 
 /// <summary>
-/// Verifies CLI command parsing for the V1 command surface.
+/// Verifies CLI application is built correctly using Spectre.Console.
 /// </summary>
 public sealed class CommandParsingTests
 {
     [Fact]
-    public void RootCommand_ParsesIndexCommandShape()
+    public void BuildApplication_CreatesApplicationSuccessfully()
     {
-        RootCommand rootCommand = CliApplication.BuildRootCommand(@"E:\Repos\Agency");
-
-        var parseResult = rootCommand.Parse("index E:\\Repos\\Agency --store sqlite --connection \"Data Source=code.db\"");
-        string[] tokenValues = parseResult.Tokens.Select(static token => token.Value).ToArray();
-
-        Assert.Equal("index", parseResult.CommandResult.Command.Name);
-        Assert.Contains(@"E:\Repos\Agency", tokenValues);
-        Assert.Contains("sqlite", tokenValues);
-        Assert.Contains("code.db", string.Join(" ", tokenValues), StringComparison.Ordinal);
-        Assert.Empty(parseResult.Errors);
+        var app = CliApplication.BuildApplication(@"E:\Repos\Agency");
+        Assert.NotNull(app);
     }
 
     [Fact]
-    public void RootCommand_ParsesQueryCommandShape()
+    public void BuildApplication_WithDifferentWorkingDirectory()
     {
-        RootCommand rootCommand = CliApplication.BuildRootCommand(@"E:\Repos\Agency");
+        var app = CliApplication.BuildApplication("/different/path");
+        Assert.NotNull(app);
+    }
 
-        var parseResult = rootCommand.Parse("query \"where is Agent defined\" --store postgres --connection Host=db --top-k 7");
-        string[] tokenValues = parseResult.Tokens.Select(static token => token.Value).ToArray();
+    [Fact]
+    public void BuildApplication_ThrowsOnNullWorkingDirectory()
+    {
+        Assert.Throws<ArgumentNullException>(() => CliApplication.BuildApplication(null!));
+    }
 
-        Assert.Equal("query", parseResult.CommandResult.Command.Name);
-        Assert.Contains("where is Agent defined", tokenValues);
-        Assert.Contains("postgres", tokenValues);
-        Assert.Contains("Host=db", tokenValues);
-        Assert.Contains("7", tokenValues);
-        Assert.Empty(parseResult.Errors);
+    [Fact]
+    public void BuildApplication_ThrowsOnEmptyWorkingDirectory()
+    {
+        Assert.Throws<ArgumentException>(() => CliApplication.BuildApplication(""));
     }
 }

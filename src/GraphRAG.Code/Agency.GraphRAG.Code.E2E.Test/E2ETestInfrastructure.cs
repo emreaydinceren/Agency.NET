@@ -156,7 +156,7 @@ internal static partial class E2ETestInfrastructure
         throw new InvalidOperationException("Could not locate the repository root containing src\\Agency.slnx.");
     }
 
-    private static string RunGit(string workingDirectory, string arguments)
+    public static string RunGit(string workingDirectory, string arguments)
     {
         using var process = new Process
         {

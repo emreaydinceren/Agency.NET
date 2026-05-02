@@ -67,6 +67,9 @@ public sealed class PostgresGraphStore : IGraphStore
     Task<Symbol?> GetSymbolByIdAsync(Guid symbolId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Symbol>> FindSymbolsByNameAsync(string name, CancellationToken cancellationToken = default);
 
+    Task<SourceFile?> GetFileByPathAsync(string path, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+
     Task StageUnresolvedCallSiteBatchAsync(IReadOnlyList<UnresolvedCallSite> callSites, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<UnresolvedCallSite>> DrainUnresolvedCallSitesAsync(Guid? sourceFileId = null, CancellationToken cancellationToken = default);
 
@@ -101,9 +104,11 @@ public sealed class PostgresMigrationRunner
 
 5. **Name search** — `FindSymbolsByNameAsync` runs a UNION of exact-name match (rank 0) and `pg_trgm` similarity match (rank 1), deduplicates by ID, and orders by rank then score.
 
-6. **Cluster management** — `ReplaceClusterSummariesAtomicallyAsync` opens its own `NpgsqlConnection` and transaction to atomically delete all `MemberOf` edges and all `clusters`, then insert the new set with freshly generated embeddings. `ApplyClusterAssignmentsAsync` converts a symbol→cluster assignment dictionary into `MemberOf` edges and delegates to `UpsertEdgeBatchAsync`.
+6. **File lookup** — `GetFileByPathAsync` fetches a single file by path using `SELECT * FROM files WHERE path = @path LIMIT 1`. `GetSymbolsByPathsAsync` returns symbols grouped by file path using `WHERE f.path = ANY(@paths)` — this Postgres-idiomatic array operator is more efficient than a parameterized `IN` clause and avoids SQL string concatenation.
 
-7. **Deferred call-site resolution** — `StageUnresolvedCallSiteBatchAsync` stages call sites that could not be resolved at index time. `DrainUnresolvedCallSitesAsync` atomically deletes and returns them (optionally scoped to a file) for the resolver pass.
+7. **Cluster management** — `ReplaceClusterSummariesAtomicallyAsync` opens its own `NpgsqlConnection` and transaction to atomically delete all `MemberOf` edges and all `clusters`, then insert the new set with freshly generated embeddings. `ApplyClusterAssignmentsAsync` converts a symbol→cluster assignment dictionary into `MemberOf` edges and delegates to `UpsertEdgeBatchAsync`.
+
+8. **Deferred call-site resolution** — `StageUnresolvedCallSiteBatchAsync` stages call sites that could not be resolved at index time. `DrainUnresolvedCallSitesAsync` atomically deletes and returns them (optionally scoped to a file) for the resolver pass.
 
 ```csharp
 using Agency.Embeddings.Common;

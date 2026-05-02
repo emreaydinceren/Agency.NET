@@ -11,5 +11,5 @@ public sealed record Phase1WriteRequest(
     SourceFile File,
     Module? Module,
     IReadOnlyList<Chunk> Chunks,
-    IReadOnlyDictionary<string, SymbolSummary> Summaries,
+    Dictionary<string, SymbolSummary> Summaries,
     IReadOnlyList<UnresolvedCallSite> UnresolvedCallSites);

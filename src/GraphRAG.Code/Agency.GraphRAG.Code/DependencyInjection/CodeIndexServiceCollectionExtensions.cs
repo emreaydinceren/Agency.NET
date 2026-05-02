@@ -2,6 +2,7 @@ using System.Reflection;
 using AgencyEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
 using Agency.GraphRAG.Code.Agentic;
 using Agency.GraphRAG.Code.ChangeDetector;
+using Agency.GraphRAG.Code.Chunker;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Hydration;
 using Agency.GraphRAG.Code.Manifest;
@@ -58,12 +59,22 @@ public static class CodeIndexServiceCollectionExtensions
         services.TryAddSingleton<Phase1Writer>();
         services.TryAddSingleton<Phase2Resolver>();
         services.TryAddSingleton<ChangeDetector.ChangeDetector>();
+        services.AddOptions<SummarizerOptions>();
+        RegisterTreeSitterServices(services);
+        services.TryAddSingleton<SummaryCache>();
+        services.TryAddSingleton<ModelTierSelector>();
+        services.TryAddSingleton<SummarizationPromptBuilder>();
+        services.TryAddSingleton<SymbolSummarizer>();
         services.TryAddSingleton<IncrementalHydrator>(static sp =>
             new IncrementalHydrator(
                 sp.GetRequiredService<IGraphStore>(),
                 (request, cancellationToken) => sp.GetRequiredService<Phase1Writer>().WriteAsync(request, cancellationToken),
                 (fileId, packages, cancellationToken) => sp.GetRequiredService<Phase2Resolver>().ResolveAsync(fileId, packages, cancellationToken),
-                static (_, _) => Task.FromResult<Guid?>(null),
+                async (path, cancellationToken) =>
+                {
+                    SourceFile? file = await sp.GetRequiredService<IGraphStore>().GetFileByPathAsync(path, cancellationToken).ConfigureAwait(false);
+                    return file?.Id;
+                },
                 static (_, _) => Task.FromResult<IReadOnlyList<Guid>>([])));
 
         services.TryAddSingleton<IGraphStore>(static sp => CreateGraphStore(sp));
@@ -87,23 +98,38 @@ public static class CodeIndexServiceCollectionExtensions
                 sp.GetRequiredService<IGraphStore>(),
                 (repo, cancellationToken) => sp.GetRequiredService<RepoWalker>().WalkAsync(repo, cancellationToken),
                 (repo, _, cancellationToken) => sp.GetRequiredService<ManifestParserOrchestrator>().ParseAsync(repo, cancellationToken),
-                static (_, _, _) => Task.FromResult<IReadOnlyDictionary<string, Phase1WriteRequest>>(new Dictionary<string, Phase1WriteRequest>(StringComparer.Ordinal)),
-                static (_, _) => Task.CompletedTask,
-                sp.GetRequiredService<ChangeDetector.ChangeDetector>(),
-                static (_, walkResult, _, _) => Task.FromResult(new ChangeSet
+                (repo, walkResult, cancellationToken) => sp.GetRequiredService<IWriteRequestBuilder>().BuildAsync(repo, walkResult, cancellationToken),
+                async (requests, cancellationToken) =>
                 {
-                    AddedFiles = walkResult.Files.Where(static file => file.Status is WalkedFileStatus.Added).Select(static file => file.Path).ToArray(),
-                    ModifiedFiles = walkResult.Files
-                        .Where(static file => file.Status is WalkedFileStatus.Modified)
-                        .Select(static file => new ModifiedFileChange(file.Path, []))
-                        .ToArray(),
-                    DeletedFiles = walkResult.Files.Where(static file => file.Status is WalkedFileStatus.Deleted).Select(static file => file.Path).ToArray(),
-                    RenamedFiles = walkResult.Files
-                        .Where(static file => file.Status is WalkedFileStatus.Renamed)
-                        .Select(static file => new RenamedFileChange(file.OldPath ?? string.Empty, file.Path, []))
-                        .ToArray(),
-                    ManifestChanges = [],
-                }),
+                    var summarizer = sp.GetRequiredService<SymbolSummarizer>();
+                    IReadOnlyList<Chunk> allChunks = requests.SelectMany(r => r.Chunks).ToArray();
+                    IReadOnlyDictionary<string, SymbolSummary> summaries = await summarizer.SummarizeAsync(allChunks, cancellationToken).ConfigureAwait(false);
+                    foreach (Phase1WriteRequest request in requests)
+                    {
+                        foreach ((string id, SymbolSummary summary) in summaries)
+                        {
+                            if (request.Chunks.Any(c => c.Id == id))
+                            {
+                                request.Summaries[id] = summary;
+                            }
+                        }
+                    }
+                },
+                sp.GetRequiredService<ChangeDetector.ChangeDetector>(),
+                async (repo, walkResult, writeRequests, cancellationToken) =>
+                {
+                    var paths = walkResult.Files
+                        .Where(f => f.Status is WalkedFileStatus.Modified or WalkedFileStatus.Renamed)
+                        .Select(f => f.Path)
+                        .ToArray();
+                    var store = sp.GetRequiredService<IGraphStore>();
+                    var storedSymbolsByPath = await store.GetSymbolsByPathsAsync(paths, cancellationToken).ConfigureAwait(false);
+                    var currentChunksByPath = writeRequests.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => (IReadOnlyList<Chunk>)kvp.Value.Chunks,
+                        StringComparer.Ordinal);
+                    return sp.GetRequiredService<ChangeDetector.ChangeDetector>().Detect(walkResult, storedSymbolsByPath, currentChunksByPath);
+                },
                 sp.GetRequiredService<IncrementalHydrator>(),
                 static _ => new Dictionary<Guid, IReadOnlyList<ExternalPackage>>()));
 
@@ -254,5 +280,40 @@ public static class CodeIndexServiceCollectionExtensions
     {
         public Task<string?> LoadAsync(Symbol symbol, CancellationToken cancellationToken = default) =>
             Task.FromResult<string?>(null);
+    }
+
+    private static void RegisterTreeSitterServices(IServiceCollection services)
+    {
+        Type? treeSitterClientType = Type.GetType(
+            "Agency.GraphRAG.Code.TreeSitter.TreeSitterClient, Agency.GraphRAG.Code.TreeSitter",
+            throwOnError: false);
+        if (treeSitterClientType is null)
+        {
+            throw new InvalidOperationException("Tree-sitter assembly not loaded. Ensure Agency.GraphRAG.Code.TreeSitter is available.");
+        }
+
+        services.AddSingleton(treeSitterClientType);
+
+        services.TryAddSingleton<ChunkerDispatcher>(static _ =>
+        {
+            var chunkers = new Dictionary<Language, IChunker>
+            {
+                [Language.CSharp] = new CSharpChunker(),
+                [Language.TypeScript] = new TypeScriptChunker(),
+                [Language.Tsx] = new TypeScriptChunker(),
+                [Language.JavaScript] = new TypeScriptChunker(),
+                [Language.Jsx] = new TypeScriptChunker(),
+                [Language.Python] = new PythonChunker(),
+            };
+            return new ChunkerDispatcher(chunkers);
+        });
+
+        Type? writeRequestBuilderType = Type.GetType(
+            "Agency.GraphRAG.Code.TreeSitter.Pipeline.WriteRequestBuilder, Agency.GraphRAG.Code.TreeSitter",
+            throwOnError: false);
+        if (writeRequestBuilderType is not null)
+        {
+            services.AddSingleton(typeof(IWriteRequestBuilder), writeRequestBuilderType);
+        }
     }
 }

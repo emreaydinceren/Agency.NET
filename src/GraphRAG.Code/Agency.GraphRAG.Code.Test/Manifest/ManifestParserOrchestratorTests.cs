@@ -282,5 +282,10 @@ public sealed class ManifestParserOrchestratorTests : IDisposable
         public Task ReplaceClusterSummariesAtomicallyAsync(
             IReadOnlyList<Agency.GraphRAG.Code.Domain.Cluster> clusters,
             CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>>(new Dictionary<string, IReadOnlyList<Symbol>>());
+
+        public Task<SourceFile?> GetFileByPathAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult<SourceFile?>(null);
     }
 }

@@ -200,6 +200,38 @@ public sealed class SqliteGraphStore_File_Tests
                 ["$path"] = path,
             });
 
+    /// <summary>Tests that GetFileByPathAsync returns the correct file when path matches.</summary>
+    [Fact]
+    public async Task GetFileByPathAsync_ReturnsFileWhenPathMatches()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await SqliteGraphStoreFixture.CreateAsync();
+        (Guid repoId, Guid projectId) = await InsertProjectGraphAsync(fixture);
+        var fileId = Guid.NewGuid();
+        string filePath = @"src\GraphRAG.Code\Parser.cs";
+
+        await InsertFileAsync(fixture, fileId, projectId, filePath);
+
+        var result = await fixture.Store.GetFileByPathAsync(filePath, cancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(fileId, result.Id);
+        Assert.Equal(filePath, result.Path);
+        Assert.Equal(projectId, result.ProjectId);
+    }
+
+    /// <summary>Tests that GetFileByPathAsync returns null when path does not exist.</summary>
+    [Fact]
+    public async Task GetFileByPathAsync_ReturnsNullWhenPathDoesNotExist()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await SqliteGraphStoreFixture.CreateAsync();
+
+        var result = await fixture.Store.GetFileByPathAsync(@"src\NonExistent.cs", cancellationToken);
+
+        Assert.Null(result);
+    }
+
     private static Task InsertSymbolAsync(SqliteGraphStoreFixture fixture, Guid symbolId, Guid fileId, string name)
         => fixture.ExecuteAsync(
             """

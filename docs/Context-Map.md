@@ -67,11 +67,13 @@ Documents
 - [[Agency.Sql.Sqlite]] — SQLite runner + `vectorize()` macro
 
 ### Vector Store
+
 - [[Agency.VectorStore.Common]] — `IKVStore`, `Query`, `SearchHit<T>`
 - [[Agency.VectorStore.Sql.Postgre]] — pgvector + HNSW index backend
 - [[Agency.VectorStore.Sql.Sqlite]] — SQLite + in-process cosine UDF backend
 
 ### RAG
+
 - [[Agency.RagFormatter]] — `Dataset.ToMarkdownTable()` for LLM context injection
 
 ### Code Graph RAG

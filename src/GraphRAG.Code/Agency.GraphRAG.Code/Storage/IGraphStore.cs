@@ -93,4 +93,14 @@ public interface IGraphStore
     Task ReplaceClusterSummariesAtomicallyAsync(
         IReadOnlyList<Agency.GraphRAG.Code.Domain.Cluster> clusters,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Returns symbols grouped by their file's repo-relative path for the given set of paths.</summary>
+    Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the file record whose Path matches, or null if not found.</summary>
+    Task<SourceFile?> GetFileByPathAsync(
+        string path,
+        CancellationToken cancellationToken = default);
 }

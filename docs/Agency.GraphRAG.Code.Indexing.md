@@ -4,6 +4,35 @@
 
 The indexing pipeline transforms raw repository files into a semantic graph: repository → files → AST chunks → summaries → nodes + edges ready for storage and querying.
 
+## Registration
+
+`AddCodeIndex()` registers the complete indexing service graph:
+
+**Core pipeline services:**
+- `GitProcessRunner`, `RepoWalker` — repository traversal and git diff
+- `ManifestParserOrchestrator` (with `IManifestParser` implementations for C#, npm, Python) — dependency manifest extraction
+- `ExternalPackageHeuristic`, `ScopeResolver`, `ReferenceScorer` — reference analysis
+- `Phase1Writer`, `Phase2Resolver` — graph storage phases
+- `ChangeDetector.ChangeDetector` — diff-driven change detection
+- `IncrementalHydrator` — two-phase reference resolution
+
+**Summarization services:**
+- `SummaryCache` — cache summaries by content hash
+- `ModelTierSelector` — selects model tier based on symbol kind (interface vs. implementation)
+- `SummarizationPromptBuilder` — constructs LLM prompts for summaries
+- `SymbolSummarizer` — LLM-based symbol summarization
+- `TreeSitterClient` (via reflection) — Tree-sitter AST parsing
+- `ChunkerDispatcher` (typed factory) — routes AST to language-specific chunkers
+- `IWriteRequestBuilder` (via reflection) — builds write requests from AST chunks
+
+**Query services:**
+- `QueryClassifier`, `QueryPlanner` — query planning
+- `HybridRetriever`, `ContextAssembler` — retrieval and context assembly
+- `QueryPipeline`, `ICodeIndex` (via `CodeIndexCapability`) — query execution
+
+**Graph store:**
+- `IGraphStore` — backing store implementation (PostgreSQL or SQLite, loaded via reflection)
+
 ## Repo Walker (Git-aware)
 
 - Operates on a git working tree. The repo's last indexed commit SHA is stored on a `Repo` node in the graph.
@@ -88,6 +117,26 @@ Interfaces, abstract classes, and public-API types use a stronger model. Concret
 - Summarize file-level and class-level only; lazily summarize methods on first query (optional toggle)
 - Use cheaper model for one-liners and concrete leaves; reserve stronger model for interfaces, abstracts, and public APIs
 
+## How It Works
+
+The `IndexingPipeline` orchestrates the complete indexing flow:
+
+1. **Repository walk:** `RepoWalker` traverses the git tree using diff (incremental) or full scan (first index). Output: `WalkResult` with file metadata and git status per file.
+
+2. **Manifest parsing:** `ManifestParserOrchestrator` parses all detected dependency manifests in parallel. Output: project boundaries and external package metadata.
+
+3. **AST parsing and chunking:** `IWriteRequestBuilder.BuildAsync()` (implemented by TreeSitter's `WriteRequestBuilder`) parses each file's AST and chunks it into semantically meaningful blocks via `ChunkerDispatcher`. Each chunk is assigned a stable content hash. Output: `Phase1WriteRequest` objects, one per file, containing `Chunk` lists.
+
+4. **Summarization:** `SymbolSummarizer.SummarizeAsync()` batches all chunks from all write requests and sends them to the LLM for summarization. It respects the interface-first ordering: interfaces and abstract classes are summarized before implementations. `ModelTierSelector` chooses the tier (strong model for public APIs / interfaces, cheaper model for internal helpers and one-liners). Each request's mutable `Summaries` dictionary is populated with the result.
+
+5. **Change detection:** `ChangeDetector.Detect()` compares stored chunks (by path) against current chunks. For modified/renamed files, it fetches stored `Symbol` nodes from `IGraphStore.GetSymbolsByPathsAsync()`, hashes the current chunks, and returns a structured change report: which symbols changed, which are new, which were deleted.
+
+6. **Storage (Phase1Writer):** Write requests with summaries are committed transactionally to the backing store.
+
+7. **Reference resolution (Phase2Resolver):** After all nodes are written, `IncrementalHydrator` resolves cross-file and cross-project references in a second pass.
+
+8. **Commit tracking:** After successful batch commit, `Repo.indexedCommit` is updated to HEAD. Crashes mid-batch leave the old SHA in place, so the next run is idempotent — same diff is re-processed.
+
 ## Change Detector
 
 Driven entirely by git diff output from the Repo Walker. Per file status:
@@ -98,11 +147,42 @@ Driven entirely by git diff output from the Repo Walker. Per file status:
 - **`R` (renamed):** update `File.path` in place. **Preserve** `Symbol` nodes and their edges — this is the big win over content hashing, which would delete and recreate everything on a move.
 - **Manifest changes:** any change to a tracked manifest triggers a full re-parse of that manifest and reconciliation of the corresponding `Project` node's edges.
 
-After the batch commits, update `Repo.indexedCommit = HEAD`. If the indexer crashes mid-batch, the next run sees the old SHA and re-processes the same diff — operations are idempotent.
-
 ## Graph Store Writer
 
 Persists nodes, edges, and embeddings via the `IGraphStore` abstraction in a single transactional batch per file. Implementation handles dialect-specific concerns; pipeline is storage-agnostic.
+
+---
+
+## API Surface
+
+### IWriteRequestBuilder
+
+```csharp
+// File: src/GraphRAG.Code/Agency.GraphRAG.Code/Pipeline/IWriteRequestBuilder.cs
+
+internal interface IWriteRequestBuilder
+{
+    /// <summary>Builds write requests for all processable files in the walk result.</summary>
+    /// <param name="repo">The repository being indexed.</param>
+    /// <param name="walkResult">The result of the repository walk.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A dictionary mapping file paths to their write requests.</returns>
+    Task<IReadOnlyDictionary<string, Phase1WriteRequest>> BuildAsync(
+        Repo repo,
+        WalkResult walkResult,
+        CancellationToken cancellationToken = default);
+}
+```
+
+Implemented by `WriteRequestBuilder` in `Agency.GraphRAG.Code.TreeSitter.Pipeline`. Parses AST and generates `Phase1WriteRequest` objects with chunked symbols ready for summarization.
+
+---
+
+## Design Notes
+
+- **Reflection-at-registration pattern:** `TreeSitterClient` and `IWriteRequestBuilder` (implemented by `WriteRequestBuilder` in the TreeSitter module) are registered via reflection using `Type.GetType()` and `ActivatorUtilities.CreateInstance()`. This avoids a circular project dependency: `Agency.GraphRAG.Code.TreeSitter` already depends on `Agency.GraphRAG.Code`, so the core project cannot directly reference TreeSitter. Reflection acts as the seam, using the same pattern as store implementations (Sqlite, Postgres).
+- **Chunk content hashing:** Stability across renames relies on per-chunk content hashing. When a file is renamed, all chunks are re-hashed; hashes that match stored values are preserved. Only content changes trigger re-summarization.
+- **Interface-first summarization:** Interfaces and abstractions are summarized before implementations, with higher-tier models reserved for public APIs and connective tissue. This improves summary quality downstream.
 
 ---
 

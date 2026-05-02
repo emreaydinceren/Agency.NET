@@ -25,7 +25,7 @@ All persistence goes through an `IGraphStore` interface. Two implementations shi
 
 ### Interface Design
 
-The interface exposes operations rather than queries: `UpsertSymbol`, `UpsertEdgeBatch`, `DeleteSymbolsByFile`, `VectorSearch`, `TraverseFrom`, `ApplyClusterAssignments`, etc. Query construction lives inside the implementation. Application code never sees SQL.
+The interface exposes operations rather than queries: `UpsertSymbol`, `UpsertEdgeBatch`, `DeleteSymbolsByFile`, `VectorSearch`, `TraverseFrom`, `ApplyClusterAssignments`, `GetSymbolsByPaths`, `GetFileByPath`, etc. Query construction lives inside the implementation. Application code never sees SQL.
 
 **Implementation strategy:**
 
@@ -34,6 +34,56 @@ The interface exposes operations rather than queries: `UpsertSymbol`, `UpsertEdg
 - **FluentMigrator** handles schema versioning across both stores
 - **Embedding dimension is configurable** per indexer instance — default 1536 (OpenAI compatible), overridable for local models (e.g., 768 for BGE-base, 1024 for BGE-large)
 - **Default selection:** when the indexer is run with no storage config, it provisions a SQLite database file in the working directory. Power users opt into Postgres via connection string config.
+
+---
+
+## API Surface
+
+```csharp
+// File: src/GraphRAG.Code/Agency.GraphRAG.Code/Storage/IGraphStore.cs
+
+public interface IGraphStore
+{
+    // Schema & Lifecycle
+    Task InitializeSchemaAsync(CancellationToken cancellationToken = default);
+
+    // Upsert Operations (Write)
+    Task UpsertRepoAsync(Repo repo, CancellationToken cancellationToken = default);
+    Task UpsertProjectAsync(Project project, CancellationToken cancellationToken = default);
+    Task UpsertExternalPackageBatchAsync(IReadOnlyList<ExternalPackage> packages, CancellationToken cancellationToken = default);
+    Task UpsertFileAsync(SourceFile file, CancellationToken cancellationToken = default);
+    Task UpsertModuleAsync(Module module, CancellationToken cancellationToken = default);
+    Task UpsertSymbolAsync(Symbol symbol, CancellationToken cancellationToken = default);
+    Task UpsertSymbolBatchAsync(IReadOnlyList<Symbol> symbols, CancellationToken cancellationToken = default);
+    Task UpsertEdgeBatchAsync(IReadOnlyList<Edge> edges, CancellationToken cancellationToken = default);
+
+    // Delete & Mutate Operations
+    Task DeleteSymbolsByFileAsync(Guid fileId, CancellationToken cancellationToken = default);
+    Task DeleteFileAsync(Guid fileId, CancellationToken cancellationToken = default);
+    Task RenameFileAsync(Guid fileId, string newPath, CancellationToken cancellationToken = default);
+
+    // Commit & Index Tracking
+    Task<string?> LoadIndexedCommitAsync(Guid repoId, CancellationToken cancellationToken = default);
+    Task SetIndexedCommitAsync(Guid repoId, string indexedCommit, CancellationToken cancellationToken = default);
+
+    // Query Operations (Read)
+    Task<VectorSearchResult> VectorSearchSymbolsAsync(string queryText, int topK, CancellationToken cancellationToken = default);
+    Task<VectorSearchResult> VectorSearchClustersAsync(string queryText, int topK, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TraversalHop>> TraverseFromAsync(TraversalRequest request, CancellationToken cancellationToken = default);
+    Task<Symbol?> GetSymbolByIdAsync(Guid symbolId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Symbol>> FindSymbolsByNameAsync(string name, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
+    Task<SourceFile?> GetFileByPathAsync(string path, CancellationToken cancellationToken = default);
+
+    // Unresolved Call Site Resolution
+    Task StageUnresolvedCallSiteBatchAsync(IReadOnlyList<UnresolvedCallSite> callSites, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<UnresolvedCallSite>> DrainUnresolvedCallSitesAsync(Guid? sourceFileId = null, CancellationToken cancellationToken = default);
+
+    // Clustering & Summarization
+    Task ApplyClusterAssignmentsAsync(IReadOnlyDictionary<Guid, ValueTuple<Guid, string>> assignments, CancellationToken cancellationToken = default);
+    Task ReplaceClusterSummariesAtomicallyAsync(IReadOnlyList<Cluster> clusters, CancellationToken cancellationToken = default);
+}
+```
 
 ---
 
@@ -137,6 +187,17 @@ Each `REFERENCES` edge carries a `confidence` score and a `signals` array drawn 
 **Composability:** Multiple signals can coexist on one edge. `["name_match", "llm_extraction"]` is the high-confidence agreement case. `["external_likely"]` flows into Dependency queries — "what frameworks does this code call into" becomes answerable. `["unresolved"]` edges are filtered out by default at query time but kept in the graph for diagnostic queries.
 
 **Distinguishing external_likely from unresolved:** if the call site's receiver, surrounding usings/imports, or LLM-named callee can be plausibly traced to a known `ExternalPackage` for the source file's `Project`, tag `external_likely`. Otherwise `unresolved`. Exact heuristic is implementation tuning; a reasonable starting point is namespace-prefix matching against package names.
+
+---
+
+## Incremental Indexing & Hydration
+
+The two query methods added for incremental indexing and hydration:
+
+- **`GetSymbolsByPathsAsync`** — retrieves symbols grouped by file path for a given set of paths. Used during incremental indexing to compare stored vs. current symbols for change detection, allowing the indexer to skip unmodified files and target only changed content.
+- **`GetFileByPathAsync`** — returns a file record by its repo-relative path. Used during hydration to resolve file IDs, linking newly indexed symbols back to their source files.
+
+Both support efficient small-scope queries that avoid full-graph scans.
 
 ---
 

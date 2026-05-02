@@ -65,6 +65,8 @@ public sealed class SqliteGraphStore : IGraphStore
     public Task<IReadOnlyList<TraversalHop>> TraverseFromAsync(TraversalRequest request, CancellationToken cancellationToken = default);
     public Task<Symbol?> GetSymbolByIdAsync(Guid symbolId, CancellationToken cancellationToken = default);
     public Task<IReadOnlyList<Symbol>> FindSymbolsByNameAsync(string name, CancellationToken cancellationToken = default);
+    public Task<SourceFile?> GetFileByPathAsync(string path, CancellationToken cancellationToken = default);
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
 
     // IGraphStore — unresolved call sites
     public Task StageUnresolvedCallSiteBatchAsync(IReadOnlyList<UnresolvedCallSite> callSites, CancellationToken cancellationToken = default);
@@ -134,6 +136,10 @@ When upserting a symbol or cluster that carries no embedding, `SqliteGraphStore`
 `FindSymbolsByNameAsync()` checks whether `symbols_fts` exists:
 - **FTS available** — combines exact-name matches from `symbols` with FTS5 matches in a CTE, deduplicates by `rowid`, and returns results ordered by match rank then name.
 - **FTS unavailable** — falls back to `WHERE name = @name`.
+
+`GetFileByPathAsync()` returns a single file by path (`SELECT * FROM files WHERE path = @path LIMIT 1`).
+
+`GetSymbolsByPathsAsync()` joins symbols with files using a parameterized `IN` clause to support variable-length path lists. The query dynamically builds `WHERE f.path IN (@path0, @path1, ..., @pathN)` with one parameter per path, avoiding SQL injection while handling any number of paths. Results are grouped by file path.
 
 `VectorSearchSymbolsAsync()` and `VectorSearchClustersAsync()` first try the `symbols_vec` / `clusters_vec` virtual tables; if the tables are absent or return no results they fall back to scanning all stored `BLOB` embeddings and computing cosine distance in-process.
 

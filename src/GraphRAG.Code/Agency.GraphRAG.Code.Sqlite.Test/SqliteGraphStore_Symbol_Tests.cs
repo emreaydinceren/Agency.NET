@@ -260,6 +260,74 @@ public sealed class SqliteGraphStore_Symbol_Tests
         Assert.Equal(1L, inserted.IsUtility);
     }
 
+    /// <summary>Tests that GetSymbolsByPathsAsync returns symbols grouped by their file paths.</summary>
+    [Fact]
+    public async Task GetSymbolsByPathsAsync_ReturnsSymbolsGroupedByFilePath()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await SqliteGraphStoreFixture.CreateAsync();
+        Guid repoId = Guid.NewGuid();
+        Guid projectId = Guid.NewGuid();
+        Guid file1Id = Guid.NewGuid();
+        Guid file2Id = Guid.NewGuid();
+        Guid symbol1Id = Guid.NewGuid();
+        Guid symbol2Id = Guid.NewGuid();
+        Guid symbol3Id = Guid.NewGuid();
+
+        await fixture.ExecuteAsync(
+            """
+            INSERT INTO repos (id, remote_url, root_path, indexed_commit, indexed_at, is_shallow)
+            VALUES ($repoId, 'https://example.test/repo.git', 'E:\Repos\Agency', NULL, NULL, 0);
+
+            INSERT INTO projects (id, repo_id, name, relative_path, manifest_path, language, ecosystem)
+            VALUES ($projectId, $repoId, 'Agency.GraphRAG.Code', 'src\GraphRAG.Code', 'src\GraphRAG.Code\Agency.GraphRAG.Code.csproj', 'csharp', NULL);
+
+            INSERT INTO files (id, repo_id, project_id, path, language, content_hash, last_indexed_at)
+            VALUES
+                ($file1Id, $repoId, $projectId, 'src\GraphRAG.Code\File1.cs', 'csharp', 'hash1', NULL),
+                ($file2Id, $repoId, $projectId, 'src\GraphRAG.Code\File2.cs', 'csharp', 'hash2', NULL);
+
+            INSERT INTO symbols (
+                id, file_id, module_id, name, fully_qualified_name, kind, signature, summary, one_line_summary,
+                embedding, content_hash, is_utility, source_range_start, source_range_end
+            )
+            VALUES
+                ($symbol1Id, $file1Id, NULL, 'Symbol1', 'Agency.Symbol1', 'Class', NULL, NULL, NULL, NULL, 'symbol-hash1', 0, 1, 10),
+                ($symbol2Id, $file1Id, NULL, 'Symbol2', 'Agency.Symbol2', 'Method', NULL, NULL, NULL, NULL, 'symbol-hash2', 0, 11, 20),
+                ($symbol3Id, $file2Id, NULL, 'Symbol3', 'Agency.Symbol3', 'Class', NULL, NULL, NULL, NULL, 'symbol-hash3', 0, 1, 10);
+            """,
+            new Dictionary<string, object?>
+            {
+                ["$repoId"] = repoId.ToString("D"),
+                ["$projectId"] = projectId.ToString("D"),
+                ["$file1Id"] = file1Id.ToString("D"),
+                ["$file2Id"] = file2Id.ToString("D"),
+                ["$symbol1Id"] = symbol1Id.ToString("D"),
+                ["$symbol2Id"] = symbol2Id.ToString("D"),
+                ["$symbol3Id"] = symbol3Id.ToString("D"),
+            });
+
+        var result = await fixture.Store.GetSymbolsByPathsAsync(
+        [
+            @"src\GraphRAG.Code\File1.cs",
+            @"src\GraphRAG.Code\File2.cs",
+        ],
+        cancellationToken);
+
+        Assert.Equal(2, result.Count);
+        Assert.True(result.ContainsKey(@"src\GraphRAG.Code\File1.cs"));
+        Assert.True(result.ContainsKey(@"src\GraphRAG.Code\File2.cs"));
+        Assert.Equal(2, result[@"src\GraphRAG.Code\File1.cs"].Count);
+        Assert.Single(result[@"src\GraphRAG.Code\File2.cs"]);
+
+        var file1Symbols = result[@"src\GraphRAG.Code\File1.cs"];
+        Assert.Contains(file1Symbols, s => s.Id == symbol1Id && s.Name == "Symbol1");
+        Assert.Contains(file1Symbols, s => s.Id == symbol2Id && s.Name == "Symbol2");
+
+        var file2Symbols = result[@"src\GraphRAG.Code\File2.cs"];
+        Assert.Contains(file2Symbols, s => s.Id == symbol3Id && s.Name == "Symbol3");
+    }
+
     private static async Task<Guid> InsertFileGraphAsync(SqliteGraphStoreFixture fixture)
     {
         Guid repoId = Guid.NewGuid();

@@ -900,6 +900,106 @@ public sealed class SqliteGraphStore : IGraphStore
             });
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        return this.RunOperationAsync(
+            "get-symbols-by-paths",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.path.count", paths.Count);
+
+                if (paths.Count == 0)
+                {
+                    return new Dictionary<string, IReadOnlyList<Symbol>>();
+                }
+
+                var parameters = new Dictionary<string, object?>();
+                var sqlBuilder = new StringBuilder(
+                    """
+                    SELECT s.id, s.file_id, s.module_id, s.name, s.fully_qualified_name, s.kind, s.signature, s.summary, s.one_line_summary,
+                           s.embedding, s.content_hash, s.is_utility, s.source_range_start, s.source_range_end, f.path
+                    FROM symbols s
+                    JOIN files f ON s.file_id = f.id
+                    WHERE f.path IN (
+                    """);
+
+                for (int index = 0; index < paths.Count; index++)
+                {
+                    if (index > 0)
+                    {
+                        _ = sqlBuilder.Append(", ");
+                    }
+
+                    string parameterName = "path" + index.ToString(CultureInfo.InvariantCulture);
+                    _ = sqlBuilder.Append('@').Append(parameterName);
+                    parameters[parameterName] = paths[index];
+                }
+
+                _ = sqlBuilder.AppendLine(");");
+
+                List<(Symbol Symbol, string Path)> rows = await this._sqliteRunner.QueryAsync(
+                    sqlBuilder.ToString(),
+                    reader => Task.FromResult((HydrateSymbol(reader), reader.GetString(14))),
+                    parameters,
+                    cancellationToken);
+
+                var resultDict = new Dictionary<string, List<Symbol>>();
+                foreach (var (symbol, path) in rows)
+                {
+                    if (!resultDict.ContainsKey(path))
+                    {
+                        resultDict[path] = [];
+                    }
+
+                    resultDict[path].Add(symbol);
+                }
+
+                activity?.SetTag("graphrag.symbol.result_count", rows.Count);
+
+                Dictionary<string, IReadOnlyList<Symbol>> result = new();
+                foreach (var (path, symbols) in resultDict)
+                {
+                    result[path] = symbols.AsReadOnly();
+                }
+
+                return (IReadOnlyDictionary<string, IReadOnlyList<Symbol>>)result;
+            });
+    }
+
+    /// <inheritdoc />
+    public Task<SourceFile?> GetFileByPathAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
+        }
+
+        return this.RunOperationAsync(
+            "get-file-by-path",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.file.path", path);
+
+                List<SourceFile> results = await this._sqliteRunner.QueryAsync(
+                    """
+                    SELECT id, repo_id, project_id, path, language, content_hash
+                    FROM files
+                    WHERE path = @path
+                    LIMIT 1;
+                    """,
+                    reader => Task.FromResult(HydrateSourceFile(reader)),
+                    new Dictionary<string, object?> { ["path"] = path },
+                    cancellationToken);
+
+                return results.Count == 0 ? null : results[0];
+            });
+    }
+
     private async Task UpsertSymbolCoreAsync(Symbol symbol, CancellationToken cancellationToken)
     {
         float[]? embedding = await this.ResolveEmbeddingAsync(symbol, cancellationToken);
@@ -1500,6 +1600,17 @@ public sealed class SqliteGraphStore : IGraphStore
             IsUtility = reader.GetInt64(11) != 0,
             SourceRangeStart = reader.GetInt32(12),
             SourceRangeEnd = reader.GetInt32(13),
+        };
+
+    private static SourceFile HydrateSourceFile(DbDataReader reader) =>
+        new()
+        {
+            Id = ParseGuid(reader.GetString(0)),
+            RepoId = ParseGuid(reader.GetString(1)),
+            ProjectId = ParseGuid(reader.GetString(2)),
+            Path = reader.GetString(3),
+            Language = reader.GetString(4),
+            ContentHash = reader.IsDBNull(5) ? null : reader.GetString(5),
         };
 
     private static Edge HydrateEdge(DbDataReader reader, int offset) =>

@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Agency.GraphRAG.Code.Test" />
+    <InternalsVisibleTo Include="Agency.GraphRAG.Code.Sqlite" />
+    <InternalsVisibleTo Include="Agency.GraphRAG.Code.Postgres" />
   </ItemGroup>
 
 </Project>

@@ -75,4 +75,33 @@ Steps 3–5 pipeline per-file with no inter-file dependency. Steps 6 and 7 are t
 
 ---
 
+## API Surface
+
+### Phase1WriteRequest
+
+```csharp
+// File: src/GraphRAG.Code/Agency.GraphRAG.Code/Hydration/Phase1WriteRequest.cs
+
+public sealed record Phase1WriteRequest(
+    SourceFile File,
+    Module? Module,
+    IReadOnlyList<Chunk> Chunks,
+    Dictionary<string, SymbolSummary> Summaries,
+    IReadOnlyList<UnresolvedCallSite> UnresolvedCallSites);
+```
+
+Bundles all data needed to write a parsed file's definitions and initial metadata into the graph.
+
+- `File` — the source file being written
+- `Module` — optional module namespace
+- `Chunks` — AST chunks from the tree-sitter parser
+- `Summaries` — symbol summaries and LLM metadata, populated by the summarization step (mutable `Dictionary`, not read-only)
+- `UnresolvedCallSites` — call sites to be resolved in Phase 2
+
+### Design Notes
+
+**Why `Summaries` is mutable:** The summarization step runs *after* `WriteRequestBuilder` constructs the request. It populates the `Summaries` dictionary in-place with LLM-generated summaries and embeddings. Storing a mutable `Dictionary<string, SymbolSummary>` rather than a read-only interface allows the summarizer to enrich the request without requiring reconstruction or post-processing.
+
+---
+
 ## Next: [[Agency.GraphRAG.Code.Clustering]] — Community detection and cluster summarization

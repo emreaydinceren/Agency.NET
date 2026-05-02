@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Agency.GraphRAG.Code.Test" />
+    <InternalsVisibleTo Include="Agency.GraphRAG.Code.TreeSitter" />
   </ItemGroup>
 
 </Project>

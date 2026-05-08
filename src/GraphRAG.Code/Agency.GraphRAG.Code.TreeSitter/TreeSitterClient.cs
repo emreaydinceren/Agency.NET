@@ -11,9 +11,11 @@ namespace Agency.GraphRAG.Code.TreeSitter;
 public sealed class TreeSitterClient : IAsyncDisposable
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonDocumentOptions DocumentOptions = new() { MaxDepth = 1024 };
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<ParsedFile>> _pending = new(StringComparer.Ordinal);
+    private readonly ConcurrentQueue<string> _stderrLines = new();
     private readonly string _nodeExecutable;
     private readonly string _sidecarPath;
     private Process? _process;
@@ -28,7 +30,7 @@ public sealed class TreeSitterClient : IAsyncDisposable
     /// </summary>
     /// <param name="nodeExecutable">The node executable to run.</param>
     /// <param name="sidecarPath">The sidecar script path. When omitted, the repository default is used.</param>
-    public TreeSitterClient(string nodeExecutable = "node", string? sidecarPath = null)
+    internal TreeSitterClient(string nodeExecutable = "node", string? sidecarPath = null)
     {
         _nodeExecutable = nodeExecutable;
         _sidecarPath = sidecarPath ?? ResolveDefaultSidecarPath();
@@ -86,6 +88,14 @@ public sealed class TreeSitterClient : IAsyncDisposable
                 _writeGate.Release();
             }
 
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(120));
+            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask).ConfigureAwait(false);
+            if (completedTask != tcs.Task)
+            {
+                _pending.TryRemove(requestId, out _);
+                CleanupProcess(new TimeoutException($"Tree-sitter parsing timed out after 120 seconds"));
+                throw new TimeoutException($"Tree-sitter parsing timed out after 120 seconds");
+            }
             return await tcs.Task.ConfigureAwait(false);
         }
         catch
@@ -132,7 +142,7 @@ public sealed class TreeSitterClient : IAsyncDisposable
                 return;
             }
 
-            CleanupProcess(new InvalidOperationException("Tree-sitter sidecar exited."));
+            CleanupProcess(new InvalidOperationException("Tree-sitter sidecar exited unexpectedly."));
 
             if (!File.Exists(_sidecarPath))
             {
@@ -149,15 +159,17 @@ public sealed class TreeSitterClient : IAsyncDisposable
                 WorkingDirectory = Path.GetDirectoryName(_sidecarPath) ?? Environment.CurrentDirectory,
             };
 
+            while (_stderrLines.TryDequeue(out _)) { }
+
             Process process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException("Failed to start tree-sitter sidecar process.");
 
             _process = process;
             _stdin = process.StandardInput;
-            _stdoutReaderTask = Task.Run(ReadStdOutAsync);
-            _stderrReaderTask = Task.Run(ReadStdErrAsync);
-            process.EnableRaisingEvents = true;
+            _stdoutReaderTask = Task.Run(() => ReadStdOutAsync(process));
+            _stderrReaderTask = Task.Run(() => ReadStdErrAsync(process));
             process.Exited += _processExitedHandler;
+            process.EnableRaisingEvents = true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -170,13 +182,13 @@ public sealed class TreeSitterClient : IAsyncDisposable
         }
     }
 
-    private async Task ReadStdOutAsync()
+    private async Task ReadStdOutAsync(Process ownedProcess)
     {
         try
         {
-            while (_process is { HasExited: false } process)
+            while (!ownedProcess.HasExited)
             {
-                string? line = await process.StandardOutput.ReadLineAsync().ConfigureAwait(false);
+                string? line = await ownedProcess.StandardOutput.ReadLineAsync().ConfigureAwait(false);
                 if (line is null)
                 {
                     break;
@@ -185,36 +197,51 @@ public sealed class TreeSitterClient : IAsyncDisposable
                 HandleResponseLine(line);
             }
 
-            CleanupProcess(new InvalidOperationException("Tree-sitter sidecar closed stdout."));
+            if (ReferenceEquals(_process, ownedProcess))
+            {
+                CleanupProcess(new InvalidOperationException("Tree-sitter sidecar closed stdout."));
+            }
         }
         catch (Exception ex)
         {
-            CleanupProcess(ex);
+            if (ReferenceEquals(_process, ownedProcess))
+            {
+                CleanupProcess(ex);
+            }
         }
     }
 
-    private async Task ReadStdErrAsync()
+    private async Task ReadStdErrAsync(Process ownedProcess)
     {
         try
         {
-            while (_process is { HasExited: false } process)
+            while (!ownedProcess.HasExited)
             {
-                string? line = await process.StandardError.ReadLineAsync().ConfigureAwait(false);
+                string? line = await ownedProcess.StandardError.ReadLineAsync().ConfigureAwait(false);
                 if (line is null)
                 {
                     break;
+                }
+
+                _stderrLines.Enqueue(line);
+                while (_stderrLines.Count > 20)
+                {
+                    _stderrLines.TryDequeue(out _);
                 }
             }
         }
         catch (Exception ex)
         {
-            CleanupProcess(ex);
+            if (ReferenceEquals(_process, ownedProcess))
+            {
+                CleanupProcess(ex);
+            }
         }
     }
 
     private void HandleResponseLine(string line)
     {
-        using JsonDocument document = JsonDocument.Parse(line);
+        using JsonDocument document = JsonDocument.Parse(line, DocumentOptions);
         JsonElement root = document.RootElement;
 
         string? requestId = GetString(root, "id") ?? GetString(root, "requestId");
@@ -226,11 +253,21 @@ public sealed class TreeSitterClient : IAsyncDisposable
 
         if (TryGetProperty(root, "error", out JsonElement error))
         {
-            string message = GetString(error, "message")
-                ?? (error.ValueKind == JsonValueKind.String ? error.GetString() : null)
-                ?? "Tree-sitter sidecar returned an error.";
+            string? code = GetString(error, "code");
+            string? rawMessage = GetString(error, "message")
+                ?? (error.ValueKind == JsonValueKind.String ? error.GetString() : null);
+            string? file = GetString(root, "file");
+            string? language = GetString(root, "language");
 
-            if (!string.IsNullOrWhiteSpace(requestId) && _pending.TryRemove(requestId, out TaskCompletionSource<ParsedFile>? failed))
+            string message = BuildSidecarErrorMessage(code, rawMessage, file, language);
+
+            string? errorRequestId = requestId;
+            if (string.IsNullOrWhiteSpace(errorRequestId) && _pending.Count == 1)
+            {
+                errorRequestId = _pending.Keys.Single();
+            }
+
+            if (!string.IsNullOrWhiteSpace(errorRequestId) && _pending.TryRemove(errorRequestId, out TaskCompletionSource<ParsedFile>? failed))
             {
                 failed.TrySetException(new InvalidOperationException(message));
             }
@@ -260,7 +297,11 @@ public sealed class TreeSitterClient : IAsyncDisposable
 
     private void OnProcessExited()
     {
-        CleanupProcess(new InvalidOperationException("Tree-sitter sidecar exited unexpectedly."));
+        string[] capturedLines = _stderrLines.ToArray();
+        string message = capturedLines.Length > 0
+            ? $"Tree-sitter sidecar exited unexpectedly. Stderr:{Environment.NewLine}{string.Join(Environment.NewLine, capturedLines)}"
+            : "Tree-sitter sidecar exited unexpectedly.";
+        CleanupProcess(new InvalidOperationException(message));
     }
 
     private void CleanupProcess(Exception exception)
@@ -287,7 +328,7 @@ public sealed class TreeSitterClient : IAsyncDisposable
                 if (!process.HasExited)
                 {
                     process.Kill(entireProcessTree: true);
-                    process.WaitForExit();
+                    process.WaitForExit(5000);
                 }
             }
             catch
@@ -350,9 +391,39 @@ public sealed class TreeSitterClient : IAsyncDisposable
         };
     }
 
+    private static string BuildSidecarErrorMessage(string? code, string? rawMessage, string? file, string? language)
+    {
+        var parts = new System.Text.StringBuilder("Tree-sitter sidecar error");
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            parts.Append($" [{code}]");
+        }
+
+        if (!string.IsNullOrWhiteSpace(file) || !string.IsNullOrWhiteSpace(language))
+        {
+            parts.Append(" (");
+            if (!string.IsNullOrWhiteSpace(file))
+            {
+                parts.Append(file);
+            }
+
+            if (!string.IsNullOrWhiteSpace(language))
+            {
+                parts.Append($", {language}");
+            }
+
+            parts.Append(')');
+        }
+
+        parts.Append(": ");
+        parts.Append(string.IsNullOrWhiteSpace(rawMessage) ? "no message provided" : rawMessage);
+        return parts.ToString();
+    }
+
     private static string Quote(string value)
     {
-        return $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+        string normalized = value.Replace("\\", "/", StringComparison.Ordinal);
+        return $"\"{normalized.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
     }
 
     private static string? GetString(JsonElement element, string propertyName)

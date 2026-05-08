@@ -1,7 +1,9 @@
+using System.ClientModel;
 using System.Security.Cryptography;
 using System.Text;
 using Agency.GraphRAG.Code.Chunker;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Summarizer;
 
@@ -13,26 +15,37 @@ public sealed class SymbolSummarizer(
     Agency.Embeddings.Common.IEmbeddingGenerator embeddingGenerator,
     SummaryCache cache,
     ModelTierSelector modelTierSelector,
-    SummarizationPromptBuilder promptBuilder)
+    SummarizationPromptBuilder promptBuilder,
+    IOptions<SummarizerOptions> options)
 {
+    private readonly TimeSpan requestTimeout = TimeSpan.FromMinutes(Math.Max(1, options.Value.RequestTimeoutMinutes));
+
     private const string SummaryInstructions =
         "You summarize source code precisely and concisely. Follow the user's formatting requirements exactly.";
 
+    private readonly string strongModel = options.Value.StrongModel;
+    private readonly string standardModel = options.Value.StandardModel;
+    private readonly string cheapModel = options.Value.CheapModel;
+    private readonly string cheapestModel = options.Value.CheapestModel;
+
     /// <summary>
-    /// Summarizes the provided chunks.
+    /// Summarizes the provided chunks, retrying up to 10 times on transient failures.
+    /// Failed chunks are returned in the result and do not cause an exception.
     /// </summary>
     /// <param name="chunks">The chunks to summarize.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A map from chunk identifier to generated summary.</returns>
-    public async Task<IReadOnlyDictionary<string, SymbolSummary>> SummarizeAsync(
+    /// <param name="onProgress">Optional callback for progress updates (processed, failed, total, symbolName).</param>
+    /// <returns>A result containing successful summaries and identifiers of failed chunks.</returns>
+    public async Task<SummarizationResult> SummarizeAsync(
         IReadOnlyList<Chunk> chunks,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<int, int, int, string>? onProgress = null)
     {
         ArgumentNullException.ThrowIfNull(chunks);
 
         if (chunks.Count == 0)
         {
-            return new Dictionary<string, SymbolSummary>(StringComparer.Ordinal);
+            return new SummarizationResult(new Dictionary<string, SymbolSummary>(StringComparer.Ordinal), []);
         }
 
         IReadOnlyList<Chunk> orderedChunks = SummarizationOrder.Order(chunks);
@@ -41,6 +54,10 @@ public sealed class SymbolSummarizer(
         Dictionary<string, List<Chunk>> chunksBySimpleName = BuildNameMap(orderedChunks, static chunk => chunk.Name);
         HashSet<string> nonLeafChunkIds = BuildNonLeafChunkIds(orderedChunks, chunksById, chunksByQualifiedName, chunksBySimpleName);
         Dictionary<string, SymbolSummary> results = new(StringComparer.Ordinal);
+
+        int processed = 0;
+        int failed = 0;
+        List<string> failedChunkIds = [];
 
         foreach (Chunk chunk in orderedChunks)
         {
@@ -88,32 +105,105 @@ public sealed class SymbolSummarizer(
                 cache.Set(contentHash, cacheKey, new SummaryCacheEntry(oneLine, detailed, probableCallees));
             }
 
-            ReadOnlyMemory<float> embedding = await embeddingGenerator.GenerateEmbeddingAsync(oneLine, cancellationToken).ConfigureAwait(false);
+            if (oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal))
+            {
+                failed++;
+                failedChunkIds.Add(chunk.Id);
+            }
+
+            ReadOnlyMemory<float> embedding = await GenerateEmbeddingWithTimeoutAsync(oneLine, cancellationToken).ConfigureAwait(false);
             results[chunk.Id] = new SymbolSummary(oneLine, detailed, probableCallees, embedding);
+
+            processed++;
+            onProgress?.Invoke(processed, failed, orderedChunks.Count, chunk.FullyQualifiedName);
         }
 
-        return results;
+        return new SummarizationResult(results, failedChunkIds);
+    }
+
+    private async Task<ReadOnlyMemory<float>> GenerateEmbeddingWithTimeoutAsync(string text, CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(requestTimeout);
+
+        try
+        {
+            return await embeddingGenerator.GenerateEmbeddingAsync(text, cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new InvalidOperationException(
+                $"Timeout generating embedding after {requestTimeout.TotalSeconds:F0} seconds. " +
+                "The embedding service may be unavailable or unresponsive. " +
+                "Check that your embedding service is running and responding to requests.");
+        }
     }
 
     private async Task<string> GetTextResponseAsync(string model, string prompt, CancellationToken cancellationToken)
     {
-        ChatResponse response = await chatClient.GetResponseAsync(
-            [new ChatMessage(ChatRole.User, prompt)],
-            new ChatOptions
+        const int MaxRetries = 10;
+        int attempt = 0;
+
+        while (attempt < MaxRetries)
+        {
+            attempt++;
+
+            try
             {
-                ModelId = model,
-                Instructions = SummaryInstructions,
-            },
-            cancellationToken).ConfigureAwait(false);
+                using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(requestTimeout);
 
-        string text = string.Concat(
-            response.Messages
-                .SelectMany(static message => message.Contents.OfType<TextContent>())
-                .Select(static content => content.Text));
+                ChatResponse response = await chatClient.GetResponseAsync(
+                    [new ChatMessage(ChatRole.User, prompt)],
+                    new ChatOptions
+                    {
+                        ModelId = model,
+                        Instructions = SummaryInstructions,
+                    },
+                    cts.Token).ConfigureAwait(false);
 
-        return string.IsNullOrWhiteSpace(text)
-            ? throw new InvalidOperationException($"Model '{model}' returned an empty summarization response.")
-            : text.Trim();
+                string text = string.Concat(
+                    response.Messages
+                        .SelectMany(static message => message.Contents.OfType<TextContent>())
+                        .Select(static content => content.Text));
+
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text.Trim();
+                }
+
+                if (attempt < MaxRetries)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < MaxRetries)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new InvalidOperationException(
+                    $"Timeout calling model '{model}' after {requestTimeout.TotalSeconds:F0} seconds. " +
+                    $"The LLM service may be unavailable or unresponsive. " +
+                    $"Check that your LLM service is running and responding to requests.");
+            }
+            catch (ClientResultException ex) when (ex.Status == 400)
+            {
+                throw new InvalidOperationException(
+                    $"Bad request calling model '{model}'. " +
+                    "The configured model ID is likely not available or not loaded by the current LLM provider. " +
+                    "Verify the model exists in the provider model list and update Summarizer model settings. " +
+                    $"Provider error: {ex.Message}",
+                    ex);
+            }
+            catch (Exception) when (attempt < MaxRetries)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return "[Unable to generate summary]";
     }
 
     private static string AppendProbableCalleesInstruction(string prompt) =>

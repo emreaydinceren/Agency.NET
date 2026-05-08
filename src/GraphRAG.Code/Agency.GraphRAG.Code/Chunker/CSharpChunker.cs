@@ -24,6 +24,8 @@ public sealed class CSharpChunker : IChunker
         "field_declaration",
     ];
 
+    private static object? s_sharedTreeSitterClient;
+
     private readonly ChunkerOptions _options;
 
     /// <summary>
@@ -45,8 +47,27 @@ public sealed class CSharpChunker : IChunker
             throw new NotSupportedException($"The {nameof(CSharpChunker)} only supports C# inputs.");
         }
 
-        object parsedRoot = await ParseCSharpAsync(input, cancellationToken).ConfigureAwait(false);
-        return Chunk(input, parsedRoot);
+        try
+        {
+            object parsedRoot = await ParseCSharpAsync(input, cancellationToken).ConfigureAwait(false);
+            return Chunk(input, parsedRoot);
+        }
+        catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+        {
+            string fileName = System.IO.Path.GetFileName(input.Path);
+            return [new Chunk(
+                Id: ChunkBuilder.CreateStableId(input.Path, input.Path, ""),
+                Path: input.Path,
+                Language: input.Language,
+                Granularity: ChunkGranularity.Namespace,
+                Name: fileName,
+                FullyQualifiedName: input.Path,
+                Signature: null,
+                Content: input.Source,
+                Range: new ChunkSourceRange(0, 0, 0, 0),
+                SymbolKind: SymbolKind.Namespace,
+                ImportsInScope: [])];
+        }
     }
 
     internal IReadOnlyList<Chunk> Chunk(ChunkerInput input, object root)
@@ -555,7 +576,20 @@ public sealed class CSharpChunker : IChunker
             .ToArray();
     }
 
-    private static async Task<object> ParseCSharpAsync(ChunkerInput input, CancellationToken cancellationToken)
+    private async Task<object> ParseCSharpAsync(ChunkerInput input, CancellationToken cancellationToken)
+    {
+        if (s_sharedTreeSitterClient is null)
+        {
+            lock (TypeDeclarationKinds)
+            {
+                s_sharedTreeSitterClient ??= CreateSharedClient();
+            }
+        }
+
+        return await ParseWithClientAsync(s_sharedTreeSitterClient, input, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static object CreateSharedClient()
     {
         Type? clientType = Type.GetType(
             "Agency.GraphRAG.Code.TreeSitter.TreeSitterClient, Agency.GraphRAG.Code.TreeSitter",
@@ -565,26 +599,27 @@ public sealed class CSharpChunker : IChunker
             throw new InvalidOperationException("Tree-sitter client is unavailable. Ensure the tree-sitter project is loaded.");
         }
 
-        object client = Activator.CreateInstance(clientType, "node", null)
+        var constructor = clientType.GetConstructor(
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            null,
+            [typeof(string), typeof(string)],
+            null)
+            ?? throw new InvalidOperationException("TreeSitterClient constructor not found.");
+
+        return constructor.Invoke(["node", null])
             ?? throw new InvalidOperationException("Failed to create the tree-sitter client.");
+    }
 
-        try
-        {
-            object taskObject = clientType
-                .GetMethod("ParseAsync", [typeof(string), typeof(Language), typeof(string), typeof(CancellationToken)])
-                ?.Invoke(client, [input.Path, input.Language, input.Source, cancellationToken])
-                ?? throw new InvalidOperationException("Tree-sitter ParseAsync could not be invoked.");
+    private static async Task<object> ParseWithClientAsync(object client, ChunkerInput input, CancellationToken cancellationToken)
+    {
+        Type clientType = client.GetType();
+        object taskObject = clientType
+            .GetMethod("ParseAsync", [typeof(string), typeof(Language), typeof(string), typeof(CancellationToken)])
+            ?.Invoke(client, [input.Path, input.Language, input.Source, cancellationToken])
+            ?? throw new InvalidOperationException("Tree-sitter ParseAsync could not be invoked.");
 
-            dynamic parsed = await (dynamic)taskObject;
-            return parsed.Root;
-        }
-        finally
-        {
-            if (client is IAsyncDisposable asyncDisposable)
-            {
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
-            }
-        }
+        dynamic parsed = await (dynamic)taskObject;
+        return parsed.Root;
     }
 
     private sealed record AstNodeAdapter(string Kind, string? Text, ChunkSourceRange? Range, IReadOnlyList<AstNodeAdapter> Children)
@@ -593,18 +628,23 @@ public sealed class CSharpChunker : IChunker
         {
             ArgumentNullException.ThrowIfNull(node);
             ArgumentNullException.ThrowIfNull(source);
+            int[] lineOffsets = BuildLineOffsets(source);
+            return Create(node, source, lineOffsets);
+        }
 
+        private static AstNodeAdapter Create(object node, string source, int[] lineOffsets)
+        {
             Type type = node.GetType();
             string kind = (string?)type.GetProperty("Kind")?.GetValue(node)
                 ?? throw new InvalidOperationException("AST node is missing a Kind property.");
             object? rangeValue = type.GetProperty("Range")?.GetValue(node);
             ChunkSourceRange? range = rangeValue is null ? null : CreateRange(rangeValue);
-            string? text = (string?)type.GetProperty("Text")?.GetValue(node) ?? ExtractText(source, range);
+            string? text = (string?)type.GetProperty("Text")?.GetValue(node) ?? ExtractText(source, range, lineOffsets);
             IEnumerable<object> children = ((System.Collections.IEnumerable?)type.GetProperty("Children")?.GetValue(node))
                 ?.Cast<object>()
                 ?? throw new InvalidOperationException("AST node is missing a Children property.");
 
-            return new AstNodeAdapter(kind, text, range, children.Select(child => Create(child, source)).ToArray());
+            return new AstNodeAdapter(kind, text, range, children.Select(child => Create(child, source, lineOffsets)).ToArray());
         }
 
         private static ChunkSourceRange CreateRange(object range)
@@ -617,44 +657,42 @@ public sealed class CSharpChunker : IChunker
                 (int)(type.GetProperty("EndColumn")?.GetValue(range) ?? 0));
         }
 
-        private static string? ExtractText(string source, ChunkSourceRange? range)
+        private static string? ExtractText(string source, ChunkSourceRange? range, int[] lineOffsets)
         {
             if (range is null)
             {
                 return null;
             }
 
-            int start = GetOffset(source, range.StartLine, range.StartColumn);
-            int end = GetOffset(source, range.EndLine, range.EndColumn);
+            int start = GetOffset(lineOffsets, range.StartLine, range.StartColumn);
+            int end = GetOffset(lineOffsets, range.EndLine, range.EndColumn);
             return start >= 0 && end >= start && end <= source.Length
                 ? source[start..end]
                 : null;
         }
 
-        private static int GetOffset(string source, int targetLine, int targetColumn)
+        private static int GetOffset(int[] lineOffsets, int targetLine, int targetColumn)
         {
-            int line = 0;
-            int column = 0;
-
-            for (int index = 0; index < source.Length; index++)
+            if ((uint)targetLine >= (uint)lineOffsets.Length)
             {
-                if (line == targetLine && column == targetColumn)
-                {
-                    return index;
-                }
+                return -1;
+            }
 
-                if (source[index] == '\n')
+            return lineOffsets[targetLine] + targetColumn;
+        }
+
+        private static int[] BuildLineOffsets(string source)
+        {
+            List<int> offsets = [0];
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (source[i] == '\n')
                 {
-                    line++;
-                    column = 0;
-                }
-                else
-                {
-                    column++;
+                    offsets.Add(i + 1);
                 }
             }
 
-            return line == targetLine && column == targetColumn ? source.Length : -1;
+            return [.. offsets];
         }
     }
 }

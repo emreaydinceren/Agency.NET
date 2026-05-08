@@ -107,6 +107,38 @@ public sealed class CSharpChunkerTests
         await AssertCommonInvariantsAsync("Generics.cs", chunks, ["System.Collections.Generic"]);
     }
 
+    [Fact]
+    public async Task ChunkAsync_LargeFile_CompletesWithinFiveSeconds()
+    {
+        SkipIfTreeSitterUnavailable();
+
+        // PostgresGraphStore.cs (70 KB, 1 547 lines) causes tree-sitter 0.21.x to return an error
+        // response with no request ID. Without the fix, HandleResponseLine silently drops that
+        // error and the 120-second ParseAsync timeout fires — the pipeline "halts".
+        // With the fix, the id-less error is matched to the single pending request, ChunkAsync
+        // catches InvalidOperationException, and returns a fallback chunk in < 1 s.
+        string repoFilePath = Path.Combine(
+            "E:\\Repos\\Agency", "src", "GraphRAG.Code",
+            "Agency.GraphRAG.Code.Postgres", "PostgresGraphStore.cs");
+
+        if (!File.Exists(repoFilePath))
+        {
+            Assert.Skip($"PostgresGraphStore.cs not found at {repoFilePath}.");
+        }
+
+        string largeSource = await File.ReadAllTextAsync(repoFilePath, TestContext.Current.CancellationToken);
+        ChunkerInput input = new("PostgresGraphStore.cs", Language.CSharp, largeSource);
+
+        Stopwatch sw = Stopwatch.StartNew();
+        IReadOnlyList<Chunk> chunks = await new CSharpChunker().ChunkAsync(input, TestContext.Current.CancellationToken);
+        sw.Stop();
+
+        Assert.NotEmpty(chunks);
+        Assert.True(sw.Elapsed.TotalSeconds < 5,
+            $"Chunking took {sw.Elapsed.TotalSeconds:F1}s — expected < 5s. " +
+            "HandleResponseLine may still be silently dropping id-less sidecar errors.");
+    }
+
     private static async Task<IReadOnlyList<Chunk>> ChunkFixtureAsync(string fixtureFileName, ChunkerOptions? options = null)
     {
         SkipIfTreeSitterUnavailable();

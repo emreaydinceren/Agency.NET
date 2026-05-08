@@ -60,12 +60,12 @@ public sealed class IndexingPipelineTests
                 stages.Add("walk");
                 return Task.FromResult(walkResult);
             },
-            (_, _, _) =>
+            (_, _, _, _) =>
             {
                 stages.Add("manifest");
                 return Task.CompletedTask;
             },
-            (_, _, _) =>
+            (_, _, _, _) =>
             {
                 stages.Add("chunk");
                 return Task.FromResult<IReadOnlyDictionary<string, Phase1WriteRequest>>(new Dictionary<string, Phase1WriteRequest>(StringComparer.Ordinal)
@@ -73,7 +73,7 @@ public sealed class IndexingPipelineTests
                     [request.File.Path] = request,
                 });
             },
-            (requests, _) =>
+            (requests, _, _) =>
             {
                 stages.Add("summarize");
                 Assert.Single(requests);

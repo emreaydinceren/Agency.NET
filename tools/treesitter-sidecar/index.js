@@ -51,6 +51,7 @@ function serializeNode(node, fieldName) {
 function successResponse(request, tree) {
   return {
     ok: true,
+    id: request.id != null ? request.id : undefined,
     file: request.file,
     language: request.language,
     ast: serializeNode(tree.rootNode)
@@ -60,6 +61,7 @@ function successResponse(request, tree) {
 function errorResponse(request, code, message) {
   return {
     ok: false,
+    id: request != null && request.id != null ? request.id : undefined,
     file: request && typeof request.file === "string" ? request.file : null,
     language: request && typeof request.language === "string" ? request.language : null,
     error: {
@@ -113,12 +115,29 @@ function parseLine(line) {
 
   try {
     parser.setLanguage(language);
-    const tree = parser.parse(request.source);
+    const source = request.source;
+    const CHUNK_SIZE = 8192;
+    const tree = parser.parse((startIndex) => source.slice(startIndex, startIndex + CHUNK_SIZE) || null);
     return successResponse(request, tree);
   } catch (error) {
     return errorResponse(request, "parse_failed", error.message);
   }
 }
+
+// Validate every grammar module is loadable before accepting requests.
+// A native .node addon that failed to compile crashes here with a clear message
+// rather than producing a silent "Invalid argument" at first parse time.
+(function validateLanguages() {
+  const probe = new Parser();
+  for (const [name, grammar] of languages.entries()) {
+    try {
+      probe.setLanguage(grammar);
+    } catch (error) {
+      process.stderr.write(`[tree-sitter-sidecar] language '${name}' failed to initialize: ${error.message}\n`);
+      process.exit(1);
+    }
+  }
+})();
 
 const rl = readline.createInterface({
   input: process.stdin,

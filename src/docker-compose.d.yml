@@ -1,0 +1,17 @@
+services:
+  db_d:
+    image: pgvector/pgvector:pg18-trixie
+    container_name: postgres_vector_db_d
+    restart: always
+    environment:
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: dev_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - D:/data/postrgre:/var/lib/postgresql/18/docker
+
+networks:
+  default:
+    name: dotnet_infrastructure

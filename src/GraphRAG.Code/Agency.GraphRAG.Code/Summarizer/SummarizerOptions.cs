@@ -24,4 +24,9 @@ public sealed class SummarizerOptions
     /// Gets or sets the model used for one-line summaries.
     /// </summary>
     public string CheapestModel { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the timeout in minutes for each LLM or embedding request.
+    /// </summary>
+    public int RequestTimeoutMinutes { get; set; } = 3;
 }

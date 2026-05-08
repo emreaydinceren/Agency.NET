@@ -52,7 +52,7 @@ public sealed class EmbeddingOptionsTests
     [Fact]
     public void ModelId_IsLoadedFromConfig()
     {
-        Assert.Equal("text-embedding-qwen3-embedding-8b", Sut.ModelId);
+        Assert.Equal("text-embedding-qwen3-embedding-0.6b", Sut.ModelId);
     }
 
     /// <summary>

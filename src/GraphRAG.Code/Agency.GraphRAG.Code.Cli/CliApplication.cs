@@ -3,9 +3,13 @@ using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Pipeline;
 using Agency.GraphRAG.Code.Query;
 using Agency.GraphRAG.Code.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Spectre.Console;
 using Spectre.Console.Cli;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 
 namespace Agency.GraphRAG.Code.Cli;
 
@@ -49,21 +53,78 @@ public static class CliApplication
 
         private static async Task<int> ExecuteAsync(IndexSettings settings, CancellationToken cancellationToken)
         {
-            string workingDirectory = Directory.GetCurrentDirectory();
-            CliInvocation invocation = CreateIndexInvocation(
-                settings.Repo!,
-                settings.Store,
-                settings.Connection,
-                workingDirectory);
+            try
+            {
+                string workingDirectory = Directory.GetCurrentDirectory();
+                CliInvocation invocation = CreateIndexInvocation(
+                    settings.Repo!,
+                    settings.Store,
+                    settings.Connection,
+                    settings.EmbeddingBaseUrl,
+                    settings.EmbeddingModelId,
+                    settings.EmbeddingApiKey,
+                    workingDirectory);
 
-            using IHost host = CreateHost(invocation);
-            IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
-            await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
-            await host.Services.GetRequiredService<IndexingPipeline>()
-                .RunAsync(invocation.Repo!, cancellationToken)
-                .ConfigureAwait(false);
+                AnsiConsole.MarkupLine($"[bold blue]Indexing repository:[/] {invocation.Repo!.LocalPath}");
+                AnsiConsole.MarkupLine($"[dim]Store:[/] {invocation.Options.Store} | [dim]Working directory:[/] {workingDirectory}");
+                AnsiConsole.WriteLine();
 
-            return 0;
+                using IHost host = CreateHost(invocation);
+                IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
+
+                AnsiConsole.MarkupLine("[yellow]→[/] Initializing database schema...");
+                var stopwatch = Stopwatch.StartNew();
+                await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
+                stopwatch.Stop();
+                AnsiConsole.MarkupLine($"[green]✓[/] Schema initialized ({stopwatch.ElapsedMilliseconds}ms)");
+                AnsiConsole.WriteLine();
+
+                AnsiConsole.MarkupLine("[yellow]→[/] Running indexing pipeline...");
+                stopwatch.Restart();
+
+                var pipelineStopwatch = Stopwatch.StartNew();
+                void ReportProgress(string message)
+                {
+                    pipelineStopwatch.Stop();
+                    AnsiConsole.MarkupLine($"  [dim]({pipelineStopwatch.ElapsedMilliseconds}ms)[/] {message}");
+                    pipelineStopwatch.Restart();
+                }
+
+                try
+                {
+                    await host.Services.GetRequiredService<IndexingPipeline>()
+                        .RunAsync(invocation.Repo!, cancellationToken, ReportProgress)
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    pipelineStopwatch.Stop();
+                }
+
+                stopwatch.Stop();
+                AnsiConsole.MarkupLine($"[green]✓[/] Indexing complete ({stopwatch.ElapsedMilliseconds}ms)");
+                AnsiConsole.WriteLine();
+
+                AnsiConsole.MarkupLine("[green bold]✓ Indexing succeeded[/]");
+                return 0;
+            }
+            catch (OperationCanceledException)
+            {
+                AnsiConsole.MarkupLine("[yellow]⚠ Indexing cancelled by user[/]");
+                return 130;
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red bold]✗ Indexing failed[/]");
+                AnsiConsole.MarkupLine($"[red]{ex.GetType().Name}:[/] {ex.Message}");
+                if (!string.IsNullOrWhiteSpace(ex.InnerException?.Message))
+                {
+                    AnsiConsole.MarkupLine($"[dim red]Cause:[/] {ex.InnerException.Message}");
+                }
+                AnsiConsole.WriteLine();
+                AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+                return 1;
+            }
         }
     }
 
@@ -80,6 +141,16 @@ public static class CliApplication
 
         [CommandOption("--connection")]
         public string? Connection { get; init; }
+
+        [CommandOption("--embedding-base-url")]
+        public string? EmbeddingBaseUrl { get; init; }
+
+        [CommandOption("--embedding-model-id")]
+        public string? EmbeddingModelId { get; init; }
+
+        [CommandOption("--embedding-api-key")]
+        public string? EmbeddingApiKey { get; init; }
+
     }
 
     /// <summary>
@@ -95,6 +166,9 @@ public static class CliApplication
                 settings.Store,
                 settings.Connection,
                 settings.TopK,
+                settings.EmbeddingBaseUrl,
+                settings.EmbeddingModelId,
+                settings.EmbeddingApiKey,
                 workingDirectory);
 
             using IHost host = CreateHost(invocation);
@@ -125,6 +199,15 @@ public static class CliApplication
 
         [CommandOption("--top-k")]
         public int TopK { get; init; } = 5;
+
+        [CommandOption("--embedding-base-url")]
+        public string? EmbeddingBaseUrl { get; init; }
+
+        [CommandOption("--embedding-model-id")]
+        public string? EmbeddingModelId { get; init; }
+
+        [CommandOption("--embedding-api-key")]
+        public string? EmbeddingApiKey { get; init; }
     }
 
     /// <summary>
@@ -134,12 +217,16 @@ public static class CliApplication
         string repo,
         string store,
         string? connection,
+        string? embeddingBaseUrl,
+        string? embeddingModelId,
+        string? embeddingApiKey,
         string workingDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repo);
 
         return new CliInvocation(
             BuildOptions(store, connection, workingDirectory),
+            Embedding: new CliEmbeddingOptions(embeddingBaseUrl, embeddingModelId, embeddingApiKey),
             Repo: new Repo
             {
                 Id = Guid.NewGuid(),
@@ -159,19 +246,61 @@ public static class CliApplication
         string store,
         string? connection,
         int topK,
+        string? embeddingBaseUrl,
+        string? embeddingModelId,
+        string? embeddingApiKey,
         string workingDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
 
         return new CliInvocation(
             BuildOptions(store, connection, workingDirectory),
+            Embedding: new CliEmbeddingOptions(embeddingBaseUrl, embeddingModelId, embeddingApiKey),
             Question: question,
             TopK: topK);
     }
 
     private static IHost CreateHost(CliInvocation invocation)
     {
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+        });
+
+        builder.Configuration
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+            .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false);
+
+        builder.Services
+            .AddOptions<Agency.Embeddings.OpenAI.EmbeddingOptions>()
+            .Bind(builder.Configuration.GetSection(Agency.Embeddings.OpenAI.EmbeddingOptions.SectionName))
+            .PostConfigure(options =>
+            {
+                if (!string.IsNullOrWhiteSpace(invocation.Embedding.BaseUrl))
+                {
+                    options.BaseUrl = invocation.Embedding.BaseUrl;
+                }
+
+                if (!string.IsNullOrWhiteSpace(invocation.Embedding.ModelId))
+                {
+                    options.ModelId = invocation.Embedding.ModelId;
+                }
+
+                if (!string.IsNullOrWhiteSpace(invocation.Embedding.ApiKey))
+                {
+                    options.ApiKey = invocation.Embedding.ApiKey;
+                }
+
+                if (string.IsNullOrWhiteSpace(options.ApiKey))
+                {
+                    options.ApiKey = "lmstudio";
+                }
+            })
+            .Validate(static o => !string.IsNullOrWhiteSpace(o.BaseUrl), "Embedding:BaseUrl is required.")
+            .Validate(static o => !string.IsNullOrWhiteSpace(o.ApiKey), "Embedding:ApiKey is required.")
+            .Validate(static o => !string.IsNullOrWhiteSpace(o.ModelId), "Embedding:ModelId is required.")
+            .ValidateOnStart();
+
         builder.Services.AddCodeIndex(options =>
         {
             options.Store = invocation.Options.Store;
@@ -222,6 +351,18 @@ public static class CliApplication
 /// <param name="TopK">The result limit for queries.</param>
 public sealed record CliInvocation(
     CodeIndexOptions Options,
+    CliEmbeddingOptions Embedding,
     Repo? Repo = null,
     string? Question = null,
     int TopK = 5);
+
+/// <summary>
+/// Captures resolved embedding configuration for CLI execution.
+/// </summary>
+/// <param name="BaseUrl">Embedding service base URL.</param>
+/// <param name="ModelId">Embedding model identifier.</param>
+/// <param name="ApiKey">Embedding API key.</param>
+public sealed record CliEmbeddingOptions(
+    string? BaseUrl,
+    string? ModelId,
+    string? ApiKey);

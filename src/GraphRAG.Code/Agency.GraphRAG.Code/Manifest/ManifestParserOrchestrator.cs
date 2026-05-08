@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Storage;
 
@@ -103,7 +104,8 @@ public sealed class ManifestParserOrchestrator
     /// </summary>
     /// <param name="repo">The repository to scan.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    public async Task ParseAsync(Repo repo, CancellationToken cancellationToken = default)
+    /// <param name="onProgress">Optional callback for progress updates.</param>
+    public async Task ParseAsync(Repo repo, CancellationToken cancellationToken = default, Action<string>? onProgress = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
 
@@ -123,7 +125,21 @@ public sealed class ManifestParserOrchestrator
             }
 
             ManifestParserContext context = new(repo, manifestPath, manifestRelativePath);
-            IReadOnlyList<ManifestProjectDefinition> parsedProjects = await parser.ParseAsync(context, cancellationToken);
+            IReadOnlyList<ManifestProjectDefinition> parsedProjects;
+            try
+            {
+                parsedProjects = await parser.ParseAsync(context, cancellationToken);
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+            catch (XmlException)
+            {
+                continue;
+            }
+
+            onProgress?.Invoke($"Parsed manifest: {manifestRelativePath}");
 
             foreach (ManifestProjectDefinition parsedProject in parsedProjects)
             {

@@ -14,6 +14,9 @@ public sealed class StorageSelectionTests
             @"E:\Repos\Agency",
             "sqlite",
             null,
+            null,
+            null,
+            null,
             @"E:\Repos\Agency");
 
         Assert.Equal(CodeIndexStore.Sqlite, invocation.Options.Store);
@@ -29,6 +32,9 @@ public sealed class StorageSelectionTests
             "postgres",
             null,
             5,
+            null,
+            null,
+            null,
             @"E:\Repos\Agency"));
 
         Assert.Equal("Postgres store requires a connection string.", exception.Message);

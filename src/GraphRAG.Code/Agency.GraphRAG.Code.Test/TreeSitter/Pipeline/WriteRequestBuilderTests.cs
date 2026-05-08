@@ -2,7 +2,6 @@ using Agency.GraphRAG.Code.Chunker;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Hydration;
 using Agency.GraphRAG.Code.Summarizer;
-using Agency.GraphRAG.Code.TreeSitter;
 using Agency.GraphRAG.Code.TreeSitter.Pipeline;
 using Agency.GraphRAG.Code.Walker;
 
@@ -35,7 +34,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
     [Fact]
     public async Task BuildAsync_SkipDeletedFiles()
     {
-        TreeSitterClient treeSitterClient = new();
         RecordingChunkerDispatcher recordingChunker = new();
         ChunkerDispatcher chunkerDispatcher = new(new Dictionary<Language, IChunker>
         {
@@ -46,7 +44,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(treeSitterClient, chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher);
 
         Repo repo = new()
         {
@@ -73,13 +71,11 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         IReadOnlyDictionary<string, Phase1WriteRequest> result = await builder.BuildAsync(repo, walkResult, TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
-        await treeSitterClient.DisposeAsync();
     }
 
     [Fact]
     public async Task BuildAsync_SkipsUnknownLanguageFiles()
     {
-        TreeSitterClient treeSitterClient = new();
         RecordingChunkerDispatcher recordingChunker = new();
         ChunkerDispatcher chunkerDispatcher = new(new Dictionary<Language, IChunker>
         {
@@ -90,7 +86,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(treeSitterClient, chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher);
 
         Repo repo = new()
         {
@@ -117,7 +113,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         IReadOnlyDictionary<string, Phase1WriteRequest> result = await builder.BuildAsync(repo, walkResult, TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
-        await treeSitterClient.DisposeAsync();
     }
 
     [Fact]
@@ -128,7 +123,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         await File.WriteAllTextAsync(filePath, sourceCode, TestContext.Current.CancellationToken);
 
-        TreeSitterClient treeSitterClient = new();
         RecordingChunkerDispatcher recordingChunker = new();
         ChunkerDispatcher chunkerDispatcher = new(new Dictionary<Language, IChunker>
         {
@@ -139,7 +133,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(treeSitterClient, chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -176,8 +170,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         Assert.NotNull(request.Chunks);
         Assert.Empty(request.Summaries);
         Assert.Empty(request.UnresolvedCallSites);
-
-        await treeSitterClient.DisposeAsync();
     }
 
     [Fact]
@@ -188,7 +180,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         await File.WriteAllTextAsync(filePath, sourceCode, TestContext.Current.CancellationToken);
 
-        TreeSitterClient treeSitterClient = new();
         RecordingChunkerDispatcher recordingChunker = new();
         ChunkerDispatcher chunkerDispatcher = new(new Dictionary<Language, IChunker>
         {
@@ -199,7 +190,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(treeSitterClient, chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -229,8 +220,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         Assert.Single(result);
         Phase1WriteRequest request = result.Values.First();
         Assert.Equal("typescript", request.File.Language);
-
-        await treeSitterClient.DisposeAsync();
     }
 
     [Fact]
@@ -241,7 +230,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
         await File.WriteAllTextAsync(filePath, sourceCode, TestContext.Current.CancellationToken);
 
-        TreeSitterClient treeSitterClient = new();
         RecordingChunkerDispatcher recordingChunker = new();
         ChunkerDispatcher chunkerDispatcher = new(new Dictionary<Language, IChunker>
         {
@@ -252,7 +240,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(treeSitterClient, chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -282,8 +270,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         Phase1WriteRequest request = result.Values.First();
         Guid expectedId = HydrationIds.StableGuid($"file:{repoId}:src/Bar.cs");
         Assert.Equal(expectedId, request.File.Id);
-
-        await treeSitterClient.DisposeAsync();
     }
 
     [Fact]
@@ -296,7 +282,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         string filePath2 = Path.Combine(_tempDir, "src", "File2.ts");
         await File.WriteAllTextAsync(filePath2, "export class File2 {}", TestContext.Current.CancellationToken);
 
-        TreeSitterClient treeSitterClient = new();
         RecordingChunkerDispatcher recordingChunker = new();
         ChunkerDispatcher chunkerDispatcher = new(new Dictionary<Language, IChunker>
         {
@@ -307,7 +292,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(treeSitterClient, chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -342,8 +327,6 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
         IReadOnlyDictionary<string, Phase1WriteRequest> result = await builder.BuildAsync(repo, walkResult, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Count);
-
-        await treeSitterClient.DisposeAsync();
     }
 
     private sealed class RecordingChunkerDispatcher : IChunker

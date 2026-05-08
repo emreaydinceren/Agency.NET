@@ -5,6 +5,7 @@ using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.Walker;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Test.Summarizer;
 
@@ -75,9 +76,10 @@ public sealed class SymbolSummarizerTests
             inherits: ["PaymentProcessorBase"],
             implements: ["IPaymentProcessor"]);
 
-        IReadOnlyDictionary<string, SymbolSummary> summaries = await summarizer.SummarizeAsync(
+        SummarizationResult result = await summarizer.SummarizeAsync(
             [implementation, baseClass, contract],
             TestContext.Current.CancellationToken);
+        IReadOnlyDictionary<string, SymbolSummary> summaries = result.Summaries;
 
         Assert.Equal(6, chatClient.GetResponseCallCount);
         Assert.Equal(
@@ -105,7 +107,7 @@ public sealed class SymbolSummarizerTests
     {
         FakeChatClient chatClient = new();
         RecordingEmbeddingGenerator embeddingGenerator = new();
-        SummaryCache cache = new();
+        SummaryCache cache = new(":memory:");
         Chunk chunk = CreateTypeChunk(
             path: @"src\Services\Worker.cs",
             line: 0,
@@ -119,7 +121,8 @@ public sealed class SymbolSummarizerTests
             new SummaryCacheEntry("Executes the worker action.", "Performs the work operation.", ["Save"]));
         SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator, cache);
 
-        IReadOnlyDictionary<string, SymbolSummary> summaries = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+        SummarizationResult result = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+        IReadOnlyDictionary<string, SymbolSummary> summaries = result.Summaries;
 
         Assert.Equal(0, chatClient.GetResponseCallCount);
         Assert.Equal(["Executes the worker action."], embeddingGenerator.RequestedInputs);
@@ -150,10 +153,10 @@ public sealed class SymbolSummarizerTests
             symbolKind: SymbolKind.Method,
             content: "public Task Submit() { return Task.CompletedTask; }");
 
-        IReadOnlyDictionary<string, SymbolSummary> summaries = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+        SummarizationResult result = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
 
-        Assert.Equal("Coordinates order submission and logging.", summaries[chunk.Id].Detailed);
-        Assert.Equal(["Repository.SaveAsync", "Logger.LogInformation"], summaries[chunk.Id].ProbableCallees);
+        Assert.Equal("Coordinates order submission and logging.", result.Summaries[chunk.Id].Detailed);
+        Assert.Equal(["Repository.SaveAsync", "Logger.LogInformation"], result.Summaries[chunk.Id].ProbableCallees);
     }
 
     private static SymbolSummarizer CreateSummarizer(
@@ -163,9 +166,10 @@ public sealed class SymbolSummarizerTests
         new(
             chatClient,
             embeddingGenerator,
-            cache ?? new SummaryCache(),
-            new ModelTierSelector(DefaultOptions),
-            new SummarizationPromptBuilder());
+            cache ?? new SummaryCache(":memory:"),
+            new ModelTierSelector(Options.Create(DefaultOptions)),
+            new SummarizationPromptBuilder(),
+            Options.Create(DefaultOptions));
 
     private static Chunk CreateTypeChunk(
         string path,

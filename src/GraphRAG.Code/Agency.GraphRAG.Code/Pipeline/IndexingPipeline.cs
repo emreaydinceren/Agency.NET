@@ -12,9 +12,9 @@ namespace Agency.GraphRAG.Code.Pipeline;
 public sealed class IndexingPipeline(
     IGraphStore graphStore,
     Func<Repo, CancellationToken, Task<WalkResult>> walkAsync,
-    Func<Repo, WalkResult, CancellationToken, Task> parseManifestsAsync,
-    Func<Repo, WalkResult, CancellationToken, Task<IReadOnlyDictionary<string, Phase1WriteRequest>>> buildWriteRequestsAsync,
-    Func<IReadOnlyList<Phase1WriteRequest>, CancellationToken, Task> summarizeAsync,
+    Func<Repo, WalkResult, Action<string>?, CancellationToken, Task> parseManifestsAsync,
+    Func<Repo, WalkResult, Action<string>?, CancellationToken, Task<IReadOnlyDictionary<string, Phase1WriteRequest>>> buildWriteRequestsAsync,
+    Func<IReadOnlyList<Phase1WriteRequest>, Action<string>?, CancellationToken, Task> summarizeAsync,
     ChangeDetector.ChangeDetector changeDetector,
     Func<Repo, WalkResult, IReadOnlyDictionary<string, Phase1WriteRequest>, CancellationToken, Task<ChangeSet>> detectChangesAsync,
     IncrementalHydrator incrementalHydrator,
@@ -25,24 +25,39 @@ public sealed class IndexingPipeline(
     /// </summary>
     /// <param name="repo">The repository to index.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    public async Task RunAsync(Repo repo, CancellationToken cancellationToken = default)
+    /// <param name="onProgress">Optional callback for progress updates.</param>
+    public async Task RunAsync(Repo repo, CancellationToken cancellationToken = default, Action<string>? onProgress = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
 
+        onProgress?.Invoke("Walking repository...");
         WalkResult walkResult = await walkAsync(repo, cancellationToken).ConfigureAwait(false);
-        await parseManifestsAsync(repo, walkResult, cancellationToken).ConfigureAwait(false);
+        onProgress?.Invoke($"Found {walkResult.Files.Count} files ({walkResult.Mode} scan)");
 
-        IReadOnlyDictionary<string, Phase1WriteRequest> writeRequests = await buildWriteRequestsAsync(repo, walkResult, cancellationToken).ConfigureAwait(false);
-        await summarizeAsync(writeRequests.Values.ToArray(), cancellationToken).ConfigureAwait(false);
+        onProgress?.Invoke("Parsing manifests...");
+        await parseManifestsAsync(repo, walkResult, onProgress, cancellationToken).ConfigureAwait(false);
+
+        onProgress?.Invoke("Building write requests...");
+        IReadOnlyDictionary<string, Phase1WriteRequest> writeRequests = await buildWriteRequestsAsync(repo, walkResult, onProgress, cancellationToken).ConfigureAwait(false);
+        onProgress?.Invoke($"Generated {writeRequests.Count} write requests");
+
+        int totalChunks = writeRequests.Values.SelectMany(r => r.Chunks).Count();
+        onProgress?.Invoke($"Summarizing {totalChunks} symbols (this may take a while)...");
+        await summarizeAsync(writeRequests.Values.ToArray(), onProgress, cancellationToken).ConfigureAwait(false);
+        onProgress?.Invoke($"Summarization complete for {totalChunks} symbols");
 
         _ = changeDetector;
+        onProgress?.Invoke("Detecting changes...");
         ChangeSet changeSet = await detectChangesAsync(repo, walkResult, writeRequests, cancellationToken).ConfigureAwait(false);
+
+        onProgress?.Invoke("Hydrating graph...");
         await incrementalHydrator.HydrateAsync(
             changeSet,
             writeRequests,
             buildPackagesByFileId(writeRequests),
             cancellationToken).ConfigureAwait(false);
 
+        onProgress?.Invoke("Updating checkpoint...");
         if (!string.IsNullOrWhiteSpace(walkResult.HeadCommit))
         {
             await graphStore.SetIndexedCommitAsync(repo.Id, walkResult.HeadCommit, cancellationToken).ConfigureAwait(false);

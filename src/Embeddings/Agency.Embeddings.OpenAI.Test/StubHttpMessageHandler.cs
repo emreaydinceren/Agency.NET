@@ -44,7 +44,7 @@ internal sealed class StubHttpMessageHandler(string responseJson, HttpStatusCode
                  {
                    "object": "list",
                    "data": [{{data}}],
-                   "model": "text-embedding-qwen3-embedding-8b",
+                   "model": "text-embedding-qwen3-embedding-0.6b",
                    "usage": { "prompt_tokens": {{totalTokens}}, "total_tokens": {{totalTokens}} }
                  }
                  """;

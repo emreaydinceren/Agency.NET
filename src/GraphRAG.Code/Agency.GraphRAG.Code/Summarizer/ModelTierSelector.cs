@@ -1,12 +1,13 @@
 using Agency.GraphRAG.Code.Chunker;
 using Agency.GraphRAG.Code.Domain;
+using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Summarizer;
 
 /// <summary>
 /// Selects which configured model tier should summarize a chunk.
 /// </summary>
-public sealed class ModelTierSelector(SummarizerOptions options)
+public sealed class ModelTierSelector(IOptions<SummarizerOptions> options)
 {
     /// <summary>
     /// Represents the supported summarization model tiers.
@@ -79,10 +80,10 @@ public sealed class ModelTierSelector(SummarizerOptions options)
     /// <returns>The configured model name.</returns>
     public string GetModelName(ModelTier tier) => tier switch
     {
-        ModelTier.Strong => options.StrongModel,
-        ModelTier.Standard => options.StandardModel,
-        ModelTier.Cheap => options.CheapModel,
-        ModelTier.Cheapest => options.CheapestModel,
+        ModelTier.Strong => options.Value.StrongModel,
+        ModelTier.Standard => options.Value.StandardModel,
+        ModelTier.Cheap => options.Value.CheapModel,
+        ModelTier.Cheapest => options.Value.CheapestModel,
         _ => throw new ArgumentOutOfRangeException(nameof(tier)),
     };
 

@@ -2,6 +2,7 @@ using Agency.GraphRAG.Code.Chunker;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.Walker;
+using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Test.Summarizer;
 
@@ -21,7 +22,7 @@ public sealed class ModelTierSelectorTests
     [Fact]
     public void SelectDetailedTier_Interface_UsesStrongTier()
     {
-        ModelTierSelector selector = new(DefaultOptions);
+        ModelTierSelector selector = new(Options.Create(DefaultOptions));
 
         ModelTierSelector.ModelTier tier = selector.SelectDetailedTier(CreateChunk(SymbolKind.Interface, "public interface IWorker"), isLeaf: false);
 
@@ -32,7 +33,7 @@ public sealed class ModelTierSelectorTests
     [Fact]
     public void SelectDetailedTier_AbstractClass_UsesStrongTier()
     {
-        ModelTierSelector selector = new(DefaultOptions);
+        ModelTierSelector selector = new(Options.Create(DefaultOptions));
         Chunk chunk = CreateChunk(SymbolKind.Class, "public abstract class WorkerBase", "public abstract class WorkerBase");
 
         ModelTierSelector.ModelTier tier = selector.SelectDetailedTier(chunk, isLeaf: false);
@@ -44,7 +45,7 @@ public sealed class ModelTierSelectorTests
     [Fact]
     public void SelectDetailedTier_NonLeafConcreteSymbol_UsesStandardTier()
     {
-        ModelTierSelector selector = new(DefaultOptions);
+        ModelTierSelector selector = new(Options.Create(DefaultOptions));
         Chunk chunk = CreateChunk(SymbolKind.Class, "public sealed class StripeProcessor");
 
         ModelTierSelector.ModelTier tier = selector.SelectDetailedTier(chunk, isLeaf: false);
@@ -56,7 +57,7 @@ public sealed class ModelTierSelectorTests
     [Fact]
     public void SelectDetailedTier_LeafSymbol_UsesCheapTier()
     {
-        ModelTierSelector selector = new(DefaultOptions);
+        ModelTierSelector selector = new(Options.Create(DefaultOptions));
         Chunk chunk = CreateChunk(SymbolKind.Method, "private void Normalize()");
 
         ModelTierSelector.ModelTier tier = selector.SelectDetailedTier(chunk, isLeaf: true);
@@ -68,7 +69,7 @@ public sealed class ModelTierSelectorTests
     [Fact]
     public void SelectOneLineTier_AlwaysUsesCheapestTier()
     {
-        ModelTierSelector selector = new(DefaultOptions);
+        ModelTierSelector selector = new(Options.Create(DefaultOptions));
 
         Assert.Equal(ModelTierSelector.ModelTier.Cheapest, selector.SelectOneLineTier());
         Assert.Equal("gpt-cheapest", selector.SelectOneLineModel());

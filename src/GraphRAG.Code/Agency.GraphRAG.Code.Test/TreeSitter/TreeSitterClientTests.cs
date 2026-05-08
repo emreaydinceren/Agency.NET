@@ -82,6 +82,38 @@ public sealed class TreeSitterClientTests
         }
     }
 
+    [Fact]
+    public async Task ParseAsync_SucceedsAfterMoreThan100Requests_CSharp()
+    {
+        SkipIfTreeSitterUnavailable();
+
+        await using TreeSitterClient client = new();
+        const string source = "public class Test { public void Run() { } }";
+
+        for (int i = 0; i < 101; i++)
+        {
+            ParsedFile parsed = await client.ParseAsync(
+                $"Test{i}.cs", Language.CSharp, source, TestContext.Current.CancellationToken);
+            Assert.Equal("compilation_unit", parsed.Root.Kind);
+        }
+    }
+
+    [Fact]
+    public async Task ParseAsync_SucceedsAfterMoreThan100Requests_TypeScript()
+    {
+        SkipIfTreeSitterUnavailable();
+
+        await using TreeSitterClient client = new();
+        const string source = "export function run(): void {}";
+
+        for (int i = 0; i < 101; i++)
+        {
+            ParsedFile parsed = await client.ParseAsync(
+                $"Test{i}.ts", Language.TypeScript, source, TestContext.Current.CancellationToken);
+            Assert.Equal("program", parsed.Root.Kind);
+        }
+    }
+
     private static int CountNodes(AstNode node)
     {
         return 1 + node.Children.Sum(CountNodes);

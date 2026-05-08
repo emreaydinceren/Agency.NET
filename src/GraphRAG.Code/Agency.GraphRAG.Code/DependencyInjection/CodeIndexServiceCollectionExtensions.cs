@@ -1,5 +1,6 @@
 using System.Reflection;
 using AgencyEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
+using Agency.Embeddings.OpenAI;
 using Agency.GraphRAG.Code.Agentic;
 using Agency.GraphRAG.Code.ChangeDetector;
 using Agency.GraphRAG.Code.Chunker;
@@ -12,9 +13,13 @@ using Agency.GraphRAG.Code.References;
 using Agency.GraphRAG.Code.Storage;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.Walker;
+using Agency.Llm.Claude;
+using Agency.Llm.Common;
+using Agency.Llm.OpenAI;
 using Agency.Sql.Postgre;
 using Agency.Sql.Sqlite;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -44,8 +49,44 @@ public static class CodeIndexServiceCollectionExtensions
             services.Configure(configure);
         }
 
-        services.TryAddSingleton<AgencyEmbeddingGenerator, ZeroEmbeddingGenerator>();
-        services.TryAddSingleton<IChatClient, NullChatClient>();
+        services.AddOptions<EmbeddingOptions>();
+        services.TryAddSingleton<AgencyEmbeddingGenerator, EmbeddingGenerator>();
+
+        services.AddOptions<LlmClientOptions>()
+            .Configure<IConfiguration>((opts, config) =>
+            {
+                opts.ClientType = config["LlmClient:ClientType"] ?? "OpenAI";
+                opts.BaseUrl = config["LlmClient:BaseUrl"] ?? "http://llm-host.example:1234/v1";
+                opts.ApiKey = config["LlmClient:ApiKey"] ?? "lmstudio";
+
+                if (config["LlmClient:Timeout"] is string timeoutStr && TimeSpan.TryParse(timeoutStr, out var timeout))
+                {
+                    opts.Timeout = timeout;
+                }
+                else
+                {
+                    opts.Timeout = TimeSpan.FromMinutes(3);
+                }
+
+                if (int.TryParse(config["LlmClient:MaxRetries"], out int maxRetries))
+                {
+                    opts.MaxRetries = maxRetries;
+                }
+            })
+            .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "LlmClient:ApiKey is required")
+            .ValidateOnStart();
+
+        services.TryAddSingleton<ClaudeClient>();
+        services.TryAddSingleton<OpenAIClient>();
+        services.TryAddSingleton<IChatClient>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<LlmClientOptions>>().Value;
+            return options.ClientType switch
+            {
+                "claude" => sp.GetRequiredService<ClaudeClient>().CreateChatClient(),
+                _ => sp.GetRequiredService<OpenAIClient>().CreateChatClient(),
+            };
+        });
 
         services.TryAddSingleton<GitProcessRunner>();
         services.TryAddSingleton<RepoWalker>();
@@ -59,9 +100,26 @@ public static class CodeIndexServiceCollectionExtensions
         services.TryAddSingleton<Phase1Writer>();
         services.TryAddSingleton<Phase2Resolver>();
         services.TryAddSingleton<ChangeDetector.ChangeDetector>();
-        services.AddOptions<SummarizerOptions>();
+        services.AddOptions<SummarizerOptions>()
+            .Configure<IConfiguration>((opts, config) =>
+            {
+                opts.StrongModel = config["Summarizer:StrongModel"] ?? string.Empty;
+                opts.StandardModel = config["Summarizer:StandardModel"] ?? string.Empty;
+                opts.CheapModel = config["Summarizer:CheapModel"] ?? string.Empty;
+                opts.CheapestModel = config["Summarizer:CheapestModel"] ?? string.Empty;
+            })
+            .Validate(o => !string.IsNullOrWhiteSpace(o.StrongModel), "Summarizer:StrongModel is required.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.StandardModel), "Summarizer:StandardModel is required.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.CheapModel), "Summarizer:CheapModel is required.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.CheapestModel), "Summarizer:CheapestModel is required.")
+            .ValidateOnStart();
         RegisterTreeSitterServices(services);
-        services.TryAddSingleton<SummaryCache>();
+        services.TryAddSingleton<SummaryCache>(static sp =>
+        {
+            CodeIndexOptions opts = sp.GetRequiredService<IOptions<CodeIndexOptions>>().Value;
+            string dbPath = Path.Combine(opts.WorkingDirectory, "graphrag-code.summaries.db");
+            return new SummaryCache(dbPath);
+        });
         services.TryAddSingleton<ModelTierSelector>();
         services.TryAddSingleton<SummarizationPromptBuilder>();
         services.TryAddSingleton<SymbolSummarizer>();
@@ -97,16 +155,18 @@ public static class CodeIndexServiceCollectionExtensions
             new IndexingPipeline(
                 sp.GetRequiredService<IGraphStore>(),
                 (repo, cancellationToken) => sp.GetRequiredService<RepoWalker>().WalkAsync(repo, cancellationToken),
-                (repo, _, cancellationToken) => sp.GetRequiredService<ManifestParserOrchestrator>().ParseAsync(repo, cancellationToken),
-                (repo, walkResult, cancellationToken) => sp.GetRequiredService<IWriteRequestBuilder>().BuildAsync(repo, walkResult, cancellationToken),
-                async (requests, cancellationToken) =>
+                (repo, _, onProgress, cancellationToken) => sp.GetRequiredService<ManifestParserOrchestrator>().ParseAsync(repo, cancellationToken, onProgress),
+                (repo, walkResult, progress, cancellationToken) => sp.GetRequiredService<IWriteRequestBuilder>().BuildAsync(repo, walkResult, cancellationToken, progress),
+                async (requests, onProgress, cancellationToken) =>
                 {
                     var summarizer = sp.GetRequiredService<SymbolSummarizer>();
                     IReadOnlyList<Chunk> allChunks = requests.SelectMany(r => r.Chunks).ToArray();
-                    IReadOnlyDictionary<string, SymbolSummary> summaries = await summarizer.SummarizeAsync(allChunks, cancellationToken).ConfigureAwait(false);
+                    Action<int, int, int, string>? summarizerProgress = onProgress is null ? null :
+                        (done, failed, total, symbolName) => onProgress($"Summarized {done}/{total} symbols ({failed} failed): {symbolName}");
+                    SummarizationResult result = await summarizer.SummarizeAsync(allChunks, cancellationToken, summarizerProgress).ConfigureAwait(false);
                     foreach (Phase1WriteRequest request in requests)
                     {
-                        foreach ((string id, SymbolSummary summary) in summaries)
+                        foreach ((string id, SymbolSummary summary) in result.Summaries)
                         {
                             if (request.Chunks.Any(c => c.Id == id))
                             {
@@ -187,50 +247,6 @@ public static class CodeIndexServiceCollectionExtensions
             : Path.Combine(options.WorkingDirectory, options.DefaultSqliteFileName);
 
         return $"Data Source={sqlitePath}";
-    }
-
-    private sealed class ZeroEmbeddingGenerator : AgencyEmbeddingGenerator
-    {
-        public Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string input, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(ReadOnlyMemory<float>.Empty);
-        }
-
-        public Task<IReadOnlyList<ReadOnlyMemory<float>>> GenerateEmbeddingsAsync(IEnumerable<string> inputs, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<IReadOnlyList<ReadOnlyMemory<float>>>(inputs.Select(static _ => ReadOnlyMemory<float>.Empty).ToArray());
-        }
-    }
-
-    private sealed class NullChatClient : IChatClient
-    {
-        public ChatClientMetadata Metadata { get; } = new("NullChatClient", null, null);
-
-        public Task<ChatResponse> GetResponseAsync(
-            IEnumerable<ChatMessage> messages,
-            ChatOptions? options = null,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "Code index chat client is not configured.")])
-            {
-                FinishReason = ChatFinishReason.Stop,
-            });
-        }
-
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-            IEnumerable<ChatMessage> messages,
-            ChatOptions? options = null,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("Streaming is not configured for the default code index chat client.");
-
-        public object? GetService(Type serviceType, object? key = null) => null;
-
-        public void Dispose()
-        {
-        }
     }
 
     private sealed class CSharpManifestParserAdapter(CSharpManifestParser parser) : IManifestParser

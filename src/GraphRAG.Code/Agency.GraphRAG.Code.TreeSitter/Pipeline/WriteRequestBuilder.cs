@@ -12,9 +12,7 @@ namespace Agency.GraphRAG.Code.TreeSitter.Pipeline;
 /// <summary>
 /// Builds <see cref="Phase1WriteRequest"/> instances from repository walk results using tree-sitter parsing and chunking.
 /// </summary>
-public sealed class WriteRequestBuilder(
-    TreeSitterClient treeSitterClient,
-    ChunkerDispatcher chunkerDispatcher) : IWriteRequestBuilder
+public sealed class WriteRequestBuilder(ChunkerDispatcher chunkerDispatcher) : IWriteRequestBuilder
 {
     /// <summary>
     /// Builds write requests for all processable files in the walk result.
@@ -26,13 +24,17 @@ public sealed class WriteRequestBuilder(
     public async Task<IReadOnlyDictionary<string, Phase1WriteRequest>> BuildAsync(
         Repo repo,
         WalkResult walkResult,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<string>? onProgress = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         ArgumentNullException.ThrowIfNull(walkResult);
         cancellationToken.ThrowIfCancellationRequested();
 
         Dictionary<string, Phase1WriteRequest> requests = new(StringComparer.Ordinal);
+
+        int total = walkResult.Files.Count(static f => f.Status != WalkedFileStatus.Deleted && f.Language != Language.Unknown);
+        int processed = 0;
 
         foreach (WalkedFile file in walkResult.Files)
         {
@@ -43,12 +45,6 @@ public sealed class WriteRequestBuilder(
 
             string filePath = Path.Combine(repo.LocalPath, file.Path);
             string source = await File.ReadAllTextAsync(filePath, cancellationToken).ConfigureAwait(false);
-
-            _ = await treeSitterClient.ParseAsync(
-                file.Path,
-                file.Language,
-                source,
-                cancellationToken).ConfigureAwait(false);
 
             IReadOnlyList<Chunk> chunks = await chunkerDispatcher.ChunkAsync(
                 new ChunkerInput(file.Path, file.Language, source),
@@ -72,6 +68,12 @@ public sealed class WriteRequestBuilder(
                 []);
 
             requests[file.Path] = request;
+
+            processed++;
+            if (processed % 25 == 0 || processed == total)
+            {
+                onProgress?.Invoke($"Parsed {processed}/{total} files");
+            }
         }
 
         return requests;

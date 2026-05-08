@@ -1,3 +1,4 @@
+using System.Xml;
 using System.Xml.Linq;
 
 namespace Agency.GraphRAG.Code.Manifest;
@@ -28,7 +29,7 @@ public sealed class CSharpManifestParser : IManifestParser
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(manifestPath);
 
-        XDocument projectDocument = XDocument.Load(manifestPath, LoadOptions.PreserveWhitespace);
+        XDocument projectDocument = LoadXmlDocument(manifestPath, "project manifest");
         string manifestDirectory = Path.GetDirectoryName(manifestPath)
             ?? throw new InvalidOperationException("Manifest directory could not be determined.");
         Dictionary<string, string> centralVersions = LoadCentralPackageVersions(repositoryRoot, manifestDirectory);
@@ -139,7 +140,16 @@ public sealed class CSharpManifestParser : IManifestParser
         Dictionary<string, string> versions = new(StringComparer.OrdinalIgnoreCase);
         foreach (string propsFile in propsFiles)
         {
-            XDocument propsDocument = XDocument.Load(propsFile, LoadOptions.PreserveWhitespace);
+            XDocument propsDocument;
+            try
+            {
+                propsDocument = LoadXmlDocument(propsFile, "central package version file");
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+
             foreach (XElement packageVersion in propsDocument.Descendants().Where(element => element.Name.LocalName == "PackageVersion"))
             {
                 string? packageName = packageVersion.Attribute("Include")?.Value ?? packageVersion.Attribute("Update")?.Value;
@@ -155,5 +165,28 @@ public sealed class CSharpManifestParser : IManifestParser
         }
 
         return versions;
+    }
+
+    private static XDocument LoadXmlDocument(string path, string description)
+    {
+        FileInfo fileInfo = new(path);
+        if (!fileInfo.Exists)
+        {
+            throw new FileNotFoundException($"The {description} '{path}' could not be found.", path);
+        }
+
+        if (fileInfo.Length == 0)
+        {
+            throw new InvalidDataException($"The {description} '{path}' is empty.");
+        }
+
+        try
+        {
+            return XDocument.Load(path, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException ex)
+        {
+            throw new InvalidDataException($"The {description} '{path}' is not valid XML.", ex);
+        }
     }
 }

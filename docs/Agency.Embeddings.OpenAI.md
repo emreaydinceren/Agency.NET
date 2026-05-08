@@ -59,7 +59,7 @@ using Microsoft.Extensions.Options;
 var options = new EmbeddingOptions
 {
     BaseUrl = "http://llm-host.example:1234/v1",
-    ModelId = "text-embedding-qwen3-embedding-8b",
+    ModelId = "text-embedding-qwen3-embedding-0.6b",
     ApiKey = "lmstudio"
 };
 

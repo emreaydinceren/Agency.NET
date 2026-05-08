@@ -7,7 +7,7 @@ namespace Agency.Embeddings.OpenAI.Test;
 /// Functional tests that call the real LM Studio server configured in <see cref="appsettings.json"/>.
 /// Run with: dotnet test --filter "Category=Functional"
 /// Skip with: dotnet test --filter "Category!=Functional"
-/// Requires LM Studio running with text-embedding-qwen3-embedding-8b loaded. Configure the endpoint in appsettings.json.
+/// Requires LM Studio running with text-embedding-qwen3-embedding-0.6b loaded. Configure the endpoint in appsettings.json.
 /// </summary>
 [Trait("Category", "Functional")]
 /// <summary>

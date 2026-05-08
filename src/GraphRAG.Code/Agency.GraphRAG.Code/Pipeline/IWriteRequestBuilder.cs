@@ -17,5 +17,6 @@ internal interface IWriteRequestBuilder
     Task<IReadOnlyDictionary<string, Phase1WriteRequest>> BuildAsync(
         Repo repo,
         WalkResult walkResult,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Action<string>? onProgress = null);
 }

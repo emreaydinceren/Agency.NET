@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System.ClientModel;
+using System.ClientModel.Primitives;
 
 /// <summary>
 /// Creates <see cref="IChatClient"/> instances backed by an OpenAI-compatible API.
@@ -73,6 +74,11 @@ public sealed class OpenAIClient : IModelProvider
         if (opts.Timeout is { } timeout && timeout > TimeSpan.Zero)
         {
             clientOptions.NetworkTimeout = timeout;
+        }
+
+        if (opts.MaxRetries is { } maxRetries && maxRetries >= 0)
+        {
+            clientOptions.RetryPolicy = new ClientRetryPolicy(maxRetries);
         }
 
         return new global::OpenAI.OpenAIClient(credential, clientOptions);

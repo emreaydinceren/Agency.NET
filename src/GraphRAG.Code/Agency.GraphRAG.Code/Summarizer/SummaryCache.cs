@@ -1,14 +1,62 @@
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
 
 namespace Agency.GraphRAG.Code.Summarizer;
 
 /// <summary>
-/// Caches generated summaries by chunk content hash and model tier.
+/// Caches generated summaries by chunk content hash and model tier in a SQLite-backed,
+/// write-through store so that progress survives process crashes and restarts.
 /// </summary>
-public sealed class SummaryCache
+public sealed class SummaryCache : IDisposable
 {
-    private readonly ConcurrentDictionary<SummaryCacheKey, SummaryCacheEntry> _entries = new();
+    private const string CreateTableSql =
+        "CREATE TABLE IF NOT EXISTS summary_cache (" +
+        "    content_hash TEXT NOT NULL," +
+        "    model_tier TEXT NOT NULL," +
+        "    one_line TEXT NOT NULL," +
+        "    detailed TEXT NOT NULL," +
+        "    probable_callees TEXT NOT NULL," +
+        "    PRIMARY KEY (content_hash, model_tier)" +
+        ") WITHOUT ROWID;";
+
+    private const string SelectSql =
+        "SELECT one_line, detailed, probable_callees FROM summary_cache " +
+        "WHERE content_hash = $hash AND model_tier = $tier;";
+
+    private const string UpsertSql =
+        "INSERT INTO summary_cache (content_hash, model_tier, one_line, detailed, probable_callees) " +
+        "VALUES ($hash, $tier, $oneLine, $detailed, $callees) " +
+        "ON CONFLICT(content_hash, model_tier) DO UPDATE SET " +
+        "    one_line = excluded.one_line," +
+        "    detailed = excluded.detailed," +
+        "    probable_callees = excluded.probable_callees;";
+
+    private readonly SqliteConnection _connection;
+    private readonly Lock _gate = new();
+
+    /// <summary>
+    /// Initializes a new <see cref="SummaryCache"/> backed by a SQLite database at <paramref name="databasePath"/>.
+    /// </summary>
+    /// <param name="databasePath">
+    /// Absolute path to the SQLite file. The parent directory must exist.
+    /// Pass <c>":memory:"</c> for a non-persistent in-memory store (useful in tests).
+    /// </param>
+    public SummaryCache(string databasePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+
+        string connectionString = string.Equals(databasePath, ":memory:", StringComparison.Ordinal)
+            ? "Data Source=:memory:"
+            : $"Data Source={databasePath};Cache=Shared";
+
+        this._connection = new SqliteConnection(connectionString);
+        this._connection.Open();
+
+        ExecuteNonQuery("PRAGMA journal_mode=WAL;");
+        ExecuteNonQuery("PRAGMA synchronous=NORMAL;");
+        ExecuteNonQuery(CreateTableSql);
+    }
 
     /// <summary>
     /// Attempts to read a cached summary.
@@ -19,41 +67,88 @@ public sealed class SummaryCache
     /// <returns><see langword="true"/> when a matching entry exists; otherwise <see langword="false"/>.</returns>
     public bool TryGet(string chunkContentHash, string modelTier, [NotNullWhen(true)] out SummaryCacheEntry? entry)
     {
-        SummaryCacheKey key = CreateKey(chunkContentHash, modelTier);
-        return this._entries.TryGetValue(key, out entry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(chunkContentHash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelTier);
+
+        lock (this._gate)
+        {
+            using SqliteCommand command = this._connection.CreateCommand();
+            command.CommandText = SelectSql;
+            command.Parameters.AddWithValue("$hash", chunkContentHash);
+            command.Parameters.AddWithValue("$tier", modelTier);
+
+            using SqliteDataReader reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                entry = null;
+                return false;
+            }
+
+            string oneLine = reader.GetString(0);
+            string detailed = reader.GetString(1);
+            string calleesJson = reader.GetString(2);
+            IReadOnlyList<string> callees = DeserializeCallees(calleesJson);
+
+            entry = new SummaryCacheEntry(oneLine, detailed, callees);
+            return true;
+        }
     }
 
     /// <summary>
-    /// Stores or replaces a cached summary.
+    /// Stores or replaces a cached summary, persisting it to disk before returning.
     /// </summary>
     /// <param name="chunkContentHash">The chunk content hash.</param>
     /// <param name="modelTier">The model tier used to generate the summary.</param>
     /// <param name="entry">The summary to cache.</param>
     public void Set(string chunkContentHash, string modelTier, SummaryCacheEntry entry)
     {
-        ArgumentNullException.ThrowIfNull(entry);
-
-        SummaryCacheKey key = CreateKey(chunkContentHash, modelTier);
-        this._entries[key] = entry;
-    }
-
-    private static SummaryCacheKey CreateKey(string chunkContentHash, string modelTier)
-    {
         ArgumentException.ThrowIfNullOrWhiteSpace(chunkContentHash);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelTier);
+        ArgumentNullException.ThrowIfNull(entry);
 
-        return new SummaryCacheKey(chunkContentHash, modelTier);
+        string calleesJson = JsonSerializer.Serialize(entry.ProbableCallees);
+
+        lock (this._gate)
+        {
+            using SqliteCommand command = this._connection.CreateCommand();
+            command.CommandText = UpsertSql;
+            command.Parameters.AddWithValue("$hash", chunkContentHash);
+            command.Parameters.AddWithValue("$tier", modelTier);
+            command.Parameters.AddWithValue("$oneLine", entry.OneLine);
+            command.Parameters.AddWithValue("$detailed", entry.Detailed);
+            command.Parameters.AddWithValue("$callees", calleesJson);
+            command.ExecuteNonQuery();
+        }
     }
 
-    private readonly record struct SummaryCacheKey(string ChunkContentHash, string ModelTier);
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        this._connection.Dispose();
+    }
+
+    private void ExecuteNonQuery(string sql)
+    {
+        using SqliteCommand command = this._connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
+
+    private static IReadOnlyList<string> DeserializeCallees(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        string[]? parsed = JsonSerializer.Deserialize<string[]>(json);
+        return parsed ?? [];
+    }
 }
 
 /// <summary>
 /// Represents a cached summarization result.
 /// </summary>
-/// <param name="OneLine">The one-line summary.</param>
-/// <param name="Detailed">The detailed summary.</param>
-/// <param name="ProbableCallees">The probable callees extracted from the summary.</param>
 public sealed record SummaryCacheEntry
 {
     /// <summary>
@@ -62,7 +157,8 @@ public sealed record SummaryCacheEntry
     /// <param name="oneLine">The one-line summary.</param>
     /// <param name="detailed">The detailed summary.</param>
     /// <param name="probableCallees">The probable callees extracted from the summary.</param>
-    public SummaryCacheEntry(string oneLine, string detailed, IReadOnlyList<string> probableCallees)
+    /// <param name="embedding">The embedding generated from <paramref name="oneLine"/>, or empty if not yet generated.</param>
+    public SummaryCacheEntry(string oneLine, string detailed, IReadOnlyList<string> probableCallees, ReadOnlyMemory<float> embedding = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(oneLine);
         ArgumentException.ThrowIfNullOrWhiteSpace(detailed);
@@ -71,6 +167,7 @@ public sealed record SummaryCacheEntry
         this.OneLine = oneLine;
         this.Detailed = detailed;
         this.ProbableCallees = probableCallees.ToArray();
+        this.Embedding = embedding;
     }
 
     /// <summary>
@@ -87,4 +184,9 @@ public sealed record SummaryCacheEntry
     /// Gets the probable callees.
     /// </summary>
     public IReadOnlyList<string> ProbableCallees { get; }
+
+    /// <summary>
+    /// Gets the embedding generated from <see cref="OneLine"/>, or empty if not yet cached.
+    /// </summary>
+    public ReadOnlyMemory<float> Embedding { get; }
 }

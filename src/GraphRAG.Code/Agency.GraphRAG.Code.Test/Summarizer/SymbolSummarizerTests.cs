@@ -5,6 +5,7 @@ using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.Walker;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Test.Summarizer;
@@ -131,6 +132,35 @@ public sealed class SymbolSummarizerTests
     }
 
     [Fact]
+    public async Task SummarizeAsync_FailedSummary_IsNotCached_SoNextRunRetries()
+    {
+        SummaryCache cache = new(":memory:");
+        Chunk chunk = CreateTypeChunk(
+            path: @"src\Services\Worker.cs",
+            line: 0,
+            name: "Worker",
+            fullyQualifiedName: "Example.Services.Worker",
+            symbolKind: SymbolKind.Method,
+            content: "private void Work() { }");
+
+        FakeChatClient failingClient = new();
+        failingClient.EnqueueTextResponse("[Unable to generate summary]");
+        failingClient.EnqueueTextResponse("[Unable to generate summary]");
+        SymbolSummarizer firstRun = CreateSummarizer(failingClient, new RecordingEmbeddingGenerator(), cache);
+        SummarizationResult firstResult = await firstRun.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+        Assert.Contains(chunk.Id, firstResult.FailedChunkIds);
+
+        FakeChatClient workingClient = new();
+        workingClient.EnqueueTextResponse("Executes the worker action.");
+        workingClient.EnqueueTextResponse("Does work.\nProbable callees: (none)");
+        SymbolSummarizer secondRun = CreateSummarizer(workingClient, new RecordingEmbeddingGenerator(), cache);
+        SummarizationResult secondResult = await secondRun.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+
+        Assert.Empty(secondResult.FailedChunkIds);
+        Assert.Equal(2, workingClient.GetResponseCallCount);
+    }
+
+    [Fact]
     public async Task SummarizeAsync_ExtractsProbableCalleesFromInlineAndBulletFormats()
     {
         FakeChatClient chatClient = new();
@@ -159,6 +189,32 @@ public sealed class SymbolSummarizerTests
         Assert.Equal(["Repository.SaveAsync", "Logger.LogInformation"], result.Summaries[chunk.Id].ProbableCallees);
     }
 
+    [Fact]
+    public async Task SummarizeAsync_PersistentAggregateException_ReturnsFailureMarkerInsteadOfPropagating()
+    {
+        // Regression: when the LLM client throws AggregateException (e.g. from OpenAI SDK's internal
+        // retry policy) on every call, SummarizeAsync must return a failure marker rather than
+        // propagating the exception. Note: this test takes ~9 seconds due to built-in retry delays.
+        FakeChatClient chatClient = new();
+        chatClient.SetAlwaysThrow(new AggregateException(
+            "Retry failed after 3 tries.",
+            new TaskCanceledException("Timeout 1"),
+            new TaskCanceledException("Timeout 2"),
+            new TaskCanceledException("Timeout 3")));
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient, new RecordingEmbeddingGenerator());
+        Chunk chunk = CreateTypeChunk(
+            path: @"src\Services\Worker.cs",
+            line: 0,
+            name: "Worker",
+            fullyQualifiedName: "Example.Services.Worker",
+            symbolKind: SymbolKind.Method,
+            content: "private void Work() { }");
+
+        SummarizationResult result = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+
+        Assert.Contains(chunk.Id, result.FailedChunkIds);
+    }
+
     private static SymbolSummarizer CreateSummarizer(
         FakeChatClient chatClient,
         RecordingEmbeddingGenerator embeddingGenerator,
@@ -169,7 +225,8 @@ public sealed class SymbolSummarizerTests
             cache ?? new SummaryCache(":memory:"),
             new ModelTierSelector(Options.Create(DefaultOptions)),
             new SummarizationPromptBuilder(),
-            Options.Create(DefaultOptions));
+            Options.Create(DefaultOptions),
+            NullLogger<SymbolSummarizer>.Instance);
 
     private static Chunk CreateTypeChunk(
         string path,
@@ -224,6 +281,7 @@ public sealed class SymbolSummarizerTests
     private sealed class FakeChatClient : IChatClient
     {
         private readonly Queue<ChatResponse> _responses = new();
+        private Exception? _alwaysThrow;
 
         public int GetResponseCallCount { get; private set; }
 
@@ -241,6 +299,8 @@ public sealed class SymbolSummarizerTests
             });
         }
 
+        public void SetAlwaysThrow(Exception ex) => _alwaysThrow = ex;
+
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
@@ -255,6 +315,11 @@ public sealed class SymbolSummarizerTests
                     .Select(static content => content.Text));
             ReceivedPrompts.Add(prompt);
             ReceivedModelIds.Add(options?.ModelId);
+
+            if (_alwaysThrow is not null)
+            {
+                throw _alwaysThrow;
+            }
 
             if (_responses.Count == 0)
             {

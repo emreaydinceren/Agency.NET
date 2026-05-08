@@ -274,7 +274,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
         await _store.InitializeSchemaAsync(cancellationToken).ConfigureAwait(false);
         await _store.UpsertRepoAsync(repo, cancellationToken).ConfigureAwait(false);
 
-        ManifestParserOrchestrator manifestOrchestrator = new(_store, [new CSharpManifestParser(), new NpmManifestParser(), new PythonManifestParser()]);
+        ManifestParserOrchestrator manifestOrchestrator = new(_store, [new CSharpManifestParser(), new NpmManifestParser(), new PythonManifestParser()], NullLogger<ManifestParserOrchestrator>.Instance);
         await manifestOrchestrator.ParseAsync(repo, cancellationToken).ConfigureAwait(false);
 
         RepoWalker walker = new(new GitProcessRunner());

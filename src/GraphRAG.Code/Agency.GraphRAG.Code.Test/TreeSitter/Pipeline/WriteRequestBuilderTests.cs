@@ -4,6 +4,7 @@ using Agency.GraphRAG.Code.Hydration;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.TreeSitter.Pipeline;
 using Agency.GraphRAG.Code.Walker;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.GraphRAG.Code.Test.TreeSitter.Pipeline;
 
@@ -44,7 +45,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher, NullLogger<WriteRequestBuilder>.Instance);
 
         Repo repo = new()
         {
@@ -86,7 +87,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher, NullLogger<WriteRequestBuilder>.Instance);
 
         Repo repo = new()
         {
@@ -133,7 +134,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher, NullLogger<WriteRequestBuilder>.Instance);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -190,7 +191,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher, NullLogger<WriteRequestBuilder>.Instance);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -240,7 +241,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher, NullLogger<WriteRequestBuilder>.Instance);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()
@@ -292,7 +293,7 @@ public sealed class WriteRequestBuilderTests : IAsyncLifetime
             [Language.Jsx] = recordingChunker,
             [Language.Python] = recordingChunker,
         });
-        WriteRequestBuilder builder = new(chunkerDispatcher);
+        WriteRequestBuilder builder = new(chunkerDispatcher, NullLogger<WriteRequestBuilder>.Instance);
 
         Guid repoId = Guid.NewGuid();
         Repo repo = new()

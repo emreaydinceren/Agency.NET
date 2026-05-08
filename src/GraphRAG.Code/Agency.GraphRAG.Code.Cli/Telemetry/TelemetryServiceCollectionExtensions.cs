@@ -1,4 +1,4 @@
-namespace Agency.Agentic.Console.Telemetry;
+namespace Agency.GraphRAG.Code.Cli.Telemetry;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

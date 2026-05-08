@@ -1,6 +1,7 @@
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Manifest;
 using Agency.GraphRAG.Code.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.GraphRAG.Code.Test.Manifest;
 
@@ -64,7 +65,7 @@ public sealed class ManifestParserOrchestratorTests : IDisposable
                 },
             ]);
         FakeGraphStore graphStore = new();
-        ManifestParserOrchestrator orchestrator = new(graphStore, [csharpParser, npmParser]);
+        ManifestParserOrchestrator orchestrator = new(graphStore, [csharpParser, npmParser], NullLogger<ManifestParserOrchestrator>.Instance);
 
         await orchestrator.ParseAsync(repo, TestContext.Current.CancellationToken);
 
@@ -165,7 +166,7 @@ public sealed class ManifestParserOrchestratorTests : IDisposable
                 _ => throw new InvalidOperationException("Unexpected manifest."),
             });
         FakeGraphStore graphStore = new();
-        ManifestParserOrchestrator orchestrator = new(graphStore, [parser]);
+        ManifestParserOrchestrator orchestrator = new(graphStore, [parser], NullLogger<ManifestParserOrchestrator>.Instance);
 
         await orchestrator.ParseAsync(repo, TestContext.Current.CancellationToken);
 

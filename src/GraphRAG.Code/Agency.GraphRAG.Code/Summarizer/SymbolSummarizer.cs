@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Agency.GraphRAG.Code.Chunker;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Summarizer;
@@ -16,7 +17,8 @@ public sealed class SymbolSummarizer(
     SummaryCache cache,
     ModelTierSelector modelTierSelector,
     SummarizationPromptBuilder promptBuilder,
-    IOptions<SummarizerOptions> options)
+    IOptions<SummarizerOptions> options,
+    ILogger<SymbolSummarizer> logger)
 {
     private readonly TimeSpan requestTimeout = TimeSpan.FromMinutes(Math.Max(1, options.Value.RequestTimeoutMinutes));
 
@@ -102,13 +104,21 @@ public sealed class SymbolSummarizer(
                 detailed = parsed.Detailed;
                 probableCallees = parsed.ProbableCallees;
 
-                cache.Set(contentHash, cacheKey, new SummaryCacheEntry(oneLine, detailed, probableCallees));
+                bool summaryFailed = oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal)
+                    || detailed.Contains("[Unable to generate summary]", StringComparison.Ordinal);
+                if (!summaryFailed)
+                {
+                    cache.Set(contentHash, cacheKey, new SummaryCacheEntry(oneLine, detailed, probableCallees));
+                }
             }
 
             if (oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal))
             {
                 failed++;
                 failedChunkIds.Add(chunk.Id);
+                logger.LogWarning(
+                    "Summary generation failed for symbol '{Symbol}' in '{Path}' (chunk {ChunkId}).",
+                    chunk.FullyQualifiedName, chunk.Path, chunk.Id);
             }
 
             ReadOnlyMemory<float> embedding = await GenerateEmbeddingWithTimeoutAsync(oneLine, cancellationToken).ConfigureAwait(false);
@@ -177,8 +187,9 @@ public sealed class SymbolSummarizer(
                     await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
                 }
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < MaxRetries)
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && attempt < MaxRetries)
             {
+                logger.LogWarning(ex, "Attempt {Attempt}/{MaxRetries} timed out calling model '{Model}'. Retrying.", attempt, MaxRetries, model);
                 await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -197,12 +208,19 @@ public sealed class SymbolSummarizer(
                     $"Provider error: {ex.Message}",
                     ex);
             }
-            catch (Exception) when (attempt < MaxRetries)
+            catch (Exception ex) when (attempt < MaxRetries)
             {
+                logger.LogWarning(ex, "Attempt {Attempt}/{MaxRetries} failed calling model '{Model}'. Retrying.", attempt, MaxRetries, model);
                 await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Exhausted {MaxRetries} retries calling model '{Model}'. Returning failure marker.", MaxRetries, model);
+                return "[Unable to generate summary]";
             }
         }
 
+        logger.LogError("Exhausted {MaxRetries} retries calling model '{Model}'. Returning failure marker.", MaxRetries, model);
         return "[Unable to generate summary]";
     }
 

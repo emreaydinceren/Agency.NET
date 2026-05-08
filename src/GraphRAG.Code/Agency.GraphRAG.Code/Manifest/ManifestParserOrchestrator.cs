@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace Agency.GraphRAG.Code.Manifest;
 
@@ -87,16 +88,19 @@ public sealed class ManifestParserOrchestrator
     private static readonly string[] IgnoredDirectoryNames = [".git", "bin", "obj", "node_modules"];
     private readonly IGraphStore graphStore;
     private readonly IReadOnlyList<IManifestParser> parsers;
+    private readonly ILogger<ManifestParserOrchestrator> logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ManifestParserOrchestrator"/> class.
     /// </summary>
     /// <param name="graphStore">The graph store receiving project and dependency records.</param>
     /// <param name="parsers">The manifest parsers available for dispatch.</param>
-    public ManifestParserOrchestrator(IGraphStore graphStore, IEnumerable<IManifestParser> parsers)
+    /// <param name="logger">The logger.</param>
+    public ManifestParserOrchestrator(IGraphStore graphStore, IEnumerable<IManifestParser> parsers, ILogger<ManifestParserOrchestrator> logger)
     {
         this.graphStore = graphStore ?? throw new ArgumentNullException(nameof(graphStore));
         this.parsers = (parsers ?? throw new ArgumentNullException(nameof(parsers))).ToArray();
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -130,12 +134,14 @@ public sealed class ManifestParserOrchestrator
             {
                 parsedProjects = await parser.ParseAsync(context, cancellationToken);
             }
-            catch (InvalidDataException)
+            catch (InvalidDataException ex)
             {
+                this.logger.LogWarning(ex, "Skipping manifest '{ManifestPath}': invalid data.", manifestRelativePath);
                 continue;
             }
-            catch (XmlException)
+            catch (XmlException ex)
             {
+                this.logger.LogWarning(ex, "Skipping manifest '{ManifestPath}': XML parse error.", manifestRelativePath);
                 continue;
             }
 

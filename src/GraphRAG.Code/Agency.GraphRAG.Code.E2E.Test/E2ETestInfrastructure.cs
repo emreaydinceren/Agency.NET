@@ -266,7 +266,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
 {
     private readonly IGraphStore _store = store;
     private readonly FakeEmbeddingGenerator _embeddingGenerator = embeddingGenerator;
-    private readonly Phase1Writer _phase1Writer = new(store);
+    private readonly Phase1Writer _phase1Writer = new(store, embeddingGenerator);
     private readonly CSharpManifestParser _manifestParser = new();
 
     public async Task<IndexArtifacts> IndexAsync(Repo repo, CancellationToken cancellationToken = default)
@@ -274,7 +274,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
         await _store.InitializeSchemaAsync(cancellationToken).ConfigureAwait(false);
         await _store.UpsertRepoAsync(repo, cancellationToken).ConfigureAwait(false);
 
-        ManifestParserOrchestrator manifestOrchestrator = new(_store, [new CSharpManifestParser(), new NpmManifestParser(), new PythonManifestParser()]);
+        ManifestParserOrchestrator manifestOrchestrator = new(_store, [new CSharpManifestParser(), new NpmManifestParser(), new PythonManifestParser()], NullLogger<ManifestParserOrchestrator>.Instance);
         await manifestOrchestrator.ParseAsync(repo, cancellationToken).ConfigureAwait(false);
 
         RepoWalker walker = new(new GitProcessRunner());
@@ -570,8 +570,7 @@ internal sealed partial class SimpleCSharpIndexer
         Agency.GraphRAG.Code.Summarizer.SymbolSummary summary = new(
             $"{fullyQualifiedName} in {Path.GetFileName(relativePath)}",
             content.Trim(),
-            [],
-            embeddingGenerator.GenerateEmbeddingAsync(content).GetAwaiter().GetResult());
+            []);
         Symbol symbol = new()
         {
             Id = StableGuid("symbol", chunk.Id),
@@ -584,7 +583,7 @@ internal sealed partial class SimpleCSharpIndexer
             Summary = summary.Detailed,
             OneLineSummary = summary.OneLine,
             ContentHash = ComputeHash(content),
-            Embedding = summary.OneLineEmbedding.ToArray(),
+            Embedding = embeddingGenerator.GenerateEmbeddingAsync(content).GetAwaiter().GetResult().ToArray(),
             IsUtility = false,
             SourceRangeStart = startLine + 1,
             SourceRangeEnd = endLine + 1,

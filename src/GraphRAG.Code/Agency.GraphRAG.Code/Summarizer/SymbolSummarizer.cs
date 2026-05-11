@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Agency.GraphRAG.Code.Chunker;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Summarizer;
@@ -12,16 +13,38 @@ namespace Agency.GraphRAG.Code.Summarizer;
 /// </summary>
 public sealed class SymbolSummarizer(
     IChatClient chatClient,
-    Agency.Embeddings.Common.IEmbeddingGenerator embeddingGenerator,
     SummaryCache cache,
     ModelTierSelector modelTierSelector,
     SummarizationPromptBuilder promptBuilder,
-    IOptions<SummarizerOptions> options)
+    IOptions<SummarizerOptions> options,
+    ILogger<SymbolSummarizer> logger)
 {
     private readonly TimeSpan requestTimeout = TimeSpan.FromMinutes(Math.Max(1, options.Value.RequestTimeoutMinutes));
+    private readonly int maxOutputTokens = options.Value.MaxOutputTokens;
+
+    private const int MaxProbableCallees = 10;
 
     private const string SummaryInstructions =
-        "You summarize source code precisely and concisely. Follow the user's formatting requirements exactly.";
+"""
+You are a code analyzer. Your job: read the code provided and produce a concise summary.
+
+Output format:
+1. **Purpose** (1 sentence): what this code does.
+2. **Key components** (3-7 bullets): functions/classes/modules and their roles.
+3. **Flow** (2-4 sentences): how data/control moves through it.
+4. **Notable** (0-3 bullets): non-obvious behavior, side effects, or risks. Skip if nothing notable.
+
+Rules:
+- One pass. Do not re-analyze your own output.
+- If a section has nothing to say, omit it. Do not pad.
+- Describe what the code does, not what it could do or should do.
+- No refactoring suggestions, no style critique, no "consider..." unless explicitly asked.
+- If the code is unclear or truncated, state that once and summarize what's visible. Do not speculate about missing pieces.
+- Stop when the four sections are done. Do not add a conclusion or recap.
+""";
+    //private const string SummaryInstructions_old =
+    //    "You summarize source code precisely and concisely. Follow the user's formatting requirements exactly. Output only what is asked. Do not explain your reasoning or add any preamble. /no_think";
+
 
     private readonly string strongModel = options.Value.StrongModel;
     private readonly string standardModel = options.Value.StandardModel;
@@ -61,10 +84,19 @@ public sealed class SymbolSummarizer(
 
         foreach (Chunk chunk in orderedChunks)
         {
+            if (chunk.Granularity == ChunkGranularity.Statement)
+            {
+                onProgress?.Invoke(processed, failed, orderedChunks.Count, chunk.FullyQualifiedName);
+                processed++;
+                continue;
+            }
+
             bool isLeaf = !nonLeafChunkIds.Contains(chunk.Id);
             ModelTierSelector.ModelTier detailedTier = modelTierSelector.SelectDetailedTier(chunk, isLeaf);
             string cacheKey = detailedTier.ToString();
             string contentHash = ComputeContentHash(chunk.Content);
+
+            onProgress?.Invoke(processed, failed, orderedChunks.Count, chunk.FullyQualifiedName);
 
             string oneLine;
             string detailed;
@@ -102,41 +134,28 @@ public sealed class SymbolSummarizer(
                 detailed = parsed.Detailed;
                 probableCallees = parsed.ProbableCallees;
 
-                cache.Set(contentHash, cacheKey, new SummaryCacheEntry(oneLine, detailed, probableCallees));
+                bool summaryFailed = oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal)
+                    || detailed.Contains("[Unable to generate summary]", StringComparison.Ordinal);
+                if (!summaryFailed)
+                {
+                    cache.Set(contentHash, cacheKey, new SummaryCacheEntry(oneLine, detailed, probableCallees));
+                }
             }
 
             if (oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal))
             {
                 failed++;
                 failedChunkIds.Add(chunk.Id);
+                logger.LogWarning(
+                    "Summary generation failed for symbol '{Symbol}' in '{Path}' (chunk {ChunkId}).",
+                    chunk.FullyQualifiedName, chunk.Path, chunk.Id);
             }
 
-            ReadOnlyMemory<float> embedding = await GenerateEmbeddingWithTimeoutAsync(oneLine, cancellationToken).ConfigureAwait(false);
-            results[chunk.Id] = new SymbolSummary(oneLine, detailed, probableCallees, embedding);
-
+            results[chunk.Id] = new SymbolSummary(oneLine, detailed, probableCallees);
             processed++;
-            onProgress?.Invoke(processed, failed, orderedChunks.Count, chunk.FullyQualifiedName);
         }
 
         return new SummarizationResult(results, failedChunkIds);
-    }
-
-    private async Task<ReadOnlyMemory<float>> GenerateEmbeddingWithTimeoutAsync(string text, CancellationToken cancellationToken)
-    {
-        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(requestTimeout);
-
-        try
-        {
-            return await embeddingGenerator.GenerateEmbeddingAsync(text, cts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            throw new InvalidOperationException(
-                $"Timeout generating embedding after {requestTimeout.TotalSeconds:F0} seconds. " +
-                "The embedding service may be unavailable or unresponsive. " +
-                "Check that your embedding service is running and responding to requests.");
-        }
     }
 
     private async Task<string> GetTextResponseAsync(string model, string prompt, CancellationToken cancellationToken)
@@ -159,6 +178,7 @@ public sealed class SymbolSummarizer(
                     {
                         ModelId = model,
                         Instructions = SummaryInstructions,
+                        MaxOutputTokens = this.maxOutputTokens,
                     },
                     cts.Token).ConfigureAwait(false);
 
@@ -169,7 +189,17 @@ public sealed class SymbolSummarizer(
 
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    return text.Trim();
+                    string trimmed = text.Trim();
+                    if (!IsRepetitiveResponse(trimmed))
+                    {
+                        return trimmed;
+                    }
+
+                    logger.LogWarning("Attempt {Attempt}/{MaxRetries}: model '{Model}' returned a repetitive response. Retrying.", attempt, MaxRetries, model);
+                }
+                else
+                {
+                    logger.LogWarning("Attempt {Attempt}/{MaxRetries}: model '{Model}' returned empty text. Retrying.", attempt, MaxRetries, model);
                 }
 
                 if (attempt < MaxRetries)
@@ -177,8 +207,9 @@ public sealed class SymbolSummarizer(
                     await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
                 }
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < MaxRetries)
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && attempt < MaxRetries)
             {
+                logger.LogWarning(ex, "Attempt {Attempt}/{MaxRetries} timed out calling model '{Model}'. Retrying.", attempt, MaxRetries, model);
                 await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -197,17 +228,34 @@ public sealed class SymbolSummarizer(
                     $"Provider error: {ex.Message}",
                     ex);
             }
-            catch (Exception) when (attempt < MaxRetries)
+            catch (Exception ex) when (attempt < MaxRetries)
             {
+                logger.LogWarning(ex, "Attempt {Attempt}/{MaxRetries} failed calling model '{Model}'. Retrying.", attempt, MaxRetries, model);
                 await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Exhausted {MaxRetries} retries calling model '{Model}'. Returning failure marker.", MaxRetries, model);
+                return "[Unable to generate summary]";
             }
         }
 
+        logger.LogError("Exhausted {MaxRetries} retries calling model '{Model}'. Returning failure marker.", MaxRetries, model);
         return "[Unable to generate summary]";
     }
 
     private static string AppendProbableCalleesInstruction(string prompt) =>
-        $"{prompt}{Environment.NewLine}{Environment.NewLine}At the end, append a section exactly named 'Probable callees:' followed by one bullet per likely method or function call. If none are likely, write 'Probable callees: (none)'.";
+        $"{prompt}{Environment.NewLine}{Environment.NewLine}At the end, append a section exactly named 'Probable callees:' followed by up to 10 bullets (one per likely callee). If none are likely, write 'Probable callees: (none)'. Stop after the list.";
+
+    private static bool IsRepetitiveResponse(string text)
+    {
+        string[] lines = text.Split('\n');
+        return lines
+            .Select(static l => l.Trim())
+            .Where(static l => l.Length > 0)
+            .GroupBy(static l => l, StringComparer.Ordinal)
+            .Any(static g => g.Count() >= 5);
+    }
 
     private static string ComputeContentHash(string content)
     {
@@ -411,7 +459,7 @@ public sealed class SymbolSummarizer(
 
         return new ParsedDetailedSummary(
             string.Join("\n", detailLines).Trim(),
-            probableCallees.Distinct(StringComparer.Ordinal).ToArray());
+            probableCallees.Distinct(StringComparer.Ordinal).Take(MaxProbableCallees).ToArray());
     }
 
     private static bool TryGetProbableCalleeHeaderValue(string line, out string? value)

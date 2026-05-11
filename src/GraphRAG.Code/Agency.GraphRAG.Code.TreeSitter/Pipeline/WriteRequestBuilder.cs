@@ -6,13 +6,14 @@ using Agency.GraphRAG.Code.Hydration;
 using Agency.GraphRAG.Code.Pipeline;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.Walker;
+using Microsoft.Extensions.Logging;
 
 namespace Agency.GraphRAG.Code.TreeSitter.Pipeline;
 
 /// <summary>
 /// Builds <see cref="Phase1WriteRequest"/> instances from repository walk results using tree-sitter parsing and chunking.
 /// </summary>
-public sealed class WriteRequestBuilder(ChunkerDispatcher chunkerDispatcher) : IWriteRequestBuilder
+public sealed class WriteRequestBuilder(ChunkerDispatcher chunkerDispatcher, ILogger<WriteRequestBuilder> logger) : IWriteRequestBuilder
 {
     /// <summary>
     /// Builds write requests for all processable files in the walk result.
@@ -43,31 +44,42 @@ public sealed class WriteRequestBuilder(ChunkerDispatcher chunkerDispatcher) : I
                 continue;
             }
 
-            string filePath = Path.Combine(repo.LocalPath, file.Path);
-            string source = await File.ReadAllTextAsync(filePath, cancellationToken).ConfigureAwait(false);
-
-            IReadOnlyList<Chunk> chunks = await chunkerDispatcher.ChunkAsync(
-                new ChunkerInput(file.Path, file.Language, source),
-                cancellationToken).ConfigureAwait(false);
-
-            SourceFile sourceFile = new()
+            try
             {
-                Id = HydrationIds.StableGuid($"file:{repo.Id}:{file.Path}"),
-                RepoId = repo.Id,
-                ProjectId = Guid.Empty,
-                Path = file.Path,
-                Language = LanguageName(file.Language),
-                ContentHash = ComputeHash(source),
-            };
+                string filePath = Path.Combine(repo.LocalPath, file.Path);
+                string source = await File.ReadAllTextAsync(filePath, cancellationToken).ConfigureAwait(false);
 
-            Phase1WriteRequest request = new(
-                sourceFile,
-                Module: null,
-                chunks,
-                new Dictionary<string, SymbolSummary>(StringComparer.Ordinal),
-                []);
+                IReadOnlyList<Chunk> chunks = await chunkerDispatcher.ChunkAsync(
+                    new ChunkerInput(file.Path, file.Language, source),
+                    cancellationToken).ConfigureAwait(false);
 
-            requests[file.Path] = request;
+                SourceFile sourceFile = new()
+                {
+                    Id = HydrationIds.StableGuid($"file:{repo.Id}:{file.Path}"),
+                    RepoId = repo.Id,
+                    ProjectId = Guid.Empty,
+                    Path = file.Path,
+                    Language = LanguageName(file.Language),
+                    ContentHash = ComputeHash(source),
+                };
+
+                Phase1WriteRequest request = new(
+                    sourceFile,
+                    Module: null,
+                    chunks,
+                    new Dictionary<string, SymbolSummary>(StringComparer.Ordinal),
+                    []);
+
+                requests[file.Path] = request;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to process file '{FilePath}' ({Language}). Skipping.", file.Path, file.Language);
+            }
 
             processed++;
             if (processed % 25 == 0 || processed == total)

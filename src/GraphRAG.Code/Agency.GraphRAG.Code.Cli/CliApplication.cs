@@ -1,3 +1,4 @@
+using Agency.GraphRAG.Code.Cli.Telemetry;
 using Agency.GraphRAG.Code.DependencyInjection;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Pipeline;
@@ -86,7 +87,7 @@ public static class CliApplication
                 void ReportProgress(string message)
                 {
                     pipelineStopwatch.Stop();
-                    AnsiConsole.MarkupLine($"  [dim]({pipelineStopwatch.ElapsedMilliseconds}ms)[/] {message}");
+                    AnsiConsole.MarkupLine($"  [dim]({pipelineStopwatch.ElapsedMilliseconds}ms)[/] {Markup.Escape(message)}");
                     pipelineStopwatch.Restart();
                 }
 
@@ -300,6 +301,8 @@ public static class CliApplication
             .Validate(static o => !string.IsNullOrWhiteSpace(o.ApiKey), "Embedding:ApiKey is required.")
             .Validate(static o => !string.IsNullOrWhiteSpace(o.ModelId), "Embedding:ModelId is required.")
             .ValidateOnStart();
+
+        builder.Services.AddTelemetry(builder.Configuration);
 
         builder.Services.AddCodeIndex(options =>
         {

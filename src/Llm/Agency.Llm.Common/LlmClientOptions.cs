@@ -43,8 +43,10 @@ public record class LlmClientOptions
     public TimeSpan? Timeout { get; set; } = null;
 
     /// <summary>
-    /// Gets or sets the maximum number of output tokens per request. Defaults to null (callers supply their own
-    /// default).
+    /// When <see langword="true"/>, injects <c>enable_thinking: false</c> and
+    /// <c>thinking_budget_tokens: 0</c> into every chat-completion request body.
+    /// Use with reasoning-capable models (e.g. Qwen3) when extended thinking must be
+    /// suppressed unconditionally regardless of prompt-level directives.
     /// </summary>
-    public long? MaxTokens { get; set; } = null;
+    public bool SuppressThinking { get; set; } = false;
 }

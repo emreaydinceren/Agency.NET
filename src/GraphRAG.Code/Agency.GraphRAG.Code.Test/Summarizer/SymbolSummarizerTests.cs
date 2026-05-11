@@ -5,6 +5,7 @@ using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Summarizer;
 using Agency.GraphRAG.Code.Walker;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Agency.GraphRAG.Code.Test.Summarizer;
@@ -49,8 +50,7 @@ public sealed class SymbolSummarizerTests
             - StripeSdk.CaptureAsync
             """);
 
-        RecordingEmbeddingGenerator embeddingGenerator = new();
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator);
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient);
         Chunk contract = CreateTypeChunk(
             path: @"src\Contracts\IPaymentProcessor.cs",
             line: 0,
@@ -91,22 +91,16 @@ public sealed class SymbolSummarizerTests
         Assert.Contains("Describes the payment processing contract for implementations.", implementationDetailedPrompt, StringComparison.Ordinal);
         Assert.Contains("Centralizes retries and telemetry for payment processors.", implementationDetailedPrompt, StringComparison.Ordinal);
 
-        Assert.Equal(
-            ["Defines the payment processing contract.", "Provides shared payment workflow behavior.", "Handles Stripe payment processing."],
-            embeddingGenerator.RequestedInputs);
-
         SymbolSummary implementationSummary = summaries[implementation.Id];
         Assert.Equal("Handles Stripe payment processing.", implementationSummary.OneLine);
         Assert.Equal("Implements Stripe-specific authorization and capture behavior.", implementationSummary.Detailed);
         Assert.Equal(["StripeSdk.AuthorizeAsync", "StripeSdk.CaptureAsync"], implementationSummary.ProbableCallees);
-        Assert.Equal(RecordingEmbeddingGenerator.CreateEmbedding("Handles Stripe payment processing.").ToArray(), implementationSummary.OneLineEmbedding.ToArray());
     }
 
     [Fact]
     public async Task SummarizeAsync_CacheHit_AvoidsLlmCalls()
     {
         FakeChatClient chatClient = new();
-        RecordingEmbeddingGenerator embeddingGenerator = new();
         SummaryCache cache = new(":memory:");
         Chunk chunk = CreateTypeChunk(
             path: @"src\Services\Worker.cs",
@@ -119,15 +113,67 @@ public sealed class SymbolSummarizerTests
             ComputeContentHash(chunk.Content),
             ModelTierSelector.ModelTier.Cheap.ToString(),
             new SummaryCacheEntry("Executes the worker action.", "Performs the work operation.", ["Save"]));
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator, cache);
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient, cache);
 
         SummarizationResult result = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
         IReadOnlyDictionary<string, SymbolSummary> summaries = result.Summaries;
 
         Assert.Equal(0, chatClient.GetResponseCallCount);
-        Assert.Equal(["Executes the worker action."], embeddingGenerator.RequestedInputs);
         Assert.Equal("Performs the work operation.", summaries[chunk.Id].Detailed);
         Assert.Equal(["Save"], summaries[chunk.Id].ProbableCallees);
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_StatementChunk_IsSkippedWithoutLlmCall()
+    {
+        FakeChatClient chatClient = new();
+        Chunk chunk = ChunkBuilder.Build(
+            path: @"src\Console\ConsoleChatSession.cs",
+            language: Language.CSharp,
+            granularity: ChunkGranularity.Statement,
+            name: "statement#12",
+            fullyQualifiedName: "Agency.Agentic.Console.ConsoleChatSession.RunAsync#statement:12",
+            signature: "statement-12",
+            content: "try { while (true) { if (string.IsNullOrEmpty(input)) continue; } }",
+            range: new ChunkSourceRange(10, 0, 60, 1),
+            symbolKind: SymbolKind.Method,
+            importsInScope: []);
+
+        SummarizationResult result = await CreateSummarizer(chatClient).SummarizeAsync(
+            [chunk], TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, chatClient.GetResponseCallCount);
+        Assert.False(result.Summaries.ContainsKey(chunk.Id));
+        Assert.DoesNotContain(chunk.Id, result.FailedChunkIds);
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_FailedSummary_IsNotCached_SoNextRunRetries()
+    {
+        SummaryCache cache = new(":memory:");
+        Chunk chunk = CreateTypeChunk(
+            path: @"src\Services\Worker.cs",
+            line: 0,
+            name: "Worker",
+            fullyQualifiedName: "Example.Services.Worker",
+            symbolKind: SymbolKind.Method,
+            content: "private void Work() { }");
+
+        FakeChatClient failingClient = new();
+        failingClient.EnqueueTextResponse("[Unable to generate summary]");
+        failingClient.EnqueueTextResponse("[Unable to generate summary]");
+        SymbolSummarizer firstRun = CreateSummarizer(failingClient, cache);
+        SummarizationResult firstResult = await firstRun.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+        Assert.Contains(chunk.Id, firstResult.FailedChunkIds);
+
+        FakeChatClient workingClient = new();
+        workingClient.EnqueueTextResponse("Executes the worker action.");
+        workingClient.EnqueueTextResponse("Does work.\nProbable callees: (none)");
+        SymbolSummarizer secondRun = CreateSummarizer(workingClient, cache);
+        SummarizationResult secondResult = await secondRun.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+
+        Assert.Empty(secondResult.FailedChunkIds);
+        Assert.Equal(2, workingClient.GetResponseCallCount);
     }
 
     [Fact]
@@ -143,8 +189,7 @@ public sealed class SymbolSummarizerTests
             - Logger.LogInformation
             - Repository.SaveAsync
             """);
-        RecordingEmbeddingGenerator embeddingGenerator = new();
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator);
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient);
         Chunk chunk = CreateTypeChunk(
             path: @"src\Orders\OrderService.cs",
             line: 0,
@@ -159,17 +204,42 @@ public sealed class SymbolSummarizerTests
         Assert.Equal(["Repository.SaveAsync", "Logger.LogInformation"], result.Summaries[chunk.Id].ProbableCallees);
     }
 
+    [Fact]
+    public async Task SummarizeAsync_PersistentAggregateException_ReturnsFailureMarkerInsteadOfPropagating()
+    {
+        // Regression: when the LLM client throws AggregateException (e.g. from OpenAI SDK's internal
+        // retry policy) on every call, SummarizeAsync must return a failure marker rather than
+        // propagating the exception. Note: this test takes ~9 seconds due to built-in retry delays.
+        FakeChatClient chatClient = new();
+        chatClient.SetAlwaysThrow(new AggregateException(
+            "Retry failed after 3 tries.",
+            new TaskCanceledException("Timeout 1"),
+            new TaskCanceledException("Timeout 2"),
+            new TaskCanceledException("Timeout 3")));
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient);
+        Chunk chunk = CreateTypeChunk(
+            path: @"src\Services\Worker.cs",
+            line: 0,
+            name: "Worker",
+            fullyQualifiedName: "Example.Services.Worker",
+            symbolKind: SymbolKind.Method,
+            content: "private void Work() { }");
+
+        SummarizationResult result = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
+
+        Assert.Contains(chunk.Id, result.FailedChunkIds);
+    }
+
     private static SymbolSummarizer CreateSummarizer(
         FakeChatClient chatClient,
-        RecordingEmbeddingGenerator embeddingGenerator,
         SummaryCache? cache = null) =>
         new(
             chatClient,
-            embeddingGenerator,
             cache ?? new SummaryCache(":memory:"),
             new ModelTierSelector(Options.Create(DefaultOptions)),
-            new SummarizationPromptBuilder(),
-            Options.Create(DefaultOptions));
+            new SummarizationPromptBuilder(Options.Create(DefaultOptions)),
+            Options.Create(DefaultOptions),
+            NullLogger<SymbolSummarizer>.Instance);
 
     private static Chunk CreateTypeChunk(
         string path,
@@ -203,27 +273,10 @@ public sealed class SymbolSummarizerTests
         return Convert.ToHexStringLower(hash);
     }
 
-    private sealed class RecordingEmbeddingGenerator : Agency.Embeddings.Common.IEmbeddingGenerator
-    {
-        public List<string> RequestedInputs { get; } = [];
-
-        public static ReadOnlyMemory<float> CreateEmbedding(string input) =>
-            new([input.Length, input.Count(static c => c == ' ')]);
-
-        public Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string input, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            RequestedInputs.Add(input);
-            return Task.FromResult(CreateEmbedding(input));
-        }
-
-        public Task<IReadOnlyList<ReadOnlyMemory<float>>> GenerateEmbeddingsAsync(IEnumerable<string> inputs, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-    }
-
     private sealed class FakeChatClient : IChatClient
     {
         private readonly Queue<ChatResponse> _responses = new();
+        private Exception? _alwaysThrow;
 
         public int GetResponseCallCount { get; private set; }
 
@@ -241,6 +294,8 @@ public sealed class SymbolSummarizerTests
             });
         }
 
+        public void SetAlwaysThrow(Exception ex) => _alwaysThrow = ex;
+
         public Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
@@ -255,6 +310,11 @@ public sealed class SymbolSummarizerTests
                     .Select(static content => content.Text));
             ReceivedPrompts.Add(prompt);
             ReceivedModelIds.Add(options?.ModelId);
+
+            if (_alwaysThrow is not null)
+            {
+                throw _alwaysThrow;
+            }
 
             if (_responses.Count == 0)
             {

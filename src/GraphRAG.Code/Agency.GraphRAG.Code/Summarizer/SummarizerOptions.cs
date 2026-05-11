@@ -29,4 +29,22 @@ public sealed class SummarizerOptions
     /// Gets or sets the timeout in minutes for each LLM or embedding request.
     /// </summary>
     public int RequestTimeoutMinutes { get; set; } = 3;
+
+    /// <summary>
+    /// Gets or sets the maximum number of characters of source content included in any prompt.
+    /// Content exceeding this limit is truncated with a marker. Defaults to 8000.
+    /// </summary>
+    public int MaxContentChars { get; set; } = 8000;
+
+    /// <summary>
+    /// Gets or sets the maximum number of characters of each parent summary injected as context.
+    /// Defaults to 500. Keeps sub-chunk prompts from inheriting an overwhelming parent narrative.
+    /// </summary>
+    public int MaxParentContextChars { get; set; } = 500;
+
+    /// <summary>
+    /// Gets or sets the maximum number of output tokens per LLM response. Defaults to 2048.
+    /// Acts as a hard cap to prevent runaway repetition loops on local models.
+    /// </summary>
+    public int MaxOutputTokens { get; set; } = 2048;
 }

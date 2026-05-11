@@ -162,7 +162,7 @@ public static class CodeIndexServiceCollectionExtensions
                     var summarizer = sp.GetRequiredService<SymbolSummarizer>();
                     IReadOnlyList<Chunk> allChunks = requests.SelectMany(r => r.Chunks).ToArray();
                     Action<int, int, int, string>? summarizerProgress = onProgress is null ? null :
-                        (done, failed, total, symbolName) => onProgress($"Summarized {done}/{total} symbols ({failed} failed): {symbolName}");
+                        (done, failed, total, symbolName) => onProgress($"Summarizing [{done + 1}/{total}]: {symbolName}{(failed > 0 ? $" ({failed} failed)" : "")}");
                     SummarizationResult result = await summarizer.SummarizeAsync(allChunks, cancellationToken, summarizerProgress).ConfigureAwait(false);
                     foreach (Phase1WriteRequest request in requests)
                     {

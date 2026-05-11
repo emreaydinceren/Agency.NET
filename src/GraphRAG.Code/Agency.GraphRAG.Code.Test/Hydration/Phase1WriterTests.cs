@@ -16,7 +16,7 @@ public sealed class Phase1WriterTests
     public async Task WriteAsync_WritesDefinitionsEdgesAndStagesCallSites_Idempotently()
     {
         RecordingGraphStore store = new();
-        Phase1Writer writer = new(store);
+        Phase1Writer writer = new(store, new StubEmbeddingGenerator());
         SourceFile file = new()
         {
             Id = Guid.NewGuid(),
@@ -71,8 +71,8 @@ public sealed class Phase1WriterTests
             [typeChunk, methodChunk],
             new Dictionary<string, SymbolSummary>(StringComparer.Ordinal)
             {
-                [typeChunk.Id] = new("Processes payments.", "Handles payment coordination.", [], new ReadOnlyMemory<float>([1f])),
-                [methodChunk.Id] = new("Charges a payment.", "Executes the charge.", ["HttpClient.SendAsync"], new ReadOnlyMemory<float>([2f])),
+                [typeChunk.Id] = new("Processes payments.", "Handles payment coordination.", []),
+                [methodChunk.Id] = new("Charges a payment.", "Executes the charge.", ["HttpClient.SendAsync"]),
             },
             [callSite]);
 
@@ -88,6 +88,15 @@ public sealed class Phase1WriterTests
         Assert.Contains(store.Edges.Values, edge => edge.EdgeKind == EdgeKind.Imports);
         Assert.Contains(store.Edges.Values, edge => edge.EdgeKind == EdgeKind.Contains && edge.SourceKind == "module");
         Assert.Contains(store.Edges.Values, edge => edge.EdgeKind == EdgeKind.Contains && edge.SourceKind == "symbol");
+    }
+
+    private sealed class StubEmbeddingGenerator : Agency.Embeddings.Common.IEmbeddingGenerator
+    {
+        public Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string input, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ReadOnlyMemory<float>(new float[1]));
+
+        public Task<IReadOnlyList<ReadOnlyMemory<float>>> GenerateEmbeddingsAsync(IEnumerable<string> inputs, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ReadOnlyMemory<float>>>(inputs.Select(static _ => new ReadOnlyMemory<float>(new float[1])).ToArray());
     }
 
     private sealed class RecordingGraphStore : IGraphStore

@@ -87,7 +87,7 @@ public static class CliApplication
                 void ReportProgress(string message)
                 {
                     pipelineStopwatch.Stop();
-                    AnsiConsole.MarkupLine($"  [dim]({pipelineStopwatch.ElapsedMilliseconds}ms)[/] {message}");
+                    AnsiConsole.MarkupLine($"  [dim]({pipelineStopwatch.ElapsedMilliseconds}ms)[/] {Markup.Escape(message)}");
                     pipelineStopwatch.Restart();
                 }
 

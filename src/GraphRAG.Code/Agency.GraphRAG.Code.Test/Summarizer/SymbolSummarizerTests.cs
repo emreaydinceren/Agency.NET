@@ -50,8 +50,7 @@ public sealed class SymbolSummarizerTests
             - StripeSdk.CaptureAsync
             """);
 
-        RecordingEmbeddingGenerator embeddingGenerator = new();
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator);
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient);
         Chunk contract = CreateTypeChunk(
             path: @"src\Contracts\IPaymentProcessor.cs",
             line: 0,
@@ -92,22 +91,16 @@ public sealed class SymbolSummarizerTests
         Assert.Contains("Describes the payment processing contract for implementations.", implementationDetailedPrompt, StringComparison.Ordinal);
         Assert.Contains("Centralizes retries and telemetry for payment processors.", implementationDetailedPrompt, StringComparison.Ordinal);
 
-        Assert.Equal(
-            ["Defines the payment processing contract.", "Provides shared payment workflow behavior.", "Handles Stripe payment processing."],
-            embeddingGenerator.RequestedInputs);
-
         SymbolSummary implementationSummary = summaries[implementation.Id];
         Assert.Equal("Handles Stripe payment processing.", implementationSummary.OneLine);
         Assert.Equal("Implements Stripe-specific authorization and capture behavior.", implementationSummary.Detailed);
         Assert.Equal(["StripeSdk.AuthorizeAsync", "StripeSdk.CaptureAsync"], implementationSummary.ProbableCallees);
-        Assert.Equal(RecordingEmbeddingGenerator.CreateEmbedding("Handles Stripe payment processing.").ToArray(), implementationSummary.OneLineEmbedding.ToArray());
     }
 
     [Fact]
     public async Task SummarizeAsync_CacheHit_AvoidsLlmCalls()
     {
         FakeChatClient chatClient = new();
-        RecordingEmbeddingGenerator embeddingGenerator = new();
         SummaryCache cache = new(":memory:");
         Chunk chunk = CreateTypeChunk(
             path: @"src\Services\Worker.cs",
@@ -120,15 +113,38 @@ public sealed class SymbolSummarizerTests
             ComputeContentHash(chunk.Content),
             ModelTierSelector.ModelTier.Cheap.ToString(),
             new SummaryCacheEntry("Executes the worker action.", "Performs the work operation.", ["Save"]));
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator, cache);
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient, cache);
 
         SummarizationResult result = await summarizer.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
         IReadOnlyDictionary<string, SymbolSummary> summaries = result.Summaries;
 
         Assert.Equal(0, chatClient.GetResponseCallCount);
-        Assert.Equal(["Executes the worker action."], embeddingGenerator.RequestedInputs);
         Assert.Equal("Performs the work operation.", summaries[chunk.Id].Detailed);
         Assert.Equal(["Save"], summaries[chunk.Id].ProbableCallees);
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_StatementChunk_IsSkippedWithoutLlmCall()
+    {
+        FakeChatClient chatClient = new();
+        Chunk chunk = ChunkBuilder.Build(
+            path: @"src\Console\ConsoleChatSession.cs",
+            language: Language.CSharp,
+            granularity: ChunkGranularity.Statement,
+            name: "statement#12",
+            fullyQualifiedName: "Agency.Agentic.Console.ConsoleChatSession.RunAsync#statement:12",
+            signature: "statement-12",
+            content: "try { while (true) { if (string.IsNullOrEmpty(input)) continue; } }",
+            range: new ChunkSourceRange(10, 0, 60, 1),
+            symbolKind: SymbolKind.Method,
+            importsInScope: []);
+
+        SummarizationResult result = await CreateSummarizer(chatClient).SummarizeAsync(
+            [chunk], TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, chatClient.GetResponseCallCount);
+        Assert.False(result.Summaries.ContainsKey(chunk.Id));
+        Assert.DoesNotContain(chunk.Id, result.FailedChunkIds);
     }
 
     [Fact]
@@ -146,14 +162,14 @@ public sealed class SymbolSummarizerTests
         FakeChatClient failingClient = new();
         failingClient.EnqueueTextResponse("[Unable to generate summary]");
         failingClient.EnqueueTextResponse("[Unable to generate summary]");
-        SymbolSummarizer firstRun = CreateSummarizer(failingClient, new RecordingEmbeddingGenerator(), cache);
+        SymbolSummarizer firstRun = CreateSummarizer(failingClient, cache);
         SummarizationResult firstResult = await firstRun.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
         Assert.Contains(chunk.Id, firstResult.FailedChunkIds);
 
         FakeChatClient workingClient = new();
         workingClient.EnqueueTextResponse("Executes the worker action.");
         workingClient.EnqueueTextResponse("Does work.\nProbable callees: (none)");
-        SymbolSummarizer secondRun = CreateSummarizer(workingClient, new RecordingEmbeddingGenerator(), cache);
+        SymbolSummarizer secondRun = CreateSummarizer(workingClient, cache);
         SummarizationResult secondResult = await secondRun.SummarizeAsync([chunk], TestContext.Current.CancellationToken);
 
         Assert.Empty(secondResult.FailedChunkIds);
@@ -173,8 +189,7 @@ public sealed class SymbolSummarizerTests
             - Logger.LogInformation
             - Repository.SaveAsync
             """);
-        RecordingEmbeddingGenerator embeddingGenerator = new();
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, embeddingGenerator);
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient);
         Chunk chunk = CreateTypeChunk(
             path: @"src\Orders\OrderService.cs",
             line: 0,
@@ -201,7 +216,7 @@ public sealed class SymbolSummarizerTests
             new TaskCanceledException("Timeout 1"),
             new TaskCanceledException("Timeout 2"),
             new TaskCanceledException("Timeout 3")));
-        SymbolSummarizer summarizer = CreateSummarizer(chatClient, new RecordingEmbeddingGenerator());
+        SymbolSummarizer summarizer = CreateSummarizer(chatClient);
         Chunk chunk = CreateTypeChunk(
             path: @"src\Services\Worker.cs",
             line: 0,
@@ -217,14 +232,12 @@ public sealed class SymbolSummarizerTests
 
     private static SymbolSummarizer CreateSummarizer(
         FakeChatClient chatClient,
-        RecordingEmbeddingGenerator embeddingGenerator,
         SummaryCache? cache = null) =>
         new(
             chatClient,
-            embeddingGenerator,
             cache ?? new SummaryCache(":memory:"),
             new ModelTierSelector(Options.Create(DefaultOptions)),
-            new SummarizationPromptBuilder(),
+            new SummarizationPromptBuilder(Options.Create(DefaultOptions)),
             Options.Create(DefaultOptions),
             NullLogger<SymbolSummarizer>.Instance);
 
@@ -258,24 +271,6 @@ public sealed class SymbolSummarizerTests
     {
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(content));
         return Convert.ToHexStringLower(hash);
-    }
-
-    private sealed class RecordingEmbeddingGenerator : Agency.Embeddings.Common.IEmbeddingGenerator
-    {
-        public List<string> RequestedInputs { get; } = [];
-
-        public static ReadOnlyMemory<float> CreateEmbedding(string input) =>
-            new([input.Length, input.Count(static c => c == ' ')]);
-
-        public Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string input, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            RequestedInputs.Add(input);
-            return Task.FromResult(CreateEmbedding(input));
-        }
-
-        public Task<IReadOnlyList<ReadOnlyMemory<float>>> GenerateEmbeddingsAsync(IEnumerable<string> inputs, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     private sealed class FakeChatClient : IChatClient

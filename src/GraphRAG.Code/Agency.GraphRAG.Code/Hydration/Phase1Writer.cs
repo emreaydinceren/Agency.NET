@@ -1,3 +1,4 @@
+using Agency.Embeddings.Common;
 using Agency.GraphRAG.Code.Chunker;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Storage;
@@ -7,7 +8,7 @@ namespace Agency.GraphRAG.Code.Hydration;
 /// <summary>
 /// Writes definition-phase graph records for parsed files, including symbols, containment edges, import edges, and staged call sites.
 /// </summary>
-public sealed class Phase1Writer(IGraphStore graphStore)
+public sealed class Phase1Writer(IGraphStore graphStore, IEmbeddingGenerator embeddingGenerator)
 {
     /// <summary>
     /// Persists the provided parsed-file data into the graph store.
@@ -25,8 +26,31 @@ public sealed class Phase1Writer(IGraphStore graphStore)
             await graphStore.UpsertModuleAsync(request.Module, cancellationToken).ConfigureAwait(false);
         }
 
+        List<string> chunkIdsToEmbed = [];
+        List<string> oneLineTexts = [];
+        foreach (Chunk chunk in request.Chunks)
+        {
+            if (request.Summaries.TryGetValue(chunk.Id, out Summarizer.SymbolSummary? s))
+            {
+                chunkIdsToEmbed.Add(chunk.Id);
+                oneLineTexts.Add(s.OneLine);
+            }
+        }
+
+        Dictionary<string, float[]> embeddingsByChunkId = new(StringComparer.Ordinal);
+        if (oneLineTexts.Count > 0)
+        {
+            IReadOnlyList<ReadOnlyMemory<float>> generated = await embeddingGenerator
+                .GenerateEmbeddingsAsync(oneLineTexts, cancellationToken)
+                .ConfigureAwait(false);
+            for (int i = 0; i < chunkIdsToEmbed.Count; i++)
+            {
+                embeddingsByChunkId[chunkIdsToEmbed[i]] = generated[i].ToArray();
+            }
+        }
+
         IReadOnlyList<Symbol> symbols = request.Chunks
-            .Select(chunk => ToSymbol(chunk, request.File.Id, request.Module?.Id, request.Summaries))
+            .Select(chunk => ToSymbol(chunk, request.File.Id, request.Module?.Id, request.Summaries, embeddingsByChunkId))
             .ToArray();
         await graphStore.UpsertSymbolBatchAsync(symbols, cancellationToken).ConfigureAwait(false);
 
@@ -46,9 +70,11 @@ public sealed class Phase1Writer(IGraphStore graphStore)
         Chunk chunk,
         Guid fileId,
         Guid? moduleId,
-        IReadOnlyDictionary<string, Summarizer.SymbolSummary> summaries)
+        IReadOnlyDictionary<string, Summarizer.SymbolSummary> summaries,
+        IReadOnlyDictionary<string, float[]> embeddings)
     {
         summaries.TryGetValue(chunk.Id, out Summarizer.SymbolSummary? summary);
+        embeddings.TryGetValue(chunk.Id, out float[]? embedding);
 
         return new Symbol
         {
@@ -62,7 +88,7 @@ public sealed class Phase1Writer(IGraphStore graphStore)
             Summary = summary?.Detailed,
             OneLineSummary = summary?.OneLine,
             ContentHash = ComputeContentHash(chunk.Content),
-            Embedding = summary?.OneLineEmbedding.ToArray(),
+            Embedding = embedding,
             IsUtility = false,
             SourceRangeStart = chunk.Range.StartLine,
             SourceRangeEnd = chunk.Range.EndLine,

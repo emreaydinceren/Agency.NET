@@ -81,6 +81,11 @@ public sealed class OpenAIClient : IModelProvider
             clientOptions.RetryPolicy = new ClientRetryPolicy(maxRetries);
         }
 
+        if (opts.SuppressThinking)
+        {
+            clientOptions.AddPolicy(new SuppressThinkingPipelinePolicy(), PipelinePosition.PerCall);
+        }
+
         return new global::OpenAI.OpenAIClient(credential, clientOptions);
     }
 }

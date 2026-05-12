@@ -1,3 +1,4 @@
+using Agency.Common;
 using Agency.Embeddings.Common;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Sqlite.Migrations;
@@ -15,6 +16,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Agency.GraphRAG.Code.Sqlite;
 
@@ -40,20 +42,24 @@ public sealed class SqliteGraphStore : IGraphStore
     private readonly IEmbeddingGenerator _embeddingGenerator;
     private readonly ILogger<SqliteGraphStore> _logger;
     private readonly string _connectionString;
+    private readonly int _embeddingDimensions;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SqliteGraphStore"/> class.
     /// </summary>
     /// <param name="sqliteRunner">The SQLite runner used for database operations.</param>
     /// <param name="embeddingGenerator">The embedding generator used for symbol embeddings.</param>
+    /// <param name="embeddingDimensions">The number of dimensions produced by the embedding model. Used to size the vector columns.</param>
     /// <param name="logger">Optional logger.</param>
     public SqliteGraphStore(
         SqliteRunner sqliteRunner,
         IEmbeddingGenerator embeddingGenerator,
+        int embeddingDimensions = MigrationContext.DefaultEmbeddingDimensions,
         ILogger<SqliteGraphStore>? logger = null)
     {
         this._sqliteRunner = sqliteRunner ?? throw new ArgumentNullException(nameof(sqliteRunner));
         this._embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
+        this._embeddingDimensions = embeddingDimensions > 0 ? embeddingDimensions : MigrationContext.DefaultEmbeddingDimensions;
         this._logger = logger ?? NullLogger<SqliteGraphStore>.Instance;
         this._connectionString = GetConnectionString(sqliteRunner);
     }
@@ -65,7 +71,10 @@ public sealed class SqliteGraphStore : IGraphStore
             async activity =>
             {
                 var migrationRunner = new SqliteMigrationRunner(this._connectionString);
-                await migrationRunner.MigrateToLatestAsync(cancellationToken: cancellationToken);
+                await migrationRunner.MigrateToLatestAsync(
+                    new MigrationContext { EmbeddingDimensions = this._embeddingDimensions },
+                    cancellationToken);
+                await this.EnsureVecDimensionsAsync(this._embeddingDimensions, cancellationToken);
                 activity?.SetTag("graphrag.initialized", true);
             });
 
@@ -1000,6 +1009,28 @@ public sealed class SqliteGraphStore : IGraphStore
             });
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<Symbol>> GetSymbolsByFileIdAsync(Guid fileId, CancellationToken cancellationToken = default) =>
+        this.RunOperationAsync(
+            "get-symbols-by-file",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.file.id", fileId);
+
+                List<Symbol> results = await this._sqliteRunner.QueryAsync(
+                    """
+                    SELECT id, file_id, module_id, name, fully_qualified_name, kind, signature, summary, one_line_summary,
+                           embedding, content_hash, is_utility, source_range_start, source_range_end
+                    FROM symbols
+                    WHERE file_id = @fileId;
+                    """,
+                    reader => Task.FromResult(HydrateSymbol(reader)),
+                    new Dictionary<string, object?> { ["fileId"] = ToDbGuid(fileId) },
+                    cancellationToken);
+
+                return (IReadOnlyList<Symbol>)results;
+            });
+
     private async Task UpsertSymbolCoreAsync(Symbol symbol, CancellationToken cancellationToken)
     {
         float[]? embedding = await this.ResolveEmbeddingAsync(symbol, cancellationToken);
@@ -1637,6 +1668,51 @@ public sealed class SqliteGraphStore : IGraphStore
             Scope = reader.IsDBNull(4) ? null : reader.GetString(4),
             LlmExtractedTarget = reader.IsDBNull(5) ? null : reader.GetString(5),
         };
+
+    private async Task EnsureVecDimensionsAsync(int configuredDimensions, CancellationToken cancellationToken)
+    {
+        Dataset result = await this._sqliteRunner.QueryAsync(
+            "SELECT sql FROM sqlite_schema WHERE name = 'symbols_vec' AND sql IS NOT NULL LIMIT 1;",
+            cancellationToken: cancellationToken);
+
+        if (result.Rows.Count == 0)
+        {
+            return;
+        }
+
+        string? schemaSql = result.Rows[0][0]?.ToString();
+        Match match = Regex.Match(schemaSql ?? string.Empty, @"FLOAT\[(\d+)\]", RegexOptions.IgnoreCase);
+
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out int storedDimensions))
+        {
+            return;
+        }
+
+        if (storedDimensions == configuredDimensions)
+        {
+            return;
+        }
+
+        this._logger.LogWarning(
+            "Embedding dimension mismatch: schema has {StoredDimensions}, configured is {ConfiguredDimensions}. Dropping and recreating vector tables.",
+            storedDimensions,
+            configuredDimensions);
+
+        await this._sqliteRunner.ExecuteAsync(
+            $"""
+            DROP TABLE IF EXISTS symbols_vec;
+            DROP TABLE IF EXISTS clusters_vec;
+            CREATE VIRTUAL TABLE symbols_vec USING vec0(
+                symbol_id TEXT PRIMARY KEY,
+                embedding FLOAT[{configuredDimensions}]
+            );
+            CREATE VIRTUAL TABLE clusters_vec USING vec0(
+                cluster_id TEXT PRIMARY KEY,
+                embedding FLOAT[{configuredDimensions}]
+            );
+            """,
+            cancellationToken: cancellationToken);
+    }
 
     private static string GetConnectionString(SqliteRunner sqliteRunner)
     {

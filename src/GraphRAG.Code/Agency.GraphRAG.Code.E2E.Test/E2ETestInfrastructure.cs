@@ -46,7 +46,7 @@ internal static partial class E2ETestInfrastructure
         string databasePath = Path.Combine(scratchDirectory, "agency-repo.sqlite");
         var runner = new SqliteRunner($"Data Source={databasePath}");
         var embeddingGenerator = new FakeEmbeddingGenerator();
-        var store = new SqliteGraphStore(runner, embeddingGenerator, NullLogger<SqliteGraphStore>.Instance);
+        var store = new SqliteGraphStore(runner, embeddingGenerator, FakeEmbeddingGenerator.Dimensions, NullLogger<SqliteGraphStore>.Instance);
         return new SqliteHarness(scratchDirectory, databasePath, runner, embeddingGenerator, store);
     }
 

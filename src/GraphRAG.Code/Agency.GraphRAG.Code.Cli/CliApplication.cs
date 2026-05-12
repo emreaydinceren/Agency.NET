@@ -117,10 +117,10 @@ public static class CliApplication
             catch (Exception ex)
             {
                 AnsiConsole.MarkupLine($"[red bold]✗ Indexing failed[/]");
-                AnsiConsole.MarkupLine($"[red]{ex.GetType().Name}:[/] {ex.Message}");
+                AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.GetType().Name)}:[/] {Markup.Escape(ex.Message)}");
                 if (!string.IsNullOrWhiteSpace(ex.InnerException?.Message))
                 {
-                    AnsiConsole.MarkupLine($"[dim red]Cause:[/] {ex.InnerException.Message}");
+                    AnsiConsole.MarkupLine($"[dim red]Cause:[/] {Markup.Escape(ex.InnerException.Message)}");
                 }
                 AnsiConsole.WriteLine();
                 AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);

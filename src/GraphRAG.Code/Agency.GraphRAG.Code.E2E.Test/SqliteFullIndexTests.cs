@@ -201,7 +201,7 @@ internal sealed class FullIndexPipelineFixture : IAsyncDisposable
 
             this._runner = new SqliteRunner($"Data Source={this._databasePath}");
             var embeddingGenerator = new FakeEmbeddingGenerator();
-            this._store = new SqliteGraphStore(this._runner, embeddingGenerator, NullLogger<SqliteGraphStore>.Instance);
+            this._store = new SqliteGraphStore(this._runner, embeddingGenerator, FakeEmbeddingGenerator.Dimensions, NullLogger<SqliteGraphStore>.Instance);
 
             await this._store.InitializeSchemaAsync(CancellationToken.None);
             await this._store.UpsertRepoAsync(this.Repo, CancellationToken.None);

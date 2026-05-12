@@ -97,6 +97,11 @@ public abstract class IGraphStoreContractTests
             typeof(Task<IReadOnlyList<Symbol>>),
             typeof(string),
             typeof(CancellationToken));
+        AssertMethod(
+            nameof(IGraphStore.GetSymbolsByFileIdAsync),
+            typeof(Task<IReadOnlyList<Symbol>>),
+            typeof(Guid),
+            typeof(CancellationToken));
     }
 
     [Fact]

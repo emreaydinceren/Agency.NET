@@ -103,4 +103,10 @@ public interface IGraphStore
     Task<SourceFile?> GetFileByPathAsync(
         string path,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Returns all symbols belonging to the specified file.</summary>
+    Task<IReadOnlyList<Symbol>> GetSymbolsByFileIdAsync(
+        Guid fileId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Symbol>>([]);
 }

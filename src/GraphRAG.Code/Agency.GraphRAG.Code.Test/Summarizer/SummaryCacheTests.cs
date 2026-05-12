@@ -155,4 +155,108 @@ public sealed class SummaryCacheTests : IDisposable
         Assert.NotNull(actual);
         Assert.Empty(actual.ProbableCallees);
     }
+
+    [Fact]
+    public void TryGetAny_WithNoEntries_ReturnsFalse()
+    {
+        using SummaryCache cache = new(this._databasePath);
+
+        bool found = cache.TryGetAny("missing-hash", out SummaryCacheEntry? actual);
+
+        Assert.False(found);
+        Assert.Null(actual);
+    }
+
+    [Fact]
+    public void TryGetAny_WithSingleEntry_ReturnsIt()
+    {
+        using SummaryCache cache = new(this._databasePath);
+        SummaryCacheEntry expected = new("One line", "Detailed", ["Call"]);
+        cache.Set("hash-1", "Cheap", expected);
+
+        bool found = cache.TryGetAny("hash-1", out SummaryCacheEntry? actual);
+
+        Assert.True(found);
+        SummaryCacheEntryAssert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void TryGetAny_PrefersStrongerTier_WhenMultipleTiersStored()
+    {
+        using SummaryCache cache = new(this._databasePath);
+        SummaryCacheEntry cheap = new("Cheap one-line", "Cheap detail", []);
+        SummaryCacheEntry strong = new("Strong one-line", "Strong detail", ["InterfaceCall"]);
+        cache.Set("hash-1", "Cheap", cheap);
+        cache.Set("hash-1", "Strong", strong);
+
+        bool found = cache.TryGetAny("hash-1", out SummaryCacheEntry? actual);
+
+        Assert.True(found);
+        SummaryCacheEntryAssert.Equal(strong, actual);
+    }
+
+    [Fact]
+    public void TryGetAny_ReturnsHit_WhenExactTierIsDifferentFromCachedTier()
+    {
+        // Simulates the incremental-walk scenario: symbol cached as Standard on a full run,
+        // but on a subsequent incremental run isLeaf changes and the code looks up Cheap.
+        // TryGetAny should still find the Standard entry and avoid a redundant LLM call.
+        using SummaryCache cache = new(this._databasePath);
+        SummaryCacheEntry standard = new("Standard line", "Standard detail", ["Callee"]);
+        cache.Set("hash-1", "Standard", standard);
+
+        bool exactMiss = cache.TryGet("hash-1", "Cheap", out _);
+        bool anyHit = cache.TryGetAny("hash-1", out SummaryCacheEntry? fallback);
+
+        Assert.False(exactMiss);
+        Assert.True(anyHit);
+        SummaryCacheEntryAssert.Equal(standard, fallback);
+    }
+
+    [Fact]
+    public void SetEmbedding_ThenTryGetEmbedding_ReturnsCachedEmbedding()
+    {
+        using SummaryCache cache = new(this._databasePath);
+        float[] floats = [1.0f, 2.0f, 3.0f];
+
+        cache.SetEmbedding("chunk-hash-1", "text-embedding-3-small", new ReadOnlyMemory<float>(floats));
+
+        bool found = cache.TryGetEmbedding("chunk-hash-1", "text-embedding-3-small", out ReadOnlyMemory<float> actual);
+
+        Assert.True(found);
+        Assert.Equal(floats, actual.ToArray());
+    }
+
+    [Fact]
+    public void TryGetEmbedding_WrongModel_ReturnsFalse()
+    {
+        using SummaryCache cache = new(this._databasePath);
+        cache.SetEmbedding("chunk-hash-1", "model-a", new ReadOnlyMemory<float>([1.0f]));
+
+        bool found = cache.TryGetEmbedding("chunk-hash-1", "model-b", out ReadOnlyMemory<float> embedding);
+
+        Assert.False(found);
+        Assert.Equal(default, embedding);
+    }
+
+    /// <summary>
+    /// The crash-resume guarantee for embeddings: a vector written by one instance must be readable
+    /// by a fresh instance opening the same file (simulating a process restart mid-hydration).
+    /// </summary>
+    [Fact]
+    public void SetEmbedding_InOneInstance_TryGetEmbedding_InNewInstance_ReturnsCachedEmbedding()
+    {
+        float[] floats = [0.1f, 0.2f, 0.3f];
+
+        using (SummaryCache writer = new(this._databasePath))
+        {
+            writer.SetEmbedding("chunk-hash-1", "text-embedding-3-small", new ReadOnlyMemory<float>(floats));
+        }
+
+        using SummaryCache reader = new(this._databasePath);
+        bool found = reader.TryGetEmbedding("chunk-hash-1", "text-embedding-3-small", out ReadOnlyMemory<float> actual);
+
+        Assert.True(found);
+        Assert.Equal(floats, actual.ToArray());
+    }
 }

@@ -21,10 +21,12 @@ public sealed class SymbolSummarizer(
 {
     private readonly TimeSpan requestTimeout = TimeSpan.FromMinutes(Math.Max(1, options.Value.RequestTimeoutMinutes));
     private readonly int maxOutputTokens = options.Value.MaxOutputTokens;
+    private readonly float? frequencyPenalty = options.Value.FrequencyPenalty;
+    private readonly float? temperature = options.Value.Temperature;
 
     private const int MaxProbableCallees = 10;
 
-    private const string SummaryInstructions =
+    private const string DetailedSummaryInstructions =
 """
 You are a code analyzer. Your job: read the code provided and produce a concise summary.
 
@@ -42,6 +44,9 @@ Rules:
 - If the code is unclear or truncated, state that once and summarize what's visible. Do not speculate about missing pieces.
 - Stop when the four sections are done. Do not add a conclusion or recap.
 """;
+
+    private const string OneLineSummaryInstructions =
+        "You summarize source code precisely and concisely. Follow the user's formatting requirements exactly. Output only what is asked. Do not explain your reasoning or add any preamble.";
     //private const string SummaryInstructions_old =
     //    "You summarize source code precisely and concisely. Follow the user's formatting requirements exactly. Output only what is asked. Do not explain your reasoning or add any preamble. /no_think";
 
@@ -102,7 +107,8 @@ Rules:
             string detailed;
             IReadOnlyList<string> probableCallees;
 
-            if (cache.TryGet(contentHash, cacheKey, out SummaryCacheEntry? cachedEntry))
+            if (cache.TryGet(contentHash, cacheKey, out SummaryCacheEntry? cachedEntry)
+                || cache.TryGetAny(contentHash, out cachedEntry))
             {
                 oneLine = cachedEntry.OneLine;
                 detailed = cachedEntry.Detailed;
@@ -113,6 +119,7 @@ Rules:
                 oneLine = await GetTextResponseAsync(
                     modelTierSelector.SelectOneLineModel(),
                     promptBuilder.BuildOneLinePrompt(chunk),
+                    OneLineSummaryInstructions,
                     cancellationToken).ConfigureAwait(false);
 
                 IReadOnlyList<string> parentSummaries = GetParentSummaries(
@@ -128,6 +135,7 @@ Rules:
                 string detailedResponse = await GetTextResponseAsync(
                     modelTierSelector.SelectDetailedModel(chunk, isLeaf),
                     AppendProbableCalleesInstruction(detailedPrompt),
+                    DetailedSummaryInstructions,
                     cancellationToken).ConfigureAwait(false);
 
                 ParsedDetailedSummary parsed = ParseDetailedSummary(detailedResponse);
@@ -142,7 +150,9 @@ Rules:
                 }
             }
 
-            if (oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal))
+            bool isFailed = oneLine.Contains("[Unable to generate summary]", StringComparison.Ordinal)
+                || detailed.Contains("[Unable to generate summary]", StringComparison.Ordinal);
+            if (isFailed)
             {
                 failed++;
                 failedChunkIds.Add(chunk.Id);
@@ -158,7 +168,7 @@ Rules:
         return new SummarizationResult(results, failedChunkIds);
     }
 
-    private async Task<string> GetTextResponseAsync(string model, string prompt, CancellationToken cancellationToken)
+    private async Task<string> GetTextResponseAsync(string model, string prompt, string instructions, CancellationToken cancellationToken)
     {
         const int MaxRetries = 10;
         int attempt = 0;
@@ -177,8 +187,10 @@ Rules:
                     new ChatOptions
                     {
                         ModelId = model,
-                        Instructions = SummaryInstructions,
+                        Instructions = instructions,
                         MaxOutputTokens = this.maxOutputTokens,
+                        FrequencyPenalty = this.frequencyPenalty,
+                        Temperature = this.temperature,
                     },
                     cts.Token).ConfigureAwait(false);
 

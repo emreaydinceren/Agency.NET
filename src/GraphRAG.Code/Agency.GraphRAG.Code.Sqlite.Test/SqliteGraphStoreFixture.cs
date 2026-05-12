@@ -147,7 +147,7 @@ public sealed class SqliteGraphStoreFixture : IAsyncDisposable
             ?? loggerType.GetField("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
             ?? throw new InvalidOperationException($"Could not create a null logger for '{storeType.FullName}'.");
 
-        object? instance = Activator.CreateInstance(storeType, runner, embeddingGenerator, logger);
+        object? instance = Activator.CreateInstance(storeType, runner, embeddingGenerator, FakeEmbeddingGenerator.Dimensions, logger);
         if (instance is not IGraphStore store)
         {
             throw new InvalidOperationException("SqliteGraphStore does not implement IGraphStore.");

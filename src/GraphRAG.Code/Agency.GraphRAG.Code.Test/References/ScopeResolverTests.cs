@@ -51,7 +51,9 @@ public sealed class ScopeResolverTests
         Assert.Contains(localB.Id, reachable);
         Assert.Contains(imported.Id, reachable);
         TraversalRequest request = Assert.Single(store.Requests);
-        Assert.Equal([localA.Id, localB.Id], request.SeedSymbolIds.OrderBy(static id => id).ToArray());
+        Assert.Equal(
+            new[] { localA.Id, localB.Id }.OrderBy(static id => id).ToArray(),
+            request.SeedSymbolIds.OrderBy(static id => id).ToArray());
         Assert.Contains(EdgeKind.Imports, request.EdgeKinds);
     }
 

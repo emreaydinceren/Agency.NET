@@ -20,50 +20,88 @@ public sealed class IncrementalHydrator(
     /// <param name="changeSet">The detected repository change set.</param>
     /// <param name="writeRequestsByPath">The parsed-file requests keyed by repository-relative path.</param>
     /// <param name="packagesByFileId">External packages in scope keyed by file identifier.</param>
+    /// <param name="onProgress">Optional callback for sub-step progress messages.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     public async Task HydrateAsync(
         ChangeSet changeSet,
         IReadOnlyDictionary<string, Phase1WriteRequest> writeRequestsByPath,
         IReadOnlyDictionary<Guid, IReadOnlyList<ExternalPackage>> packagesByFileId,
+        Action<string>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(changeSet);
         ArgumentNullException.ThrowIfNull(writeRequestsByPath);
         ArgumentNullException.ThrowIfNull(packagesByFileId);
 
-        foreach (string deletedPath in changeSet.DeletedFiles)
+        if (changeSet.DeletedFiles.Count > 0)
         {
-            Guid? fileId = await lookupFileIdByPathAsync(deletedPath, cancellationToken).ConfigureAwait(false);
-            if (fileId.HasValue)
+            onProgress?.Invoke($"  Deleting {changeSet.DeletedFiles.Count} file(s)...");
+            foreach (string deletedPath in changeSet.DeletedFiles)
             {
-                await graphStore.DeleteFileAsync(fileId.Value, cancellationToken).ConfigureAwait(false);
+                Guid? fileId = await lookupFileIdByPathAsync(deletedPath, cancellationToken).ConfigureAwait(false);
+                if (fileId.HasValue)
+                {
+                    await graphStore.DeleteFileAsync(fileId.Value, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
-        foreach (RenamedFileChange rename in changeSet.RenamedFiles)
+        if (changeSet.RenamedFiles.Count > 0)
         {
-            Guid? fileId = await lookupFileIdByPathAsync(rename.OldPath, cancellationToken).ConfigureAwait(false);
-            if (fileId.HasValue)
+            onProgress?.Invoke($"  Renaming {changeSet.RenamedFiles.Count} file(s)...");
+            foreach (RenamedFileChange rename in changeSet.RenamedFiles)
             {
-                await graphStore.RenameFileAsync(fileId.Value, rename.NewPath, cancellationToken).ConfigureAwait(false);
+                Guid? fileId = await lookupFileIdByPathAsync(rename.OldPath, cancellationToken).ConfigureAwait(false);
+                if (fileId.HasValue)
+                {
+                    await graphStore.RenameFileAsync(fileId.Value, rename.NewPath, cancellationToken).ConfigureAwait(false);
+                }
             }
+        }
+
+        List<(string Path, Phase1WriteRequest Request)> phase1Work = [];
+        foreach (string path in changeSet.AddedFiles
+            .Concat(changeSet.ModifiedFiles.Select(static c => c.Path))
+            .Concat(changeSet.RenamedFiles.Select(static c => c.NewPath))
+            .Distinct(StringComparer.Ordinal))
+        {
+            if (writeRequestsByPath.TryGetValue(path, out Phase1WriteRequest? request))
+            {
+                phase1Work.Add((path, request));
+            }
+        }
+
+        if (phase1Work.Count > 0)
+        {
+            onProgress?.Invoke($"  Writing {phase1Work.Count} file(s) (phase 1)...");
         }
 
         List<Guid> filesToResolve = [];
-        foreach (string path in changeSet.AddedFiles.Concat(changeSet.ModifiedFiles.Select(static change => change.Path)).Concat(changeSet.RenamedFiles.Select(static change => change.NewPath)).Distinct(StringComparer.Ordinal))
+        for (int i = 0; i < phase1Work.Count; i++)
         {
-            if (!writeRequestsByPath.TryGetValue(path, out Phase1WriteRequest? request))
-            {
-                continue;
-            }
-
+            (string path, Phase1WriteRequest request) = phase1Work[i];
+            onProgress?.Invoke($"  [phase1 {i + 1}/{phase1Work.Count}] {path}");
             await writePhase1Async(request, cancellationToken).ConfigureAwait(false);
             filesToResolve.Add(request.File.Id);
         }
 
         IReadOnlyList<Guid> reverseAffected = await resolveReverseAffectedFileIdsAsync(changeSet, cancellationToken).ConfigureAwait(false);
-        foreach (Guid fileId in filesToResolve.Concat(reverseAffected).Distinct())
+        List<Guid> phase2Ids = filesToResolve.Concat(reverseAffected).Distinct().ToList();
+
+        if (phase2Ids.Count > 0)
         {
+            onProgress?.Invoke($"  Resolving references for {phase2Ids.Count} file(s) (phase 2)...");
+        }
+
+        Dictionary<Guid, string> filePathById = phase1Work.ToDictionary(
+            static pair => pair.Request.File.Id,
+            static pair => pair.Path);
+
+        for (int i = 0; i < phase2Ids.Count; i++)
+        {
+            Guid fileId = phase2Ids[i];
+            string label = filePathById.TryGetValue(fileId, out string? p) ? p : fileId.ToString("D");
+            onProgress?.Invoke($"  [phase2 {i + 1}/{phase2Ids.Count}] {label}");
             await resolvePhase2Async(
                 fileId,
                 packagesByFileId.TryGetValue(fileId, out IReadOnlyList<ExternalPackage>? packages) ? packages : [],

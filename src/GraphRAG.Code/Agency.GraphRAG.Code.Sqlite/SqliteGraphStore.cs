@@ -1010,6 +1010,50 @@ public sealed class SqliteGraphStore : IGraphStore
     }
 
     /// <inheritdoc />
+    public Task<string?> GetRepoLocalPathAsync(Guid repoId, CancellationToken cancellationToken = default) =>
+        this.RunOperationAsync(
+            "get-repo-local-path",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.repo.id", repoId);
+
+                List<string?> results = await this._sqliteRunner.QueryAsync(
+                    """
+                    SELECT root_path
+                    FROM repos
+                    WHERE id = @repoId
+                    LIMIT 1;
+                    """,
+                    reader => Task.FromResult(reader.IsDBNull(0) ? null : reader.GetString(0)),
+                    new Dictionary<string, object?> { ["repoId"] = ToDbGuid(repoId) },
+                    cancellationToken);
+
+                return results.Count == 0 ? null : results[0];
+            });
+
+    /// <inheritdoc />
+    public Task<SourceFile?> GetFileByIdAsync(Guid fileId, CancellationToken cancellationToken = default) =>
+        this.RunOperationAsync(
+            "get-file-by-id",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.file.id", fileId);
+
+                List<SourceFile> results = await this._sqliteRunner.QueryAsync(
+                    """
+                    SELECT id, repo_id, project_id, path, language, content_hash
+                    FROM files
+                    WHERE id = @fileId
+                    LIMIT 1;
+                    """,
+                    reader => Task.FromResult(HydrateSourceFile(reader)),
+                    new Dictionary<string, object?> { ["fileId"] = ToDbGuid(fileId) },
+                    cancellationToken);
+
+                return results.Count == 0 ? null : results[0];
+            });
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<Symbol>> GetSymbolsByFileIdAsync(Guid fileId, CancellationToken cancellationToken = default) =>
         this.RunOperationAsync(
             "get-symbols-by-file",

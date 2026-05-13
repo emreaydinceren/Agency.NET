@@ -105,7 +105,7 @@ public sealed class IndexingPipelineTests
         await pipeline.RunAsync(repo, TestContext.Current.CancellationToken);
 
         Assert.Equal(["walk", "manifest", "chunk", "detect", "summarize", "packages"], stages);
-        Assert.Equal((HydrationIds.StableGuid(repo.LocalPath), "new-head"), Assert.Single(graphStore.IndexedCommits));
+        Assert.Equal((HydrationIds.StableGuid(IndexingPipeline.NormalizeRepoPath(repo.LocalPath)), "new-head"), Assert.Single(graphStore.IndexedCommits));
     }
 
     private sealed class TrackingGraphStore : IGraphStore

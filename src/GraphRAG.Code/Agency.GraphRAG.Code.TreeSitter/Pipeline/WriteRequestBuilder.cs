@@ -57,7 +57,7 @@ public sealed class WriteRequestBuilder(ChunkerDispatcher chunkerDispatcher, ILo
                 {
                     Id = HydrationIds.StableGuid($"file:{repo.Id}:{file.Path}"),
                     RepoId = repo.Id,
-                    ProjectId = Guid.Empty,
+                    ProjectId = HydrationIds.StableGuid($"project:default:{repo.Id}"),
                     Path = file.Path,
                     Language = LanguageName(file.Language),
                     ContentHash = ComputeHash(source),

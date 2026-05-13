@@ -1,9 +1,10 @@
 using FluentMigrator;
+using Microsoft.Data.Sqlite;
 
 namespace Agency.GraphRAG.Code.Sqlite.Migrations;
 
 /// <summary>
-/// Creates the base SQLite schema for GraphRAG code indexing.
+/// Creates the full SQLite schema for GraphRAG code indexing, including FTS5 and vec0 virtual tables.
 /// </summary>
 [Migration(1)]
 public sealed class M0001_InitialSchema : Migration
@@ -29,7 +30,8 @@ public sealed class M0001_InitialSchema : Migration
                 relative_path TEXT NOT NULL,
                 manifest_path TEXT NULL,
                 language TEXT NOT NULL,
-                ecosystem TEXT NULL
+                ecosystem TEXT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE
             );
             CREATE INDEX idx_projects_repo_id ON projects(repo_id);
 
@@ -40,7 +42,8 @@ public sealed class M0001_InitialSchema : Migration
                 version TEXT NULL,
                 version_resolved TEXT NULL,
                 ecosystem TEXT NOT NULL,
-                scope TEXT NOT NULL
+                scope TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
             CREATE INDEX idx_external_packages_project_id ON external_packages(project_id);
 
@@ -51,7 +54,9 @@ public sealed class M0001_InitialSchema : Migration
                 path TEXT NOT NULL,
                 language TEXT NOT NULL,
                 content_hash TEXT NULL,
-                last_indexed_at TEXT NULL
+                last_indexed_at TEXT NULL,
+                FOREIGN KEY (repo_id) REFERENCES repos(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
             CREATE UNIQUE INDEX idx_files_repo_id_path ON files(repo_id, path);
             CREATE INDEX idx_files_project_id ON files(project_id);
@@ -62,7 +67,8 @@ public sealed class M0001_InitialSchema : Migration
                 project_id TEXT NULL,
                 name TEXT NOT NULL,
                 path TEXT NULL,
-                kind TEXT NULL
+                kind TEXT NULL,
+                FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
             );
             CREATE INDEX idx_modules_file_id ON modules(file_id);
 
@@ -80,7 +86,9 @@ public sealed class M0001_InitialSchema : Migration
                 content_hash TEXT NULL,
                 is_utility INTEGER NOT NULL,
                 source_range_start INTEGER NOT NULL,
-                source_range_end INTEGER NOT NULL
+                source_range_end INTEGER NOT NULL,
+                FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+                FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE SET NULL
             );
             CREATE INDEX idx_symbols_file_id ON symbols(file_id);
             CREATE INDEX idx_symbols_module_id ON symbols(module_id);
@@ -117,17 +125,91 @@ public sealed class M0001_InitialSchema : Migration
                 source_file_id TEXT NOT NULL,
                 identifier TEXT NOT NULL,
                 scope TEXT NULL,
-                llm_extracted_target TEXT NULL
+                llm_extracted_target TEXT NULL,
+                FOREIGN KEY (source_symbol_id) REFERENCES symbols(id) ON DELETE CASCADE,
+                FOREIGN KEY (source_file_id) REFERENCES files(id) ON DELETE CASCADE
             );
             CREATE INDEX idx_unresolved_call_sites_source_file_id ON unresolved_call_sites(source_file_id);
+
+            CREATE VIRTUAL TABLE symbols_fts USING fts5(
+                name,
+                content='symbols',
+                content_rowid='rowid'
+            );
+
+            INSERT INTO symbols_fts(rowid, name)
+            SELECT rowid, name
+            FROM symbols;
+
+            CREATE TRIGGER trg_symbols_ai_fts
+            AFTER INSERT ON symbols
+            BEGIN
+                INSERT INTO symbols_fts(rowid, name)
+                VALUES (new.rowid, new.name);
+            END;
+
+            CREATE TRIGGER trg_symbols_au_fts
+            AFTER UPDATE ON symbols
+            BEGIN
+                INSERT INTO symbols_fts(symbols_fts, rowid, name)
+                VALUES ('delete', old.rowid, old.name);
+                INSERT INTO symbols_fts(rowid, name)
+                VALUES (new.rowid, new.name);
+            END;
+
+            CREATE TRIGGER trg_symbols_ad_fts
+            AFTER DELETE ON symbols
+            BEGIN
+                INSERT INTO symbols_fts(symbols_fts, rowid, name)
+                VALUES ('delete', old.rowid, old.name);
+            END;
             """);
+
+        this.Execute.WithConnection((connection, _) =>
+        {
+            var sqliteConnection = (SqliteConnection)connection;
+            SqliteMigrationRunner.ConfigureConnection(sqliteConnection);
+
+            using var command = sqliteConnection.CreateCommand();
+            command.CommandText =
+                $"""
+                CREATE VIRTUAL TABLE symbols_vec USING vec0(
+                    symbol_id TEXT PRIMARY KEY,
+                    embedding FLOAT[{SqliteMigrationRunner.CurrentContext.EmbeddingDimensions}]
+                );
+
+                CREATE VIRTUAL TABLE clusters_vec USING vec0(
+                    cluster_id TEXT PRIMARY KEY,
+                    embedding FLOAT[{SqliteMigrationRunner.CurrentContext.EmbeddingDimensions}]
+                );
+                """;
+            command.ExecuteNonQuery();
+        });
     }
 
     /// <inheritdoc />
     public override void Down()
     {
+        this.Execute.WithConnection((connection, _) =>
+        {
+            var sqliteConnection = (SqliteConnection)connection;
+            SqliteMigrationRunner.ConfigureConnection(sqliteConnection);
+
+            using var command = sqliteConnection.CreateCommand();
+            command.CommandText =
+                """
+                DROP TABLE IF EXISTS symbols_vec;
+                DROP TABLE IF EXISTS clusters_vec;
+                """;
+            command.ExecuteNonQuery();
+        });
+
         this.Execute.Sql(
             """
+            DROP TRIGGER IF EXISTS trg_symbols_ad_fts;
+            DROP TRIGGER IF EXISTS trg_symbols_au_fts;
+            DROP TRIGGER IF EXISTS trg_symbols_ai_fts;
+            DROP TABLE IF EXISTS symbols_fts;
             DROP TABLE IF EXISTS unresolved_call_sites;
             DROP TABLE IF EXISTS clusters;
             DROP TABLE IF EXISTS edges;

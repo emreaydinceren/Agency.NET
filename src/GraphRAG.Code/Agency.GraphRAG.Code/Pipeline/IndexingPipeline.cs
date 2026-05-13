@@ -30,9 +30,22 @@ public sealed class IndexingPipeline(
     {
         ArgumentNullException.ThrowIfNull(repo);
 
-        Guid stableId = HydrationIds.StableGuid(repo.LocalPath);
+        Guid stableId = HydrationIds.StableGuid(NormalizeRepoPath(repo.LocalPath));
         string? indexedCommit = await graphStore.LoadIndexedCommitAsync(stableId, cancellationToken).ConfigureAwait(false);
         repo = repo with { Id = stableId, IndexedCommit = indexedCommit };
+
+        onProgress?.Invoke("Registering repository...");
+        repo = repo with { IndexedAt = DateTimeOffset.UtcNow };
+        await graphStore.UpsertRepoAsync(repo, cancellationToken).ConfigureAwait(false);
+        await graphStore.UpsertProjectAsync(new Project
+        {
+            Id = HydrationIds.StableGuid($"project:default:{repo.Id}"),
+            RepoId = repo.Id,
+            Name = Path.GetFileName(repo.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+            Language = "mixed",
+            RelativePath = ".",
+            ManifestPath = null,
+        }, cancellationToken).ConfigureAwait(false);
 
         onProgress?.Invoke("Walking repository...");
         WalkResult walkResult = await walkAsync(repo, cancellationToken).ConfigureAwait(false);
@@ -75,5 +88,20 @@ public sealed class IndexingPipeline(
         {
             await graphStore.SetIndexedCommitAsync(repo.Id, walkResult.HeadCommit, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Normalizes a repository path for stable GUID generation by canonicalizing separators, trimming trailing slashes, and lowercasing on case-insensitive filesystems.
+    /// </summary>
+    /// <param name="localPath">The repository path to normalize.</param>
+    /// <returns>The normalized path.</returns>
+    internal static string NormalizeRepoPath(string localPath)
+    {
+        string full = Path.GetFullPath(localPath);
+        string? root = Path.GetPathRoot(full);
+        string trimmed = (root != null && full.Length > root.Length)
+            ? full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : full;
+        return OperatingSystem.IsWindows() ? trimmed.ToLowerInvariant() : trimmed;
     }
 }

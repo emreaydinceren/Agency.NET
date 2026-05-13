@@ -88,11 +88,22 @@ public sealed class SqliteMigrationRunnerTests : IClassFixture<SqliteMigrationRu
     [Fact]
     public async Task SymbolsFtsTriggers_KeepIndexInSync()
     {
-        string symbolId = Guid.NewGuid().ToString("D");
+        string repoId = Guid.NewGuid().ToString("D");
+        string projectId = Guid.NewGuid().ToString("D");
         string fileId = Guid.NewGuid().ToString("D");
+        string symbolId = Guid.NewGuid().ToString("D");
 
         await this._fixture.ExecuteAsync(
             """
+            INSERT INTO repos (id, remote_url, root_path, indexed_commit, indexed_at, is_shallow)
+            VALUES ($repoId, NULL, 'E:\Repos\Agency', NULL, NULL, 0);
+
+            INSERT INTO projects (id, repo_id, name, relative_path, manifest_path, language, ecosystem)
+            VALUES ($projectId, $repoId, 'TestProject', 'src', NULL, 'csharp', NULL);
+
+            INSERT INTO files (id, repo_id, project_id, path, language, content_hash, last_indexed_at)
+            VALUES ($fileId, $repoId, $projectId, 'src\Test.cs', 'csharp', NULL, NULL);
+
             INSERT INTO symbols (
                 id, file_id, module_id, name, fully_qualified_name, kind, signature, summary, one_line_summary,
                 embedding, content_hash, is_utility, source_range_start, source_range_end
@@ -104,8 +115,10 @@ public sealed class SqliteMigrationRunnerTests : IClassFixture<SqliteMigrationRu
             """,
             new()
             {
-                ["$id"] = symbolId,
+                ["$repoId"] = repoId,
+                ["$projectId"] = projectId,
                 ["$fileId"] = fileId,
+                ["$id"] = symbolId,
             });
 
         Assert.Equal(1L, await this._fixture.CountAsync("SELECT COUNT(*) FROM symbols_fts WHERE symbols_fts MATCH 'OriginalName';"));

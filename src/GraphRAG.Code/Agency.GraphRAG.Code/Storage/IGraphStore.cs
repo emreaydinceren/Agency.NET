@@ -104,6 +104,18 @@ public interface IGraphStore
         string path,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Returns the file record with the specified identifier, or <c>null</c> if not found.</summary>
+    Task<SourceFile?> GetFileByIdAsync(
+        Guid fileId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<SourceFile?>(null);
+
+    /// <summary>Returns the local file-system root path of the repository with the specified identifier, or <c>null</c> if not found.</summary>
+    Task<string?> GetRepoLocalPathAsync(
+        Guid repoId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
     /// <summary>Returns all symbols belonging to the specified file.</summary>
     Task<IReadOnlyList<Symbol>> GetSymbolsByFileIdAsync(
         Guid fileId,

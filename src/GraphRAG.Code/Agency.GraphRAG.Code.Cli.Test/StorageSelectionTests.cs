@@ -12,7 +12,7 @@ public sealed class StorageSelectionTests
     {
         CliInvocation invocation = CliApplication.CreateIndexInvocation(
             @"E:\Repos\Agency",
-            "sqlite",
+            null,
             null,
             null,
             null,

@@ -7,6 +7,7 @@ using Agency.GraphRAG.Code.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using System.ComponentModel.DataAnnotations;
@@ -67,10 +68,11 @@ public static class CliApplication
                     workingDirectory);
 
                 AnsiConsole.MarkupLine($"[bold blue]Indexing repository:[/] {invocation.Repo!.LocalPath}");
-                AnsiConsole.MarkupLine($"[dim]Store:[/] {invocation.Options.Store} | [dim]Working directory:[/] {workingDirectory}");
-                AnsiConsole.WriteLine();
 
                 using IHost host = CreateHost(invocation);
+                CodeIndexOptions resolvedOptions = host.Services.GetRequiredService<IOptions<CodeIndexOptions>>().Value;
+                AnsiConsole.MarkupLine($"[dim]Store:[/] {resolvedOptions.Store} | [dim]Working directory:[/] {workingDirectory}");
+                AnsiConsole.WriteLine();
                 IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
 
                 AnsiConsole.MarkupLine("[yellow]→[/] Initializing database schema...");
@@ -138,7 +140,7 @@ public static class CliApplication
         public string? Repo { get; init; }
 
         [CommandOption("--store")]
-        public string Store { get; init; } = "sqlite";
+        public string? Store { get; init; }
 
         [CommandOption("--connection")]
         public string? Connection { get; init; }
@@ -175,12 +177,67 @@ public static class CliApplication
             using IHost host = CreateHost(invocation);
             IGraphStore graphStore = host.Services.GetRequiredService<IGraphStore>();
             await graphStore.InitializeSchemaAsync().ConfigureAwait(false);
-            string response = (await host.Services.GetRequiredService<QueryPipeline>()
+            QueryResponse response = await host.Services.GetRequiredService<QueryPipeline>()
                 .ExecuteAsync(invocation.Question!, cancellationToken)
-                .ConfigureAwait(false)).Answer;
-            Console.Out.WriteLine(response);
+                .ConfigureAwait(false);
+
+            if (settings.Verbose)
+            {
+                PrintVerboseOutput(response);
+            }
+
+            Console.Out.WriteLine(response.Answer);
 
             return 0;
+        }
+
+        private static void PrintVerboseOutput(QueryResponse response)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[dim]=== Query Plan ===[/]");
+            AnsiConsole.MarkupLine($"Category:        {Markup.Escape(response.Plan.Category.ToString())}");
+            AnsiConsole.MarkupLine($"FocusTerm:       {Markup.Escape(response.Plan.FocusTerm ?? "(none)")}");
+            AnsiConsole.MarkupLine($"SymbolTopK:      {response.Plan.SymbolTopK}    ClusterTopK: {response.Plan.ClusterTopK}");
+            AnsiConsole.WriteLine($"Traversal:       {response.Plan.TraversalDirection}, {response.Plan.TraversalMaxHops} hop(s), [{string.Join(", ", response.Plan.TraversalEdgeKinds)}]");
+            AnsiConsole.MarkupLine($"VectorSearch:    Symbols={response.Plan.UseSymbolVectorSearch} Clusters={response.Plan.UseClusterVectorSearch}");
+            AnsiConsole.WriteLine();
+
+            AnsiConsole.MarkupLine($"[dim]=== Retrieval ({response.RetrieveDuration.TotalMilliseconds:F0}ms) ===[/]");
+            if (response.Retrieval != null)
+            {
+                if (response.Retrieval.Symbols.Count > 0)
+                {
+                    AnsiConsole.MarkupLine($"Symbols ({response.Retrieval.Symbols.Count}):");
+                    foreach (var symbolResult in response.Retrieval.Symbols)
+                    {
+                        string rawSize = !string.IsNullOrEmpty(symbolResult.RawCode)
+                            ? $"{symbolResult.RawCode.Length / 1024.0:F1}KB"
+                            : "-";
+                        AnsiConsole.WriteLine($"  {symbolResult.Score:F2}  d={symbolResult.Depth}  {symbolResult.Symbol.FullyQualifiedName ?? symbolResult.Symbol.Name}    [raw: {rawSize}]");
+                    }
+                }
+
+                if (response.Retrieval.Clusters.Count > 0)
+                {
+                    AnsiConsole.MarkupLine($"Clusters ({response.Retrieval.Clusters.Count}):");
+                    foreach (var clusterResult in response.Retrieval.Clusters)
+                    {
+                        AnsiConsole.WriteLine($"  {clusterResult.Score:F2}  [{clusterResult.Cluster.Type}]  {clusterResult.Cluster.Label}");
+                    }
+                }
+
+                AnsiConsole.MarkupLine($"LowConfidence:   {response.Retrieval.HasLowConfidenceReferences}");
+            }
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[dim]=== Context ({response.Context.EstimatedTokens} est tokens, truncated: {response.Context.IsTruncated}) ===[/]");
+            AnsiConsole.MarkupLine(Markup.Escape(response.Context.ContextText));
+            AnsiConsole.WriteLine();
+
+            string inputTokensStr = response.InputTokenCount?.ToString() ?? "?";
+            string outputTokensStr = response.OutputTokenCount?.ToString() ?? "?";
+            AnsiConsole.MarkupLine($"[dim]=== LLM ({response.AnswerDuration.TotalMilliseconds:F0}ms, in={inputTokensStr} out={outputTokensStr} tokens) ===[/]");
+            AnsiConsole.WriteLine();
         }
     }
 
@@ -193,7 +250,7 @@ public static class CliApplication
         public string? Question { get; init; }
 
         [CommandOption("--store")]
-        public string Store { get; init; } = "sqlite";
+        public string? Store { get; init; }
 
         [CommandOption("--connection")]
         public string? Connection { get; init; }
@@ -209,6 +266,10 @@ public static class CliApplication
 
         [CommandOption("--embedding-api-key")]
         public string? EmbeddingApiKey { get; init; }
+
+        /// <summary>Gets a value indicating whether verbose output is enabled.</summary>
+        [CommandOption("--verbose")]
+        public bool Verbose { get; init; }
     }
 
     /// <summary>
@@ -216,7 +277,7 @@ public static class CliApplication
     /// </summary>
     public static CliInvocation CreateIndexInvocation(
         string repo,
-        string store,
+        string? store,
         string? connection,
         string? embeddingBaseUrl,
         string? embeddingModelId,
@@ -236,7 +297,9 @@ public static class CliApplication
                 IndexedCommit = null,
                 IndexedAt = null,
                 RemoteUrl = null,
-            });
+            },
+            ExplicitStore: store,
+            ExplicitConnectionString: connection);
     }
 
     /// <summary>
@@ -244,7 +307,7 @@ public static class CliApplication
     /// </summary>
     public static CliInvocation CreateQueryInvocation(
         string question,
-        string store,
+        string? store,
         string? connection,
         int topK,
         string? embeddingBaseUrl,
@@ -258,7 +321,9 @@ public static class CliApplication
             BuildOptions(store, connection, workingDirectory),
             Embedding: new CliEmbeddingOptions(embeddingBaseUrl, embeddingModelId, embeddingApiKey),
             Question: question,
-            TopK: topK);
+            TopK: topK,
+            ExplicitStore: store,
+            ExplicitConnectionString: connection);
     }
 
     private static IHost CreateHost(CliInvocation invocation)
@@ -304,22 +369,54 @@ public static class CliApplication
 
         builder.Services.AddTelemetry(builder.Configuration);
 
+        builder.Services.AddSingleton<ISymbolTextProvider, FileSystemSymbolTextProvider>();
+
+        // Bind Store section from appsettings.json first so CLI args registered below can override.
+        builder.Services
+            .AddOptions<CodeIndexOptions>()
+            .Configure<IConfiguration>((opts, config) =>
+            {
+                if (Enum.TryParse<CodeIndexStore>(config["Store:Type"], ignoreCase: true, out CodeIndexStore configStore))
+                {
+                    opts.Store = configStore;
+                }
+
+                if (config["Store:ConnectionString"] is string cs && !string.IsNullOrWhiteSpace(cs))
+                {
+                    opts.ConnectionString = cs;
+                }
+            })
+            .Validate(
+                opts => opts.Store is not CodeIndexStore.Postgres || !string.IsNullOrWhiteSpace(opts.ConnectionString),
+                "Postgres store requires a connection string.")
+            .ValidateOnStart();
+
         builder.Services.AddCodeIndex(options =>
         {
-            options.Store = invocation.Options.Store;
-            options.ConnectionString = invocation.Options.ConnectionString;
-            options.SqlitePath = invocation.Options.SqlitePath;
             options.WorkingDirectory = invocation.Options.WorkingDirectory;
+            options.SqlitePath = invocation.Options.SqlitePath;
             options.DefaultSqliteFileName = invocation.Options.DefaultSqliteFileName;
+
+            // Only override store/connection when the user explicitly passed CLI flags.
+            if (invocation.ExplicitStore is not null)
+            {
+                options.Store = invocation.Options.Store;
+                options.ConnectionString = invocation.Options.ConnectionString;
+            }
+            else if (invocation.ExplicitConnectionString is not null)
+            {
+                options.ConnectionString = invocation.ExplicitConnectionString;
+            }
         });
 
         return builder.Build();
     }
 
-    private static CodeIndexOptions BuildOptions(string store, string? connection, string workingDirectory)
+    private static CodeIndexOptions BuildOptions(string? store, string? connection, string workingDirectory)
     {
-        CodeIndexStore normalizedStore = ParseStore(store);
-        if (normalizedStore is CodeIndexStore.Postgres && string.IsNullOrWhiteSpace(connection))
+        CodeIndexStore normalizedStore = store is not null ? ParseStore(store) : CodeIndexStore.Sqlite;
+
+        if (store is not null && normalizedStore is CodeIndexStore.Postgres && string.IsNullOrWhiteSpace(connection))
         {
             throw new InvalidOperationException("Postgres store requires a connection string.");
         }
@@ -349,15 +446,20 @@ public static class CliApplication
 /// Captures resolved CLI runtime settings.
 /// </summary>
 /// <param name="Options">The resolved code-index options.</param>
+/// <param name="Embedding">The embedding configuration.</param>
 /// <param name="Repo">The repository to index, when applicable.</param>
 /// <param name="Question">The question to ask, when applicable.</param>
 /// <param name="TopK">The result limit for queries.</param>
+/// <param name="ExplicitStore">The raw <c>--store</c> value from the CLI, or <see langword="null"/> if not provided (appsettings.json takes effect).</param>
+/// <param name="ExplicitConnectionString">The raw <c>--connection</c> value from the CLI, or <see langword="null"/> if not provided.</param>
 public sealed record CliInvocation(
     CodeIndexOptions Options,
     CliEmbeddingOptions Embedding,
     Repo? Repo = null,
     string? Question = null,
-    int TopK = 5);
+    int TopK = 5,
+    string? ExplicitStore = null,
+    string? ExplicitConnectionString = null);
 
 /// <summary>
 /// Captures resolved embedding configuration for CLI execution.

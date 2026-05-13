@@ -49,6 +49,12 @@ Generated\ Files/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
+# Keep classifier-sweep reports so prompt-quality history is tracked in source control.
+# Note: a directory-level ignore blocks descent, so the negation requires re-allowing
+# the TestResults directory, re-ignoring its contents, then un-ignoring the sweep files.
+!TestResults/
+TestResults/*
+!TestResults/classifier-sweep-*.md
 
 # NUnit
 *.VisualState.xml

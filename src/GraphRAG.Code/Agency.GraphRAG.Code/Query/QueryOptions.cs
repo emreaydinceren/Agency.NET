@@ -12,5 +12,5 @@ public sealed class QueryOptions
     public string AnswerModel { get; init; } = "standard";
 
     /// <summary>Gets the default context token budget.</summary>
-    public int ContextTokenBudget { get; init; } = 600;
+    public int ContextTokenBudget { get; init; } = 3000;
 }

@@ -1,5 +1,6 @@
 using System.Reflection;
 using AgencyEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
+using Microsoft.Data.Sqlite;
 using Agency.Embeddings.OpenAI;
 using Agency.GraphRAG.Code.Agentic;
 using Agency.GraphRAG.Code.ChangeDetector;
@@ -96,8 +97,16 @@ public static class CodeIndexServiceCollectionExtensions
         services.TryAddSingleton<ManifestParserOrchestrator>();
         services.TryAddSingleton<ExternalPackageHeuristic>();
         services.TryAddSingleton<ReferenceScorer>();
-        services.TryAddSingleton<ScopeResolver>();
-        services.TryAddSingleton<Phase1Writer>();
+        services.TryAddSingleton<ScopeResolver>(static sp =>
+            new ScopeResolver(
+                sp.GetRequiredService<IGraphStore>(),
+                (fileId, ct) => sp.GetRequiredService<IGraphStore>().GetSymbolsByFileIdAsync(fileId, ct)));
+        services.TryAddSingleton<Phase1Writer>(static sp =>
+            new Phase1Writer(
+                sp.GetRequiredService<IGraphStore>(),
+                sp.GetRequiredService<AgencyEmbeddingGenerator>(),
+                sp.GetRequiredService<SummaryCache>(),
+                sp.GetRequiredService<IOptions<EmbeddingOptions>>().Value.ModelId));
         services.TryAddSingleton<Phase2Resolver>();
         services.TryAddSingleton<ChangeDetector.ChangeDetector>();
         services.AddOptions<SummarizerOptions>()
@@ -214,8 +223,28 @@ public static class CodeIndexServiceCollectionExtensions
 
     private static IGraphStore CreateSqliteGraphStore(IServiceProvider serviceProvider, string connectionString)
     {
-        SqliteRunner runner = ActivatorUtilities.CreateInstance<SqliteRunner>(serviceProvider, connectionString);
-        return CreateGraphStoreViaReflection(serviceProvider, "Agency.GraphRAG.Code.Sqlite", "Agency.GraphRAG.Code.Sqlite.SqliteGraphStore", runner);
+        Assembly assembly = Assembly.Load("Agency.GraphRAG.Code.Sqlite");
+        Action<SqliteConnection> configureConnection = BuildConfigureConnectionDelegate(assembly);
+        SqliteRunner runner = ActivatorUtilities.CreateInstance<SqliteRunner>(serviceProvider, connectionString, configureConnection);
+        int dimensions = serviceProvider.GetRequiredService<IOptions<EmbeddingOptions>>().Value.Dimensions
+            ?? GetDefaultEmbeddingDimensions(assembly);
+        Type storeType = assembly.GetType("Agency.GraphRAG.Code.Sqlite.SqliteGraphStore", throwOnError: true)!;
+        return (IGraphStore)ActivatorUtilities.CreateInstance(serviceProvider, storeType, runner, dimensions);
+    }
+
+    private static int GetDefaultEmbeddingDimensions(Assembly sqliteAssembly)
+    {
+        Type? contextType = sqliteAssembly.GetType("Agency.GraphRAG.Code.Sqlite.Migrations.MigrationContext");
+        FieldInfo? field = contextType?.GetField("DefaultEmbeddingDimensions", BindingFlags.Public | BindingFlags.Static);
+        return field?.GetValue(null) is int value ? value : 1536;
+    }
+
+    private static Action<SqliteConnection> BuildConfigureConnectionDelegate(Assembly assembly)
+    {
+        Type migrationType = assembly.GetType("Agency.GraphRAG.Code.Sqlite.Migrations.SqliteMigrationRunner", throwOnError: true)!;
+        MethodInfo configureMethod = migrationType.GetMethod("ConfigureConnection", BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException("SqliteMigrationRunner.ConfigureConnection not found.");
+        return (Action<SqliteConnection>)configureMethod.CreateDelegate(typeof(Action<SqliteConnection>));
     }
 
     private static IGraphStore CreatePostgresGraphStore(IServiceProvider serviceProvider, string connectionString)

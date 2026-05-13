@@ -46,7 +46,7 @@ internal static partial class E2ETestInfrastructure
         string databasePath = Path.Combine(scratchDirectory, "agency-repo.sqlite");
         var runner = new SqliteRunner($"Data Source={databasePath}");
         var embeddingGenerator = new FakeEmbeddingGenerator();
-        var store = new SqliteGraphStore(runner, embeddingGenerator, NullLogger<SqliteGraphStore>.Instance);
+        var store = new SqliteGraphStore(runner, embeddingGenerator, FakeEmbeddingGenerator.Dimensions, NullLogger<SqliteGraphStore>.Instance);
         return new SqliteHarness(scratchDirectory, databasePath, runner, embeddingGenerator, store);
     }
 
@@ -667,9 +667,12 @@ internal sealed class MockChatClient : IChatClient
     {
         cancellationToken.ThrowIfCancellationRequested();
         string prompt = string.Concat(messages.SelectMany(static message => message.Contents.OfType<TextContent>()).Select(static content => content.Text));
-        string text = prompt.Contains("Choose exactly one category", StringComparison.Ordinal)
-            ? Classify(prompt)
-            : Answer(prompt);
+        // Answer calls carry a "Question:" marker (set by QueryPipeline); classification
+        // calls do not. The previous "Choose exactly one category" discriminator was tied to
+        // the old user-message phrasing of QueryClassifier, which now lives in system instructions.
+        string text = prompt.Contains("Question:", StringComparison.Ordinal)
+            ? Answer(prompt)
+            : Classify(prompt);
         return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, text)]));
     }
 

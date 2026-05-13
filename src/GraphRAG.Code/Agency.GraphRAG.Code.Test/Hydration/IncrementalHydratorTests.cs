@@ -57,7 +57,7 @@ public sealed class IncrementalHydratorTests
             [reverseAffectedFileId] = [CreatePackage("Shared.Abstractions")],
         };
 
-        await hydrator.HydrateAsync(changeSet, requests, packagesByFileId, TestContext.Current.CancellationToken);
+        await hydrator.HydrateAsync(changeSet, requests, packagesByFileId, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal([Guid.Parse("11111111-1111-1111-1111-111111111111")], graphStore.DeletedFileIds);
         Assert.Equal([(Guid.Parse("22222222-2222-2222-2222-222222222222"), @"src\NewName.cs")], graphStore.Renames);

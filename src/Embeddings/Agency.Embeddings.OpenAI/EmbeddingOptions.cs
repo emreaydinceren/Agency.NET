@@ -29,4 +29,9 @@ public sealed class EmbeddingOptions
     /// </summary>
     public string? ApiKey { get; set; }
 
+    /// <summary>
+    /// Gets or sets the number of dimensions produced by the embedding model.
+    /// Required when using a SQLite vector store so the schema is created with the correct column width.
+    /// </summary>
+    public int? Dimensions { get; set; }
 }

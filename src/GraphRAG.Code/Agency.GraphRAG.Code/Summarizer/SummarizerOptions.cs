@@ -47,4 +47,18 @@ public sealed class SummarizerOptions
     /// Acts as a hard cap to prevent runaway repetition loops on local models.
     /// </summary>
     public int MaxOutputTokens { get; set; } = 2048;
+
+    /// <summary>
+    /// Gets or sets the frequency penalty passed to the LLM on every request.
+    /// Penalizes tokens proportional to how often they have already appeared, reducing repetition loops.
+    /// Set to <see langword="null"/> to omit the parameter (provider default). Defaults to 0.3.
+    /// </summary>
+    public float? FrequencyPenalty { get; set; } = 0.3f;
+
+    /// <summary>
+    /// Gets or sets the temperature passed to the LLM on every request.
+    /// Higher values increase randomness and can help reduce repetition loops.
+    /// Set to <see langword="null"/> to omit the parameter (provider default). Defaults to 0.5.
+    /// </summary>
+    public float? Temperature { get; set; } = 0.5f;
 }

@@ -34,4 +34,5 @@ public class StubGraphStore : IGraphStore
     public virtual Task ReplaceClusterSummariesAtomicallyAsync(IReadOnlyList<ClusterRecord> clusters, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public virtual Task<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>> GetSymbolsByPathsAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<Symbol>>>(new Dictionary<string, IReadOnlyList<Symbol>>());
     public virtual Task<SourceFile?> GetFileByPathAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult<SourceFile?>(null);
+    public virtual Task<IReadOnlyList<Symbol>> GetSymbolsByFileIdAsync(Guid fileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<Symbol>>([]);
 }

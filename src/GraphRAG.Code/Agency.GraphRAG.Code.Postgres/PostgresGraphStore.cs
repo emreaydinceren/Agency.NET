@@ -1082,6 +1082,72 @@ public sealed class PostgresGraphStore : IGraphStore
             });
     }
 
+    /// <inheritdoc />
+    public Task<string?> GetRepoLocalPathAsync(Guid repoId, CancellationToken cancellationToken = default) =>
+        this.RunOperationAsync(
+            "get-repo-local-path",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.repo.id", repoId);
+
+                List<string?> results = await this._postgreSqlRunner.QueryAsync(
+                    """
+                    SELECT root_path
+                    FROM repos
+                    WHERE id = @repoId
+                    LIMIT 1;
+                    """,
+                    reader => Task.FromResult(reader.IsDBNull(0) ? null : reader.GetString(0)),
+                    new Dictionary<string, object?> { ["repoId"] = repoId },
+                    cancellationToken);
+
+                return results.Count == 0 ? null : results[0];
+            });
+
+    /// <inheritdoc />
+    public Task<SourceFile?> GetFileByIdAsync(Guid fileId, CancellationToken cancellationToken = default) =>
+        this.RunOperationAsync(
+            "get-file-by-id",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.file.id", fileId);
+
+                List<SourceFile> results = await this._postgreSqlRunner.QueryAsync(
+                    """
+                    SELECT id, repo_id, project_id, path, language, content_hash
+                    FROM files
+                    WHERE id = @fileId
+                    LIMIT 1;
+                    """,
+                    reader => Task.FromResult(HydrateSourceFile(reader)),
+                    new Dictionary<string, object?> { ["fileId"] = fileId },
+                    cancellationToken);
+
+                return results.Count == 0 ? null : results[0];
+            });
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<Symbol>> GetSymbolsByFileIdAsync(Guid fileId, CancellationToken cancellationToken = default) =>
+        this.RunOperationAsync(
+            "get-symbols-by-file",
+            async activity =>
+            {
+                activity?.SetTag("graphrag.file.id", fileId);
+
+                List<Symbol> results = await this._postgreSqlRunner.QueryAsync(
+                    """
+                    SELECT id, file_id, module_id, name, fully_qualified_name, kind, signature, summary, one_line_summary,
+                           embedding, content_hash, is_utility, source_range_start, source_range_end
+                    FROM symbols
+                    WHERE file_id = @fileId;
+                    """,
+                    reader => Task.FromResult(HydrateSymbol(reader)),
+                    new Dictionary<string, object?> { ["fileId"] = fileId },
+                    cancellationToken);
+
+                return (IReadOnlyList<Symbol>)results;
+            });
+
     private async Task RunOperationAsync(string operationName, Func<Activity?, Task> action)
     {
         using var activity = _activitySource.StartActivity($"graphrag.postgres.{operationName}", ActivityKind.Client);

@@ -2,13 +2,18 @@ using Agency.Embeddings.Common;
 using Agency.GraphRAG.Code.Chunker;
 using Agency.GraphRAG.Code.Domain;
 using Agency.GraphRAG.Code.Storage;
+using Agency.GraphRAG.Code.Summarizer;
 
 namespace Agency.GraphRAG.Code.Hydration;
 
 /// <summary>
 /// Writes definition-phase graph records for parsed files, including symbols, containment edges, import edges, and staged call sites.
 /// </summary>
-public sealed class Phase1Writer(IGraphStore graphStore, IEmbeddingGenerator embeddingGenerator)
+public sealed class Phase1Writer(
+    IGraphStore graphStore,
+    IEmbeddingGenerator embeddingGenerator,
+    SummaryCache? embeddingCache = null,
+    string? embeddingModelId = null)
 {
     /// <summary>
     /// Persists the provided parsed-file data into the graph store.
@@ -26,26 +31,43 @@ public sealed class Phase1Writer(IGraphStore graphStore, IEmbeddingGenerator emb
             await graphStore.UpsertModuleAsync(request.Module, cancellationToken).ConfigureAwait(false);
         }
 
-        List<string> chunkIdsToEmbed = [];
+        List<(string ChunkId, string ContentHash)> toEmbed = [];
         List<string> oneLineTexts = [];
+        Dictionary<string, float[]> embeddingsByChunkId = new(StringComparer.Ordinal);
+
         foreach (Chunk chunk in request.Chunks)
         {
-            if (request.Summaries.TryGetValue(chunk.Id, out Summarizer.SymbolSummary? s))
+            if (!request.Summaries.TryGetValue(chunk.Id, out Summarizer.SymbolSummary? s))
             {
-                chunkIdsToEmbed.Add(chunk.Id);
+                continue;
+            }
+
+            string contentHash = ComputeContentHash(chunk.Content);
+            if (embeddingCache is not null
+                && embeddingModelId is not null
+                && embeddingCache.TryGetEmbedding(contentHash, embeddingModelId, out ReadOnlyMemory<float> cached))
+            {
+                embeddingsByChunkId[chunk.Id] = cached.ToArray();
+            }
+            else
+            {
+                toEmbed.Add((chunk.Id, contentHash));
                 oneLineTexts.Add(s.OneLine);
             }
         }
 
-        Dictionary<string, float[]> embeddingsByChunkId = new(StringComparer.Ordinal);
         if (oneLineTexts.Count > 0)
         {
             IReadOnlyList<ReadOnlyMemory<float>> generated = await embeddingGenerator
                 .GenerateEmbeddingsAsync(oneLineTexts, cancellationToken)
                 .ConfigureAwait(false);
-            for (int i = 0; i < chunkIdsToEmbed.Count; i++)
+            for (int i = 0; i < toEmbed.Count; i++)
             {
-                embeddingsByChunkId[chunkIdsToEmbed[i]] = generated[i].ToArray();
+                embeddingsByChunkId[toEmbed[i].ChunkId] = generated[i].ToArray();
+                if (embeddingCache is not null && embeddingModelId is not null)
+                {
+                    embeddingCache.SetEmbedding(toEmbed[i].ContentHash, embeddingModelId, generated[i]);
+                }
             }
         }
 

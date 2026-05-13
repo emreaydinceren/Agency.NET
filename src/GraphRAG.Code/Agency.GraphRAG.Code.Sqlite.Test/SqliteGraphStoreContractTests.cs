@@ -16,5 +16,6 @@ public sealed class SqliteGraphStoreContractTests : IGraphStoreContractTests
         => new SqliteGraphStore(
             new SqliteRunner("Data Source=:memory:", onConnectionOpen: static _ => { }),
             new FakeEmbeddingGenerator(),
+            FakeEmbeddingGenerator.Dimensions,
             NullLogger<SqliteGraphStore>.Instance);
 }

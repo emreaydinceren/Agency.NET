@@ -19,13 +19,14 @@ public sealed class QueryClassifierTests
 
         Assert.Equal(QueryCategory.Global, category);
         Assert.Equal("gpt-cheapest", Assert.Single(chatClient.ReceivedModelIds));
-        string prompt = Assert.Single(chatClient.ReceivedPrompts).ReplaceLineEndings("\n");
-        Assert.Contains("- Local", prompt, StringComparison.Ordinal);
-        Assert.Contains("- Subsystem", prompt, StringComparison.Ordinal);
-        Assert.Contains("- Global", prompt, StringComparison.Ordinal);
-        Assert.Contains("- Impact", prompt, StringComparison.Ordinal);
-        Assert.Contains("- Dependency", prompt, StringComparison.Ordinal);
-        Assert.Contains("What does this codebase do?", prompt, StringComparison.Ordinal);
+        string userPrompt = Assert.Single(chatClient.ReceivedPrompts).ReplaceLineEndings("\n");
+        string systemInstructions = Assert.Single(chatClient.ReceivedInstructions)!.ReplaceLineEndings("\n");
+        Assert.Contains("- Local", systemInstructions, StringComparison.Ordinal);
+        Assert.Contains("- Subsystem", systemInstructions, StringComparison.Ordinal);
+        Assert.Contains("- Global", systemInstructions, StringComparison.Ordinal);
+        Assert.Contains("- Impact", systemInstructions, StringComparison.Ordinal);
+        Assert.Contains("- Dependency", systemInstructions, StringComparison.Ordinal);
+        Assert.Contains("What does this codebase do?", userPrompt, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -49,6 +50,8 @@ public sealed class QueryClassifierTests
 
         public List<string?> ReceivedModelIds { get; } = [];
 
+        public List<string?> ReceivedInstructions { get; } = [];
+
         public ChatClientMetadata Metadata { get; } = new("FakeChatClient", null, null);
 
         public void EnqueueTextResponse(string text) =>
@@ -62,6 +65,7 @@ public sealed class QueryClassifierTests
             cancellationToken.ThrowIfCancellationRequested();
             ReceivedPrompts.Add(string.Concat(messages.SelectMany(static message => message.Contents.OfType<TextContent>()).Select(static content => content.Text)));
             ReceivedModelIds.Add(options?.ModelId);
+            ReceivedInstructions.Add(options?.Instructions);
             return Task.FromResult(_responses.Dequeue());
         }
 

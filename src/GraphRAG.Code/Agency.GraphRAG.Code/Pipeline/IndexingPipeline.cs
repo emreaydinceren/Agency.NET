@@ -30,6 +30,23 @@ public sealed class IndexingPipeline(
     {
         ArgumentNullException.ThrowIfNull(repo);
 
+        Guid stableId = HydrationIds.StableGuid(NormalizeRepoPath(repo.LocalPath));
+        string? indexedCommit = await graphStore.LoadIndexedCommitAsync(stableId, cancellationToken).ConfigureAwait(false);
+        repo = repo with { Id = stableId, IndexedCommit = indexedCommit };
+
+        onProgress?.Invoke("Registering repository...");
+        repo = repo with { IndexedAt = DateTimeOffset.UtcNow };
+        await graphStore.UpsertRepoAsync(repo, cancellationToken).ConfigureAwait(false);
+        await graphStore.UpsertProjectAsync(new Project
+        {
+            Id = HydrationIds.StableGuid($"project:default:{repo.Id}"),
+            RepoId = repo.Id,
+            Name = Path.GetFileName(repo.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+            Language = "mixed",
+            RelativePath = ".",
+            ManifestPath = null,
+        }, cancellationToken).ConfigureAwait(false);
+
         onProgress?.Invoke("Walking repository...");
         WalkResult walkResult = await walkAsync(repo, cancellationToken).ConfigureAwait(false);
         onProgress?.Invoke($"Found {walkResult.Files.Count} files ({walkResult.Mode} scan)");
@@ -41,20 +58,29 @@ public sealed class IndexingPipeline(
         IReadOnlyDictionary<string, Phase1WriteRequest> writeRequests = await buildWriteRequestsAsync(repo, walkResult, onProgress, cancellationToken).ConfigureAwait(false);
         onProgress?.Invoke($"Generated {writeRequests.Count} write requests");
 
-        int totalChunks = writeRequests.Values.SelectMany(r => r.Chunks).Count();
-        onProgress?.Invoke($"Summarizing {totalChunks} symbols (this may take a while)...");
-        await summarizeAsync(writeRequests.Values.ToArray(), onProgress, cancellationToken).ConfigureAwait(false);
-        onProgress?.Invoke($"Summarization complete for {totalChunks} symbols");
-
         _ = changeDetector;
         onProgress?.Invoke("Detecting changes...");
         ChangeSet changeSet = await detectChangesAsync(repo, walkResult, writeRequests, cancellationToken).ConfigureAwait(false);
+
+        IReadOnlyList<Phase1WriteRequest> changedRequests = changeSet.AddedFiles
+            .Concat(changeSet.ModifiedFiles.Select(static c => c.Path))
+            .Concat(changeSet.RenamedFiles.Select(static c => c.NewPath))
+            .Distinct(StringComparer.Ordinal)
+            .Where(writeRequests.ContainsKey)
+            .Select(p => writeRequests[p])
+            .ToArray();
+
+        int totalChunks = changedRequests.Sum(static r => r.Chunks.Count);
+        onProgress?.Invoke($"Summarizing {totalChunks} symbols (this may take a while)...");
+        await summarizeAsync(changedRequests, onProgress, cancellationToken).ConfigureAwait(false);
+        onProgress?.Invoke($"Summarization complete for {totalChunks} symbols");
 
         onProgress?.Invoke("Hydrating graph...");
         await incrementalHydrator.HydrateAsync(
             changeSet,
             writeRequests,
             buildPackagesByFileId(writeRequests),
+            onProgress,
             cancellationToken).ConfigureAwait(false);
 
         onProgress?.Invoke("Updating checkpoint...");
@@ -62,5 +88,20 @@ public sealed class IndexingPipeline(
         {
             await graphStore.SetIndexedCommitAsync(repo.Id, walkResult.HeadCommit, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Normalizes a repository path for stable GUID generation by canonicalizing separators, trimming trailing slashes, and lowercasing on case-insensitive filesystems.
+    /// </summary>
+    /// <param name="localPath">The repository path to normalize.</param>
+    /// <returns>The normalized path.</returns>
+    internal static string NormalizeRepoPath(string localPath)
+    {
+        string full = Path.GetFullPath(localPath);
+        string? root = Path.GetPathRoot(full);
+        string trimmed = (root != null && full.Length > root.Length)
+            ? full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : full;
+        return OperatingSystem.IsWindows() ? trimmed.ToLowerInvariant() : trimmed;
     }
 }

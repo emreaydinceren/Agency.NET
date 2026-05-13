@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using System.Diagnostics;
 
 namespace Agency.GraphRAG.Code.Query;
 
@@ -19,9 +20,17 @@ public sealed class QueryPipeline(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
 
+        var classifyStopwatch = Stopwatch.StartNew();
         QueryPlan plan = await planner.PlanAsync(query, cancellationToken).ConfigureAwait(false);
+        classifyStopwatch.Stop();
+
+        var retrieveStopwatch = Stopwatch.StartNew();
         QueryRetrievalResult retrieval = await retriever.RetrieveAsync(plan, cancellationToken).ConfigureAwait(false);
+        retrieveStopwatch.Stop();
+
+        var assembleStopwatch = Stopwatch.StartNew();
         QueryContextAssembly context = assembler.Assemble(plan, retrieval, options.ContextTokenBudget);
+        assembleStopwatch.Stop();
 
         string prompt =
             $"""
@@ -32,6 +41,7 @@ public sealed class QueryPipeline(
             {context.ContextText}
             """;
 
+        var answerStopwatch = Stopwatch.StartNew();
         ChatResponse response = await chatClient.GetResponseAsync(
             [new ChatMessage(ChatRole.User, prompt)],
             new ChatOptions
@@ -40,6 +50,7 @@ public sealed class QueryPipeline(
                 Instructions = BuildInstructions(retrieval),
             },
             cancellationToken).ConfigureAwait(false);
+        answerStopwatch.Stop();
 
         string answer = string.Concat(
             response.Messages
@@ -52,6 +63,13 @@ public sealed class QueryPipeline(
             Answer = answer,
             Plan = plan,
             Context = context,
+            Retrieval = retrieval,
+            ClassifyDuration = classifyStopwatch.Elapsed,
+            RetrieveDuration = retrieveStopwatch.Elapsed,
+            AssembleDuration = assembleStopwatch.Elapsed,
+            AnswerDuration = answerStopwatch.Elapsed,
+            InputTokenCount = response.Usage?.InputTokenCount,
+            OutputTokenCount = response.Usage?.OutputTokenCount,
         };
     }
 

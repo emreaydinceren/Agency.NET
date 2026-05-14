@@ -15,22 +15,26 @@ jobs:
       ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings__PostgreSql }}
 
     steps:
-      - name: Checkout
+      - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: 🧰 Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.x"
 
-      - name: Restore dependencies
+      - name: 📦 Restore dependencies
         working-directory: src
         run: dotnet restore
 
-      - name: Build Solution
+      - name: 🛠️ Build Solution
         working-directory: src
         run: dotnet build --configuration Release --no-restore
 
-      - name: Run Tests
+      - name: 🧪 Run Unit Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal
+        run: dotnet test --configuration Release --no-build --verbosity normal  --filter "Category!=Functional&Category!=Eval"
+
+      - name: 🧪 Run Functional Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal  --filter "Category=Functional"

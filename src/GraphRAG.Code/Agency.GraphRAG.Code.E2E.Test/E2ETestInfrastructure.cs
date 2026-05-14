@@ -337,7 +337,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
             string relativeManifestPath = parsed.ManifestRelativePath.Replace('/', '\\');
             projects[relativeProjectPath] = new Project
             {
-                Id = StableGuid("project", repo.Id.ToString("N"), relativeProjectPath),
+                Id = StableGuid("project", repo.Id.ToString("N"), relativeProjectPath.Replace('\\', '/')),
                 RepoId = repo.Id,
                 Name = parsed.ProjectName,
                 RelativePath = relativeProjectPath,

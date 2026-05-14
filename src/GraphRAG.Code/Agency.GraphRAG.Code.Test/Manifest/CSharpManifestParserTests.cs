@@ -41,7 +41,7 @@ public sealed class CSharpManifestParserTests
                 <PackageReference Include="Serilog" />
                 <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
                 <PackageReference Include="Moq" />
-                <ProjectReference Include="..\Shared\Shared.csproj" />
+                <ProjectReference Include="../Shared/Shared.csproj" />
               </ItemGroup>
             </Project>
             """);

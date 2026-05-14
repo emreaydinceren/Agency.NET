@@ -84,8 +84,8 @@ public sealed class ChangeDetectorTests
             [
                 new WalkedFile
                 {
-                    Path = @"src\package.json",
-                    OldPath = @"src\package-old.json",
+                    Path = Path.Combine("src", "package.json"),
+                    OldPath = Path.Combine("src", "package-old.json"),
                     Status = WalkedFileStatus.Renamed,
                     Language = Language.JavaScript,
                 },
@@ -97,7 +97,7 @@ public sealed class ChangeDetectorTests
             new Dictionary<string, IReadOnlyList<Symbol>>(StringComparer.Ordinal),
             new Dictionary<string, IReadOnlyList<Chunk>>(StringComparer.Ordinal));
 
-        Assert.Equal([@"src\package.json"], changeSet.ManifestChanges);
+        Assert.Equal([Path.Combine("src", "package.json")], changeSet.ManifestChanges);
     }
 
     private static Symbol CreateSymbol(Guid id, string fullyQualifiedName, string content) =>

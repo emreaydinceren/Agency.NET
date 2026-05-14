@@ -1,7 +1,5 @@
 name: .NET 10 CI
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 

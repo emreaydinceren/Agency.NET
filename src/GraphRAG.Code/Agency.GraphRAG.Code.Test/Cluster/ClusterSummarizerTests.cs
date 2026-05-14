@@ -35,7 +35,7 @@ public sealed class ClusterSummarizerTests
 
         IReadOnlyList<Agency.GraphRAG.Code.Domain.Cluster> clusters = await summarizer.SummarizeAsync(requests, TestContext.Current.CancellationToken);
 
-        Assert.Contains("business concept", chatClient.ReceivedPrompts[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("decision procedure", chatClient.ReceivedPrompts[0], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cross-cutting code", chatClient.ReceivedPrompts[1], StringComparison.OrdinalIgnoreCase);
 
         Assert.Equal(ClusterType.Business, clusters[0].Type);

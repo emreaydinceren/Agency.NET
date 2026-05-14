@@ -10,18 +10,21 @@ public sealed class StorageSelectionTests
     [Fact]
     public void CreateIndexInvocation_WithoutStoreFlag_DefaultsToSqliteInWorkingDirectory()
     {
+        string workingDirectory = Path.Combine(Path.GetTempPath(), "Agency");
+        string expectedSqlitePath = Path.Combine(workingDirectory, "graphrag-code.db");
+
         CliInvocation invocation = CliApplication.CreateIndexInvocation(
-            @"E:\Repos\Agency",
+            workingDirectory,
             null,
             null,
             null,
             null,
             null,
-            @"E:\Repos\Agency");
+            workingDirectory);
 
         Assert.Equal(CodeIndexStore.Sqlite, invocation.Options.Store);
-        Assert.Equal("Data Source=E:\\Repos\\Agency\\graphrag-code.db", invocation.Options.ConnectionString);
-        Assert.Equal(@"E:\Repos\Agency\graphrag-code.db", invocation.Options.SqlitePath);
+        Assert.Equal($"Data Source={expectedSqlitePath}", invocation.Options.ConnectionString);
+        Assert.Equal(expectedSqlitePath, invocation.Options.SqlitePath);
     }
 
     [Fact]

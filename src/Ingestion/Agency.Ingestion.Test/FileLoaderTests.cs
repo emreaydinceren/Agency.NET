@@ -58,7 +58,7 @@ public sealed class FileLoaderTests
     [Fact]
     public void BuildDocument_SetsFileNameMetadata()
     {
-        var doc = FileLoader.BuildDocument(@"C:\docs\file.txt", "content");
+        var doc = FileLoader.BuildDocument(Path.Combine("docs", "file.txt"), "content");
 
         Assert.Equal("file.txt", doc.Metadata!["file_name"]);
     }

@@ -303,7 +303,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
                 continue;
             }
 
-            string absolutePath = Path.Combine(repo.LocalPath, relativePath);
+            string absolutePath = Path.Combine(repo.LocalPath, relativePath.Replace('\\', Path.DirectorySeparatorChar));
             string source = File.ReadAllText(absolutePath);
             SimpleParsedFile parsed = SimpleCSharpIndexer.Parse(repo, project, relativePath, source, _embeddingGenerator);
             parsedFiles.Add(parsed);
@@ -337,7 +337,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
             string relativeManifestPath = parsed.ManifestRelativePath.Replace('/', '\\');
             projects[relativeProjectPath] = new Project
             {
-                Id = StableGuid("project", repo.Id.ToString("N"), relativeProjectPath),
+                Id = StableGuid("project", repo.Id.ToString("N"), relativeProjectPath.Replace('\\', '/')),
                 RepoId = repo.Id,
                 Name = parsed.ProjectName,
                 RelativePath = relativeProjectPath,
@@ -352,7 +352,7 @@ internal sealed class AgencyRepoIndexer(IGraphStore store, FakeEmbeddingGenerato
     private static string FindProjectDirectory(string relativePath, IEnumerable<string> projectDirectories)
     {
         string? match = projectDirectories
-            .Where(directory => relativePath.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            .Where(directory => relativePath.StartsWith(directory + '\\', StringComparison.OrdinalIgnoreCase)
                 || string.Equals(relativePath, directory, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(static directory => directory.Length)
             .FirstOrDefault();

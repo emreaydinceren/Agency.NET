@@ -38,8 +38,6 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
 {
     private const double DefaultOverallAccuracyThreshold = 0.70;
     private const string ThresholdEnvironmentVariable = "AGENCY_CLASSIFIER_EVAL_THRESHOLD";
-    private const int DefaultRunCount = 3;
-    private const int MaxRunCount = 20;
     private const string RunCountEnvironmentVariable = "AGENCY_CLASSIFIER_EVAL_RUNS";
 
     private readonly LiveClassifierFixture _fixture = fixture;
@@ -71,7 +69,7 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
         EvalReport report = EvalReport.From(this._fixture.ModelId, results);
         this._output.WriteLine(report.Render());
 
-        double threshold = ReadThreshold();
+        double threshold = EvalTestHelpers.ReadThreshold(ThresholdEnvironmentVariable, DefaultOverallAccuracyThreshold);
         Assert.True(
             report.OverallAccuracy >= threshold,
             $"Overall accuracy {report.OverallAccuracy:P1} fell below threshold {threshold:P1} on {this._fixture.ModelId}. See output for per-category breakdown.");
@@ -116,7 +114,7 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
         IReadOnlyList<EvalCase> dataset = EvalDataset.All;
         IReadOnlyList<PromptVariant> variants = PromptVariants.All;
         QueryOptions options = new() { CheapestModel = this._fixture.ModelId };
-        int runCount = ReadRunCount();
+        int runCount = EvalTestHelpers.ReadRunCount(RunCountEnvironmentVariable);
 
         List<VariantOutcome> outcomes = new(variants.Count);
         foreach (PromptVariant variant in variants)
@@ -146,14 +144,14 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
 
         // Persist the report so the comparison table survives `dotnet test` without --logger.
         // Timestamped filename keeps a permanent history that supports diffing across runs.
-        string reportsDir = Path.Combine(LiveClassifierFixture.FindRepoRoot(), "TestResults");
+        string reportsDir = Path.Combine(EvalTestHelpers.FindRepoRoot(), "TestResults");
         Directory.CreateDirectory(reportsDir);
         string reportPath = Path.Combine(reportsDir, $"classifier-sweep-{DateTime.UtcNow:yyyy-MM-dd_HHmmss}Z.md");
         await File.WriteAllTextAsync(reportPath, report, cancellationToken);
         this._output.WriteLine($"Report written to: {reportPath}");
 
         VariantOutcome winner = outcomes.OrderByDescending(static o => o.MeanAccuracy).First();
-        double threshold = ReadThreshold();
+        double threshold = EvalTestHelpers.ReadThreshold(ThresholdEnvironmentVariable, DefaultOverallAccuracyThreshold);
 
         Assert.True(
             winner.MeanAccuracy >= threshold,
@@ -206,32 +204,6 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
         int valueStart = start + prefix.Length;
         int valueEnd = message.IndexOf('\'', valueStart);
         return valueEnd < 0 ? message[valueStart..] : message[valueStart..valueEnd];
-    }
-
-    private static double ReadThreshold()
-    {
-        string? raw = Environment.GetEnvironmentVariable(ThresholdEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(raw)
-            && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed)
-            && parsed is >= 0.0 and <= 1.0)
-        {
-            return parsed;
-        }
-
-        return DefaultOverallAccuracyThreshold;
-    }
-
-    private static int ReadRunCount()
-    {
-        string? raw = Environment.GetEnvironmentVariable(RunCountEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(raw)
-            && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
-            && parsed is >= 1 and <= MaxRunCount)
-        {
-            return parsed;
-        }
-
-        return DefaultRunCount;
     }
 
     // ── Eval dataset ─────────────────────────────────────────────────────────
@@ -332,7 +304,7 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
         public double MeanAccuracy =>
             this.Reports.Count == 0 ? 0.0 : this.Reports.Average(static r => r.OverallAccuracy);
 
-        public double AccuracyStdDev => SampleStdDev(this.Reports.Select(static r => r.OverallAccuracy));
+        public double AccuracyStdDev => EvalTestHelpers.SampleStdDev(this.Reports.Select(static r => r.OverallAccuracy));
 
         public double MeanRecallFor(QueryCategory category)
         {
@@ -354,18 +326,6 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
         public double MeanParseFailures =>
             this.Reports.Count == 0 ? 0.0 : this.Reports.Average(static r => (double)r.ParseFailureCount);
 
-        private static double SampleStdDev(IEnumerable<double> values)
-        {
-            double[] sample = values.ToArray();
-            if (sample.Length <= 1)
-            {
-                return 0.0;
-            }
-
-            double mean = sample.Average();
-            double sumSquares = sample.Sum(value => (value - mean) * (value - mean));
-            return Math.Sqrt(sumSquares / (sample.Length - 1));
-        }
     }
 
     /// <summary>
@@ -791,10 +751,6 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
     /// </summary>
     public sealed class LiveClassifierFixture : IAsyncLifetime
     {
-        private const string CliAppSettingsRelativePath = @"src\GraphRAG.Code\Agency.GraphRAG.Code.Cli\appsettings.json";
-        private const string LlmClientSection = "LlmClient";
-        private const string SummarizerSection = "Summarizer";
-
         private IChatClient? _chatClient;
         private QueryClassifier? _classifier;
 
@@ -816,11 +772,11 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
         {
             try
             {
-                IConfigurationRoot config = LoadCliConfiguration();
+                IConfigurationRoot config = EvalTestHelpers.LoadCliConfiguration();
 
-                string baseUrl = RequireConfig(config, $"{LlmClientSection}:BaseUrl");
-                string apiKey = RequireConfig(config, $"{LlmClientSection}:ApiKey");
-                this.ModelId = RequireConfig(config, $"{SummarizerSection}:CheapestModel");
+                string baseUrl = EvalTestHelpers.RequireConfig(config, $"{EvalTestHelpers.LlmClientSection}:BaseUrl");
+                string apiKey = EvalTestHelpers.RequireConfig(config, $"{EvalTestHelpers.LlmClientSection}:ApiKey");
+                this.ModelId = EvalTestHelpers.RequireConfig(config, $"{EvalTestHelpers.SummarizerSection}:CheapestModel");
 
                 LlmClientOptions options = new() { BaseUrl = baseUrl, ApiKey = apiKey };
                 this._chatClient = new OpenAIClient(Options.Create(options)).CreateChatClient();
@@ -845,48 +801,5 @@ public sealed class QueryClassifierEvalTests(QueryClassifierEvalTests.LiveClassi
             return ValueTask.CompletedTask;
         }
 
-        private static IConfigurationRoot LoadCliConfiguration()
-        {
-            string repoRoot = FindRepoRoot();
-            string appSettingsPath = Path.Combine(repoRoot, CliAppSettingsRelativePath);
-            if (!File.Exists(appSettingsPath))
-            {
-                throw new FileNotFoundException(
-                    $"CLI appsettings.json not found at expected location.",
-                    appSettingsPath);
-            }
-
-            return new ConfigurationBuilder()
-                .SetBasePath(Path.GetDirectoryName(appSettingsPath)!)
-                .AddJsonFile(Path.GetFileName(appSettingsPath), optional: false)
-                .AddEnvironmentVariables()
-                .Build();
-        }
-
-        private static string RequireConfig(IConfiguration configuration, string key) =>
-            configuration[key]
-                ?? throw new InvalidOperationException($"Missing required configuration value '{key}' in CLI appsettings.json.");
-
-        internal static string FindRepoRoot()
-        {
-            string current = AppContext.BaseDirectory;
-            while (!string.IsNullOrWhiteSpace(current))
-            {
-                if (File.Exists(Path.Combine(current, "src", "Agency.slnx")))
-                {
-                    return current;
-                }
-
-                DirectoryInfo? parent = Directory.GetParent(current);
-                if (parent is null)
-                {
-                    break;
-                }
-
-                current = parent.FullName;
-            }
-
-            throw new InvalidOperationException("Could not locate the repository root containing src\\Agency.slnx.");
-        }
     }
 }

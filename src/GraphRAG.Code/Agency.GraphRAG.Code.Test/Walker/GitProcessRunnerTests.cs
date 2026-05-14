@@ -17,8 +17,8 @@ public sealed class GitProcessRunnerTests : IDisposable
 
         string repositoryPath = CreateTempDirectory();
         InitializeRepository(repositoryPath);
-        WriteFile(repositoryPath, "src\\Tracked.cs", "class Tracked {}");
-        WriteFile(repositoryPath, "docs\\tracked.ts", "export const tracked = true;");
+        WriteFile(repositoryPath, Path.Combine("src", "Tracked.cs"), "class Tracked {}");
+        WriteFile(repositoryPath, Path.Combine("docs", "tracked.ts"), "export const tracked = true;");
         Git(repositoryPath, "add .");
         Commit(repositoryPath, "initial");
 

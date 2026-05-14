@@ -17,15 +17,26 @@ namespace Agency.Agentic.Console.Test;
 public sealed class AgentConsoleTests
 {
     // Resolved once at class load time. The test binary sits at:
-    //   src/Agency.Agentic.Console.Test/bin/<cfg>/net10.0/
-    // The console csproj sits at:
-    //   src/Agency.Agentic.Console/Agency.Agentic.Console.csproj
-    private static readonly string ConsoleCsproj = Path.GetFullPath(
-        Path.Combine(
+    //   src/Agentic/Agency.Agentic.Console.Test/bin/<cfg>/<tfm>/
+    // The console binary (built as a ProjectReference dependency) sits at:
+    //   src/Agentic/Agency.Agentic.Console/bin/<cfg>/<tfm>/Agency.Agentic.Console.dll
+    // We derive <cfg> and <tfm> from the last two segments of AppContext.BaseDirectory
+    // so the path stays correct across Debug/Release and TFM changes.
+    private static readonly string ConsoleDll = GetConsoleDll();
+
+    private static string GetConsoleDll()
+    {
+        var dir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var parts = dir.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string tfm = parts[^1];
+        string cfg = parts[^2];
+        return Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
-            "..", "..", "..", "..",       // up to src/
+            "..", "..", "..", "..",       // up to src/Agentic/
             "Agency.Agentic.Console",
-            "Agency.Agentic.Console.csproj"));
+            "bin", cfg, tfm,
+            "Agency.Agentic.Console.dll"));
+    }
 
     // ── Startup / shutdown ────────────────────────────────────────────────────
 
@@ -227,7 +238,8 @@ public sealed class AgentConsoleTests
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --project \"{ConsoleCsproj}\"",
+            Arguments = $"\"{ConsoleDll}\"",
+            WorkingDirectory = Path.GetDirectoryName(ConsoleDll),
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

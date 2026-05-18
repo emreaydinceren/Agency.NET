@@ -10,6 +10,32 @@
     <NoWarn>$(NoWarn);MSB3270</NoWarn>
   </PropertyGroup>
 
+  <!-- Package metadata -->
+  <PropertyGroup>
+    <RepositoryUrl>http://gitea-host.example:3000/emre/Agency</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <!-- Versioning: set MajorVersion, MinorVersion, Revision manually; BuildNumber is injected by CI (/p:BuildNumber=N) -->
+  <PropertyGroup>
+    <MajorVersion>0</MajorVersion>
+    <MinorVersion>0</MinorVersion>
+    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
+    <Revision>0</Revision>
+    <Version>$(MajorVersion).$(MinorVersion).$(BuildNumber).$(Revision)</Version>
+  </PropertyGroup>
+
+  <!-- All non-test projects produce NuGet packages -->
+  <PropertyGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
+    <None Include="THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
+  </ItemGroup>
+
   <!-- Test project defaults -->
   <PropertyGroup Condition="$(MSBuildProjectName.Contains('Test'))">
     <IsPackable>false</IsPackable>

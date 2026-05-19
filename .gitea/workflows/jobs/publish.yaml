@@ -53,12 +53,12 @@ jobs:
       - name: 🚀 Publish NuGet packages
         if: steps.version.outputs.revision == '0'
         working-directory: src
+        env:
+          NUGET_ALLOW_INSECURE_CONNECTIONS: true
         run: |
-          CONFIG_FILE="$(pwd)/NuGet.Config"
           for pkg in nupkg/*.nupkg; do
             dotnet nuget push "$pkg" \
               --source http://gitea-host.example:3000/api/packages/emre/nuget/index.json \
               --api-key ${{ secrets.NUGET_PUBLISH_TOKEN }} \
-              --skip-duplicate \
-              --configfile "$CONFIG_FILE"
+              --skip-duplicate
           done

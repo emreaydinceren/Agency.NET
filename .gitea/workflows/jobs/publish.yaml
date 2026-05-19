@@ -53,6 +53,8 @@ jobs:
       - name: 🚀 Publish NuGet packages
         if: steps.version.outputs.revision == '0'
         working-directory: src
+        env:
+          NUGET_CONFIGFILE: ./NuGet.Config.publish
         run: |
           cat > NuGet.Config.publish <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -71,6 +73,5 @@ jobs:
             dotnet nuget push "$pkg" \
               --source http://gitea-host.example:3000/api/packages/emre/nuget/index.json \
               --api-key ${{ secrets.NUGET_PUBLISH_TOKEN }} \
-              --configfile NuGet.Config.publish \
               --skip-duplicate
           done

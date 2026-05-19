@@ -164,6 +164,7 @@ When adding or updating a dependency:
 
 - Git push may fail due to credential/auth issues on this machine. If push fails, inform the user rather than retrying endlessly.
 - This repo uses scoped Git credentials via includeIf directives
+- **Do not commit changes unless explicitly asked.** Make changes and ask before committing to ensure the user can review.
 
 ## Testing
 

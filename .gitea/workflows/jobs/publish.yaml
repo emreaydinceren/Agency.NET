@@ -58,5 +58,6 @@ jobs:
             dotnet nuget push "$pkg" \
               --source http://gitea-host.example:3000/api/packages/emre/nuget/index.json \
               --api-key ${{ secrets.NUGET_PUBLISH_TOKEN }} \
-              --skip-duplicate
+              --skip-duplicate \
+              --config-file ./NuGet.Config
           done

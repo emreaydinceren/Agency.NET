@@ -55,7 +55,7 @@ Transform tasks into verifiable goals:
 
 For multi-step tasks, state a brief plan:
 
-```
+```Text
 1. [Step] → verify: [check]
 2. [Step] → verify: [check]
 3. [Step] → verify: [check]
@@ -67,7 +67,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Code Style
 
-@.editorconfig
+Read this file only when writing new code or editing existing code: @.editorconfig
 
 ## Build & Test Commands
 
@@ -149,6 +149,7 @@ SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
 ### Global Build Config & Centralized Package Management
 
 `src/Directory.Build.props` is the single source of truth for:
+
 - **Package versions** — all NuGet dependencies are pinned here and referenced by version in individual `.csproj` files (no duplicate version strings)
 - **Compiler settings** — `TreatWarningsAsErrors=true` and `Nullable=enable` for all projects
 - **Code standards** — all code must be warning-free and null-safe

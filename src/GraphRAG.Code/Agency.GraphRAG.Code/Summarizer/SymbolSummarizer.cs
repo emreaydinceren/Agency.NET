@@ -28,21 +28,12 @@ public sealed class SymbolSummarizer(
 
     private const string DetailedSummaryInstructions =
 """
-You are a code analyzer. Your job: read the code provided and produce a concise summary.
+You are a code analyzer. Write a 2-3 paragraph prose summary of the provided code:
+1. What it does (purpose and responsibilities).
+2. How it does it (key steps, data flow, important calls).
+3. Anything non-obvious: side effects, risks, or constraints. Omit if nothing notable.
 
-Output format:
-1. **Purpose** (1 sentence): what this code does.
-2. **Key components** (3-7 bullets): functions/classes/modules and their roles.
-3. **Flow** (2-4 sentences): how data/control moves through it.
-4. **Notable** (0-3 bullets): non-obvious behavior, side effects, or risks. Skip if nothing notable.
-
-Rules:
-- One pass. Do not re-analyze your own output.
-- If a section has nothing to say, omit it. Do not pad.
-- Describe what the code does, not what it could do or should do.
-- No refactoring suggestions, no style critique, no "consider..." unless explicitly asked.
-- If the code is unclear or truncated, state that once and summarize what's visible. Do not speculate about missing pieces.
-- Stop when the four sections are done. Do not add a conclusion or recap.
+Be direct. Stop when done. Do not pad, speculate, or add a conclusion.
 """;
 
     private const string OneLineSummaryInstructions =
@@ -55,6 +46,47 @@ Rules:
     private readonly string standardModel = options.Value.StandardModel;
     private readonly string cheapModel = options.Value.CheapModel;
     private readonly string cheapestModel = options.Value.CheapestModel;
+
+    // Nullable overrides set only by the internal eval constructor; null = use production defaults.
+    private readonly Func<Chunk, string>? oneLinePromptBuilderOverride;
+    private readonly Func<Chunk, IReadOnlyList<string>, string>? detailedPromptBuilderOverride;
+    private readonly string? oneLineInstructionsOverride;
+    private readonly string? detailedInstructionsOverride;
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="SymbolSummarizer"/> with custom prompt builders
+    /// and system instructions; used by the evaluation suite to sweep prompt variants.
+    /// </summary>
+    /// <param name="chatClient">The chat client used to generate summaries.</param>
+    /// <param name="cache">The summary cache.</param>
+    /// <param name="modelTierSelector">The model tier selector.</param>
+    /// <param name="options">The summarizer options.</param>
+    /// <param name="logger">The logger.</param>
+    /// <param name="oneLinePromptBuilder">Builds the user message for one-line summaries.</param>
+    /// <param name="detailedPromptBuilder">Builds the user message for detailed summaries given the chunk and any resolved parent summaries.</param>
+    /// <param name="oneLineInstructions">System instructions for the one-line call.</param>
+    /// <param name="detailedInstructions">System instructions for the detailed call.</param>
+    internal SymbolSummarizer(
+        IChatClient chatClient,
+        SummaryCache cache,
+        ModelTierSelector modelTierSelector,
+        IOptions<SummarizerOptions> options,
+        ILogger<SymbolSummarizer> logger,
+        Func<Chunk, string> oneLinePromptBuilder,
+        Func<Chunk, IReadOnlyList<string>, string> detailedPromptBuilder,
+        string oneLineInstructions,
+        string detailedInstructions)
+        : this(chatClient, cache, modelTierSelector, new SummarizationPromptBuilder(options), options, logger)
+    {
+        ArgumentNullException.ThrowIfNull(oneLinePromptBuilder);
+        ArgumentNullException.ThrowIfNull(detailedPromptBuilder);
+        ArgumentNullException.ThrowIfNull(oneLineInstructions);
+        ArgumentNullException.ThrowIfNull(detailedInstructions);
+        this.oneLinePromptBuilderOverride = oneLinePromptBuilder;
+        this.detailedPromptBuilderOverride = detailedPromptBuilder;
+        this.oneLineInstructionsOverride = oneLineInstructions;
+        this.detailedInstructionsOverride = detailedInstructions;
+    }
 
     /// <summary>
     /// Summarizes the provided chunks, retrying up to 10 times on transient failures.
@@ -118,8 +150,8 @@ Rules:
             {
                 oneLine = await GetTextResponseAsync(
                     modelTierSelector.SelectOneLineModel(),
-                    promptBuilder.BuildOneLinePrompt(chunk),
-                    OneLineSummaryInstructions,
+                    (this.oneLinePromptBuilderOverride ?? promptBuilder.BuildOneLinePrompt)(chunk),
+                    this.oneLineInstructionsOverride ?? OneLineSummaryInstructions,
                     cancellationToken).ConfigureAwait(false);
 
                 IReadOnlyList<string> parentSummaries = GetParentSummaries(
@@ -129,13 +161,15 @@ Rules:
                     chunksBySimpleName,
                     results);
 
-                string detailedPrompt = parentSummaries.Count == 0
-                    ? promptBuilder.BuildDetailedPrompt(chunk)
-                    : promptBuilder.BuildDetailedForImplementationPrompt(chunk, parentSummaries);
+                string detailedPrompt = this.detailedPromptBuilderOverride is not null
+                    ? this.detailedPromptBuilderOverride(chunk, parentSummaries)
+                    : (parentSummaries.Count == 0
+                        ? promptBuilder.BuildDetailedPrompt(chunk)
+                        : promptBuilder.BuildDetailedForImplementationPrompt(chunk, parentSummaries));
                 string detailedResponse = await GetTextResponseAsync(
                     modelTierSelector.SelectDetailedModel(chunk, isLeaf),
                     AppendProbableCalleesInstruction(detailedPrompt),
-                    DetailedSummaryInstructions,
+                    this.detailedInstructionsOverride ?? DetailedSummaryInstructions,
                     cancellationToken).ConfigureAwait(false);
 
                 ParsedDetailedSummary parsed = ParseDetailedSummary(detailedResponse);

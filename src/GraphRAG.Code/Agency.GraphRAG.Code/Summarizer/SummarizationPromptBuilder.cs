@@ -23,7 +23,7 @@ public sealed class SummarizationPromptBuilder(IOptions<SummarizerOptions> optio
 
         return CreateBasePrompt(
             chunk,
-            "Write exactly one sentence that states this symbol's primary purpose. Output only that sentence — no preamble, no explanation.");
+            "Write exactly one sentence that opens with this symbol's kind (e.g. 'Interface that…', 'Class that…', 'Method that…') and states its primary purpose. Output only that sentence — no preamble, no explanation.");
     }
 
     /// <summary>

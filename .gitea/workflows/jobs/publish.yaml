@@ -54,10 +54,11 @@ jobs:
         if: steps.version.outputs.revision == '0'
         working-directory: src
         run: |
+          CONFIG_FILE="$(pwd)/NuGet.Config"
           for pkg in nupkg/*.nupkg; do
             dotnet nuget push "$pkg" \
               --source http://gitea-host.example:3000/api/packages/emre/nuget/index.json \
               --api-key ${{ secrets.NUGET_PUBLISH_TOKEN }} \
               --skip-duplicate \
-              --configfile ./NuGet.Config
+              --configfile "$CONFIG_FILE"
           done

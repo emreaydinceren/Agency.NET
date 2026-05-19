@@ -1,0 +1,13 @@
+name: CI (Pull Request)
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    uses: ./.gitea/workflows/jobs/build-package-and-test.yaml
+    secrets:
+      LLM_CLAUDE_API_KEY: ${{ secrets.LlmTest__Claude__ApiKey }}
+      LLM_OPENAI_API_KEY: ${{ secrets.LlmTest__OpenAI__ApiKey }}
+      POSTGRES_CONNECTION_STRING: ${{ secrets.ConnectionStrings__PostgreSql }}

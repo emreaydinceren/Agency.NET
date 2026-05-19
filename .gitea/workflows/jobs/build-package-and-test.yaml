@@ -1,0 +1,54 @@
+name: Build, Package, and Test
+
+on:
+  workflow_call:
+    inputs:
+      build-number:
+        required: false
+        type: string
+        default: ''
+    secrets:
+      LLM_CLAUDE_API_KEY:
+        required: true
+      LLM_OPENAI_API_KEY:
+        required: true
+      POSTGRES_CONNECTION_STRING:
+        required: true
+jobs:
+  build-package-and-test:
+    runs-on: dotnet-10
+
+    env:
+      LlmTest__Claude__ApiKey: ${{ secrets.LLM_CLAUDE_API_KEY }}
+      LlmTest__OpenAI__ApiKey: ${{ secrets.LLM_OPENAI_API_KEY }}
+      ConnectionStrings__PostgreSql: ${{ secrets.POSTGRES_CONNECTION_STRING }}
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🧰 Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: 📦 Restore dependencies
+        working-directory: src
+        run: dotnet restore
+
+      - name: 🛠️ Build Solution
+        working-directory: src
+        run: |
+          BUILD_ARGS=""
+          if [ -n "${{ inputs.build-number }}" ]; then
+            BUILD_ARGS="/p:BuildNumber=${{ inputs.build-number }}"
+          fi
+          dotnet build --configuration Release --no-restore $BUILD_ARGS
+
+      - name: 🧪 Run Unit Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional&Category!=Eval"
+
+      - name: 🧪 Run Functional Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional"

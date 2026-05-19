@@ -1,0 +1,23 @@
+name: CI (Main)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    uses: ./.gitea/workflows/jobs/build-package-and-test.yaml
+    secrets:
+      LLM_CLAUDE_API_KEY: ${{ secrets.LlmTest__Claude__ApiKey }}
+      LLM_OPENAI_API_KEY: ${{ secrets.LlmTest__OpenAI__ApiKey }}
+      POSTGRES_CONNECTION_STRING: ${{ secrets.ConnectionStrings__PostgreSql }}
+    with:
+      build-number: ${{ github.run_number }}
+
+  publish:
+    needs: build
+    uses: ./.gitea/workflows/jobs/publish.yaml
+    secrets:
+      NUGET_PUBLISH_TOKEN: ${{ secrets.NUGETPUBLISHTOKEN }}
+    with:
+      build-number: ${{ github.run_number }}

@@ -1,17 +1,19 @@
-name: .NET 10 Build And Publish
+name: Publish NuGet Packages
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      build-number:
+        required: false
+        type: string
+        default: ''
+    secrets:
+      NUGET_PUBLISH_TOKEN:
+        required: true
 
 jobs:
   publish:
     runs-on: dotnet-10
-
-    env:
-      LlmTest__Claude__ApiKey: ${{ secrets.LlmTest__Claude__ApiKey }}
-      LlmTest__OpenAI__ApiKey: ${{ secrets.LlmTest__OpenAI__ApiKey }}
-      ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings__PostgreSql }}
 
     steps:
       - name: 📥 Checkout
@@ -21,22 +23,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.x"
-
-      - name: 📦 Restore dependencies
-        working-directory: src
-        run: dotnet restore
-
-      - name: 🛠️ Build Solution
-        working-directory: src
-        run: dotnet build --configuration Release --no-restore /p:BuildNumber=${{ github.run_number }}
-
-      - name: 🧪 Run Unit Tests
-        working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal  --filter "Category!=Functional&Category!=Eval"
-
-      - name: 🧪 Run Functional Tests
-        working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal  --filter "Category=Functional"
 
       - name: 🔎 Read package revision
         id: version
@@ -57,7 +43,12 @@ jobs:
       - name: 📦 Pack NuGet packages
         if: steps.version.outputs.revision == '0'
         working-directory: src
-        run: dotnet pack --configuration Release --no-build /p:BuildNumber=${{ github.run_number }} --output ./nupkg
+        run: |
+          PACK_ARGS=""
+          if [ -n "${{ inputs.build-number }}" ]; then
+            PACK_ARGS="/p:BuildNumber=${{ inputs.build-number }}"
+          fi
+          dotnet pack --configuration Release $PACK_ARGS --output ./nupkg
 
       - name: 🚀 Publish NuGet packages
         if: steps.version.outputs.revision == '0'
@@ -66,6 +57,6 @@ jobs:
           for pkg in nupkg/*.nupkg; do
             dotnet nuget push "$pkg" \
               --source http://gitea-host.example:3000/api/packages/emre/nuget/index.json \
-              --api-key ${{ secrets.NUGETPUBLISHTOKEN }} \
+              --api-key ${{ secrets.NUGET_PUBLISH_TOKEN }} \
               --skip-duplicate
           done

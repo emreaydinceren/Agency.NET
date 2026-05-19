@@ -5,19 +5,62 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    uses: ./.gitea/workflows/jobs/build-package-and-test.yaml
-    secrets:
-      LLM_CLAUDE_API_KEY: ${{ secrets.LlmTest__Claude__ApiKey }}
-      LLM_OPENAI_API_KEY: ${{ secrets.LlmTest__OpenAI__ApiKey }}
-      POSTGRES_CONNECTION_STRING: ${{ secrets.ConnectionStrings__PostgreSql }}
-    with:
-      build-number: ${{ github.run_number }}
+  build-and-publish:
+    runs-on: dotnet-10
 
-  publish:
-    needs: build
-    uses: ./.gitea/workflows/jobs/publish.yaml
-    secrets:
-      NUGET_PUBLISH_TOKEN: ${{ secrets.NUGETPUBLISHTOKEN }}
-    with:
-      build-number: ${{ github.run_number }}
+    env:
+      LlmTest__Claude__ApiKey: ${{ secrets.LlmTest__Claude__ApiKey }}
+      LlmTest__OpenAI__ApiKey: ${{ secrets.LlmTest__OpenAI__ApiKey }}
+      ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings__PostgreSql }}
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Restore dependencies
+        working-directory: src
+        run: dotnet restore
+
+      - name: 🛠️ Build Solution
+        working-directory: src
+        run: dotnet build --configuration Release --no-restore /p:BuildNumber=${{ github.run_number }}
+
+      - name: 🧪 Run Unit Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional&Category!=Eval"
+
+      - name: 🧪 Run Functional Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional"
+
+      - name: 🔎 Read package revision
+        id: version
+        run: |
+          REVISION=$(grep '<Revision>' src/Directory.Build.props | grep -o '[0-9]*')
+          echo "revision=$REVISION" >> $GITHUB_OUTPUT
+
+      - name: 📋 Generate third-party notices
+        if: steps.version.outputs.revision == '0'
+        working-directory: src
+        run: |
+          dotnet tool install --global thirdlicense || dotnet tool update --global thirdlicense
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          dotnet sln Agency.slnx list | grep '\.csproj$' | grep -v 'Test' | while read proj; do
+            thirdlicense --project "$proj" --output "$(dirname $proj)/THIRD-PARTY-NOTICES.TXT"
+          done
+
+      - name: 📦 Pack NuGet packages
+        if: steps.version.outputs.revision == '0'
+        working-directory: src
+        run: dotnet pack --configuration Release --no-build /p:BuildNumber=${{ github.run_number }} --output ./nupkg
+
+      - name: 🚀 Publish NuGet packages
+        if: steps.version.outputs.revision == '0'
+        working-directory: src
+        run: |
+          for pkg in nupkg/*.nupkg; do
+            curl --fail -X PUT \
+              -H "Authorization: token ${{ secrets.NUGETPUBLISHTOKEN }}" \
+              -F "package=@$pkg" \
+              "http://gitea-host.example:3000/api/packages/emre/nuget"
+          done

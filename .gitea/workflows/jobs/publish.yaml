@@ -55,8 +55,8 @@ jobs:
         working-directory: src
         run: |
           for pkg in nupkg/*.nupkg; do
-            curl -X PUT \
+            curl --fail -X PUT \
               -H "Authorization: token ${{ secrets.NUGET_PUBLISH_TOKEN }}" \
-              --data-binary @"$pkg" \
-              "http://gitea-host.example:3000/api/packages/emre/nuget/index.json?filename=$(basename $pkg)"
+              -F "package=@$pkg" \
+              "http://gitea-host.example:3000/api/packages/emre/nuget"
           done

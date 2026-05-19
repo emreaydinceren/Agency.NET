@@ -24,7 +24,7 @@ public sealed class SummarizationPromptBuilderTests
         Assert.Equal(
             """
             You are summarizing a source-code symbol.
-            Write exactly one sentence that states this symbol's primary purpose. Output only that sentence — no preamble, no explanation.
+            Write exactly one sentence that opens with this symbol's kind (e.g. 'Interface that…', 'Class that…', 'Method that…') and states its primary purpose. Output only that sentence — no preamble, no explanation.
 
             Language: CSharp
             Path: src\Payments\StripePaymentProcessor.cs

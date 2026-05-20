@@ -7,6 +7,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: dotnet-10
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
 
     env:
       LlmTest__Claude__ApiKey: ${{ secrets.LlmTest__Claude__ApiKey }}
@@ -15,7 +17,11 @@ jobs:
 
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          AUTH_URL="${GITHUB_SERVER_URL/http:\/\//http:\/\/x-access-token:$GITHUB_TOKEN@}"
+          git clone --depth=1 "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
       - name: 📦 Restore dependencies
         working-directory: src
@@ -58,7 +64,8 @@ jobs:
         if: steps.version.outputs.revision == '0'
         working-directory: src
         run: |
-          for pkg in nupkg/*.nupkg; do
+          for pkg in nupkg/*.nupkg nupkg/*.snupkg; do
+            [ -f "$pkg" ] || continue
             curl --fail -X PUT \
               -H "Authorization: token ${{ secrets.NUGETPUBLISHTOKEN }}" \
               -F "package=@$pkg" \

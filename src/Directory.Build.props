@@ -31,6 +31,13 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
+  <!-- Symbol and source embedding for NuGet packages -->
+  <PropertyGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedAllSources>true</EmbedAllSources>
+  </PropertyGroup>
+
   <ItemGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
     <None Include="THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />

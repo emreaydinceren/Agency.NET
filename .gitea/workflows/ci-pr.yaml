@@ -23,11 +23,6 @@ jobs:
           git clone --depth=1 "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
-      - name: 🧰 Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.x"
-
       - name: 📦 Restore dependencies
         working-directory: src
         run: dotnet restore

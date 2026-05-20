@@ -55,16 +55,18 @@ jobs:
         if: steps.version.outputs.revision == '0'
         working-directory: src
         run: |
-          # Patch stale .nupkg.metadata files that reference localhost:3000 (written when the
-          # Mac Mini host's NuGet config used localhost; inside the container that address is
-          # the container itself, not Gitea).
-          grep -rl "localhost:3000" /root/.nuget/packages 2>/dev/null \
-            | xargs -r sed -i 's|localhost:3000|gitea-host.example:3000|g' || true
+          # Agency packages embed localhost:3000 as repository URL; forward to actual Gitea host
+          # so thirdlicense can fetch license data (patching plain-text files doesn't help because
+          # thirdlicense reads the URL from inside the .nupkg zip archive).
+          apt-get update -qq && apt-get install -y -q socat
+          socat TCP-LISTEN:3000,fork,reuseaddr TCP:gitea-host.example:3000 &
+          SOCAT_PID=$!
           dotnet tool install --global thirdlicense || dotnet tool update --global thirdlicense
           export PATH="$HOME/.dotnet/tools:$PATH"
           dotnet sln Agency.slnx list | grep '\.csproj$' | grep -v 'Test' | while read proj; do
             thirdlicense --project "$proj" --output "$(dirname $proj)/THIRD-PARTY-NOTICES.TXT"
           done
+          kill $SOCAT_PID 2>/dev/null || true
 
       - name: 📦 Pack NuGet packages
         if: steps.version.outputs.revision == '0'

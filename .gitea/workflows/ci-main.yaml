@@ -58,9 +58,8 @@ jobs:
           # Patch stale .nupkg.metadata files that reference localhost:3000 (written when the
           # Mac Mini host's NuGet config used localhost; inside the container that address is
           # the container itself, not Gitea).
-          find /root/.nuget/packages -name "*.nupkg.metadata" -print0 2>/dev/null \
-            | xargs -0 grep -rl "localhost:3000" 2>/dev/null \
-            | xargs -r sed -i 's|localhost:3000|gitea-host.example:3000|g'
+          grep -rl "localhost:3000" /root/.nuget/packages --include="*.nupkg.metadata" 2>/dev/null \
+            | xargs -r sed -i 's|localhost:3000|gitea-host.example:3000|g' || true
           dotnet tool install --global thirdlicense || dotnet tool update --global thirdlicense
           export PATH="$HOME/.dotnet/tools:$PATH"
           dotnet sln Agency.slnx list | grep '\.csproj$' | grep -v 'Test' | while read proj; do

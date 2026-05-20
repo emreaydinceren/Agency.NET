@@ -44,3 +44,19 @@ jobs:
       - name: 🧪 Run Functional Tests
         working-directory: src
         run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional"
+
+      - name: 📋 Generate third-party notices
+        working-directory: src
+        run: |
+          # Agency packages embed localhost:3000 as repository URL; forward to actual Gitea host
+          # so thirdlicense can fetch license data (patching plain-text files doesn't help because
+          # thirdlicense reads the URL from inside the .nupkg zip archive).
+          apt-get update -qq && apt-get install -y -q socat
+          socat TCP-LISTEN:3000,fork,reuseaddr TCP:gitea-host.example:3000 &
+          SOCAT_PID=$!
+          dotnet tool install --global thirdlicense || dotnet tool update --global thirdlicense
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          dotnet sln Agency.slnx list | grep '\.csproj$' | grep -v 'Test' | while read proj; do
+            thirdlicense --project "$proj" --output "$(dirname $proj)/THIRD-PARTY-NOTICES.TXT"
+          done
+          kill $SOCAT_PID 2>/dev/null || true

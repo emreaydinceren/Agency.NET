@@ -9,6 +9,9 @@ jobs:
     runs-on: dotnet-10
     container:
       image: mcr.microsoft.com/dotnet/sdk:10.0
+    defaults:
+      run:
+        shell: bash
 
     env:
       LlmTest__Claude__ApiKey: ${{ secrets.LlmTest__Claude__ApiKey }}

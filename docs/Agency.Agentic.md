@@ -15,6 +15,7 @@ Agency.Agentic is the autonomous agent loop library that drives a think → act 
 ```csharp
 // File: src/Agentic/Agency.Agentic/Agent.cs
 using Agency.Agentic.Contexts;
+using Agency.Agentic.Hooks;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -30,14 +31,17 @@ public sealed class Agent
         string model,
         string? clientType = null,
         StopCondition? stopWhen = null,  // default: Any(NoToolCalls, StepCountIs(20))
-        bool stream = true,
+        AgentHooks? hooks = null,        // default: AgentHooks.None
         ILogger<Agent>? logger = null);
 
     public string Model      { get; }
     public string ClientType { get; }
 
     /// <summary>Creates a Context pre-populated with temporal context and the initial prompt.</summary>
-    public static Context CreateContext(string initialPrompt, ToolContext? tools = null);
+    public static Context CreateContext(
+        string initialPrompt,
+        ToolContext? tools = null,
+        EnvironmentalContext? environment = null);
 
     /// <summary>
     /// Executes one user turn. On the first call, delegates to the internal loop; on subsequent calls,
@@ -100,17 +104,11 @@ public sealed record SessionStartedEvent(string SessionId) : AgentEvent;
 /// <summary>Emitted after each LLM response is appended to the conversation.</summary>
 public sealed record AssistantTurnEvent(ChatMessage Message) : AgentEvent;
 
-/// <summary>Emitted when a tool call is received from the stream, before execution begins.</summary>
-public sealed record ToolUseReceivedEvent(string ToolName, string ToolUseId) : AgentEvent;
-
 /// <summary>Emitted after a tool has been invoked and its result is ready.</summary>
 public sealed record ToolInvokedEvent(string ToolName, JsonElement Input, ToolResult Result) : AgentEvent;
 
 /// <summary>Emitted after each complete iteration (LLM call + optional tool calls).</summary>
 public sealed record IterationCompletedEvent(int Iteration, LlmTokenUsage TurnUsage) : AgentEvent;
-
-/// <summary>Streaming path only — one event per text token chunk.</summary>
-public sealed record TextDeltaEvent(string Delta) : AgentEvent;
 
 /// <summary>Terminal event — always the last event emitted by the agent loop.</summary>
 public sealed record AgentResultEvent(
@@ -126,6 +124,61 @@ public sealed record LlmTokenUsage(long InputTokens, long OutputTokens)
     public long TotalTokens => InputTokens + OutputTokens;
 }
 ```
+
+### Hooks
+
+```csharp
+// File: src/Agentic/Agency.Agentic/Hooks/PreToolUseDecision.cs
+namespace Agency.Agentic.Hooks;
+
+public abstract record PreToolUseDecision
+{
+    public sealed record Allow : PreToolUseDecision;
+    public sealed record Deny(string Reason) : PreToolUseDecision;
+    public sealed record Rewrite(JsonElement NewInput) : PreToolUseDecision;
+    public static PreToolUseDecision Allowed { get; }
+}
+```
+
+Hook context records passed to each delegate:
+
+| Record | Constructor Parameters |
+|--------|----------------------|
+| `SessionStartedHookContext` | `string SessionId, Context AgentContext` |
+| `PreToolUseHookContext` | `string ToolName, JsonElement Input, Context AgentContext` |
+| `PostToolUseHookContext` | `string ToolName, JsonElement Input, ToolResult Result, Context AgentContext` |
+| `AssistantTurnHookContext` | `ChatMessage Message, Context AgentContext` |
+| `StopHookContext` | `AgentResultEvent Result, Context AgentContext` |
+
+```csharp
+// File: src/Agentic/Agency.Agentic/Hooks/AgentHooks.cs
+namespace Agency.Agentic.Hooks;
+
+public sealed record AgentHooks
+{
+    public Func<SessionStartedHookContext, CancellationToken, Task>?                         OnSessionStarted { get; init; }
+    public Func<PreToolUseHookContext, CancellationToken, Task<PreToolUseDecision>>?         OnPreToolUse     { get; init; }
+    public Func<PostToolUseHookContext, CancellationToken, Task>?                            OnPostToolUse    { get; init; }
+    public Func<AssistantTurnHookContext, CancellationToken, Task>?                          OnAssistantTurn  { get; init; }
+    public Func<StopHookContext, CancellationToken, Task>?                                   OnStop           { get; init; }
+    public static AgentHooks None { get; }
+}
+```
+
+```csharp
+// File: src/Agentic/Agency.Agentic/Hooks/AgentHooksExtensions.cs
+namespace Agency.Agentic.Hooks;
+
+public static class AgentHooksExtensions
+{
+    public static AgentHooks Compose(this AgentHooks first, AgentHooks second);
+}
+```
+
+**Built-in hooks:**
+
+- `BlockListHooks.Dangerous` — static `AgentHooks` with `OnPreToolUse` that denies shell commands (targeting `Bash`, `ExecutePowershell`, `ExecutePowershellTool`) containing patterns like `rm -rf`, `DROP TABLE`, `format c:`, `del /f /s`.
+- `AuditHooks.ForLogger(ILogger logger)` — returns `AgentHooks` with `OnPreToolUse` and `OnPostToolUse` that log at `Information` level; `OnPreToolUse` always returns `Allow`.
 
 ### Stop Conditions
 
@@ -205,9 +258,9 @@ public sealed class AgentOptions
 {
     public string             DefaultClientName  { get; set; }
     public string?            DefaultModel       { get; set; }
-    public bool               Stream             { get; set; } = true;
     public int?               TurnTimeoutSeconds { get; set; }
     public LlmClientOptions[] LLmClients         { get; set; } = [];
+    public int?               ContextWindowSize  { get; set; }
 }
 ```
 
@@ -323,18 +376,25 @@ public sealed class McpClientPool : IAsyncDisposable
 The loop implemented internally in `Agent` follows this pattern on every iteration:
 
 ```
-1. Seed conversation with the user prompt (first iteration only)
-2. Build system prompt via SystemPromptBuilder.Build(ctx)
-3. Call IChatClient:
-   • stream=true  → GetStreamingResponseAsync → yield TextDeltaEvent per token chunk
-   • stream=false → GetResponseAsync          → single batch response
-4. Emit AssistantTurnEvent + IterationCompletedEvent
-5. Evaluate StopCondition(ctx, lastMessage)
-   └── true → AgentResultEvent → break
-6. Extract FunctionCallContent items from the assistant message
-7. Execute all tool calls in parallel → ToolInvokedEvent (one per tool)
-8. Append tool results to conversation as Tool-role messages (one per call)
-9. Increment IterationCount → repeat
+1. Yield SessionStartedEvent
+2. → OnSessionStarted hook (if set)
+3. Seed conversation with the user prompt (first iteration only)
+4. Build system prompt via SystemPromptBuilder.Build(ctx) [every iteration]
+5. Call IChatClient.GetResponseAsync (single batch response)
+6. Append assistant message to conversation
+7. Yield AssistantTurnEvent
+8. → OnAssistantTurn hook (if set)
+9. Yield IterationCompletedEvent
+10. Evaluate StopCondition(ctx, lastMessage)
+    └── true → OnStop hook → yield AgentResultEvent → break
+11. Extract FunctionCallContent items from the assistant message
+12. For each tool call (in parallel):
+    a. → OnPreToolUse hook → Allow / Deny (skip InvokeAsync) / Rewrite (replace input)
+    b. InvokeAsync(name, input, ct)
+    c. → OnPostToolUse hook (fires even on error)
+    d. Yield ToolInvokedEvent
+13. Append tool results to conversation as Tool-role messages
+14. Repeat from step 4
 ```
 
 ### Practical Usage
@@ -360,17 +420,46 @@ await foreach (AgentEvent evt in session.SendAsync("List files in /tmp", ct))
 {
     switch (evt)
     {
-        case TextDeltaEvent d:
-            Console.Write(d.Delta);
-            break;
         case ToolInvokedEvent t:
-            Console.WriteLine($"\n[tool: {t.ToolName}]");
+            Console.WriteLine($"[tool: {t.ToolName}]");
             break;
         case AgentResultEvent r:
-            Console.WriteLine($"\nDone ({r.Status}). Tokens: {r.TotalUsage.TotalTokens}");
+            Console.WriteLine($"Done ({r.Status}). Tokens: {r.TotalUsage.TotalTokens}");
             break;
     }
 }
+```
+
+### Using Hooks
+
+```csharp
+using Agency.Agentic;
+using Agency.Agentic.Hooks;
+using Microsoft.Extensions.Logging;
+
+// Block dangerous commands and audit all tool calls
+AgentHooks hooks = BlockListHooks.Dangerous
+    .Compose(AuditHooks.ForLogger(logger));
+
+var agent = new Agent(chatClient, "claude-opus-4-6", hooks: hooks);
+
+// Custom hook: inject context when the session starts
+var customHooks = new AgentHooks
+{
+    OnSessionStarted = (ctx, _) =>
+    {
+        ctx.AgentContext.Knowledge = ctx.AgentContext.Knowledge with
+        {
+            Facts = [.. ctx.AgentContext.Knowledge.Facts, "Today's sprint: auth hardening"],
+        };
+        return Task.CompletedTask;
+    },
+    OnPreToolUse = (ctx, _) =>
+    {
+        // Rewrite relative paths to absolute before the tool sees them
+        return Task.FromResult(PreToolUseDecision.Allowed);
+    },
+};
 ```
 
 ### Stop Conditions
@@ -435,11 +524,11 @@ var toolCtx  = new ToolContext { Registry = registry };
 |---|---|---|
 | `ActivitySource` | `Agency.Agentic.Agent` | — |
 | `Meter` | `Agency.Agentic.Agent` | — |
-| Counter | `agent.turns` | `agent.model`, `agent.client_type`, `agent.stream` |
+| Counter | `agent.turns` | `agent.model`, `agent.client_type` |
 | Counter | `agent.errors` | same |
 | Counter | `agent.tool.calls` | same + `agent.tool.name`, `agent.tool.error` |
 | Counter | `agent.tokens` | `agent.model`, `agent.client_type`, `agent.token.type` |
-| Histogram | `agent.turn.duration` (ms) | `agent.model`, `agent.client_type`, `agent.stream` |
+| Histogram | `agent.turn.duration` (ms) | `agent.model`, `agent.client_type` |
 
 ### `Models`
 
@@ -470,3 +559,5 @@ var toolCtx  = new ToolContext { Registry = registry };
 - **`McpProxyTool` is `internal`** — callers never instantiate `McpProxyTool` directly; `McpClientPool.CreateAsync` wraps each discovered `McpClientTool` and exposes the results through the `Tools` property. This keeps the MCP SDK types contained behind the pool boundary.
 - **`McpClientPool` is `IAsyncDisposable`** — each `McpClient` holds an open connection to its server process or HTTP endpoint. Disposing the pool closes all connections; callers should use `await using` to ensure cleanup even on cancellation.
 - **`ChatSession` is not thread-safe** — create one instance per user or logical connection; at most one `SendAsync` call should be in flight at a time. Call `Reset()` to clear conversation history and start a fresh session without creating a new instance.
+- **Hooks are interceptors, events are observers** — `IAsyncEnumerable<AgentEvent>` lets callers observe what happened after the fact; `AgentHooks` lets callers block, rewrite, or react *before* the action completes. `OnPreToolUse` is the only hook that can alter agent behaviour (via `Deny`/`Rewrite`); all others are fire-and-forget.
+- **`Compose()` uses most-restrictive-wins for `OnPreToolUse`** — when composing two hooks that both have `OnPreToolUse`, they run concurrently via `Task.WhenAll`; the result priority is Deny > Rewrite > Allow. All other delegate slots run sequentially (first then second) so ordering is deterministic.

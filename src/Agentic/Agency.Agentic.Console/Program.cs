@@ -48,7 +48,7 @@ internal class Program
         {
             var agentFactory = sp.GetRequiredService<IAgentFactory>();
             var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            return agentFactory.CreateAgent(null, null, options.Stream);
+            return agentFactory.CreateAgent(null, null);
         });
 
         // 6. Tool & Context Registration:
@@ -62,8 +62,8 @@ internal class Program
             registry.Register(new ReadFileTool());
             registry.Register(new WriteFileTool());
 
-            registry.Register(new AgentTool((clientName, modelName, stream) =>
-                (options, agentFactory.CreateAgent(clientName, modelName, stream), registry)));
+            registry.Register(new AgentTool((clientName, modelName) =>
+                (options, agentFactory.CreateAgent(clientName, modelName), registry)));
 
             return new ToolContext { Registry = registry };
         });

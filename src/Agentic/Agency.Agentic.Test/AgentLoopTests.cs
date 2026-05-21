@@ -63,7 +63,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("Paris."));
 
-        var agent = new Agent(llm, "claude-3-5-sonnet", stream: false);
+        var agent = new Agent(llm, "claude-3-5-sonnet");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         Assert.IsType<SessionStartedEvent>(events[0]);
@@ -75,7 +75,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("Done."));
 
-        var agent = new Agent(llm, "claude-3-5-sonnet", stream: false);
+        var agent = new Agent(llm, "claude-3-5-sonnet");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         Assert.IsType<AgentResultEvent>(events[^1]);
@@ -87,7 +87,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("ok"));
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var sessionEvent = Assert.IsType<SessionStartedEvent>(events[0]);
@@ -103,7 +103,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("Paris is the capital of France."));
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
 
         // Act
         var events = await RunToCompletion(agent, MakeContext("What is the capital of France?"), ct: TestContext.Current.CancellationToken);
@@ -122,7 +122,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("Done."));
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
@@ -135,7 +135,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("The answer is 42."));
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
@@ -148,7 +148,7 @@ public sealed class AgentLoopTests
         var llm = new FakeChatClient();
         llm.EnqueueResponse(TextResponse("ok", inputTokens: 100, outputTokens: 50));
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
@@ -165,7 +165,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("ok"));
 
         var ctx = MakeContext("My specific prompt");
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // The first message sent to the LLM must be the user's prompt.
@@ -185,7 +185,7 @@ public sealed class AgentLoopTests
         var existingMsg = new ChatMessage(ChatRole.User, "Existing message");
         ctx.Conversation.Append(existingMsg);
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // Only the pre-existing message — the prompt should NOT be re-seeded.
@@ -210,7 +210,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Search is done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
 
         // Act
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
@@ -231,7 +231,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("The result is 42."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var toolEvent = events.OfType<ToolInvokedEvent>().Single();
@@ -251,7 +251,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // The second LLM call must include a Tool-role message with the FunctionResultContent.
@@ -278,7 +278,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Both results received."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, toolA.InvokeCount);
@@ -300,7 +300,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // Regardless of execution order, result messages must match original call IDs in sequence.
@@ -328,7 +328,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("I saw the error and I handled it."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         // The ToolInvokedEvent must mark the result as an error.
@@ -353,7 +353,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Handled both."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, brokenTool.InvokeCount);
@@ -374,8 +374,7 @@ public sealed class AgentLoopTests
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model",
-            stopWhen: StopConditions.StepCountIs(2),
-            stream: false);
+            stopWhen: StopConditions.StepCountIs(2));
         var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();
@@ -394,8 +393,7 @@ public sealed class AgentLoopTests
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
         var agent = new Agent(llm, "model",
-            stopWhen: StopConditions.StepCountIs(2),
-            stream: false);
+            stopWhen: StopConditions.StepCountIs(2));
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, ctx.IterationCount);
@@ -414,7 +412,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var iterationEvents = events.OfType<IterationCompletedEvent>().ToList();
@@ -436,7 +434,7 @@ public sealed class AgentLoopTests
         llm.EnqueueResponse(TextResponse("Done."));
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, llm.ReceivedSystemPrompts.Count);
@@ -452,7 +450,7 @@ public sealed class AgentLoopTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var ctx = MakeContext();
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
@@ -488,7 +486,7 @@ public sealed class AgentLoopTests
         });
 
         var ctx = MakeContext(tools: new ToolContext { Registry = registry });
-        var agent = new Agent(llm, "model", stream: false);
+        var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
 
         var result = events.OfType<AgentResultEvent>().Single();

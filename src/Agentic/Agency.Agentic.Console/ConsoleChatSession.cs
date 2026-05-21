@@ -55,6 +55,7 @@ internal sealed class ConsoleChatSession
     private readonly ILogger<ConsoleChatSession> _logger;
     private readonly ToolContext toolContext;
     private Agent _agent;
+    private ChatSession? _chatSession;
 
     internal IServiceProvider ServiceProvider { get; }
 
@@ -79,6 +80,7 @@ internal sealed class ConsoleChatSession
     internal void SetAgent(Agent agent)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
+        this._chatSession?.SetAgent(agent);
     }
 
     public async Task RunAsync(string? initialInput = null)
@@ -98,7 +100,6 @@ internal sealed class ConsoleChatSession
         bool failed = false;
 
         int chatTurns = 0;
-        ChatSession? chatSession = null;
 
         this._logger.LogInformation(
             "Starting console chat session. ClientType={ClientType}, Model={Model}",
@@ -115,7 +116,7 @@ internal sealed class ConsoleChatSession
                 sessionCts.Cancel();
             };
 
-            chatSession = new(this._agent, this._options, this.toolContext);
+            this._chatSession = new(this._agent, this._options, this.toolContext);
 
             // ── REPL loop ─────────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ internal sealed class ConsoleChatSession
                         break;
                         case CommandContinuation.Clear:
                         AnsiConsole.Clear();
-                        chatSession.Reset();
+                        this._chatSession.Reset();
                         continue;
                         case CommandContinuation.Continue:
                         continue;
@@ -168,51 +169,19 @@ internal sealed class ConsoleChatSession
                 }
 
                 // Snapshot token counts before this run so we can show the per-turn delta.
-                long prevIn = chatSession.TotalUsage.InputTokens;
-                long prevOut = chatSession.TotalUsage.OutputTokens;
+                long prevIn = this._chatSession.TotalUsage.InputTokens;
+                long prevOut = this._chatSession.TotalUsage.OutputTokens;
 
                 bool interrupted = false;
-                bool streamingStarted = false;
-                StringBuilder? streamingBuffer = null;
 
                 try
                 {
                     this.output.StartSpinner();
 
-                    // This loops through the events of the turn as they come in from the agent. The main point of complexity here
-                    // is handling the fact that TextDeltaEvents may streaming in one or more chunks before the AssistantTurnEvent comes in
-                    // to indicate the turn is done. We want to buffer those deltas until the turn is done so we can print them together, rather
-                    // than interleaving them with any ToolInvokedEvents that may come in during the turn.
-                    await foreach (AgentEvent evt in chatSession.SendAsync(input, sessionCts.Token))
+                    await foreach (AgentEvent evt in this._chatSession.SendAsync(input, sessionCts.Token))
                     {
                         switch (evt)
                         {
-                            case TextDeltaEvent delta:
-                            // This event may come in one or more chunks as the assistant generates a response. We buffer it until the turn
-                            // is done (indicated by AssistantTurnEvent) before printing, so that we don't interleave it with ToolInvokedEvents
-                            // that may also come in the middle of the response.
-
-                            if (!streamingStarted)
-                            {
-                                streamingStarted = true;
-                                streamingBuffer = new StringBuilder();
-                            }
-
-                            streamingBuffer!.Append(delta.Delta);
-                            break;
-
-                            case AssistantTurnEvent turn when streamingStarted:
-                            // This event may come in the middle of streaming text deltas, or as a complete message at the end.
-                            // If streaming, we buffer it until the turn is done; if not, we print it immediately.
-
-                            string buffered = streamingBuffer!.ToString();
-                            streamingBuffer = null;
-                            streamingStarted = false;
-                            this.output.WriteMarkup(AssistantMarkup);
-                            MarkdownRenderer.Print(buffered);
-                            this.output.StopSpinner();
-                            break;
-
                             case AssistantTurnEvent turn:
                             this.PrintAssistantTurn(turn.Message);
                             this.output.StopSpinner();
@@ -235,8 +204,8 @@ internal sealed class ConsoleChatSession
                             case AgentResultEvent result:
                             // This is the final event of the turn, showing the overall result and token usage for the turn.
 
-                            long deltaIn = chatSession.TotalUsage.InputTokens - prevIn;
-                            long deltaOut = chatSession.TotalUsage.OutputTokens - prevOut;
+                            long deltaIn = this._chatSession.TotalUsage.InputTokens - prevIn;
+                            long deltaOut = this._chatSession.TotalUsage.OutputTokens - prevOut;
                             this.output.WriteLine("gray",
                                 $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out  [{result.Status}]");
                             break;
@@ -247,8 +216,6 @@ internal sealed class ConsoleChatSession
                 }
                 catch (OperationCanceledException)
                 {
-                    streamingBuffer = null;
-                    streamingStarted = false;
                     this.output.WriteLine("yellow", "  [interrupted]");
                     interrupted = true;
                 }
@@ -271,7 +238,7 @@ internal sealed class ConsoleChatSession
             this.output.WriteLine();
             this.output.WriteLine("gray",
                 $"Session ended  ·  {chatTurns} turn{(chatTurns == 1 ? "" : "s")}  ·  " +
-                $"{chatSession.TotalUsage.InputTokens:N0} in, {chatSession.TotalUsage.OutputTokens:N0} out total");
+                $"{this._chatSession.TotalUsage.InputTokens:N0} in, {this._chatSession.TotalUsage.OutputTokens:N0} out total");
         }
         catch (Exception ex)
         {
@@ -290,24 +257,24 @@ internal sealed class ConsoleChatSession
             _sessionDurationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
             _sessionTurnCounter.Add(chatTurns, tags);
 
-            if (chatSession?.IsStarted == true)
+            if (this._chatSession?.IsStarted == true)
             {
-                _sessionTokenCounter.Add(chatSession.TotalUsage.InputTokens, new TagList
+                _sessionTokenCounter.Add(this._chatSession.TotalUsage.InputTokens, new TagList
                 {
                     { "agent.client_type", this._agent.ClientType },
                     { "agent.model", this._agent.Model },
                     { "agent.token.type", "input" },
                 });
 
-                _sessionTokenCounter.Add(chatSession.TotalUsage.OutputTokens, new TagList
+                _sessionTokenCounter.Add(this._chatSession.TotalUsage.OutputTokens, new TagList
                 {
                     { "agent.client_type", this._agent.ClientType },
                     { "agent.model", this._agent.Model },
                     { "agent.token.type", "output" },
                 });
 
-                activity?.SetTag("agent.usage.input_tokens", chatSession.TotalUsage.InputTokens);
-                activity?.SetTag("agent.usage.output_tokens", chatSession.TotalUsage.OutputTokens);
+                activity?.SetTag("agent.usage.input_tokens", this._chatSession.TotalUsage.InputTokens);
+                activity?.SetTag("agent.usage.output_tokens", this._chatSession.TotalUsage.OutputTokens);
             }
 
             if (!failed)

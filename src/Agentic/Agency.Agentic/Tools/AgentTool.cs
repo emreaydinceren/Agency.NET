@@ -6,9 +6,9 @@ using Agentic.Contexts;
 
 public class AgentTool : ITool
 {
-    private readonly Func<string?, string?, bool, (AgentOptions, Agent, IToolRegistry)> agentFactory;
+    private readonly Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory;
 
-    public AgentTool(Func<string?, string?, bool, (AgentOptions, Agent, IToolRegistry)> agentFactory)
+    public AgentTool(Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory)
     {
         this.agentFactory = agentFactory;
     }
@@ -53,7 +53,7 @@ public class AgentTool : ITool
 
         string? model = accessor.model;
 
-        var (agentOptions, agent, toolRegistry) = agentFactory(clientName, model, false);
+        var (agentOptions, agent, toolRegistry) = agentFactory(clientName, model);
 
         var chatSession = new ChatSession(agent, agentOptions, new ToolContext { Registry = toolRegistry });
 
@@ -74,12 +74,6 @@ public class AgentTool : ITool
                     break;
                 case IterationCompletedEvent ev:
                     verboseSB.AppendLine($"Iteration {ev.Iteration} completed.");
-                    break;
-                case TextDeltaEvent ev:
-                    verboseSB.AppendLine(ev.Delta);
-                    break;
-                case ToolUseReceivedEvent ev:
-                    verboseSB.AppendLine($"Tool use received: {ev.ToolName} with input {ev.ToolUseId}");
                     break;
                 case AgentResultEvent ev:
                     verboseSB.AppendLine($"Agent result: {ev.Status} with {ev.FinalText}");

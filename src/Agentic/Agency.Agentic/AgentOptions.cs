@@ -13,12 +13,6 @@ public sealed class AgentOptions
     public string? DefaultModel { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether to use streaming mode for the agent loop. Defaults to
-    /// <see langword="true"/>.
-    /// </summary>
-    public bool Stream { get; set; } = true;
-
-    /// <summary>
     /// Gets or sets the maximum duration, in seconds, to wait for a turn to complete before timing out.
     /// </summary>
     public int? TurnTimeoutSeconds { get; set; }

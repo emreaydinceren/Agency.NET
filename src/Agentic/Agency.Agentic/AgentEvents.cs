@@ -22,15 +22,6 @@ public sealed record IterationCompletedEvent(
     int Iteration,
     LlmTokenUsage TurnUsage) : AgentEvent;
 
-/// <summary>Emitted as a streaming text token arrives from the LLM (streaming path only).</summary>
-public sealed record TextDeltaEvent(string Delta) : AgentEvent;
-
-/// <summary>
-/// Emitted when a complete tool call is received from the stream,
-/// before execution begins. Gives UIs a chance to render "calling tool X…".
-/// </summary>
-public sealed record ToolUseReceivedEvent(string ToolName, string ToolUseId) : AgentEvent;
-
 /// <summary>Terminal event — always the last event emitted by <see cref="Agent.RunAsync"/>.</summary>
 public sealed record AgentResultEvent(
     AgentResultStatus Status,

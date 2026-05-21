@@ -16,7 +16,7 @@ using System.Runtime.CompilerServices;
 /// </remarks>
 public sealed class ChatSession
 {
-    private readonly Agent _agent;
+    private Agent _agent;
     private readonly AgentOptions _options;
     private readonly ToolContext _toolContext;
     private Context? _ctx;
@@ -48,6 +48,16 @@ public sealed class ChatSession
 
     /// <summary>Gets a value indicating whether the first turn has been sent and the underlying <see cref="Context"/> created.</summary>
     public bool IsStarted => this._ctx is not null;
+
+    /// <summary>
+    /// Switches the agent used for subsequent turns. Conversation history is preserved;
+    /// the new agent will receive the full prior context on its first call.
+    /// </summary>
+    /// <param name="agent">The replacement agent.</param>
+    public void SetAgent(Agent agent)
+    {
+        this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
+    }
 
     /// <summary>
     /// Sends <paramref name="userMessage"/> to the agent and streams back the resulting

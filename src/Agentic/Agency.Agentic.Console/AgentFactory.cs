@@ -17,7 +17,7 @@ internal sealed class AgentFactory : IAgentFactory
         this.options = optionsAccessor.Value;
     }
 
-    public Agent CreateAgent(string? clientName, string? modelName, bool stream)
+    public Agent CreateAgent(string? clientName, string? modelName)
     {
         clientName = !string.IsNullOrEmpty(clientName)
             ? clientName
@@ -28,6 +28,6 @@ internal sealed class AgentFactory : IAgentFactory
             : this.options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
-        return new Agent(chatClient, modelName, clientType, null, stream, this.logger);
+        return new Agent(chatClient, modelName, clientType, null, this.logger);
     }
 }

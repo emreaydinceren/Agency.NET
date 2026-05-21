@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Agency.Agentic.Contexts;
+using Agency.Agentic.Hooks;
 using Agency.Agentic.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,6 +49,7 @@ public sealed class Agent
     private readonly string _clientType;
     private readonly StopCondition _stop;
     private readonly ILogger<Agent> _logger;
+    private readonly AgentHooks _hooks;
 
     /// <param name="llm">The <see cref="IChatClient"/> used for all LLM calls.</param>
     /// <param name="model">The model identifier forwarded to the provider on every call.</param>
@@ -55,18 +57,21 @@ public sealed class Agent
     /// <param name="stopWhen">
     /// Predicate evaluated after each turn. Defaults to <c>Any(NoToolCalls, StepCountIs(20))</c>.
     /// </param>
+    /// <param name="hooks">Optional lifecycle hook delegates; defaults to <see cref="AgentHooks.None"/>.</param>
     /// <param name="logger">Optional structured logger.</param>
     public Agent(
         IChatClient llm,
         string model,
         string? clientType = null,
         StopCondition? stopWhen = null,
+        AgentHooks? hooks = null,
         ILogger<Agent>? logger = null)
     {
         this._llm = llm ?? throw new ArgumentNullException(nameof(llm));
         this._model = model ?? throw new ArgumentNullException(nameof(model));
         this._clientType = clientType ?? "Unknown";
         this._stop = stopWhen ?? StopConditions.Any(StopConditions.NoToolCalls, StopConditions.StepCountIs(20));
+        this._hooks = hooks ?? AgentHooks.None;
         this._logger = logger ?? NullLogger<Agent>.Instance;
     }
 
@@ -221,7 +226,13 @@ public sealed class Agent
         Context ctx,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        yield return new SessionStartedEvent(Guid.NewGuid().ToString("N"));
+        string sessionId = Guid.NewGuid().ToString("N");
+        yield return new SessionStartedEvent(sessionId);
+
+        if (this._hooks.OnSessionStarted is { } onSessionStarted)
+        {
+            await onSessionStarted(new SessionStartedHookContext(sessionId, ctx), ct);
+        }
 
         // 1. Seed conversation with the user prompt if the history is empty.
         if (ctx.Conversation.Messages.Count == 0)
@@ -268,6 +279,11 @@ public sealed class Agent
 
             ctx.Conversation.Append(lastAssistant);
             yield return new AssistantTurnEvent(lastAssistant);
+            if (this._hooks.OnAssistantTurn is { } onAssistantTurn)
+            {
+                await onAssistantTurn(new AssistantTurnHookContext(lastAssistant, ctx), ct);
+            }
+
             yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage);
 
             // Detect truncated response — model hit its context/output token limit mid-generation.
@@ -289,11 +305,16 @@ public sealed class Agent
                     $"Response truncated: the LLM hit its token limit mid-generation. " +
                     $"This turn consumed {ctx.TotalUsage.InputTokens:N0} input tokens{windowHint} — " +
                     "increase the model's context window or reduce the input size.";
-                yield return new AgentResultEvent(
+                AgentResultEvent resultEvent = new AgentResultEvent(
                     AgentResultStatus.Error,
                     truncationMessage,
                     ctx.TotalUsage,
                     ctx.TotalCostUsd);
+                if (this._hooks.OnStop is { } onStop)
+                {
+                    await onStop(new StopHookContext(resultEvent, ctx), ct);
+                }
+                yield return resultEvent;
                 yield break;
             }
 
@@ -302,7 +323,12 @@ public sealed class Agent
             {
                 AgentResultStatus status = DetermineStatus(ctx, lastAssistant);
                 string? finalText = ExtractFinalText(lastAssistant);
-                yield return new AgentResultEvent(status, finalText, ctx.TotalUsage, ctx.TotalCostUsd);
+                AgentResultEvent resultEvent = new AgentResultEvent(status, finalText, ctx.TotalUsage, ctx.TotalCostUsd);
+                if (this._hooks.OnStop is { } onStop)
+                {
+                    await onStop(new StopHookContext(resultEvent, ctx), ct);
+                }
+                yield return resultEvent;
                 yield break;
             }
 
@@ -311,9 +337,14 @@ public sealed class Agent
             if (toolCalls.Count == 0)
             {
                 // Defensive: stop predicate disagreed with reality — treat as success.
-                yield return new AgentResultEvent(
+                AgentResultEvent resultEvent = new AgentResultEvent(
                     AgentResultStatus.Success, ExtractFinalText(lastAssistant),
                     ctx.TotalUsage, ctx.TotalCostUsd);
+                if (this._hooks.OnStop is { } onStop)
+                {
+                    await onStop(new StopHookContext(resultEvent, ctx), ct);
+                }
+                yield return resultEvent;
                 yield break;
             }
 
@@ -323,6 +354,25 @@ public sealed class Agent
                 ct.ThrowIfCancellationRequested();
                 var input = ToJsonElement(call.Arguments);
                 ToolResult result;
+
+                // PreToolUse hook
+                if (this._hooks.OnPreToolUse is { } onPreToolUse)
+                {
+                    PreToolUseDecision decision = await onPreToolUse(
+                        new PreToolUseHookContext(call.Name, input, ctx), ct);
+
+                    if (decision is PreToolUseDecision.Deny deny)
+                    {
+                        ToolResult blocked = new($"[Blocked] {deny.Reason}", IsError: true);
+                        resultMessages[index] = new FunctionResultContent(call.CallId, blocked.Content);
+                        return new ToolInvokedEvent(call.Name, input, blocked);
+                    }
+
+                    if (decision is PreToolUseDecision.Rewrite rewrite)
+                    {
+                        input = rewrite.NewInput;
+                    }
+                }
 
                 using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
                 toolActivity?.SetTag("agent.tool.name", call.Name);
@@ -344,6 +394,12 @@ public sealed class Agent
                         { "exception.message", ex.Message },
                     }));
                     result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
+                }
+
+                // PostToolUse hook
+                if (this._hooks.OnPostToolUse is { } onPostToolUse)
+                {
+                    await onPostToolUse(new PostToolUseHookContext(call.Name, input, result, ctx), ct);
                 }
 
                 _toolCallCounter.Add(1, new TagList

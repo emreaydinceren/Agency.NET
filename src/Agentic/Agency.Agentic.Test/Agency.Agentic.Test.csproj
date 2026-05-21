@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- CS8509: switch not exhaustive — suppressed so closed-hierarchy records compile without a discard arm -->
+    <NoWarn>$(NoWarn);CS8509</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

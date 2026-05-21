@@ -513,6 +513,7 @@ public sealed class AgentLoopTests
         Assert.Equal(AgentResultStatus.Error, result.Status);
         Assert.NotNull(result.FinalText);
         Assert.Contains("truncated", result.FinalText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("3,350", result.FinalText);  // input token count surfaced in message
     }
 
     [Fact]

@@ -282,9 +282,16 @@ public sealed class Agent
                     { "agent.client_type", this._clientType },
                     { "agent.error", "truncated" },
                 });
+                string windowHint = ctx.Environment.ContextWindowSize is { } windowSize
+                    ? $" against a {windowSize:N0}-token context window"
+                    : string.Empty;
+                string truncationMessage =
+                    $"Response truncated: the LLM hit its token limit mid-generation. " +
+                    $"This turn consumed {ctx.TotalUsage.InputTokens:N0} input tokens{windowHint} — " +
+                    "increase the model's context window or reduce the input size.";
                 yield return new AgentResultEvent(
                     AgentResultStatus.Error,
-                    "Response truncated: the LLM hit its token limit mid-generation.",
+                    truncationMessage,
                     ctx.TotalUsage,
                     ctx.TotalCostUsd);
                 yield break;

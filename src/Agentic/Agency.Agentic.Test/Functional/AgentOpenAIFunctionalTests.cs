@@ -45,7 +45,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
     [Fact]
     public async Task Agent_SimplePrompt_ProducesNonEmptyResult()
     {
-        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
+        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model);
         var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
         var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
@@ -63,7 +63,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
     [Fact]
     public async Task Agent_EmitsEventsInOrder()
     {
-        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
+        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model);
         var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
         var events = new List<AgentEvent>();
@@ -87,8 +87,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var agent = new Agent(
             this._fixture.LlmClient,
             this._fixture.Model,
-            stopWhen: StopConditions.StepCountIs(1),
-            stream: false);
+            stopWhen: StopConditions.StepCountIs(1));
 
         var ctx = new Context { Query = new QueryContext { Prompt = "Count from 1 to 100." } };
 
@@ -105,7 +104,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
     [Fact]
     public async Task Agent_TokenUsage_IsAccumulatedAndNonZero()
     {
-        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
+        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model);
         var ctx = new Context { Query = new QueryContext { Prompt = "What is 2 + 2? Reply with just the number." } };
 
         var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
@@ -124,7 +123,7 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         var tool = new EchoTool();
         var registry = new Agency.Agentic.Tools.ToolRegistry([tool]);
 
-        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model, stream: false);
+        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model);
         var ctx = new Context
         {
             Query = new QueryContext { Prompt = "Use the echo tool with the input \"ping\" and then tell me what it returned." },

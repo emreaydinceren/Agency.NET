@@ -27,7 +27,7 @@ internal class ModelsCommand
 
         if (selectedClient is not null && selectedModel is not null)
         {
-            var agent = agentFactory.CreateAgent(selectedClient, selectedModel, stream: true);
+            var agent = agentFactory.CreateAgent(selectedClient, selectedModel);
             session.SetAgent(agent);
             AnsiConsole.MarkupLine($"[green]⎿ Switched to model:[/] [yellow]{selectedModel}[/] from client [yellow]{selectedClient}[/]");
         }

@@ -47,7 +47,6 @@ public sealed class Agent
     private readonly string _model;
     private readonly string _clientType;
     private readonly StopCondition _stop;
-    private readonly bool _stream;
     private readonly ILogger<Agent> _logger;
 
     /// <param name="llm">The <see cref="IChatClient"/> used for all LLM calls.</param>
@@ -56,24 +55,18 @@ public sealed class Agent
     /// <param name="stopWhen">
     /// Predicate evaluated after each turn. Defaults to <c>Any(NoToolCalls, StepCountIs(20))</c>.
     /// </param>
-    /// <param name="stream">
-    /// When <see langword="true"/> (default), uses the streaming code path and emits <see cref="TextDeltaEvent"/>s as
-    /// tokens arrive. Pass <see langword="false"/> to use the simpler batch path.
-    /// </param>
     /// <param name="logger">Optional structured logger.</param>
     public Agent(
         IChatClient llm,
         string model,
         string? clientType = null,
         StopCondition? stopWhen = null,
-        bool stream = true,
         ILogger<Agent>? logger = null)
     {
         this._llm = llm ?? throw new ArgumentNullException(nameof(llm));
         this._model = model ?? throw new ArgumentNullException(nameof(model));
         this._clientType = clientType ?? "Unknown";
         this._stop = stopWhen ?? StopConditions.Any(StopConditions.NoToolCalls, StopConditions.StepCountIs(20));
-        this._stream = stream;
         this._logger = logger ?? NullLogger<Agent>.Instance;
     }
 
@@ -111,13 +104,11 @@ public sealed class Agent
         using var activity = _activitySource.StartActivity("Agent.ChatAsync");
         activity?.SetTag("agent.model", this._model);
         activity?.SetTag("agent.client_type", this._clientType);
-        activity?.SetTag("agent.stream", this._stream);
 
         var tags = new TagList
         {
             { "agent.model", this._model },
             { "agent.client_type", this._clientType },
-            { "agent.stream", this._stream },
         };
 
         _turnCounter.Add(1, tags);
@@ -126,8 +117,8 @@ public sealed class Agent
         long prevOutputTokens = ctx.TotalUsage.OutputTokens;
 
         this._logger.LogInformation(
-            "Starting agent chat turn. Model={Model}, ClientType={ClientType}, Stream={Stream}",
-            this._model, this._clientType, this._stream);
+            "Starting agent chat turn. Model={Model}, ClientType={ClientType}",
+            this._model, this._clientType);
 
         if (ctx.Conversation.Messages.Count > 0)
         {
@@ -220,8 +211,7 @@ public sealed class Agent
 
     /// <summary>
     /// Runs the agent loop over <paramref name="ctx"/>, yielding events as they occur. The first event is always
-    /// <see cref="SessionStartedEvent"/>; the last is always <see cref="AgentResultEvent"/>. When streaming is enabled,
-    /// <see cref="TextDeltaEvent"/>s are emitted for each text token.
+    /// <see cref="SessionStartedEvent"/>; the last is always <see cref="AgentResultEvent"/>.
     /// </summary>
     internal async IAsyncEnumerable<AgentEvent> RunAsync(
         Context ctx,
@@ -260,87 +250,13 @@ public sealed class Agent
                     .ToList();
             }
 
-            // 4. Call the LLM — streaming or batch depending on configuration.
-            ChatMessage lastAssistant;
-            LlmTokenUsage turnUsage;
-
-            if (this._stream)
-            {
-                // Streaming path: iterate chunk by chunk, yielding TextDeltaEvents live.
-                // Collect all updates so we can build a ChatResponse for usage after the loop.
-                var allUpdates = new List<ChatResponseUpdate>();
-                Exception? streamError = null;
-
-                var enumerator = this._llm
-                    .GetStreamingResponseAsync(ctx.Conversation.Messages, options, ct)
-                    .GetAsyncEnumerator(ct);
-
-                try
-                {
-                    while (true)
-                    {
-                        bool moved;
-                        try
-                        {
-                            moved = await enumerator.MoveNextAsync();
-                        }
-                        catch (Exception ex)
-                        {
-                            streamError = ex;
-                            break;
-                        }
-
-                        if (!moved)
-                        {
-                            break;
-                        }
-
-                        var update = enumerator.Current;
-                        allUpdates.Add(update);
-
-                        foreach (var content in update.Contents)
-                        {
-                            if (content is TextContent tc && !string.IsNullOrEmpty(tc.Text))
-                            {
-                                yield return new TextDeltaEvent(tc.Text);
-                            }
-                            else if (content is FunctionCallContent fcc)
-                            {
-                                yield return new ToolUseReceivedEvent(fcc.Name, fcc.CallId);
-                            }
-                        }
-                    }
-                }
-                finally
-                {
-                    await enumerator.DisposeAsync();
-                }
-
-                if (streamError is not null)
-                {
-                    ExceptionDispatchInfo.Capture(streamError).Throw();
-                }
-
-                // Aggregate the streamed updates into a full ChatResponse to get usage + message.
-                var streamedResponse = allUpdates.ToChatResponse();
-                turnUsage = streamedResponse.Usage is { } u
-                    ? new LlmTokenUsage(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0)
-                    : new LlmTokenUsage(0, 0);
-
-                lastAssistant = streamedResponse.Messages
-                    .LastOrDefault(static m => m.Role == ChatRole.Assistant)
-                    ?? new ChatMessage(ChatRole.Assistant, []);
-            }
-            else
-            {
-                // Batch path.
-                var response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
-                lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
-                    ?? new ChatMessage(ChatRole.Assistant, []);
-                turnUsage = response.Usage is { } u
-                    ? new LlmTokenUsage(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0)
-                    : new LlmTokenUsage(0, 0);
-            }
+            // 4. Call the LLM.
+            var response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+            var lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
+                ?? new ChatMessage(ChatRole.Assistant, []);
+            var turnUsage = response.Usage is { } u
+                ? new LlmTokenUsage(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0)
+                : new LlmTokenUsage(0, 0);
 
             ctx.TotalUsage = new(
                 ctx.TotalUsage.InputTokens + turnUsage.InputTokens,

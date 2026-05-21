@@ -28,6 +28,6 @@ internal sealed class AgentFactory : IAgentFactory
             : this.options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
-        return new Agent(chatClient, modelName, clientType, null, this.logger);
+        return new Agent(chatClient, modelName, clientType, null, logger: this.logger);
     }
 }

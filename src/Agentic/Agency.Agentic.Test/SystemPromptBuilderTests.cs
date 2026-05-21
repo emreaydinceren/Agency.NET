@@ -123,6 +123,43 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("Paris is the capital of France.", result);
     }
 
+    // ── ContextWindowSize ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Build_IncludesContextWindowSize_WhenSet()
+    {
+        var ctx = MinimalContext();
+        ctx = ctx with
+        {
+            Environment = new EnvironmentalContext { ContextWindowSize = 4096 },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.Contains("4,096", result);
+    }
+
+    [Fact]
+    public void Build_IncludesRemainingEstimate_WhenContextWindowSetAndPriorUsageKnown()
+    {
+        var ctx = MinimalContext();
+        ctx = ctx with { Environment = new EnvironmentalContext { ContextWindowSize = 4096 } };
+        ctx.TotalUsage = new LlmTokenUsage(511, 360);
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.Contains("3,585", result);  // 4096 - 511
+        Assert.Contains("511", result);
+    }
+
+    [Fact]
+    public void Build_OmitsContextWindowSection_WhenNotSet()
+    {
+        string result = SystemPromptBuilder.Build(MinimalContext());
+
+        Assert.DoesNotContain("Context window", result, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ── Idempotency (D3 re-injection) ─────────────────────────────────────────
 
     [Fact]

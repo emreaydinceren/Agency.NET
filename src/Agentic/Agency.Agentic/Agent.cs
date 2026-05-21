@@ -80,12 +80,16 @@ public sealed class Agent
     /// </summary>
     /// <param name="initialPrompt">The first user message that seeds the conversation.</param>
     /// <param name="tools">Optional tool context; defaults to <see cref="ToolContext.Empty"/>.</param>
-    public static Context CreateContext(string initialPrompt, ToolContext? tools = null) =>
+    public static Context CreateContext(
+        string initialPrompt,
+        ToolContext? tools = null,
+        EnvironmentalContext? environment = null) =>
         new()
         {
             Query = new QueryContext { Prompt = initialPrompt },
             Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
             Tools = tools ?? ToolContext.Empty,
+            Environment = environment ?? EnvironmentalContext.Empty,
         };
 
     /// <summary>
@@ -265,6 +269,26 @@ public sealed class Agent
             ctx.Conversation.Append(lastAssistant);
             yield return new AssistantTurnEvent(lastAssistant);
             yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage);
+
+            // Detect truncated response — model hit its context/output token limit mid-generation.
+            if (response.FinishReason == ChatFinishReason.Length)
+            {
+                this._logger.LogWarning(
+                    "LLM response was truncated (finish_reason=length). Model={Model}, InputTokens={InputTokens}",
+                    this._model, turnUsage.InputTokens);
+                _errorCounter.Add(1, new TagList
+                {
+                    { "agent.model", this._model },
+                    { "agent.client_type", this._clientType },
+                    { "agent.error", "truncated" },
+                });
+                yield return new AgentResultEvent(
+                    AgentResultStatus.Error,
+                    "Response truncated: the LLM hit its token limit mid-generation.",
+                    ctx.TotalUsage,
+                    ctx.TotalCostUsd);
+                yield break;
+            }
 
             // 5. Evaluate stop conditions.
             if (this._stop(ctx, lastAssistant))

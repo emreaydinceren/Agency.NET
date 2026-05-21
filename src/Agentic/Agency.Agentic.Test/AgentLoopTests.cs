@@ -493,4 +493,51 @@ public sealed class AgentLoopTests
         Assert.Equal(300, result.TotalUsage.InputTokens);   // 100 + 200
         Assert.Equal(130, result.TotalUsage.OutputTokens);  // 50 + 80
     }
+
+    // ── Truncation (finish_reason=length) ─────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_WhenResponseTruncated_EmitsErrorResult()
+    {
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant, "...cut")])
+        {
+            Usage = new UsageDetails { InputTokenCount = 3350, OutputTokenCount = 746 },
+            FinishReason = ChatFinishReason.Length,
+        });
+
+        var agent = new Agent(llm, "model");
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
+
+        var result = Assert.IsType<AgentResultEvent>(events[^1]);
+        Assert.Equal(AgentResultStatus.Error, result.Status);
+        Assert.NotNull(result.FinalText);
+        Assert.Contains("truncated", result.FinalText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenResponseTruncated_DoesNotInvokeTools()
+    {
+        var invoked = false;
+        var registry = new ToolRegistry();
+        registry.Register(new FakeTool("some_tool", _ =>
+        {
+            invoked = true;
+            return new ToolResult("done", false);
+        }));
+
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant,
+            [new FunctionCallContent("call-1", "some_tool")])])
+        {
+            Usage = new UsageDetails { InputTokenCount = 100, OutputTokenCount = 50 },
+            FinishReason = ChatFinishReason.Length,
+        });
+
+        var agent = new Agent(llm, "model");
+        var ctx = MakeContext(tools: new ToolContext { Registry = registry });
+        await RunToCompletion(agent, ctx, ct: TestContext.Current.CancellationToken);
+
+        Assert.False(invoked);
+    }
 }

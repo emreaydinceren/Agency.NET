@@ -57,6 +57,10 @@ using Agency.Agentic.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Serilog;
+
+System.Console.OutputEncoding = System.Text.Encoding.UTF8;
+System.Console.InputEncoding = System.Text.Encoding.UTF8;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -89,9 +93,14 @@ builder.Services.AddScoped(sp =>
 });
 
 builder.Services.AddScoped<ConsoleChatSession>();
+
+// After the session finishes, flush Serilog before process exit
+await Log.CloseAndFlushAsync();
 ```
 
 ### Configuration
+
+`appsettings.json` ships with defaults for a local LM Studio instance. The `OpenTelemetry` section maps to `TelemetryOptions` / `FileExportOptions` and its nested signal options. All sub-keys are optional — omitting them keeps the defaults shown below.
 
 ```json
 {
@@ -114,10 +123,32 @@ builder.Services.AddScoped<ConsoleChatSession>();
       }
     ]
   },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "System": "Warning"
+    }
+  },
   "OpenTelemetry": {
     "ServiceName": "Agency.Agentic.Console",
     "FileExport": {
-      "OutputDirectory": "./logs"
+      "OutputDirectory": "./logs",
+      "Traces": {
+        "Enabled": true,
+        "FilePrefix": "traces",
+        "SamplingRatio": 1.0
+      },
+      "Metrics": {
+        "Enabled": true,
+        "FilePrefix": "metrics",
+        "ExportIntervalMs": 15000
+      },
+      "Logs": {
+        "Enabled": true,
+        "FilePrefix": "app",
+        "MinimumLevel": "Information"
+      }
     }
   }
 }
@@ -197,7 +228,7 @@ The `ToolContext` registered in DI includes four tools sourced from [[Agency.Age
 
 | Span | Tags |
 |---|---|
-| `ConsoleChatSession.RunAsync` | `agent.client_type`, `agent.model` |
+| `ConsoleChatSession.RunAsync` | `agent.client_type`, `agent.model`, `agent.usage.input_tokens`, `agent.usage.output_tokens` |
 
 **Metrics**
 
@@ -212,12 +243,13 @@ The `ToolContext` registered in DI includes four tools sourced from [[Agency.Age
 
 All instruments carry `agent.client_type` and `agent.model` tags.
 
-`AddTelemetry(IConfiguration)` reads the `OpenTelemetry` config section and wires:
-- `FileSpanExporter` — daily-rolling JSON trace files under `./logs`
-- `FileMetricExporter` — daily-rolling JSON metric files under `./logs`
-- Serilog `File` sink — structured log files under `./logs`
+`AddTelemetry(IConfiguration)` reads the `OpenTelemetry` config section and wires up to three signal pipelines — each can be independently disabled via its `Enabled` flag:
 
-Trace sampling ratio and per-signal enable flags are configurable via `TelemetryOptions` / `TraceFileOptions` / `MetricFileOptions` / `LogFileOptions`.
+- **Traces** — `FileSpanExporter` writes one span per line to a UTC date-stamped file (`traces-yyyy-MM-dd.log`). The file rolls at midnight. Sampling ratio is configurable via `SamplingRatio` (default `1.0` = always on).
+- **Metrics** — `FileMetricExporter` appends timestamped metric blocks to a UTC date-stamped file (`metrics-yyyy-MM-dd.log`) on a periodic cycle (default every 15 seconds, configurable via `ExportIntervalMs`).
+- **Logs** — Serilog writes to a **per-session** stamped file (`app-yyyy-MM-dd-HHmmss.log`) using `RollingInterval.Infinite`. The minimum level is configurable via `MinimumLevel` (default `Information`). When disabled, a `NullLoggerProvider` is registered instead.
+
+All files are written under the directory specified by `FileExport.OutputDirectory` (default `./logs`), which is created automatically at startup. The `host.name` attribute is added to the OTel resource for all signals.
 
 ## How It Relates to Other Projects
 
@@ -234,3 +266,5 @@ Trace sampling ratio and per-signal enable flags are configurable via `Telemetry
 - **Streaming buffer instead of live print** — `TextDeltaEvent` tokens are accumulated in a `StringBuilder` (`streamingBuffer`) and flushed only when the `AssistantTurnEvent` arrives. This prevents partial streaming text from interleaving with `ToolInvokedEvent` bordered panels that may fire mid-turn.
 - **`CommandRegistry` uses a static constructor** — commands are registered once at class-load time and the resulting `IReadOnlyList<Command>` is shared across all `CommandManager` instances. Adding a command only requires calling `RegisterCommand` or `RegisterAsyncCommand` in the static constructor; no change to `CommandManager` is needed.
 - **`sessionCts` is never recreated** — once Ctrl+C fires, `sessionCts.Cancel()` is called and `sessionCts.IsCancellationRequested` remains `true`. The REPL detects this after the interrupted turn and exits. The session is not designed to be restartable after cancellation.
+- **Per-session log files, not daily-rolling** — traces and metrics use `DailyRollingFileWriter` (rolls at UTC midnight), but Serilog logs use a single per-session file stamped with `yyyy-MM-dd-HHmmss` and `RollingInterval.Infinite`. This means each process launch produces a distinct log file, which makes correlating a log file to a specific run trivial without needing to filter by time within a shared daily file.
+- **Independent per-signal enable flags** — setting `Enabled: false` for traces or metrics skips building the corresponding OTel provider entirely (no `TracerProvider`/`MeterProvider` is registered). Setting `Enabled: false` for logs registers `NullLoggerProvider` rather than Serilog, so the `ILogger<T>` injection chain remains valid throughout the application.

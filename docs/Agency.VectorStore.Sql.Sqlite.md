@@ -2,11 +2,11 @@
 
 #vectorstore #sqlite #cosine #udf #observability
 
-**Namespace:** `Agency.VectorStore.Sql.Sqlite`
-
 ## What It Is
 
 Agency.VectorStore.Sql.Sqlite is the SQLite-backed `IVectorStore` implementation that stores JSON-serialized values and their embeddings in a `semantic_kv_store` table and computes cosine similarity via a pure-managed scalar UDF (`vec_distance_cosine`) registered on each opened connection.
+
+**Namespace:** `Agency.VectorStore.Sql.Sqlite`
 
 ## Prerequisites
 
@@ -160,10 +160,9 @@ When `Query.Value` is empty or whitespace, no query embedding is generated and `
 |---|---|
 | [[Agency.VectorStore.Common]] | Implements `IVectorStore`; uses `Query`, `SearchHit<TValue>`, and `JsonMetadataHelpers`. |
 | [[Agency.Embeddings.Common]] | Depends on `IEmbeddingGenerator` to embed values at upsert time and queries at search time. |
-| [[Agency.Sql.Sqlite]] | Uses `SqliteRunner` for all connection management and query execution. |
+| [[Agency.Sql.Sqlite]] | Uses `SqliteRunner` for all connection management, query execution, and connection-level UDF registration. |
 
 ## Design Notes
 
 - The cosine-distance function is implemented entirely in managed C# — no native sqlite-vec extension is loaded. This simplifies deployment at the cost of in-process CPU for similarity computation.
 - Metadata filtering is deliberately deferred to C# rather than expressed in SQL because SQLite's JSON functions lack a set-containment operator; this means SQL always returns all candidate rows when a `MetadataFilter` is present, and the `Limit` is applied after the in-memory filter pass.
-| [[Agency.Sql.Sqlite]] | Uses `SqliteRunner` for SQL execution and connection-level UDF registration. |

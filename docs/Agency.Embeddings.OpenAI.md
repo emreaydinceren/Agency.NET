@@ -23,7 +23,7 @@ public sealed class EmbeddingOptions
     public string? BaseUrl { get; set; }
     public string? ModelId { get; set; }
     public string? ApiKey { get; set; }
-    public static EmbeddingOptions LMStudioDefaults { get; }
+    public int? Dimensions { get; set; }
 }
 ```
 
@@ -60,7 +60,8 @@ var options = new EmbeddingOptions
 {
     BaseUrl = "http://llm-host.example:1234/v1",
     ModelId = "text-embedding-qwen3-embedding-0.6b",
-    ApiKey = "lmstudio"
+    ApiKey = "lmstudio",
+    Dimensions = 1024
 };
 
 var generator = new EmbeddingGenerator(options, NullLogger<EmbeddingGenerator>.Instance);
@@ -86,9 +87,10 @@ Activity tags follow the OpenTelemetry GenAI semantic conventions: `gen_ai.syste
 |---|---|
 | [[Agency.Embeddings.Common]] | Defines the `IEmbeddingGenerator` interface that `EmbeddingGenerator` implements. |
 | [[Agency.VectorStore.Sql.Postgre]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search. |
-| [[Agency.VectorStore.Sql.Sqlite]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search. |
+| [[Agency.VectorStore.Sql.Sqlite]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search; uses `Dimensions` to create schemas with the correct column width. |
 | [[Agency.Sql.Postgre]] | Consumes embeddings indirectly via `SQLQueryEmbedder` in retrieval/query pipelines. |
 
 ## Design Notes
 - Two public constructors are provided so callers can use either the DI options pattern (`IOptions<EmbeddingOptions>`) or a direct `EmbeddingOptions` instance; an additional `internal` constructor accepts a custom `HttpMessageHandler` to enable unit testing without a live endpoint.
+- The `Dimensions` property is optional and is not used by `EmbeddingGenerator` itself; it is a schema hint consumed by vector store projects (e.g., SQLite) that need to know the output width at table-creation time rather than at first insert.
 - Telemetry names are exposed as public constants (`ActivitySourceName`, `MeterName`) so host setup can reference stable string literals without duplication across test and production code.

@@ -1,10 +1,9 @@
 # Agency.KeyValueStore.Common
-
 #keyvaluestore #abstractions #search #metadata
 
 ## What It Is
 
-Agency.KeyValueStore.Common is the shared contract layer that defines the `IKVStore` interface, query/result models, metadata JSON helpers, and dataset conversion extensions used by all key-value store implementations.
+`Agency.KeyValueStore.Common` is the shared contract layer for the key-value store subsystem. It defines the `IKVStore` interface, the `Query` input model, the `SearchHit` / `SearchHit<TValue>` result records, JSON metadata round-trip helpers, and a `Dataset` conversion extension. All concrete store implementations depend on this project; no infrastructure dependencies are introduced here.
 
 **Namespace:** `Agency.KeyValueStore.Common`
 
@@ -43,7 +42,7 @@ public interface IKVStore
 }
 ```
 
-`sessionId` of `null` is treated as the user-global scope (stored as `"*"` by implementations). `GetMetadataAsync` returns lightweight, non-generic `SearchHit` records containing only keys and metadata — no deserialized value payload.
+`sessionId` of `null` is treated as the user-global scope (stored as `"*"` by implementations). `GetMetadataAsync` returns lightweight, non-generic `SearchHit` records containing only keys and metadata — no deserialized value payload. `DeleteAsync` returns `true` when an entry was removed, `false` when no matching entry existed.
 
 ### `Query`
 
@@ -61,9 +60,9 @@ public record class Query(
     bool? IncludeMetadataInResults = false);
 ```
 
-`SessionId = null` returns results across all sessions for the user. `Value` is a substring filter (case-insensitive). `MetadataFilter` is an exact-match dictionary applied on top of the key/value filter.
+`SessionId = null` returns results across all sessions for the user. `Key` and `Value` are optional filters — `Value` is a substring match (case-insensitive). `MetadataFilter` is an exact-match dictionary applied on top of the key/value filter. `Limit` defaults to `10`; passing `null` removes the cap. `IncludeMetadataInResults = false` is a hint to implementations to skip deserializing the metadata column when the caller does not need it.
 
-### `SearchHit<TValue>` and `SearchHit`
+### `SearchHit` and `SearchHit<TValue>`
 
 ```csharp
 // File: src/KeyValueStore/Agency.KeyValueStore.Common/SearchHit.cs
@@ -76,7 +75,7 @@ public record class SearchHit(
     DateTimeOffset UpdatedOn)
 {
     public double RecencyMinutes { get; }
-    public double RecencyHours  { get; }
+    public double RecencyHours { get; }
 }
 
 public record class SearchHit<TValue>(
@@ -87,7 +86,7 @@ public record class SearchHit<TValue>(
     DateTimeOffset UpdatedOn) : SearchHit(SessionId, Key, Metadata, UpdatedOn);
 ```
 
-`SearchHit` is the non-generic base returned by `GetMetadataAsync`. `SearchHit<TValue>` extends it with the deserialized `Value` and is returned by `SearchAsync<TValue>`. Both expose `RecencyMinutes` and `RecencyHours` computed from `UpdatedOn`.
+`SearchHit` is the non-generic base returned by `GetMetadataAsync`. `SearchHit<TValue>` extends it with the deserialized `Value` and is returned by `SearchAsync<TValue>`. Both expose `RecencyMinutes` and `RecencyHours`, computed as elapsed time since `UpdatedOn` at the moment the record is constructed.
 
 ### `SearchHitExtensions`
 
@@ -102,7 +101,7 @@ public static class SearchHitExtensions
 }
 ```
 
-Converts a list of `SearchHit<TValue>` to a [[Agency.Common]] `Dataset` with columns `Key`, `Value`, and `UpdatedOn`.
+Converts a list of `SearchHit<TValue>` to an [[Agency.Common]] `Dataset` with three columns: `Key`, `Value`, and `UpdatedOn`. This bridges key-value search results into the RAG formatting pipeline.
 
 ### `JsonMetadataHelpers`
 
@@ -118,27 +117,57 @@ public static class JsonMetadataHelpers
 }
 ```
 
-`DeserializeMetadata` converts a raw JSON string into a `Dictionary<string, object>` by recursively replacing `JsonElement` nodes with CLR primitives (`string`, `long`, `double`, `decimal`, `bool`, `null`, `Dictionary<string, object>`, `List<object>`). Used by SQL implementations to hydrate metadata columns.
+`DeserializeMetadata` converts a raw JSON string into a `Dictionary<string, object>` by recursively replacing `JsonElement` nodes with CLR primitives. `ConvertJsonElementToObject` handles `string`, `long`, `double`, `decimal`, `bool`, `null`, nested `Dictionary<string, object>`, and `List<object>`. Used by SQL implementations to hydrate the metadata column after a query.
 
 ## How It Works
 
-1. A caller acquires an `IKVStore` implementation (e.g. from [[Agency.KeyValueStore.Sql.Postgre]] or [[Agency.KeyValueStore.Sql.Sqlite]]).
-2. **Write** — `UpsertAsync` stores a typed value plus optional metadata under `(userId, sessionId, key)`.
-3. **Read** — `SearchAsync` accepts a `Query` and returns matching `SearchHit<TValue>` records. The implementation applies key, value, and metadata filters and respects the `Limit`.
-4. **Browse** — `GetMetadataAsync` returns lightweight `SearchHit` records (no value payload) for all entries belonging to a user/session, useful for listing available keys before fetching values.
-5. **Delete** — `DeleteAsync` removes a single entry and returns `true` if an entry existed.
-6. Implementations use `JsonMetadataHelpers.DeserializeMetadata` to round-trip the JSON metadata column back to a dictionary after querying.
+A caller acquires an `IKVStore` implementation (e.g. from [[Agency.KeyValueStore.Sql.Postgre]] or [[Agency.KeyValueStore.Sql.Sqlite]]) and interacts through the four operations:
+
+```csharp
+using Agency.KeyValueStore.Common;
+
+// Write — upsert a typed value with optional metadata
+await store.UpsertAsync(
+    userId: "user-1",
+    sessionId: "session-42",
+    key: "preferences",
+    value: new UserPreferences { Theme = "dark" },
+    metadata: new Dictionary<string, object> { ["source"] = "onboarding" });
+
+// Read — search with filters and a result cap
+var hits = await store.SearchAsync<UserPreferences>(new Query(
+    UserId: "user-1",
+    SessionId: "session-42",
+    Key: "preferences",
+    Value: null,
+    Limit: 5,
+    IncludeMetadataInResults: true));
+
+// Browse — list available keys without deserializing values
+var keys = await store.GetMetadataAsync("user-1", sessionId: null);
+
+// Delete — remove a specific entry
+bool removed = await store.DeleteAsync("user-1", "session-42", "preferences");
+
+// Convert search results to a Dataset for RAG formatting
+using Agency.Common;
+Dataset dataset = hits.ToDataset();
+```
+
+`sessionId = null` in `UpsertAsync` / `DeleteAsync` / `GetMetadataAsync` targets the user-global scope. Implementations store this as `"*"` internally; callers never need to use that sentinel directly.
 
 ## How It Relates to Other Projects
 
-- **[[Agency.Common]]** — `SearchHitExtensions.ToDataset` produces a `Dataset` defined in `Agency.Common`, bridging key-value results into the RAG formatting pipeline.
-- **[[Agency.KeyValueStore.Sql.Postgre]]** — PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` for metadata serialization.
-- **[[Agency.KeyValueStore.Sql.Sqlite]]** — SQLite implementation of `IKVStore`; same pattern.
-- **[[Agency.Agentic]]** — Agent tool layers depend on `IKVStore` for persistent session memory.
+| Project | Relationship |
+|---|---|
+| [[Agency.Common]] | `SearchHitExtensions.ToDataset` produces a `Dataset` defined in `Agency.Common`, bridging key-value results into the RAG formatting pipeline |
+| [[Agency.KeyValueStore.Sql.Postgre]] | PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` to hydrate the metadata column |
+| [[Agency.KeyValueStore.Sql.Sqlite]] | SQLite implementation of `IKVStore`; follows the same pattern |
+| [[Agency.Agentic]] | Agent tool layers depend on `IKVStore` for persistent session memory |
 
 ## Design Notes
 
-- `sessionId = null` is a first-class concept for user-global entries rather than requiring callers to pass a sentinel string; the sentinel `"*"` is an implementation detail hidden behind the interface.
-- The non-generic `SearchHit` base was introduced so `GetMetadataAsync` can return lightweight key-listing results without forcing callers to specify a value type they do not need.
-- `Query.IncludeMetadataInResults` is a hint to implementations to avoid deserializing the metadata column when the caller does not need it, keeping read paths efficient.
-- No infrastructure dependencies are declared here — the project references only `Agency.Common`, keeping the abstraction layer portable across all store backends.
+- `sessionId = null` is a first-class concept for user-global entries rather than requiring callers to pass a sentinel string. The sentinel `"*"` is an implementation detail hidden behind the interface, preventing leakage of storage conventions into the calling layer.
+- The non-generic `SearchHit` base was introduced so `GetMetadataAsync` can return lightweight key-listing results without forcing callers to specify a value type they do not need — avoiding unnecessary deserialization on metadata-only reads.
+- `Query.IncludeMetadataInResults` is an opt-in hint: metadata deserialization is skipped by default (`false`), keeping read paths efficient when callers only need keys and values.
+- No infrastructure packages are referenced here — the project depends only on `Agency.Common`, making the abstraction portable across all store backends and testable with simple in-memory fakes.

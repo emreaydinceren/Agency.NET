@@ -4,7 +4,7 @@
 
 ## What It Is
 
-Agency.VectorStore.Sql.Postgre is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional JSONB metadata filtering.
+Agency.VectorStore.Sql.Postgre is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional exact key matching and JSONB metadata filtering.
 
 **Namespace:** `Agency.VectorStore.Sql.Postgre`
 
@@ -22,6 +22,7 @@ Agency.VectorStore.Sql.Postgre is the PostgreSQL-backed vector store implementat
 using Agency.VectorStore.Common;
 using Agency.Embeddings.Common;
 using Agency.Sql.Postgre;
+using Microsoft.Extensions.Logging;
 
 public class PostgreKVStore : IVectorStore
 {
@@ -86,10 +87,12 @@ await store.UpsertAsync(
 ```
 
 Steps performed internally:
+
 1. Serializes `value` to JSON via `System.Text.Json`.
 2. Generates an embedding for that JSON string via `IEmbeddingGenerator`.
-3. Executes `INSERT … ON CONFLICT (user_id, session_id, key) DO UPDATE` to atomically upsert.
-4. A `null` `sessionId` is stored as the sentinel value `"*"` so it participates in the primary key without nullable columns.
+3. Formats the embedding as a `[f1,f2,…]` string literal and casts it with `::vector` in the SQL.
+4. Executes `INSERT … ON CONFLICT (user_id, session_id, key) DO UPDATE SET value, embedding, metadata` to atomically upsert.
+5. A `null` `sessionId` is stored as the sentinel value `"*"` so it participates in the primary key without nullable columns.
 
 ### Search
 
@@ -107,14 +110,16 @@ var query = new Query(
 IReadOnlyList<SearchHit<Article>> hits = await store.SearchAsync<Article>(query, cancellationToken);
 ```
 
-The SQL:
-- Uses `<=>` (cosine distance) when `query.Value` is non-empty; otherwise distances default to `0.0` so key-only lookups still work.
+The SQL uses boolean flag parameters (`@hasSessionId`, `@hasKey`, `@hasFilter`) to conditionally activate each filter clause within a single query shape:
+
+- Uses `<=>` (cosine distance) when `query.Value` is non-empty; passes `NULL` otherwise so all rows return distance `0.0` and key-only or metadata-only lookups still work.
 - Uses `@>` for JSONB metadata containment when `query.MetadataFilter` is set.
 - Filters by `session_id` only when `query.SessionId` is non-null, allowing cross-session searches.
+- Filters by `key` only when `query.Key` is non-null, allowing exact key lookups.
 
 ### Delete
 
-Returns `true` when a row was deleted, `false` when no matching row existed.
+Returns `true` when a row was deleted, `false` when no matching row existed. Uses the `"*"` sentinel to resolve a `null` `sessionId` before executing the `DELETE`.
 
 ## Observability
 
@@ -136,5 +141,6 @@ Every activity records an `exception` event with `exception.type`, `exception.me
 ## Design Notes
 
 - The `sessionId = null` → `"*"` sentinel keeps `session_id` NOT NULL in the primary key, avoiding nullable primary-key columns in PostgreSQL while still supporting user-global entries that span all sessions.
-- Vector parameters are passed as `NpgsqlTypes.Pgvector.Vector` objects rather than raw strings where possible for type safety, but the upsert path builds a plain `[f1,f2,…]` literal and casts it with `::vector` because Npgsql's pgvector type mapping requires the extension to be loaded in the connection session — the literal cast is more portable across connection pool configurations.
+- The upsert path builds a plain `[f1,f2,…]` vector literal and casts it with `::vector` rather than passing a `Pgvector.Vector` parameter, because Npgsql's pgvector type mapping requires the extension to be loaded in the connection session — the literal cast is more portable across connection pool configurations. The search path passes a `Pgvector.Vector` object directly because the read path opens a fresh connection where the extension is already registered.
 - Schema migration is intentionally destructive for the legacy table shape (no `user_id` column): the table is dropped and recreated rather than altered, since the legacy shape had no production data at the time this migration was introduced.
+- The search SQL uses boolean flag parameters (`@hasSessionId`, `@hasKey`, `@hasFilter`) instead of dynamic SQL string construction, keeping a single compiled query plan while allowing optional filter activation at the parameter level.

@@ -1,3 +1,4 @@
+<!-- last-wiki-commit: 49c891fedc9f015dc717e337cf99f4a89998e1fa -->
 # Agency — Context Map
 
 #agency #index #rag #agentic #dotnet
@@ -17,9 +18,13 @@ Documents
    Agency.Embeddings.OpenAI           (OpenAI-compatible implementation)
           │
           ▼
-   Agency.VectorStore.Common          (IKVStore interface)
+   Agency.VectorStore.Common          (IVectorStore interface)
    Agency.VectorStore.Sql.Postgre     (pgvector / HNSW backend)
    Agency.VectorStore.Sql.Sqlite      (SQLite + cosine UDF backend)
+          │
+   Agency.KeyValueStore.Common        (IKVStore interface — metadata/KV layer)
+   Agency.KeyValueStore.Sql.Postgre   (PostgreSQL KV backend)
+   Agency.KeyValueStore.Sql.Sqlite    (SQLite KV backend)
           │
           ▼
    Agency.Sql.Common                        (SqlRunnerBase: shared OTel + execution skeleton)
@@ -61,9 +66,15 @@ Documents
 
 ### Vector Store
 
-- [[Agency.VectorStore.Common]] — `IKVStore`, `Query`, `SearchHit<T>`
+- [[Agency.VectorStore.Common]] — `IVectorStore`, `Query`, `SearchHit<T>`
 - [[Agency.VectorStore.Sql.Postgre]] — pgvector + HNSW index backend
 - [[Agency.VectorStore.Sql.Sqlite]] — SQLite + in-process cosine UDF backend
+
+### Key-Value Store
+
+- [[Agency.KeyValueStore.Common]] — `IKVStore`, `Query`, `SearchHit<T>`, JSON metadata helpers
+- [[Agency.KeyValueStore.Sql.Postgre]] — PostgreSQL KV backend with metadata filtering
+- [[Agency.KeyValueStore.Sql.Sqlite]] — SQLite KV backend with metadata filtering
 
 ### RAG
 

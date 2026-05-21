@@ -4,7 +4,7 @@
 
 ## What It Is
 
-Agency.Agentic is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling.
+Agency.Agentic is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling. MCP (Model Context Protocol) server tools are supported via `McpClientPool`, which connects to one or more MCP servers and exposes their tools as `ITool` instances compatible with `ToolRegistry`.
 
 **Namespace:** `Agency.Agentic`
 
@@ -39,12 +39,9 @@ public sealed class Agent
     /// <summary>Creates a Context pre-populated with temporal context and the initial prompt.</summary>
     public static Context CreateContext(string initialPrompt, ToolContext? tools = null);
 
-    /// <summary>Drives the full agent loop for one Context. Lower-level — prefer ChatAsync for multi-turn.</summary>
-    public IAsyncEnumerable<AgentEvent> RunAsync(Context ctx, CancellationToken ct = default);
-
     /// <summary>
-    /// Executes one user turn. On the first call, delegates to RunAsync; on subsequent calls,
-    /// appends the message then calls RunAsync. Applies TurnTimeoutSeconds when configured.
+    /// Executes one user turn. On the first call, delegates to the internal loop; on subsequent calls,
+    /// appends the message then runs the loop. Applies TurnTimeoutSeconds when configured.
     /// </summary>
     public IAsyncEnumerable<AgentEvent> ChatAsync(
         string userMessage,
@@ -115,7 +112,7 @@ public sealed record IterationCompletedEvent(int Iteration, LlmTokenUsage TurnUs
 /// <summary>Streaming path only — one event per text token chunk.</summary>
 public sealed record TextDeltaEvent(string Delta) : AgentEvent;
 
-/// <summary>Terminal event — always the last event emitted by RunAsync.</summary>
+/// <summary>Terminal event — always the last event emitted by the agent loop.</summary>
 public sealed record AgentResultEvent(
     AgentResultStatus Status,
     string?           FinalText,
@@ -289,12 +286,12 @@ public enum McpTransportKind { Stdio, Http }
 
 public sealed class McpServerConfig
 {
-    public string                       Name                { get; set; }
-    public McpTransportKind             Transport           { get; set; }
-    public string?                      Command             { get; set; }  // Stdio only
-    public string[]?                    Arguments           { get; set; }  // Stdio only
+    public string                       Name                 { get; set; }
+    public McpTransportKind             Transport            { get; set; }
+    public string?                      Command              { get; set; }  // Stdio only
+    public string[]?                    Arguments            { get; set; }  // Stdio only
     public Dictionary<string, string?>? EnvironmentVariables { get; set; } // Stdio only
-    public string?                      Url                 { get; set; }  // Http only
+    public string?                      Url                  { get; set; }  // Http only
 }
 
 public sealed class McpClientOptions
@@ -309,29 +306,34 @@ namespace Agency.Agentic.Tools;
 
 public sealed class McpClientPool : IAsyncDisposable
 {
+    /// <summary>Gets all tools discovered from every connected MCP server.</summary>
     public IReadOnlyList<ITool> Tools { get; }
 
+    /// <summary>
+    /// Connects to each server in options, lists its tools, and returns an initialized pool.
+    /// </summary>
     public static Task<McpClientPool> CreateAsync(McpClientOptions options, CancellationToken ct = default);
+
     public ValueTask DisposeAsync();
 }
 ```
 
 ## How It Works
 
-The loop implemented in `Agent.RunAsync` follows this pattern on every iteration:
+The loop implemented internally in `Agent` follows this pattern on every iteration:
 
 ```
 1. Seed conversation with the user prompt (first iteration only)
 2. Build system prompt via SystemPromptBuilder.Build(ctx)
 3. Call IChatClient:
-   • stream=true  → CompleteStreamingAsync → yield TextDeltaEvent per token chunk
-   • stream=false → CompleteAsync          → single batch response
+   • stream=true  → GetStreamingResponseAsync → yield TextDeltaEvent per token chunk
+   • stream=false → GetResponseAsync          → single batch response
 4. Emit AssistantTurnEvent + IterationCompletedEvent
 5. Evaluate StopCondition(ctx, lastMessage)
    └── true → AgentResultEvent → break
 6. Extract FunctionCallContent items from the assistant message
 7. Execute all tool calls in parallel → ToolInvokedEvent (one per tool)
-8. Append tool results to conversation as a User message
+8. Append tool results to conversation as Tool-role messages (one per call)
 9. Increment IterationCount → repeat
 ```
 
@@ -352,7 +354,7 @@ IChatClient chatClient = /* e.g. claudeClient.AsChatClient() */;
 var agent = new Agent(chatClient, "claude-opus-4-6", clientType: "Claude");
 
 // Use ChatSession for multi-turn convenience
-var session = new ChatSession(agent, new AgentOptions());
+var session = new ChatSession(agent, new AgentOptions(), toolCtx);
 
 await foreach (AgentEvent evt in session.SendAsync("List files in /tmp", ct))
 {
@@ -386,16 +388,6 @@ StopConditions.Any(
     StopConditions.TokensExceeded(100_000));
 ```
 
-## Agent Tools
-
-| Tool class | Tool name | Description |
-|---|---|---|
-| `AgentTool` | `subagent_tool` | Delegates a focused task to a child agent with its own `ToolRegistry`. Schema: `prompt` (required), `clientName` (optional), `model` (optional). |
-| `ExecutePowershellTool` | `execute_powershell` | Executes PowerShell commands in a fresh `Runspace`; formats multi-object output as Markdown tables. |
-| `ReadFileTool` | `read_file` | Reads and returns the contents of a file at a given path. |
-| `WriteFileTool` | `write_file` | Writes content to a file at a given path. |
-| `McpProxyTool` | *(per-tool from server)* | Adapts a discovered `McpClientTool` to the `ITool` interface; one instance per tool per MCP server. |
-
 ### Connecting MCP Servers
 
 ```csharp
@@ -425,6 +417,16 @@ var registry = new ToolRegistry(pool.Tools);
 var toolCtx  = new ToolContext { Registry = registry };
 ```
 
+## Agent Tools
+
+| Tool class | Tool name | Description | Key Parameters |
+|---|---|---|---|
+| `AgentTool` | `subagent_tool` | Delegates a focused task to a child agent with its own `ToolRegistry`. | `prompt` (required), `clientName` (optional), `model` (optional) |
+| `ExecutePowershellTool` | `execute_powershell` | Executes PowerShell commands in a fresh `Runspace`; formats multi-object output as Markdown tables. | `command` (required) |
+| `ReadFileTool` | `read_file` | Reads and returns the contents of a file at a given path. | `path` (required) |
+| `WriteFileTool` | `write_file` | Writes content to a file at a given path. | `path`, `content` (required) |
+| `McpProxyTool` | *(per-tool name from server)* | Adapts a discovered `McpClientTool` to the `ITool` interface; one instance per tool per MCP server. Name and schema are sourced directly from the MCP server at connection time. | Varies by MCP server |
+
 ## Observability
 
 ### `Agent`
@@ -435,9 +437,9 @@ var toolCtx  = new ToolContext { Registry = registry };
 | `Meter` | `Agency.Agentic.Agent` | — |
 | Counter | `agent.turns` | `agent.model`, `agent.client_type`, `agent.stream` |
 | Counter | `agent.errors` | same |
-| Counter | `agent.tool.calls` | same |
-| Counter | `agent.tokens` | same + `token_type` |
-| Histogram | `agent.turn.duration` (ms) | same |
+| Counter | `agent.tool.calls` | same + `agent.tool.name`, `agent.tool.error` |
+| Counter | `agent.tokens` | `agent.model`, `agent.client_type`, `agent.token.type` |
+| Histogram | `agent.turn.duration` (ms) | `agent.model`, `agent.client_type`, `agent.stream` |
 
 ### `Models`
 
@@ -465,4 +467,6 @@ var toolCtx  = new ToolContext { Registry = registry };
 - **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only properties mutated by the loop (`internal set`). All other context properties are `init`-only, making session state predictable and easy to snapshot for testing.
 - **`SystemPromptBuilder` is a pure function** — The system prompt is rebuilt from `Context` on every iteration so `KnowledgeContext` facts are always fresh. Being a `static` pure function makes it unit-testable in complete isolation from the agent loop.
 - **Two-tier tool disabling** — `ToolRegistry` distinguishes user-initiated disables (`DisableToolByUser`) from system-initiated disables (`DisabledToolBySystem`). `ListAllDefinitions()` hides system-disabled tools entirely; user-disabled tools remain visible with `Enabled = false`, enabling UI toggle flows.
+- **`McpProxyTool` is `internal`** — callers never instantiate `McpProxyTool` directly; `McpClientPool.CreateAsync` wraps each discovered `McpClientTool` and exposes the results through the `Tools` property. This keeps the MCP SDK types contained behind the pool boundary.
+- **`McpClientPool` is `IAsyncDisposable`** — each `McpClient` holds an open connection to its server process or HTTP endpoint. Disposing the pool closes all connections; callers should use `await using` to ensure cleanup even on cancellation.
 - **`ChatSession` is not thread-safe** — create one instance per user or logical connection; at most one `SendAsync` call should be in flight at a time. Call `Reset()` to clear conversation history and start a fresh session without creating a new instance.

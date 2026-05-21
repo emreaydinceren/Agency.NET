@@ -1,10 +1,10 @@
 # Agency.Llm.OpenAI
 
-#llm #openai #factory #meai #observability
+#llm #openai #factory #meai #observability #pipeline-policy
 
 ## What It Is
 
-Agency.Llm.OpenAI is the OpenAI-compatible `IChatClient` factory that wraps the official `OpenAI` .NET SDK and wires in OpenTelemetry and logging middleware via `Microsoft.Extensions.AI`. It works with any OpenAI-protocol-compatible endpoint: OpenAI cloud, Azure OpenAI, LM Studio, Ollama, and others.
+Agency.Llm.OpenAI is the OpenAI-compatible `IChatClient` factory that wraps the official `OpenAI` .NET SDK and wires in OpenTelemetry and logging middleware via `Microsoft.Extensions.AI`. It works with any OpenAI-protocol-compatible endpoint: OpenAI cloud, Azure OpenAI, LM Studio, Ollama, and others. It also includes `SuppressThinkingPipelinePolicy`, an HTTP pipeline policy that unconditionally disables extended thinking/reasoning tokens on models that support them (e.g. Qwen3 MoE).
 
 **Namespace:** `Agency.Llm.OpenAI`
 
@@ -45,25 +45,27 @@ public sealed class OpenAIClient : IModelProvider
 
 ## How It Works
 
-`OpenAIClient` is a factory, not a chat client itself. Each call to `CreateChatClient()` constructs an underlying `OpenAI.OpenAIClient`, obtains its `ChatClient` via `GetChatClient("default")`, converts it to `IChatClient` (MEAI abstraction), then chains:
+`OpenAIClient` is a factory, not a chat client itself. Each call to `CreateChatClient()` builds an underlying `OpenAI.OpenAIClient` via the private `BuildOpenAIClient` helper, obtains its `ChatClient` via `GetChatClient("default")`, converts it to `IChatClient` (MEAI abstraction), then chains:
 
 1. `UseOpenTelemetry()` — records spans and gen_ai semantic-convention metrics automatically.
 2. `UseLogging(loggerFactory)` — emits request/response log entries.
 
 The `"default"` model placeholder is overridden at call time by setting `ChatOptions.ModelId`, so a single factory instance serves any model the caller names.
 
+When `LlmClientOptions.SuppressThinking` is `true`, `BuildOpenAIClient` registers a `SuppressThinkingPipelinePolicy` at `PipelinePosition.PerCall`. This policy intercepts every outbound request, deserialises the JSON body, appends `"enable_thinking": false` and `"thinking_budget_tokens": 0`, and rewrites the request content before it leaves the process. This is a request-level guarantee — it overrides even prompt-level directives such as `/no_think`.
+
 ```csharp
-// File: src/Llm/Agency.Llm.OpenAI/OpenAIClient.cs
+// Example: suppress thinking for a Qwen3 endpoint
 using Agency.Llm.Common;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 
-// Create the factory
+// Create the factory with thinking suppressed
 var factory = new OpenAIClient(new LlmClientOptions
 {
-    ApiKey  = "lm-studio",
-    BaseUrl = "http://llm-host.example:1234/v1",
+    ApiKey          = "lm-studio",
+    BaseUrl         = "http://llm-host.example:1234/v1",
+    SuppressThinking = true,
 });
 
 // Obtain an IChatClient
@@ -72,7 +74,7 @@ IChatClient chat = factory.CreateChatClient();
 // Send a prompt — model selected via ChatOptions
 ChatResponse response = await chat.GetResponseAsync(
     "Explain HNSW indexes.",
-    new ChatOptions { ModelId = "google/gemma-4-e2b" });
+    new ChatOptions { ModelId = "qwen3-30b-a3b" });
 
 // Enumerate available models
 IReadOnlyList<Model> models = await factory.GetModelsAsync();
@@ -105,3 +107,5 @@ No additional `ActivitySource` or `Meter` is declared in this project; telemetry
 - The model is resolved per-request via `ChatOptions.ModelId` rather than at construction time, so a single `OpenAIClient` instance can serve requests to different models without re-instantiation.
 - The `"default"` string passed to `GetChatClient("default")` is a placeholder required by the SDK; it is always overridden by `ChatOptions.ModelId` at the call site.
 - Both constructor overloads (`IOptions<LlmClientOptions>` and plain `LlmClientOptions`) are provided so the class works equally well with Microsoft DI and in manual/test scenarios.
+- `SuppressThinkingPipelinePolicy` is `internal` and registered at `PipelinePosition.PerCall` rather than `PerTry`, meaning it runs once per logical request (not once per retry attempt). JSON is round-tripped through `Utf8JsonWriter` to append the two extra fields without deserialising into a typed model, keeping the policy free of schema coupling.
+- The thinking-suppression fields are appended rather than merged because the OpenAI SDK serialises the request body before pipeline policies run; appending at the JSON level is the only reliable injection point available without forking the SDK.

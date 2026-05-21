@@ -40,13 +40,13 @@ using Agency.Llm.Common;
 
 public record class LlmClientOptions
 {
-    public string Name        { get; set; } = string.Empty;
-    public string ClientType  { get; set; } = string.Empty;
-    public string ApiKey      { get; set; } = string.Empty;
-    public string? BaseUrl    { get; set; }
-    public int?   MaxRetries  { get; set; }
-    public TimeSpan? Timeout  { get; set; }
-    public long? MaxTokens    { get; set; }
+    public string    Name             { get; set; } = string.Empty;
+    public string    ClientType       { get; set; } = string.Empty;
+    public string    ApiKey           { get; set; } = string.Empty;
+    public string?   BaseUrl          { get; set; }
+    public int?      MaxRetries       { get; set; }
+    public TimeSpan? Timeout          { get; set; }
+    public bool      SuppressThinking { get; set; } = false;
 }
 ```
 
@@ -99,11 +99,10 @@ The `Tools` sub-namespace contains the tool-calling contract. [[Agency.Agentic]]
 | [[Agency.Llm.OpenAI]] | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
 | [[Agency.Agentic]] | Depends on `ITool`, `IToolRegistry`, `ToolDefinition`, `ToolResult`, `Model` |
 | [[Agency.Agentic.Console]] | References `LlmClientOptions` and `Model` for CLI configuration |
-| [[Agency.GraphRAG.Code]] | Consumes `ToolDefinition` and `ToolResult` for code-graph tool calls |
 
 ## Design Notes
 
 - **No runtime dependencies** — the `.csproj` is intentionally empty; `Agency.Llm.Common` has zero NuGet package references, keeping the shared contract portable and fast to compile.
 - **Dual enable/disable authority** — `IToolRegistry` distinguishes system-controlled disable (`DisabledToolBySystem` / `EnableToolBySystem`) from user-controlled disable (`DisableToolByUser` / `EnableToolByUser`), so a tool is only included in `ListDefinitions()` when both authorities agree it is enabled.
-- **`LlmClientOptions` is provider-neutral** — the record covers fields common to any HTTP-based LLM API (key, base URL, retries, timeout, max tokens); provider projects extend it with provider-specific fields rather than duplicating the base properties.
-
+- **`LlmClientOptions` is provider-neutral** — the record covers fields common to any HTTP-based LLM API (key, base URL, retries, timeout); provider projects extend it with provider-specific fields rather than duplicating the base properties.
+- **`SuppressThinking` is an escape hatch** — when `true`, provider clients inject `enable_thinking: false` and `thinking_budget_tokens: 0` into every request body, unconditionally suppressing extended thinking regardless of prompt-level directives. This is intended for reasoning-capable models (e.g. Qwen3) where thinking must be disabled at the infrastructure level.

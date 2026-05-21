@@ -110,7 +110,7 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
 5. Each chunk is keyed as `{sourceId}:chunk:{index}`, and its metadata is augmented with `source_file`, `chunk_index`, and `ingested_at`.
 6. `chunkConverter` transforms each chunk `Document` into the `TValue` expected by the vector store, then `store.UpsertAsync` persists it.
 7. Success and failure counts are aggregated thread-safely; failed chunk keys are collected in a `ConcurrentBag<string>`.
-8. Duration is recorded to the `ingestion.duration_ms` histogram; activity tags `ingestion.succeeded` and `ingestion.failed` are set before the activity closes.
+8. Duration is recorded to the `ingestion.duration_ms` histogram; activity tags `ingestion.succeeded` and `ingestion.failed` are set, and the activity status is set to `Error` if any chunks failed.
 9. An `IngestionResult` is returned with the final counts and, when failures occurred, the list of failed keys.
 
 ```csharp
@@ -150,23 +150,7 @@ if (!result.IsSuccess)
 | `ingestion.documents_total` | Counter | — | `status` (`"success"` \| `"failure"`) |
 | `ingestion.duration_ms` | Histogram | ms | — |
 
-Activity `ingestion.execute` carries tags `ingestion.succeeded` and `ingestion.failed`.
-
-## How It Relates to Other Projects
-
-- **[[Agency.VectorStore.Common]]** — `IIngestionPipeline<TValue>` depends on `IVectorStore` from this project to persist chunk embeddings.
-- **[[Agency.Ingestion.FileSystem]]** — provides a concrete `IDocumentLoader` that reads documents from the local file system.
-- **[[Agency.Ingestion.SemanticKernel]]** — provides an `ITextSplitter` implementation backed by Semantic Kernel's text chunking utilities.
-
-## Design Notes
-
-- `DefaultIngestionPipeline<TValue>` is generic over `TValue` so that callers supply the conversion from `Document` to whatever the target vector store expects (e.g., `float[]`, `string`, or a custom embedding type), keeping this project free of any embedding-generation dependency.
-- Chunk keys use the deterministic pattern `{sourceId}:chunk:{index}`, which makes re-ingestion idempotent — re-running the pipeline on the same source overwrites existing chunks rather than duplicating them.
-- `DefaultIngestionPipeline<TValue>` is `sealed`, so it cannot be subclassed; custom orchestration logic should implement `IIngestionPipeline<TValue>` directly.
-- **Histogram** `ingestion.duration_ms`
-- **Logs** start/completion info logs and per-chunk upsert error logs
-
-ActivitySource name: `Agency.Ingestion` | Meter name: `Agency.Ingestion`
+Activity `ingestion.execute` carries tags `ingestion.succeeded` and `ingestion.failed`. When any chunks fail, the activity status is set to `ActivityStatusCode.Error` with a message indicating the failure count.
 
 ## How It Relates to Other Projects
 
@@ -177,3 +161,10 @@ ActivitySource name: `Agency.Ingestion` | Meter name: `Agency.Ingestion`
 | [[Agency.VectorStore.Common]] | `DefaultIngestionPipeline` calls `IVectorStore.UpsertAsync` |
 | [[Agency.VectorStore.Sql.Postgre]] | Typical production store backend |
 | [[Agency.VectorStore.Sql.Sqlite]] | Typical dev/test store backend |
+
+## Design Notes
+
+- `DefaultIngestionPipeline<TValue>` is generic over `TValue` so that callers supply the conversion from `Document` to whatever the target vector store expects (e.g., `float[]`, `string`, or a custom embedding type), keeping this project free of any embedding-generation dependency.
+- Chunk keys use the deterministic pattern `{sourceId}:chunk:{index}`, which makes re-ingestion idempotent — re-running the pipeline on the same source overwrites existing chunks rather than duplicating them.
+- `DefaultIngestionPipeline<TValue>` is `sealed`, so it cannot be subclassed; custom orchestration logic should implement `IIngestionPipeline<TValue>` directly.
+- The constructor rejects a null `chunkConverter` with `ArgumentNullException` at construction time rather than at first use, failing fast before any I/O is attempted.

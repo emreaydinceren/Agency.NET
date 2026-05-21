@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Agency.GraphRAG.Code.Cli": {
-      "commandName": "Project",
-      "commandLineArgs": " index e:\\repos\\agency\\src"
-    }
-  }
-}

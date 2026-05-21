@@ -38,13 +38,6 @@ Documents
    Agency.Console                     (one-shot RAG demo stub)
           │
           ▼
-   Agency.GraphRAG.Code               (code graph indexing, clustering, query)
-   Agency.GraphRAG.Code.Sqlite        (SQLite IGraphStore + FTS5 + sqlite-vec)
-   Agency.GraphRAG.Code.Postgres      (PostgreSQL IGraphStore + pgvector)
-   Agency.GraphRAG.Code.Cli           (index / query CLI)
-   Agency.GraphRAG.Code.TreeSitter    (Tree-sitter sidecar: AST parsing)
-          │
-          ▼
    Agency.Mcp.Memory                  (MCP server: Memorize / Recall / Forget via IKVStore)
 ```
 
@@ -75,31 +68,6 @@ Documents
 ### RAG
 
 - [[Agency.RagFormatter]] — `Dataset.ToMarkdownTable()` for LLM context injection
-
-### Code Graph RAG
-
-The code graph indexing layer enables LLM agents to understand large, polyglot code repositories **without compilation** by building a queryable knowledge graph: code → chunks → embeddings + summaries → structured graph (entities + relationships) → hybrid retrieval (vector + graph traversal + community clusters).
-
-**Design & Architecture:**
-
-- [[Agency.GraphRAG.Code.Overview]] — system overview, design principles, architecture diagram
-- [[Agency.GraphRAG.Code.Design]] — tradeoff analysis, V1 scope vs. V2+, performance assumptions
-
-**Core Layers:**
-
-- [[Agency.GraphRAG.Code.Indexing]] — Repo Walker, Tree-sitter Parser, Manifest Parser, Chunker, Summarizer, Change Detector
-- [[Agency.GraphRAG.Code.Hydration]] — two-phase indexing, reference resolution, incremental updates
-- [[Agency.GraphRAG.Code.Clustering]] — Leiden-based community detection, boundary-aware tuning, utility node handling, cluster summarization
-- [[Agency.GraphRAG.Code.Querying]] — query planner, hybrid retriever, context assembly, LLM synthesis
-- [[Agency.GraphRAG.Code.Storage]] — IGraphStore abstraction, schema design, indexes, Postgres vs. SQLite comparison, reference signal taxonomy
-
-**API & Implementations:**
-
-- [[Agency.GraphRAG.Code]] — core API surface and interfaces (ICodeIndex, IGraphStore)
-- [[Agency.GraphRAG.Code.Sqlite]] — SQLite-backed `IGraphStore` with FTS5 fuzzy name matching and `sqlite-vec` for vector search; zero-setup default for single-developer and repos < 100k symbols
-- [[Agency.GraphRAG.Code.Postgres]] — PostgreSQL-backed `IGraphStore` with pgvector (HNSW) for high-performance vector search and `pg_trgm` for trigram fuzzy matching; recommended for large repos and team scenarios
-- [[Agency.GraphRAG.Code.Cli]] — `index` / `query` CLI: local indexing (SQLite file) and remote indexing (Postgres connection string config)
-- [[Agency.GraphRAG.Code.TreeSitter]] — Tree-sitter out-of-process client for polyglot AST parsing (C#, TypeScript, Python); decouples grammar updates from .NET build
 
 ### Ingestion
 

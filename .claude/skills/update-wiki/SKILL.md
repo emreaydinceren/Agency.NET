@@ -5,7 +5,7 @@ argument-hint: "[ProjectName1] [ProjectName2] ..."
 allowed-tools: Glob Grep Read Write Bash
 ---
 
-Update the Agency solution wiki in `E:\Repos\Agency\Docs\`.
+Update the Agency solution wiki in `[repo-root]\docs\`.
 
 ## Your Task
 
@@ -16,19 +16,15 @@ $ARGUMENTS was provided as the list of project names to update. If it is empty, 
 If `$ARGUMENTS` is non-empty, parse it as a space-separated list of project names (e.g. `Agency.Agentic Agency.Llm.Claude`).
 
 If `$ARGUMENTS` is empty, run:
-```
-git -C E:/Repos/Agency diff --name-only HEAD~1 HEAD
-```
-and also check uncommitted changes:
-```
-git -C E:/Repos/Agency diff --name-only
-git -C E:/Repos/Agency diff --cached --name-only
-```
 
+Read `[repo-root]/docs/Home.md` and extract the commit hash from the `<!-- last-wiki-commit: <HASH> -->` HTML comment at the top of the file. Then run:
+
+```
+git diff --name-status <HASH>
+```
 Map changed file paths to project names by extracting the top-level folder under `src/` (e.g. `src/Agency.Agentic/Agent.cs` → `Agency.Agentic`). Skip test projects (names ending in `.Test`).
 
 Act as orchestrator, do not perform Step 2 directly. Instead, delegate Step 2 to a subagent for each project that needs updating.
-
 
 ### Step 2 — For each project to update
 
@@ -36,8 +32,8 @@ Step 2 must always be delegated to a subagent. Do not perform Step 2 directly in
 
 For each project, invoke one subagent and have that subagent do all of the following:
 
-1. Read all `.cs` files in `E:\Repos\Agency\src\<ProjectName>\` (excluding `obj/` subfolders).
-2. Read the existing wiki page at `E:\Repos\Agency\Docs\<ProjectName>.md` if it exists.
+1. Read all `.cs` files in `[repo-root]/src/<ProjectName>/` (excluding `obj/` subfolders).
+2. Read the existing wiki page at `[repo-root]/Docs/<ProjectName>.md` if it exists.
 3. Identify what has changed: new types, renamed types, removed types, changed method signatures, new dependencies, new configuration options, or new observability signals.
 4. Rewrite the wiki page following the **Required Page Structure** below. Preserve any sections that are still accurate; update only what has changed.
 
@@ -53,9 +49,11 @@ If any wiki page references a project that no longer exists under `src/`, note t
 
 ### Step 5 — Update Home.md if needed
 
-If any projects were added or removed, or if the architecture diagram changed, update `E:\Repos\Agency\Docs\Home.md`:
-- Keep the ASCII architecture diagram accurate
-- Keep the **Project Pages** index list complete and sorted by layer
+Always update `[repo-root]/docs/Home.md` at the end of every run:
+
+1. **Update the commit hash** — overwrite the `<!-- last-wiki-commit: <HASH> -->` comment at the top of the file with the result of `git rev-parse HEAD`.
+2. **Update the Mermaid diagram** — if any projects were added or removed, or if dependencies between projects changed, update the `mermaid` fenced code block to reflect the current architecture. Use a `graph TD` (top-down) layout. Each node is a project name; each arrow represents a compile-time dependency (the dependent project points to the dependency).
+3. **Update the Project Pages index** — if any projects were added or removed, keep the index list complete and sorted by layer.
 
 ---
 

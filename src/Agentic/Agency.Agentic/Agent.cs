@@ -80,12 +80,16 @@ public sealed class Agent
     /// </summary>
     /// <param name="initialPrompt">The first user message that seeds the conversation.</param>
     /// <param name="tools">Optional tool context; defaults to <see cref="ToolContext.Empty"/>.</param>
-    public static Context CreateContext(string initialPrompt, ToolContext? tools = null) =>
+    public static Context CreateContext(
+        string initialPrompt,
+        ToolContext? tools = null,
+        EnvironmentalContext? environment = null) =>
         new()
         {
             Query = new QueryContext { Prompt = initialPrompt },
             Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
             Tools = tools ?? ToolContext.Empty,
+            Environment = environment ?? EnvironmentalContext.Empty,
         };
 
     /// <summary>
@@ -265,6 +269,33 @@ public sealed class Agent
             ctx.Conversation.Append(lastAssistant);
             yield return new AssistantTurnEvent(lastAssistant);
             yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage);
+
+            // Detect truncated response — model hit its context/output token limit mid-generation.
+            if (response.FinishReason == ChatFinishReason.Length)
+            {
+                this._logger.LogWarning(
+                    "LLM response was truncated (finish_reason=length). Model={Model}, InputTokens={InputTokens}",
+                    this._model, turnUsage.InputTokens);
+                _errorCounter.Add(1, new TagList
+                {
+                    { "agent.model", this._model },
+                    { "agent.client_type", this._clientType },
+                    { "agent.error", "truncated" },
+                });
+                string windowHint = ctx.Environment.ContextWindowSize is { } windowSize
+                    ? $" against a {windowSize:N0}-token context window"
+                    : string.Empty;
+                string truncationMessage =
+                    $"Response truncated: the LLM hit its token limit mid-generation. " +
+                    $"This turn consumed {ctx.TotalUsage.InputTokens:N0} input tokens{windowHint} — " +
+                    "increase the model's context window or reduce the input size.";
+                yield return new AgentResultEvent(
+                    AgentResultStatus.Error,
+                    truncationMessage,
+                    ctx.TotalUsage,
+                    ctx.TotalCostUsd);
+                yield break;
+            }
 
             // 5. Evaluate stop conditions.
             if (this._stop(ctx, lastAssistant))

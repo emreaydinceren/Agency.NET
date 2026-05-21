@@ -75,7 +75,10 @@ public sealed class ChatSession
         string userMessage,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        this._ctx ??= Agent.CreateContext(userMessage, this._toolContext);
+        this._ctx ??= Agent.CreateContext(
+            userMessage,
+            this._toolContext,
+            new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize });
 
         await foreach (AgentEvent evt in this._agent.ChatAsync(userMessage, this._ctx, this._options, ct))
         {

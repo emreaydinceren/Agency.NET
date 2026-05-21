@@ -208,6 +208,10 @@ internal sealed class ConsoleChatSession
                             long deltaOut = this._chatSession.TotalUsage.OutputTokens - prevOut;
                             this.output.WriteLine("gray",
                                 $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out  [{result.Status}]");
+                            if (result.Status == AgentResultStatus.Error && result.FinalText is { } errorText)
+                            {
+                                this.output.WriteLine("red", $"  {errorText}");
+                            }
                             break;
 
                             // SessionStartedEvent, IterationCompletedEvent: intentionally suppressed.

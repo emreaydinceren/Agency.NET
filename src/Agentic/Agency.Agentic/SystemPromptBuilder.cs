@@ -60,6 +60,19 @@ public static class SystemPromptBuilder
             sb.AppendLine($"Operating system: {os}");
         }
 
+        if (ctx.Environment.ContextWindowSize is { } windowSize)
+        {
+            long used = ctx.TotalUsage.InputTokens;
+            if (used > 0)
+            {
+                sb.AppendLine($"Context window: {windowSize:N0} tokens (prior input: {used:N0}, est. remaining: {(windowSize - used):N0})");
+            }
+            else
+            {
+                sb.AppendLine($"Context window: {windowSize:N0} tokens");
+            }
+        }
+
         // User identity.
         if (ctx.User.Name is { } name)
         {

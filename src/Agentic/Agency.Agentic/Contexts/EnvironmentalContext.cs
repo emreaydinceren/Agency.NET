@@ -12,4 +12,7 @@ public sealed record EnvironmentalContext
 
     /// <summary>Gets the operating system name/version.</summary>
     public string? OperatingSystem { get; init; }
+
+    /// <summary>Gets the maximum context window size in tokens for the active model.</summary>
+    public int? ContextWindowSize { get; init; }
 }

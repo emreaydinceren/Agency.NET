@@ -28,7 +28,7 @@ Documents
           │
           ▼
    Agency.Sql.Common                        (SqlRunnerBase: shared OTel + execution skeleton)
-   Agency.Sql.Postgre / Agency.Sql.Sqlite  (raw SQL runner + vectorize() macro)
+   Agency.Sql.Postgres / Agency.Sql.Sqlite  (raw SQL runner + vectorize() macro)
    Agency.Common                           (Dataset, IColumnMetadata)
    Agency.RagFormatter                     (Dataset → Markdown table)
           │
@@ -61,7 +61,7 @@ Documents
 ### SQL
 
 - [[Agency.Sql.Common]] — `SqlRunnerBase` abstract class: shared OTel telemetry + execution skeleton
-- [[Agency.Sql.Postgre]] — PostgreSQL runner + `vectorize()` macro
+- [[Agency.Sql.Postgres]] — PostgreSQL runner + `vectorize()` macro
 - [[Agency.Sql.Sqlite]] — SQLite runner + `vectorize()` macro
 
 ### Vector Store

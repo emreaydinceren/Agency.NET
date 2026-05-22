@@ -88,7 +88,7 @@ Activity tags follow the OpenTelemetry GenAI semantic conventions: `gen_ai.syste
 | [[Agency.Embeddings.Common]] | Defines the `IEmbeddingGenerator` interface that `EmbeddingGenerator` implements. |
 | [[Agency.VectorStore.Sql.Postgre]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search. |
 | [[Agency.VectorStore.Sql.Sqlite]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search; uses `Dimensions` to create schemas with the correct column width. |
-| [[Agency.Sql.Postgre]] | Consumes embeddings indirectly via `SQLQueryEmbedder` in retrieval/query pipelines. |
+| [[Agency.Sql.Postgres]] | Consumes embeddings indirectly via `SQLQueryEmbedder` in retrieval/query pipelines. |
 
 ## Design Notes
 - Two public constructors are provided so callers can use either the DI options pattern (`IOptions<EmbeddingOptions>`) or a direct `EmbeddingOptions` instance; an additional `internal` constructor accepts a custom `HttpMessageHandler` to enable unit testing without a live endpoint.

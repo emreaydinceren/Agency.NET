@@ -1,7 +1,7 @@
 using Agency.KeyValueStore.Common;
 using Agency.KeyValueStore.Sql.Postgre;
 using Agency.KeyValueStore.Sql.Sqlite;
-using Agency.Sql.Postgre;
+using Agency.Sql.Postgres;
 using Agency.Sql.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

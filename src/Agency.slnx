@@ -43,8 +43,8 @@
   </Folder>
   <Folder Name="/Sql/">
     <Project Path="Sql\Agency.Sql.Common\Agency.Sql.Common.csproj" />
-    <Project Path="Sql\Agency.Sql.Postgre.Test\Agency.Sql.Postgre.Test.csproj" />
-    <Project Path="Sql\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
+    <Project Path="Sql\Agency.Sql.Postgres.Test\Agency.Sql.Postgres.Test.csproj" />
+    <Project Path="Sql\Agency.Sql.Postgres\Agency.Sql.Postgres.csproj" />
     <Project Path="Sql\Agency.Sql.Sqlite.Test\Agency.Sql.Sqlite.Test.csproj" />
     <Project Path="Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
   </Folder>

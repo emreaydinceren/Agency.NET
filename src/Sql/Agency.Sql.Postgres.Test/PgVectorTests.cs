@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace Agency.Sql.Postgre.Test;
+namespace Agency.Sql.Postgres.Test;
 
 /// <summary>
 /// Functional tests for pgvector operations against the PostgreSQL instance in docker-compose.yml.

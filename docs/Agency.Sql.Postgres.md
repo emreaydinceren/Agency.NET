@@ -1,12 +1,12 @@
-# Agency.Sql.Postgre
+# Agency.Sql.Postgres
 
 #sql #postgresql #pgvector #observability
 
 ## What It Is
 
-Agency.Sql.Postgre is the PostgreSQL adapter that executes raw SQL against a PostgreSQL/pgvector database and resolves `vectorize('...')` macros in SQL text into real embedding vectors before execution.
+Agency.Sql.Postgres is the PostgreSQL adapter that executes raw SQL against a PostgreSQL/pgvector database and resolves `vectorize('...')` macros in SQL text into real embedding vectors before execution.
 
-**Namespace:** `Agency.Sql.Postgre`
+**Namespace:** `Agency.Sql.Postgres`
 
 ## Prerequisites
 
@@ -22,19 +22,19 @@ Agency.Sql.Postgre is the PostgreSQL adapter that executes raw SQL against a Pos
 Sealed, async-disposable SQL runner that owns a singleton `NpgsqlDataSource` with `pgvector` support. Inherits `ExecuteAsync` and `QueryAsync` from [[Agency.Sql.Common]] `SqlRunnerBase`.
 
 ```csharp
-// File: src/Sql/Agency.Sql.Postgre/PostgreSqlRunner.cs
+// File: src/Sql/Agency.Sql.Postgres/PostgreSqlRunner.cs
 using Agency.Sql.Common;
 using Agency.Common;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using System.Data.Common;
 
-namespace Agency.Sql.Postgre;
+namespace Agency.Sql.Postgres;
 
 public sealed class PostgreSqlRunner : SqlRunnerBase, IAsyncDisposable
 {
-    public const string ActivitySourceName = "Agency.Sql.Postgre";
-    public const string MeterName = "Agency.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.Sql.Postgres";
+    public const string MeterName = "Agency.Sql.Postgres";
 
     // Constructor
     public PostgreSqlRunner(string connectionString, ILogger<PostgreSqlRunner>? logger = null);
@@ -65,10 +65,10 @@ public sealed class PostgreSqlRunner : SqlRunnerBase, IAsyncDisposable
 Preprocesses SQL text by replacing all `vectorize('<text>')` macro calls with pgvector literal strings before the query is sent to PostgreSQL.
 
 ```csharp
-// File: src/Sql/Agency.Sql.Postgre/SQLQueryEmbedder.cs
+// File: src/Sql/Agency.Sql.Postgres/SQLQueryEmbedder.cs
 using Agency.Embeddings.Common;
 
-namespace Agency.Sql.Postgre;
+namespace Agency.Sql.Postgres;
 
 public partial class SQLQueryEmbedder
 {
@@ -96,8 +96,8 @@ public partial class SQLQueryEmbedder
 | Counter | `postgresql.executions` | `operation`, `status` |
 | Histogram | `postgresql.duration` (ms) | `operation` |
 
-- **ActivitySource name:** `Agency.Sql.Postgre`
-- **Meter name:** `Agency.Sql.Postgre`
+- **ActivitySource name:** `Agency.Sql.Postgres`
+- **Meter name:** `Agency.Sql.Postgres`
 
 ## How It Relates to Other Projects
 

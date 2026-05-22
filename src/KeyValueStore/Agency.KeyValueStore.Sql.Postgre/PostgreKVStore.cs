@@ -1,7 +1,7 @@
 namespace Agency.KeyValueStore.Sql.Postgre;
 
 using Agency.KeyValueStore.Common;
-using Agency.Sql.Postgre;
+using Agency.Sql.Postgres;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;

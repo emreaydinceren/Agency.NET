@@ -47,7 +47,7 @@ Write-Host "  (press Enter to use the default dev instance)" -ForegroundColor Da
 $connStr = Read-Host "  Connection string"
 if (-not $connStr) { $connStr = "Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db" }
 
-Invoke-Secret -ProjectDir "Sql\Agency.Sql.Postgre.Test" -SecretId "AgencySecrets" -Key "ConnectionStrings:PostgreSql" -Value $connStr
+Invoke-Secret -ProjectDir "Sql\Agency.Sql.Postgres.Test" -SecretId "AgencySecrets" -Key "ConnectionStrings:PostgreSql" -Value $connStr
 
 # ── 2. LLM API keys ─────────────────────────────────────────────────────────
 

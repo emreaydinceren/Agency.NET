@@ -6,7 +6,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-namespace Agency.Sql.Postgre;
+namespace Agency.Sql.Postgres;
 
 /// <summary>
 /// Runs raw SQL statements and queries against a PostgreSQL instance.
@@ -17,12 +17,12 @@ public sealed class PostgreSqlRunner : SqlRunnerBase, IAsyncDisposable
     /// <summary>
     /// The activity source name used for SQL telemetry.
     /// </summary>
-    public const string ActivitySourceName = "Agency.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.Sql.Postgres";
 
     /// <summary>
     /// The meter name used for SQL telemetry.
     /// </summary>
-    public const string MeterName = "Agency.Sql.Postgre";
+    public const string MeterName = "Agency.Sql.Postgres";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);

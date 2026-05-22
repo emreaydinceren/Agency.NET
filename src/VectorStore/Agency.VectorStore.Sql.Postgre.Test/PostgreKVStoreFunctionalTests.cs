@@ -1,5 +1,5 @@
 using Agency.Embeddings.Common;
-using Agency.Sql.Postgre;
+using Agency.Sql.Postgres;
 using Agency.VectorStore.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

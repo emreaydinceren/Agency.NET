@@ -1,0 +1,163 @@
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+
+This project incorporates components from the projects listed below.
+The original copyright notices and licenses are reproduced below.
+
+===============================================================================
+
+Package:    Anthropic 12.9.0
+Author:     Anthropic
+License:    MIT
+Repository: https://github.com/anthropics/anthropic-sdk-dotnet
+
+-------------------------------------------------------------------------------
+
+Package:    OpenAI 2.9.1
+Author:     OpenAI
+License:    MIT
+Repository: https://github.com/openai/openai-dotnet
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.SemanticKernel.Core 1.74.0
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/microsoft/semantic-kernel
+
+-------------------------------------------------------------------------------
+
+Package:    Npgsql 10.0.2
+Author:     Npgsql Development Team
+License:    MIT
+Repository: https://github.com/npgsql/npgsql
+
+-------------------------------------------------------------------------------
+
+Package:    pgvector 0.3.2
+Author:     Andrew Kane
+License:    MIT
+Repository: https://github.com/pgvector/pgvector-dotnet
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Data.Sqlite 9.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/efcore
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Configuration 10.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Configuration.EnvironmentVariables 10.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Configuration.Json 10.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Configuration.UserSecrets 10.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Logging 10.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Logging.Abstractions 10.0.2
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.Extensions.Options 10.0.5
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/dotnet/runtime
+
+-------------------------------------------------------------------------------
+
+Package:    xunit
+Author:     xunit.net
+License:    Apache License 2.0
+Repository: https://github.com/xunit/xunit
+
+-------------------------------------------------------------------------------
+
+Package:    xunit.runner.visualstudio 3.1.5
+Author:     xunit.net
+License:    Apache License 2.0
+Repository: https://github.com/xunit/visualstudio.xunit
+
+-------------------------------------------------------------------------------
+
+Package:    Microsoft.NET.Test.Sdk 18.3.0
+Author:     Microsoft
+License:    MIT
+Repository: https://github.com/microsoft/vstest
+
+-------------------------------------------------------------------------------
+
+Package:    Moq 4.18.4
+Author:     Daniel Crenna
+License:    BSD-3-Clause
+Repository: https://github.com/moq/moq
+
+-------------------------------------------------------------------------------
+
+Package:    coverlet.collector 8.0.1
+Author:     Marco Rossi
+License:    MIT
+Repository: https://github.com/tonerdo/coverlet
+
+-------------------------------------------------------------------------------
+
+Package:    Spectre.Console 0.55.0
+Author:     Spectre.Console Team
+License:    MIT
+Repository: https://github.com/spectreconsole/spectre.console
+
+-------------------------------------------------------------------------------
+
+Package:    NTokenizers.Extensions.Spectre.Console 2.2.0
+Author:     crwsolutions
+License:    MIT
+Project:    https://crwsolutions.github.io/NTokenizers.Extensions.Spectre.Console
+
+-------------------------------------------------------------------------------
+
+Package:    Serilog 4.2.0
+Author:     Serilog Contributors
+License:    Apache License 2.0
+Repository: https://github.com/serilog/serilog
+
+-------------------------------------------------------------------------------
+
+Package:    Serilog.Extensions.Logging 9.0.1
+Author:     Serilog Contributors
+License:    Apache License 2.0
+Repository: https://github.com/serilog/serilog-extensions-logging
+
+===============================================================================
+
+All packages are used under their respective open-source licenses. Please refer
+to each package's repository for the full license text and terms.

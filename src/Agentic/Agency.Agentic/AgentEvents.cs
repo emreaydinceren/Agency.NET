@@ -20,7 +20,8 @@ public sealed record ToolInvokedEvent(
 /// <summary>Emitted after each complete iteration (LLM call + optional tool calls).</summary>
 public sealed record IterationCompletedEvent(
     int Iteration,
-    LlmTokenUsage TurnUsage) : AgentEvent;
+    LlmTokenUsage TurnUsage,
+    TimeSpan LlmDuration) : AgentEvent;
 
 /// <summary>Terminal event — always the last event emitted by <see cref="Agent.RunAsync"/>.</summary>
 public sealed record AgentResultEvent(

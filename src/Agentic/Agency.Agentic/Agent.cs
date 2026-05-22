@@ -266,7 +266,9 @@ public sealed class Agent
             }
 
             // 4. Call the LLM.
+            var llmSw = Stopwatch.StartNew();
             var response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+            llmSw.Stop();
             var lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
                 ?? new ChatMessage(ChatRole.Assistant, []);
             var turnUsage = response.Usage is { } u
@@ -279,12 +281,16 @@ public sealed class Agent
 
             ctx.Conversation.Append(lastAssistant);
             yield return new AssistantTurnEvent(lastAssistant);
+<<<<<<< Updated upstream
             if (this._hooks.OnAssistantTurn is { } onAssistantTurn)
             {
                 await onAssistantTurn(new AssistantTurnHookContext(lastAssistant, ctx), ct);
             }
 
             yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage);
+=======
+            yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage, llmSw.Elapsed);
+>>>>>>> Stashed changes
 
             // Detect truncated response — model hit its context/output token limit mid-generation.
             if (response.FinishReason == ChatFinishReason.Length)

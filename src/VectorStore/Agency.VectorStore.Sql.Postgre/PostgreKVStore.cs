@@ -1,7 +1,7 @@
 ﻿namespace Agency.VectorStore.Sql.Postgre;
 
 using Agency.Embeddings.Common;
-using Agency.Sql.Postgre;
+using Agency.Sql.Postgres;
 using Agency.VectorStore.Common;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -219,7 +219,7 @@ This project does not define a custom `ActivitySource` or `Meter`. All diagnosti
 | [[Agency.KeyValueStore.Common]] | `MemoryTool` depends on `IKVStore` (`UpsertAsync`, `SearchAsync`, `DeleteAsync`, `GetMetadataAsync`) and the `Query`, `SearchHit`, and `SearchHit<T>` types |
 | [[Agency.KeyValueStore.Sql.Postgre]] | Provides `PostgreKVStore` when `Provider = "postgres"` |
 | [[Agency.KeyValueStore.Sql.Sqlite]] | Provides `SqliteKVStore` when `Provider = "sqlite"`; schema is auto-initialized on startup |
-| [[Agency.Sql.Postgre]] | Provides `PostgreSqlRunner` used to construct `PostgreKVStore` |
+| [[Agency.Sql.Postgres]] | Provides `PostgreSqlRunner` used to construct `PostgreKVStore` |
 | [[Agency.Sql.Sqlite]] | Provides `SqliteRunner` used to construct `SqliteKVStore` |
 
 ## Design Notes

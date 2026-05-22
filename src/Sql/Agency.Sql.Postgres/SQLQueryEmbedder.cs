@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Agency.Sql.Postgre;
+namespace Agency.Sql.Postgres;
 
 /// <summary>
 /// Replaces vectorize(...) calls in SQL text with generated vector literals.

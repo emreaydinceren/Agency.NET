@@ -86,7 +86,7 @@ All three public methods follow the same algorithm:
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Sql.Postgre]] | `PostgreSqlRunner` extends `SqlRunnerBase`, supplying the Npgsql connection factory and command builder |
+| [[Agency.Sql.Postgres]] | `PostgreSqlRunner` extends `SqlRunnerBase`, supplying the Npgsql connection factory and command builder |
 | [[Agency.Sql.Sqlite]] | `SqliteRunner` extends `SqlRunnerBase`, supplying the SQLite connection factory and command builder |
 | [[Agency.Common]] | Returns `Dataset`; uses `IColumnMetadata` via the internal `DbColumnAdapter` |
 

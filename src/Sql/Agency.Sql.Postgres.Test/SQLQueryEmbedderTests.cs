@@ -1,6 +1,6 @@
 using Agency.Embeddings.Common;
 
-namespace Agency.Sql.Postgre.Test;
+namespace Agency.Sql.Postgres.Test;
 
 /// <summary>
 /// Tests for <see cref="Agency.Sql.SqlQueryEmbedder"/>.

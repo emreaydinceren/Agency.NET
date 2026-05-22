@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace Agency.Sql.Postgre.Test;
+namespace Agency.Sql.Postgres.Test;
 
 /// <summary>
 /// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml. Requires the container

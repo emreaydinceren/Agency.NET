@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
-    <ProjectReference Include="..\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
+    <ProjectReference Include="..\Agency.Sql.Postgres\Agency.Sql.Postgres.csproj" />
   </ItemGroup>
 
 </Project>

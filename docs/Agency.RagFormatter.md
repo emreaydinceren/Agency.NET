@@ -66,7 +66,7 @@ string systemPrompt = $"""
 |---|---|
 | [[Agency.Common]] | Extends `Dataset`; column metadata comes from `IColumnMetadata` |
 | [[Agency.Sql.Common]] | `Dataset` is produced by SQL runner implementations in this layer |
-| [[Agency.Sql.Postgre]] | `PostgreSqlRunner.QueryAsync` returns a `Dataset` that this formats |
+| [[Agency.Sql.Postgres]] | `PostgreSqlRunner.QueryAsync` returns a `Dataset` that this formats |
 | [[Agency.Sql.Sqlite]] | `SqliteRunner.QueryAsync` returns a `Dataset` that this formats |
 | [[Agency.Agentic]] | Formatted table can be injected into agent context as factual knowledge |
 | [[Agency.Console]] | The console demo wires RAG query results through this formatter |

@@ -1,7 +1,7 @@
 namespace Agency.KeyValueStore.Sql.Postgre.Test;
 
 using Agency.KeyValueStore.Common;
-using Agency.Sql.Postgre;
+using Agency.Sql.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;

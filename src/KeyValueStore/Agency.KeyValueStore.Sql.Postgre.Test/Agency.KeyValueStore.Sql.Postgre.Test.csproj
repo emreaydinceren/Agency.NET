@@ -16,7 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Agency.Common\Agency.Common.csproj" />
-    <ProjectReference Include="..\..\Sql\Agency.Sql.Postgre\Agency.Sql.Postgre.csproj" />
+    <ProjectReference Include="..\..\Sql\Agency.Sql.Postgres\Agency.Sql.Postgres.csproj" />
     <ProjectReference Include="..\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />
     <ProjectReference Include="..\Agency.KeyValueStore.Sql.Postgre\Agency.KeyValueStore.Sql.Postgre.csproj" />
   </ItemGroup>

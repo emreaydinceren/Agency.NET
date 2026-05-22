@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <Description>SqlRunnerBase abstract class for the Agency AI Toolkit: shared OpenTelemetry instrumentation and execution skeleton reused by every concrete SQL runner.</Description>
+    <PackageTags>agency.net;ai;sql;runner;otel;abstractions;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>

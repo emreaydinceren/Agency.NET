@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <Description>SQLite raw-SQL runner for the Agency AI Toolkit with a built-in vectorize() macro that inlines embedding literals from natural-language strings via IEmbeddingGenerator.</Description>
+    <PackageTags>agency.net;ai;sql;sqlite;embedded;rag;otel;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>

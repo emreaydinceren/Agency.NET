@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>IModelProvider interface and shared LLM tool/message types for the Agency AI Toolkit. The single contract that Claude, OpenAI, and any future provider implement.</Description>
+    <PackageTags>agency.net;ai;llm;abstractions;tool-use;dotnet</PackageTags>
   </PropertyGroup>
 
 </Project>

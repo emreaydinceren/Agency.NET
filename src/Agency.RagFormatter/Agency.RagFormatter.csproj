@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Renders an Agency Dataset as a Markdown table for injection into LLM context windows. The minimal RAG formatting step between SQL retrieval and chat completion.</Description>
+    <PackageTags>agency.net;ai;rag;markdown;llm-context;dotnet</PackageTags>
   </PropertyGroup>
 
     <ItemGroup>

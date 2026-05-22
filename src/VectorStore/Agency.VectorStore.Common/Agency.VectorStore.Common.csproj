@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>IVectorStore, Query, and SearchHit&lt;T&gt; abstractions for the Agency AI Toolkit. Provider-agnostic contract for nearest-neighbour search across pgvector, SQLite, and future backends.</Description>
+    <PackageTags>agency.net;ai;vector-store;vector-search;abstractions;rag;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

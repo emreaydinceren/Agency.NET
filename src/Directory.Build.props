@@ -10,11 +10,22 @@
     <NoWarn>$(NoWarn);MSB3270</NoWarn>
   </PropertyGroup>
 
-  <!-- Package metadata -->
   <PropertyGroup>
-    <RepositoryUrl>http://gitea-host.example:3000/emre/Agency</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
+    <Authors>Emre Aydinceren</Authors>
+    <Copyright>Copyright (c) 2026 Emre Aydinceren</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/emreaydinceren/Agency.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/emreaydinceren/Agency.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>Agency_128.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <!-- Versioning: set MajorVersion, MinorVersion, Revision manually; BuildNumber is injected by CI (/p:BuildNumber=N) -->
@@ -42,6 +53,8 @@
   <ItemGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
     <None Include="$(MSBuildThisFileDirectory)..\THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\NOTICE" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\assets\Agency_128.png" Pack="true" PackagePath="" Visible="false" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 

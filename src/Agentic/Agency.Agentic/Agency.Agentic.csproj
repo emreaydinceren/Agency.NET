@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Description>Autonomous agent loop for the Agency AI Toolkit: Context, StopConditions, and AgentEvent primitives for driving multi-turn tool-using agents over any IModelProvider.</Description>
+    <PackageTags>agency.net;ai;agent;agentic;tool-use;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

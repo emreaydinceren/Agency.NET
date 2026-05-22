@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <Description>Ingestion pipeline abstractions and DefaultIngestionPipeline&lt;T&gt; for the Agency AI Toolkit. Compose loaders, chunkers, embedders, and stores into a single load-and-index workflow.</Description>
+    <PackageTags>agency.net;ai;ingestion;pipeline;rag;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" />
   </ItemGroup>

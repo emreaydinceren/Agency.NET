@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <Description>SQLite IVectorStore implementation for the Agency AI Toolkit, using an in-process cosine-similarity UDF. Zero-server embedded vector search, ideal for local agents and tests.</Description>
+    <PackageTags>agency.net;ai;vector-store;sqlite;cosine;embedded;rag;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
     <ProjectReference Include="..\..\Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />

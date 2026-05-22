@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Zero-dependency shared types for the Agency AI Toolkit: Dataset and IColumnMetadata used across SQL runners, the RAG formatter, and downstream LLM consumers.</Description>
+    <PackageTags>agency.net;ai;rag;dataset;dotnet;abstractions</PackageTags>
   </PropertyGroup>
 
 </Project>

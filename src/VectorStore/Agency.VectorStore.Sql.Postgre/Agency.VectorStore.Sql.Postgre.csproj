@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>PostgreSQL + pgvector IVectorStore implementation for the Agency AI Toolkit, using HNSW indexes for fast approximate nearest-neighbour search at scale.</Description>
+    <PackageTags>agency.net;ai;vector-store;postgresql;pgvector;hnsw;rag;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

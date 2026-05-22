@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>OpenAI IModelProvider implementation for the Agency AI Toolkit, built on the official .NET OpenAI SDK with full OpenTelemetry traces and token-usage metrics. Works with Azure OpenAI and OpenAI-compatible endpoints such as LM Studio.</Description>
+    <PackageTags>agency.net;ai;llm;openai;azure-openai;lm-studio;otel;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

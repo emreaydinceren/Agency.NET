@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>OpenAI-compatible IEmbeddingGenerator implementation with full OpenTelemetry instrumentation. Works with OpenAI, Azure OpenAI, and OpenAI-compatible endpoints such as LM Studio.</Description>
+    <PackageTags>agency.net;ai;embeddings;openai;azure-openai;lm-studio;otel;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

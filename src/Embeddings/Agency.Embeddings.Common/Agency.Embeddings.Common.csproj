@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>IEmbeddingGenerator interface and shared embedding abstractions for the Agency AI Toolkit. Implementation-agnostic contract consumed by vector stores, SQL runners, and ingestion pipelines.</Description>
+    <PackageTags>agency.net;ai;embeddings;abstractions;vector;dotnet</PackageTags>
   </PropertyGroup>
 
 </Project>

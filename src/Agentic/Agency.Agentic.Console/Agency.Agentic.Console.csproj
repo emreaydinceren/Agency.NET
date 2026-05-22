@@ -3,6 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UserSecretsId>agency-agentic-console</UserSecretsId>
+    <Description>Multi-turn interactive REPL chat harness built on Agency.Agentic. Drop-in console host for testing agent prompts, tools, and stop conditions without writing a UI.</Description>
+    <PackageTags>agency.net;ai;agent;repl;console;chat;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

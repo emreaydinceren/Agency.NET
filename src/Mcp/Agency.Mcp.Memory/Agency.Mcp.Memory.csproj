@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <Description>Stdio Model Context Protocol server exposing Memorize, Recall, and Forget tools backed by any Agency IKVStore. Gives MCP-capable agents persistent memory across sessions.</Description>
+    <PackageTags>agency.net;ai;mcp;model-context-protocol;memory;agent;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

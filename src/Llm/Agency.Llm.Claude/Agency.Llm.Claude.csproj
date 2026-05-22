@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Anthropic Claude IModelProvider implementation for the Agency AI Toolkit, built on the Stainless Anthropic SDK with full OpenTelemetry traces and token-usage metrics.</Description>
+    <PackageTags>agency.net;ai;llm;claude;anthropic;otel;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

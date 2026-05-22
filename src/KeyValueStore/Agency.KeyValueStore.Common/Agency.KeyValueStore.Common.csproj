@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>IKVStore, Query, SearchHit&lt;T&gt;, and JSON metadata helpers for the Agency AI Toolkit. Provider-agnostic key-value contract used as the metadata layer alongside vector search.</Description>
+    <PackageTags>agency.net;ai;key-value;kv-store;metadata;abstractions;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\Agency.Common\Agency.Common.csproj" />
   </ItemGroup>

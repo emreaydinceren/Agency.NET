@@ -4,6 +4,8 @@
     <!-- TextChunker is marked experimental in Microsoft.SemanticKernel.Core (SKEXP0050).
          This is intentional — the spec requires TextChunker specifically. -->
     <NoWarn>$(NoWarn);SKEXP0050</NoWarn>
+    <Description>Semantic Kernel TextChunker-based text splitter for the Agency ingestion pipeline. Token-aware chunking with configurable overlap suitable for embedding-and-retrieval workflows.</Description>
+    <PackageTags>agency.net;ai;ingestion;chunking;semantic-kernel;rag;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

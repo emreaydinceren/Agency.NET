@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <Description>File and directory loaders for the Agency ingestion pipeline. Walks the filesystem and yields documents ready for chunking, embedding, and storage.</Description>
+    <PackageTags>agency.net;ai;ingestion;filesystem;rag;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Agency.Ingestion.Test" />
   </ItemGroup>

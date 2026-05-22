@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>PostgreSQL backend for Agency.KeyValueStore.Common with JSONB-based metadata filtering. Pairs with Agency.VectorStore.Sql.Postgre to give documents both vector and structured-attribute search.</Description>
+    <PackageTags>agency.net;ai;key-value;postgresql;jsonb;metadata;rag;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\Sql\Agency.Sql.Postgres\Agency.Sql.Postgres.csproj" />
     <ProjectReference Include="..\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />

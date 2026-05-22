@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SQLite backend for Agency.KeyValueStore.Common with JSON1 metadata filtering. Zero-server embedded key-value store, ideal for local agents and tests.</Description>
+    <PackageTags>agency.net;ai;key-value;sqlite;metadata;embedded;rag;dotnet</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
     <ProjectReference Include="..\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />

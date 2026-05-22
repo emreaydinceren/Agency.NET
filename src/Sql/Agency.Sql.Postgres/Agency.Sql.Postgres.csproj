@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>PostgreSQL raw-SQL runner for the Agency AI Toolkit with a built-in vectorize() macro that inlines pgvector literals from natural-language strings via IEmbeddingGenerator.</Description>
+    <PackageTags>agency.net;ai;sql;postgresql;pgvector;rag;otel;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

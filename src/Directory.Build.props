@@ -36,11 +36,13 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedAllSources>true</EmbedAllSources>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
     <None Include="$(MSBuildThisFileDirectory)..\THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
+    <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <!-- Test project defaults -->

@@ -39,7 +39,7 @@
   </PropertyGroup>
 
   <ItemGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
-    <None Include="THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\THIRD-PARTY-NOTICES.TXT" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
   </ItemGroup>
 

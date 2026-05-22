@@ -109,22 +109,37 @@ internal sealed class ConsoleChatSession
         {
             this.WriteHeader();
 
-            using var sessionCts = new CancellationTokenSource();
+            this._chatSession = new(this._agent, this._options, this.toolContext);
+
+            bool shouldExitSession = false;
+            CancellationTokenSource? turnCts = null;
+
             System.Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
-                sessionCts.Cancel();
+                if (turnCts is { IsCancellationRequested: false })
+                {
+                    turnCts.Cancel();
+                }
+                else
+                {
+                    shouldExitSession = true;
+                }
             };
-
-            this._chatSession = new(this._agent, this._options, this.toolContext);
 
             // ── REPL loop ─────────────────────────────────────────────────────────────────
 
             while (true)
             {
-                var input = initialInput ?? await this._inputReader.ReadLineAsync(PromptMarkup, sessionCts.Token);
+                if (shouldExitSession)
+                {
+                    break;
+                }
 
-                if (input is null || sessionCts.IsCancellationRequested)
+                turnCts = new CancellationTokenSource();
+                var input = initialInput ?? await this._inputReader.ReadLineAsync(PromptMarkup, turnCts.Token);
+
+                if (input is null)
                 {
                     break;
                 }
@@ -173,12 +188,13 @@ internal sealed class ConsoleChatSession
                 long prevOut = this._chatSession.TotalUsage.OutputTokens;
 
                 bool interrupted = false;
+                TimeSpan lastLlmDuration = TimeSpan.Zero;
 
                 try
                 {
                     this.output.StartSpinner();
 
-                    await foreach (AgentEvent evt in this._chatSession.SendAsync(input, sessionCts.Token))
+                    await foreach (AgentEvent evt in this._chatSession.SendAsync(input, turnCts.Token))
                     {
                         switch (evt)
                         {
@@ -201,25 +217,36 @@ internal sealed class ConsoleChatSession
                             }
                             break;
 
+                            case IterationCompletedEvent iteration:
+                            lastLlmDuration = iteration.LlmDuration;
+                            break;
+
                             case AgentResultEvent result:
                             // This is the final event of the turn, showing the overall result and token usage for the turn.
 
                             long deltaIn = this._chatSession.TotalUsage.InputTokens - prevIn;
                             long deltaOut = this._chatSession.TotalUsage.OutputTokens - prevOut;
+                            long totalDelta = deltaIn + deltaOut;
+
+                            string throughput = lastLlmDuration.TotalSeconds > 0
+                                ? $"  {(totalDelta / lastLlmDuration.TotalSeconds):F1} tok/s"
+                                : string.Empty;
+
                             this.output.WriteLine("gray",
-                                $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out  [{result.Status}]");
+                                $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out{throughput}  [{result.Status}]");
                             if (result.Status == AgentResultStatus.Error && result.FinalText is { } errorText)
                             {
                                 this.output.WriteLine("red", $"  {errorText}");
                             }
                             break;
 
-                            // SessionStartedEvent, IterationCompletedEvent: intentionally suppressed.
+                            // SessionStartedEvent: intentionally suppressed.
                         }
                     }
                 }
                 catch (OperationCanceledException)
                 {
+                    this.output.StopSpinner();
                     this.output.WriteLine("yellow", "  [interrupted]");
                     interrupted = true;
                 }
@@ -229,14 +256,7 @@ internal sealed class ConsoleChatSession
                     chatTurns++;
                 }
 
-                // If the session CTS was triggered (not just the turn), break the REPL.
-                if (sessionCts.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                // Ctrl+C re-armed: sessionCts remains valid, so subsequent turns still work
-                // until the user presses Ctrl+C again or types "exit".
+                turnCts.Dispose();
             }
 
             this.output.WriteLine();

@@ -14,12 +14,10 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="System.Security.Cryptography.Xml" />
 
   </ItemGroup>
 
@@ -31,16 +29,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Agency.Agentic\Agency.Agentic.csproj" />
-    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
-    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
-    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion.FileSystem\Agency.Ingestion.FileSystem.csproj" />
-    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion\Agency.Ingestion.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
-    <ProjectReference Include="..\..\Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
-    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" />
-    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Sqlite\Agency.VectorStore.Sql.Sqlite.csproj" />
   </ItemGroup>
 
   <ItemGroup>

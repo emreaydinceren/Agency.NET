@@ -7,19 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Agency.Common\Agency.Common.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.AI" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.PowerShell.SDK" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
   <ItemGroup>

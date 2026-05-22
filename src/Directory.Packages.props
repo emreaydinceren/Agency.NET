@@ -15,7 +15,6 @@
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
@@ -26,7 +25,6 @@
     <PackageVersion Include="OpenAI" Version="2.10.0" />
     <PackageVersion Include="pgvector" Version="0.3.2" />
     <PackageVersion Include="Spectre.Console" Version="0.55.2" />
-    <PackageVersion Include="Spectre.Console.Cli" Version="0.55.0" />
     <PackageVersion Include="OpenTelemetry" Version="1.15.3" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
@@ -35,19 +33,5 @@
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.8" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="FluentMigrator" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Db2" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Firebird" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Hana" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Oracle" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Redshift" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.Snowflake" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.SqlServer" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.MySql" Version="8.0.1" />
-    <PackageVersion Include="FluentMigrator.Runner.SQLite" Version="8.0.1" />
-    <PackageVersion Include="sqlite-vec" Version="0.1.7-alpha.2.1" />
-    <PackageVersion Include="Tomlyn" Version="2.3.2" />
   </ItemGroup>
 </Project>

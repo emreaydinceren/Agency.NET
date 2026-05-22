@@ -13,8 +13,6 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Moq" />
-    <PackageReference Include="Npgsql" />
-    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Agency.Common\Agency.Common.csproj" />

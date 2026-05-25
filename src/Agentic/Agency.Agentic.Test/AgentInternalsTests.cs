@@ -1,8 +1,8 @@
-namespace Agency.Agentic.Test;
 
 using System.Text.Json;
 using Agency.Agentic.Contexts;
 
+namespace Agency.Agentic.Test;
 /// <summary>
 /// Unit tests for <see langword="internal"/> helpers exposed via
 /// <c>[InternalsVisibleTo("Agency.Agentic.Test")]</c>.

@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using Agency.Agentic.Contexts;
 using Agency.Agentic.Hooks;
 using Agency.Agentic.Test.Fakes;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies OnAssistantTurn hook fires after each LLM response.</summary>
 public sealed class AgentAssistantTurnHookTests
 {

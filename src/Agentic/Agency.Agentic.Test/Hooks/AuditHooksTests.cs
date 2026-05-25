@@ -1,10 +1,10 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using System.Text.Json;
 using Agency.Agentic.Contexts;
 using Agency.Agentic.Hooks;
 using Microsoft.Extensions.Logging;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies AuditHooks.ForLogger logs pre/post tool use at Information level.</summary>
 public sealed class AuditHooksTests
 {

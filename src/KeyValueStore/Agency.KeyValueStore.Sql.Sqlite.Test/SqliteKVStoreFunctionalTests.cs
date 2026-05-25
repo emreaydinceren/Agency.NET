@@ -1,4 +1,3 @@
-namespace Agency.KeyValueStore.Sql.Sqlite.Test;
 
 using Agency.KeyValueStore.Common;
 using Agency.Sql.Sqlite;
@@ -6,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Moq;
 
+namespace Agency.KeyValueStore.Sql.Sqlite.Test;
 /// <summary>
 /// Integration tests for <see cref="SqliteKVStore"/> against an in-memory SQLite database.
 /// No external infrastructure is required — the database lives entirely in process.

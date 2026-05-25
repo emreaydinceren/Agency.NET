@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Console.Telemetry;
 
 using System.Diagnostics;
 using System.Text;
 using OpenTelemetry;
 
+namespace Agency.Agentic.Console.Telemetry;
 /// <summary>
 /// Exports completed <see cref="Activity"/> spans to a daily-rolling text file.
 /// Each span is written as one line containing trace identifiers, timing, status, and tags.

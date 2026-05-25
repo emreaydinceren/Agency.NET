@@ -1,8 +1,8 @@
-namespace Agency.Agentic.Console;
 
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
+namespace Agency.Agentic.Console;
 internal sealed class ConsoleOutput : IChatOutput
 {
     public void WriteLineMarkdown(string text)

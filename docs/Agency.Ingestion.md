@@ -159,7 +159,7 @@ Activity `ingestion.execute` carries tags `ingestion.succeeded` and `ingestion.f
 | [[Agency.Ingestion.FileSystem]] | Provides `IDocumentLoader` implementations for ingestion sources |
 | [[Agency.Ingestion.SemanticKernel]] | Provides `ITextSplitter` implementations used by the pipeline |
 | [[Agency.VectorStore.Common]] | `DefaultIngestionPipeline` calls `IVectorStore.UpsertAsync` |
-| [[Agency.VectorStore.Sql.Postgre]] | Typical production store backend |
+| [[Agency.VectorStore.Sql.Postgres]] | Typical production store backend |
 | [[Agency.VectorStore.Sql.Sqlite]] | Typical dev/test store backend |
 
 ## Design Notes

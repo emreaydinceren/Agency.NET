@@ -1,32 +1,33 @@
-# Agency.KeyValueStore.Sql.Postgre
+# Agency.KeyValueStore.Sql.Postgres
 
 #keyvaluestore #postgresql #jsonb #observability
 
 ## What It Is
 
-Agency.KeyValueStore.Sql.Postgre is the PostgreSQL-backed implementation of [[Agency.KeyValueStore.Common]]'s `IKVStore` that stores, retrieves, and deletes typed key-value entries with optional JSONB metadata in a `kv_store` table scoped by `user_id` and `session_id`.
+Agency.KeyValueStore.Sql.Postgres is the PostgreSQL-backed implementation of [[Agency.KeyValueStore.Common]]'s `IKVStore` that stores, retrieves, and deletes typed key-value entries with optional JSONB metadata in a `kv_store` table scoped by `user_id` and `session_id`.
 
-**Namespace:** `Agency.KeyValueStore.Sql.Postgre`
+**Namespace:** `Agency.KeyValueStore.Sql.Postgres`
 
 ## Prerequisites
 
-- A running PostgreSQL instance accessible via a configured [[Agency.Sql.Postgre]] `PostgreSqlRunner`
+- A running PostgreSQL instance accessible via a configured [[Agency.Sql.Postgres]] `PostgreSqlRunner`
 - `InitializeSchemaAsync` must be called once before first use to create the `kv_store` table and its GIN index
 
 ## API Surface
 
 ```csharp
-// File: src/KeyValueStore/Agency.KeyValueStore.Sql.Postgre/PostgreKVStore.cs
+// File: src/KeyValueStore/Agency.KeyValueStore.Sql.Postgres/PostgresKVStore.cs
 using Agency.KeyValueStore.Common;
-using Agency.Sql.Postgre;
+using Agency.KeyValueStore.Sql.Postgres;
+using Agency.Sql.Postgres;
 using Microsoft.Extensions.Logging;
 
-public class PostgreKVStore : IKVStore
+public class PostgresKVStore : IKVStore
 {
-    public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Postgre";
-    public const string MeterName = "Agency.KeyValueStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Postgres";
+    public const string MeterName = "Agency.KeyValueStore.Sql.Postgres";
 
-    public PostgreKVStore(PostgreSqlRunner postgreSqlRunner, ILogger<PostgreKVStore> logger);
+    public PostgresKVStore(PostgreSqlRunner postgreSqlRunner, ILogger<PostgresKVStore> logger);
 
     // Creates the kv_store table and GIN index on metadata if not already present.
     // Drops legacy table shapes that lack the user_id column.
@@ -75,13 +76,13 @@ public class PostgreKVStore : IKVStore
 
 ```csharp
 using Agency.KeyValueStore.Common;
-using Agency.KeyValueStore.Sql.Postgre;
-using Agency.Sql.Postgre;
+using Agency.KeyValueStore.Sql.Postgres;
+using Agency.Sql.Postgres;
 using Microsoft.Extensions.Logging.Abstractions;
 
 // Construction
 var runner = new PostgreSqlRunner(connectionString);
-var store = new PostgreKVStore(runner, NullLogger<PostgreKVStore>.Instance);
+var store = new PostgresKVStore(runner, NullLogger<PostgresKVStore>.Instance);
 
 // One-time schema setup
 await store.InitializeSchemaAsync();
@@ -113,10 +114,10 @@ IReadOnlyList<SearchHit> metaHits = await store.GetMetadataAsync("user-42", sess
 
 ## Observability
 
-`PostgreKVStore` emits OpenTelemetry traces and metrics for every operation:
+`PostgresKVStore` emits OpenTelemetry traces and metrics for every operation:
 
-- **ActivitySource:** `Agency.KeyValueStore.Sql.Postgre`
-- **Meter:** `Agency.KeyValueStore.Sql.Postgre`
+- **ActivitySource:** `Agency.KeyValueStore.Sql.Postgres`
+- **Meter:** `Agency.KeyValueStore.Sql.Postgres`
 - **Counter:** `kvstore.operations` — tags: `operation`, `status` (`success` / `error`)
 - **Histogram:** `kvstore.duration` (ms) — tag: `operation`
 
@@ -127,7 +128,7 @@ Operations instrumented: `kvstore.initialize`, `kvstore.upsert`, `kvstore.search
 | Project | Relationship |
 |---|---|
 | [[Agency.KeyValueStore.Common]] | Defines `IKVStore`, `Query`, `SearchHit`, and `SearchHit<TValue>` — the contracts this project implements |
-| [[Agency.Sql.Postgre]] | Supplies `PostgreSqlRunner`, which executes all DDL and DML issued by `PostgreKVStore` |
+| [[Agency.Sql.Postgres]] | Supplies `PostgreSqlRunner`, which executes all DDL and DML issued by `PostgresKVStore` |
 | [[Agency.KeyValueStore.Sql.Sqlite]] | Sibling SQLite implementation of the same `IKVStore` contract |
 
 ## Design Notes

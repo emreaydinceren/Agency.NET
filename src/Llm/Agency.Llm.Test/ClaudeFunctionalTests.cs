@@ -1,4 +1,3 @@
-namespace Agency.Llm.Test;
 
 using Agency.Llm.Claude;
 using Agency.Llm.Common;
@@ -6,6 +5,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
+namespace Agency.Llm.Test;
 /// <summary>
 /// Functional tests for <see cref="Agency.Llm.Claude.ClaudeClient"/> exercised via
 /// <see cref="IChatClient"/>. Run with: <c>dotnet test --filter "Category=Functional"</c>.

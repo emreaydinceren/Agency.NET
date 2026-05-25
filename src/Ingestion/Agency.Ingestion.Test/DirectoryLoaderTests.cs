@@ -1,7 +1,7 @@
-namespace Agency.Ingestion.Test;
 
 using Agency.Ingestion.FileSystem;
 
+namespace Agency.Ingestion.Test;
 /// <summary>
 /// DirectoryLoader recursively walks a directory and streams each matching file
 /// as a Document. Tests use a real temporary directory (created in the constructor,

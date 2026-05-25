@@ -1,7 +1,7 @@
-namespace Agency.Ingestion.SemanticKernel;
 
 using Microsoft.SemanticKernel.Text;
 
+namespace Agency.Ingestion.SemanticKernel;
 /// <summary>
 /// Splits documents into chunks using <see cref="TextChunker"/> from Microsoft.SemanticKernel.
 /// </summary>

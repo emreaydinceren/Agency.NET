@@ -1,8 +1,8 @@
-namespace Agency.Ingestion.Test;
 
 using Agency.Ingestion.SemanticKernel;
 using Microsoft.SemanticKernel.Text;
 
+namespace Agency.Ingestion.Test;
 /// <summary>
 /// SemanticKernelTextSplitter wraps TextChunker from Microsoft.SemanticKernel.Core
 /// to break large documents into token-bounded chunks. Tests verify:

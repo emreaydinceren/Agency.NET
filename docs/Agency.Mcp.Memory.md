@@ -101,7 +101,7 @@ namespace Agency.Mcp.Memory;
 
 public static class MemoryServiceCollectionExtensions
 {
-    // Registers PostgreKVStore, SqliteKVStore, IKVStore selector, and MemorySchemaInitializer.
+  // Registers PostgresKVStore, SqliteKVStore, IKVStore selector, and MemorySchemaInitializer.
     // Throws InvalidOperationException for unsupported provider values.
     public static IServiceCollection AddKVStore(this IServiceCollection services);
 }
@@ -163,7 +163,7 @@ For PostgreSQL:
 ## How It Works
 
 1. On startup, `Program` sets both `Console.OutputEncoding` and `Console.InputEncoding` to UTF-8, then builds a .NET Generic Host, binds `MemoryOptions` from the `"Memory"` config section, and registers the MCP stdio transport with `WithToolsFromAssembly()`.
-2. `AddKVStore()` registers both `PostgreKVStore` and `SqliteKVStore` as singletons, then resolves `IKVStore` by switching on `MemoryOptions.Provider`. An unsupported provider value throws `InvalidOperationException` at resolution time.
+2. `AddKVStore()` registers both `PostgresKVStore` and `SqliteKVStore` as singletons, then resolves `IKVStore` by switching on `MemoryOptions.Provider`. An unsupported provider value throws `InvalidOperationException` at resolution time.
 3. `MemorySchemaInitializer` (an `internal sealed` hosted service) calls `SqliteKVStore.InitializeSchemaAsync()` inside `StartAsync` when the provider is `sqlite`; PostgreSQL requires a pre-existing schema and is skipped.
 4. The MCP framework discovers `MemoryTool` via `[McpServerToolType]` and exposes its four `[McpServerTool]` methods over stdio.
 5. All memory entries are stored in `IKVStore` under a composite key `{domain}|{key}`, with a metadata dictionary carrying `domain`, `key`, and optional `tags`. Scope partitioning (`UserId` + `SessionId`) is enforced by the KV store.
@@ -217,9 +217,9 @@ This project does not define a custom `ActivitySource` or `Meter`. All diagnosti
 | Project | Relationship |
 |---|---|
 | [[Agency.KeyValueStore.Common]] | `MemoryTool` depends on `IKVStore` (`UpsertAsync`, `SearchAsync`, `DeleteAsync`, `GetMetadataAsync`) and the `Query`, `SearchHit`, and `SearchHit<T>` types |
-| [[Agency.KeyValueStore.Sql.Postgre]] | Provides `PostgreKVStore` when `Provider = "postgres"` |
+| [[Agency.KeyValueStore.Sql.Postgres]] | Provides `PostgresKVStore` when `Provider = "postgres"` |
 | [[Agency.KeyValueStore.Sql.Sqlite]] | Provides `SqliteKVStore` when `Provider = "sqlite"`; schema is auto-initialized on startup |
-| [[Agency.Sql.Postgres]] | Provides `PostgreSqlRunner` used to construct `PostgreKVStore` |
+| [[Agency.Sql.Postgres]] | Provides `PostgreSqlRunner` used to construct `PostgresKVStore` |
 | [[Agency.Sql.Sqlite]] | Provides `SqliteRunner` used to construct `SqliteKVStore` |
 
 ## Design Notes

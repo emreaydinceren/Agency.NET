@@ -1,4 +1,3 @@
-namespace Agency.KeyValueStore.Sql.Sqlite;
 
 using Agency.KeyValueStore.Common;
 using Agency.Sql.Sqlite;
@@ -11,6 +10,7 @@ using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Text.Json;
 
+namespace Agency.KeyValueStore.Sql.Sqlite;
 /// <summary>
 /// An <see cref="IKVStore"/> backed by SQLite that stores key/value entries in a plain TEXT column and supports
 /// substring-based value filtering via the SQLite <c> instr</c> function. Metadata filtering is applied in-process

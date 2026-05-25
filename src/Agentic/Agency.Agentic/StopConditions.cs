@@ -1,7 +1,7 @@
-namespace Agency.Agentic;
 
 using Agency.Agentic.Contexts;
 
+namespace Agency.Agentic;
 /// <summary>
 /// A predicate evaluated after each assistant turn to decide whether the loop should halt.
 /// </summary>

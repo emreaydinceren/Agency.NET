@@ -1,4 +1,3 @@
-namespace Agency.Agentic.Test.Functional;
 
 using Agency.Agentic.Contexts;
 using Agency.Llm.Common;
@@ -6,6 +5,7 @@ using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
+namespace Agency.Agentic.Test.Functional;
 /// <summary>
 /// End-to-end functional tests for the <see cref="Agent"/> loop using
 /// <see cref="Agency.Llm.OpenAI.OpenAIClient"/> as the LLM backend.

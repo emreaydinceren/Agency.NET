@@ -1,5 +1,5 @@
 using Agency.KeyValueStore.Common;
-using Agency.KeyValueStore.Sql.Postgre;
+using Agency.KeyValueStore.Sql.Postgres;
 using Agency.KeyValueStore.Sql.Sqlite;
 using Agency.Sql.Postgres;
 using Agency.Sql.Sqlite;
@@ -19,11 +19,11 @@ public static class MemoryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddKVStore(this IServiceCollection services)
     {
-        services.AddSingleton<PostgreKVStore>(sp =>
+        services.AddSingleton<PostgresKVStore>(sp =>
         {
             var opts = sp.GetRequiredService<IOptions<MemoryOptions>>().Value;
             var runner = ActivatorUtilities.CreateInstance<PostgreSqlRunner>(sp, opts.ConnectionString);
-            return ActivatorUtilities.CreateInstance<PostgreKVStore>(sp, runner);
+            return ActivatorUtilities.CreateInstance<PostgresKVStore>(sp, runner);
         });
 
         services.AddSingleton<SqliteKVStore>(sp =>
@@ -38,7 +38,7 @@ public static class MemoryServiceCollectionExtensions
             var opts = sp.GetRequiredService<IOptions<MemoryOptions>>().Value;
             return opts.Provider.ToLowerInvariant() switch
             {
-                "postgres" => sp.GetRequiredService<PostgreKVStore>(),
+                "postgres" => sp.GetRequiredService<PostgresKVStore>(),
                 "sqlite" => sp.GetRequiredService<SqliteKVStore>(),
                 _ => throw new InvalidOperationException($"Unsupported provider: {opts.Provider}")
             };

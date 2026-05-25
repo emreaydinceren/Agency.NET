@@ -1,4 +1,3 @@
-namespace Agency.Agentic.Console.Telemetry;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +11,7 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Extensions.Logging;
 
+namespace Agency.Agentic.Console.Telemetry;
 /// <summary>
 /// Extension methods for registering OpenTelemetry file exporters and Serilog structured
 /// logging into an <see cref="IServiceCollection"/> without a Generic Host.

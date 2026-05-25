@@ -1,18 +1,18 @@
-# Agency.KeyValueStore.Sql.Postgre
+# Agency.KeyValueStore.Sql.Postgres
 
 PostgreSQL implementation of `IKVStore` for the Agency AI Toolkit. Uses `ILIKE` for substring key search — no vector extension required.
 
 ## Install
 
 ```
-dotnet add package Agency.KeyValueStore.Sql.Postgre
+dotnet add package Agency.KeyValueStore.Sql.Postgres
 ```
 
 ## Usage
 
 ```csharp
 services.AddScoped<IKVStore>(sp =>
-    new PostgreKVStore(config.GetConnectionString("Default")!));
+    new PostgresKVStore(config.GetConnectionString("Default")!));
 
 // Store and retrieve
 await kvStore.UpsertAsync(key: "memory:session:abc", value: myObject, metadata: tags);

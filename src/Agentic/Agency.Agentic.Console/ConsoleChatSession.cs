@@ -1,4 +1,3 @@
-namespace Agency.Agentic.Console;
 
 using Agency.Agentic;
 using Agency.Agentic.Console.Commands;
@@ -12,6 +11,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
 
+namespace Agency.Agentic.Console;
 internal sealed class ConsoleChatSession
 {
     private const string PromptMarkup= "[blue]❯ [/]";

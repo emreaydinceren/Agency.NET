@@ -1,5 +1,4 @@
-﻿namespace Agency.VectorStore.Sql.Postgre;
-
+﻿
 using Agency.Embeddings.Common;
 using Agency.Sql.Postgres;
 using Agency.VectorStore.Common;
@@ -14,17 +13,18 @@ using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Text.Json;
 
-public class PostgreKVStore : IVectorStore
+namespace Agency.VectorStore.Sql.Postgres;
+public class PostgresKVStore : IVectorStore
 {
     /// <summary>
     /// The activity source name used for vector store telemetry.
     /// </summary>
-    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgres";
 
     /// <summary>
     /// The meter name used for vector store telemetry.
     /// </summary>
-    public const string MeterName = "Agency.VectorStore.Sql.Postgre";
+    public const string MeterName = "Agency.VectorStore.Sql.Postgres";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);
@@ -35,7 +35,7 @@ public class PostgreKVStore : IVectorStore
     private static readonly Histogram<double> _operationDuration =
         _meter.CreateHistogram<double>("vectorstore.duration", unit: "ms", description: "Duration of vector store operations in milliseconds.");
 
-    private readonly ILogger<PostgreKVStore> _logger;
+    private readonly ILogger<PostgresKVStore> _logger;
 
     private readonly IEmbeddingGenerator _embeddingGenerator;
 
@@ -45,14 +45,14 @@ public class PostgreKVStore : IVectorStore
 
     private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
 
-    public PostgreKVStore(
+    public PostgresKVStore(
         IEmbeddingGenerator embeddingGenerator,
         PostgreSqlRunner postgreSqlRunner,
-        ILogger<PostgreKVStore> logger)
+        ILogger<PostgresKVStore> logger)
     {
         this._embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
         this._postgreSqlRunner = postgreSqlRunner ?? throw new ArgumentNullException(nameof(postgreSqlRunner));
-        this._logger = logger ?? NullLogger<PostgreKVStore>.Instance;
+        this._logger = logger ?? NullLogger<PostgresKVStore>.Instance;
     }
 
     /// <summary>

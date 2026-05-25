@@ -1,4 +1,3 @@
-namespace Agency.VectorStore.Sql.Sqlite;
 
 using Agency.Embeddings.Common;
 using Agency.Sql.Sqlite;
@@ -12,6 +11,7 @@ using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Text.Json;
 
+namespace Agency.VectorStore.Sql.Sqlite;
 /// <summary>
 /// An <see cref="IVectorStore"/> backed by SQLite that stores embeddings as JSON-array TEXT columns
 /// and uses a cosine-distance UDF registered via <see cref="RegisterVectorFunctions"/> for similarity search.

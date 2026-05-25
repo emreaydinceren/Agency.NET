@@ -1,8 +1,8 @@
-namespace Agency.Agentic.Console;
 
 using Spectre.Console;
 using System.Text.RegularExpressions;
 
+namespace Agency.Agentic.Console;
 /// <summary>Renders markdown text to the console using Spectre.Console markup.</summary>
 internal static class MarkdownRenderer
 {

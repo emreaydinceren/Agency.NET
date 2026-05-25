@@ -1,8 +1,8 @@
-namespace Agency.Agentic;
 
 using Agency.Agentic.Contexts;
 using System.Runtime.CompilerServices;
 
+namespace Agency.Agentic;
 /// <summary>
 /// Maintains the stateful context for a multi-turn conversation and provides a simple
 /// <see cref="SendAsync"/> surface that any host — console REPL, ASP.NET Core endpoint,

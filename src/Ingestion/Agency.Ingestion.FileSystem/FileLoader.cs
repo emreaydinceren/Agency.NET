@@ -1,7 +1,7 @@
-namespace Agency.Ingestion.FileSystem;
 
 using System.Runtime.CompilerServices;
 
+namespace Agency.Ingestion.FileSystem;
 /// <summary>
 /// Loads a single file as a <see cref="Document"/>.
 /// </summary>

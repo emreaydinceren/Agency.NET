@@ -1,10 +1,10 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using System.Text.Json;
 using Agency.Agentic.Contexts;
 using Agency.Agentic.Hooks;
 using Agency.Agentic.Test.Fakes;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies OnPreToolUse and OnPostToolUse hook behaviour.</summary>
 public sealed class AgentToolHookTests
 {

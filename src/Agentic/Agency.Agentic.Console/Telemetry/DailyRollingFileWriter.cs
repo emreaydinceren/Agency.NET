@@ -1,8 +1,8 @@
-namespace Agency.Agentic.Console.Telemetry;
 
 using System.Diagnostics;
 using System.Text;
 
+namespace Agency.Agentic.Console.Telemetry;
 /// <summary>
 /// Thread-safe writer that appends lines to a date-stamped log file and rolls to a new file at midnight (UTC).
 /// </summary>

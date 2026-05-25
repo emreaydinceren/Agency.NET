@@ -1,7 +1,7 @@
-namespace Agency.Ingestion;
 
 using Agency.VectorStore.Common;
 
+namespace Agency.Ingestion;
 /// <summary>
 /// Orchestrates the full load → split → store ingestion flow.
 /// </summary>

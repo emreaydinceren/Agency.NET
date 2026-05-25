@@ -1,7 +1,7 @@
-namespace Agency.VectorStore.Common;
 
 using System.Text.Json;
 
+namespace Agency.VectorStore.Common;
 /// <summary>
 /// Shared helpers for deserializing JSON metadata stored in vector store rows.
 /// </summary>

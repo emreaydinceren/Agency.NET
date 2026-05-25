@@ -1,8 +1,8 @@
-namespace Agency.Agentic.Console;
 
 using Spectre.Console;
 using System.Text;
 
+namespace Agency.Agentic.Console;
 internal class ConsolePickerRow(params string[] values)
 {
     public string[] Values { get; } = values;

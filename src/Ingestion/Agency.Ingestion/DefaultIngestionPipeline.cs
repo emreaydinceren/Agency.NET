@@ -1,4 +1,3 @@
-namespace Agency.Ingestion;
 
 using Agency.VectorStore.Common;
 using Microsoft.Extensions.Logging;
@@ -7,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
+namespace Agency.Ingestion;
 /// <summary>
 /// Default orchestration of the load → split → store ingestion pipeline.
 /// </summary>

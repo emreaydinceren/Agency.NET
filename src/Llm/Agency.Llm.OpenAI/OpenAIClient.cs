@@ -1,4 +1,3 @@
-namespace Agency.Llm.OpenAI;
 
 using Agency.Llm.Common;
 using global::OpenAI;
@@ -9,6 +8,7 @@ using Microsoft.Extensions.Options;
 using System.ClientModel;
 using System.ClientModel.Primitives;
 
+namespace Agency.Llm.OpenAI;
 /// <summary>
 /// Creates <see cref="IChatClient"/> instances backed by an OpenAI-compatible API.
 /// Also implements <see cref="IModelProvider"/> so callers can enumerate available models.

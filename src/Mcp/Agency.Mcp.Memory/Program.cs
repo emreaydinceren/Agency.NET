@@ -1,4 +1,4 @@
-using Agency.KeyValueStore.Sql.Postgre;
+using Agency.KeyValueStore.Sql.Postgres;
 using Agency.KeyValueStore.Sql.Sqlite;
 using Agency.Sql.Postgres;
 using Agency.Sql.Sqlite;

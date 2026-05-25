@@ -1,7 +1,7 @@
-namespace Agency.Ingestion.Test;
 
 using Agency.Ingestion.FileSystem;
 
+namespace Agency.Ingestion.Test;
 /// <summary>
 /// FileLoader turns a single file path into an <see cref="IAsyncEnumerable{T}"/> of Document.
 /// The internal BuildDocument helper is tested directly (via InternalsVisibleTo)

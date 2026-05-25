@@ -41,7 +41,7 @@ If you've ever wanted a readable reference implementation of a RAG + agent stack
 dotnet add package Agency.Agentic
 dotnet add package Agency.Llm.Claude              # or Agency.Llm.OpenAI
 dotnet add package Agency.Embeddings.OpenAI
-dotnet add package Agency.VectorStore.Sql.Sqlite  # or .Postgre
+dotnet add package Agency.VectorStore.Sql.Sqlite  # or .Postgres
 dotnet add package Agency.Ingestion.SemanticKernel
 ```
 
@@ -109,11 +109,11 @@ Documents
           │
           ▼
    Agency.VectorStore.Common          (IVectorStore)
-   Agency.VectorStore.Sql.Postgre     (pgvector / HNSW)
+   Agency.VectorStore.Sql.Postgres     (pgvector / HNSW)
    Agency.VectorStore.Sql.Sqlite      (SQLite + cosine UDF)
           │
    Agency.KeyValueStore.Common        (IKVStore)
-   Agency.KeyValueStore.Sql.Postgre
+       Agency.KeyValueStore.Sql.Postgres
    Agency.KeyValueStore.Sql.Sqlite
           │
           ▼
@@ -144,10 +144,10 @@ Documents
 | `Agency.Embeddings.Common` | `IEmbeddingGenerator` interface |
 | `Agency.Embeddings.OpenAI` | OpenAI-compatible embedding generator |
 | `Agency.VectorStore.Common` | `IVectorStore`, `Query`, `SearchHit<T>` |
-| `Agency.VectorStore.Sql.Postgre` | pgvector + HNSW backend |
+| `Agency.VectorStore.Sql.Postgres` | pgvector + HNSW backend |
 | `Agency.VectorStore.Sql.Sqlite` | SQLite + in-process cosine UDF |
 | `Agency.KeyValueStore.Common` | `IKVStore`, JSON metadata helpers |
-| `Agency.KeyValueStore.Sql.Postgre` | PostgreSQL KV backend |
+| `Agency.KeyValueStore.Sql.Postgres` | PostgreSQL KV backend |
 | `Agency.KeyValueStore.Sql.Sqlite` | SQLite KV backend |
 | `Agency.Sql.Common` | `SqlRunnerBase`: OTel + execution skeleton |
 | `Agency.Sql.Postgres` | PostgreSQL runner + `vectorize()` macro |

@@ -1,11 +1,11 @@
-# Agency.Sql.Postgre
+# Agency.Sql.Postgres
 
 PostgreSQL SQL runner for the Agency AI Toolkit.
 
 ## Install
 
 ```
-dotnet add package Agency.Sql.Postgre
+dotnet add package Agency.Sql.Postgres
 ```
 
 ## Configuration

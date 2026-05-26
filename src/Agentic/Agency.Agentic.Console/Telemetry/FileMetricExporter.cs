@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Console.Telemetry;
 
 using System.Diagnostics;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 
+namespace Agency.Agentic.Console.Telemetry;
 /// <summary>
 /// Exports metric snapshots to a daily-rolling text file.
 /// Each export cycle appends a timestamped block listing every metric with its current value and tags.

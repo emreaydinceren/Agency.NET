@@ -16,7 +16,7 @@ dotnet add package Agency.Sql.Common
 
 Use a concrete implementation:
 
-- [`Agency.Sql.Postgre`](https://www.nuget.org/packages/Agency.Sql.Postgre) — PostgreSQL
+- [`Agency.Sql.Postgres`](https://www.nuget.org/packages/Agency.Sql.Postgres) — PostgreSQL
 - [`Agency.Sql.Sqlite`](https://www.nuget.org/packages/Agency.Sql.Sqlite) — SQLite
 
 Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.

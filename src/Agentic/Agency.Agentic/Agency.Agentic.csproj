@@ -4,9 +4,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Description>Autonomous agent loop for the Agency AI Toolkit: Context, StopConditions, and AgentEvent primitives for driving multi-turn tool-using agents over any IModelProvider.</Description>
-    <PackageTags>agency.net;ai;agent;agentic;tool-use;dotnet</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Messages\**" />
+    <EmbeddedResource Remove="Messages\**" />
+    <None Remove="Messages\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Llm\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
@@ -17,10 +21,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.PowerShell.SDK" />
     <PackageReference Include="ModelContextProtocol" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Messages\" />
   </ItemGroup>
 
 </Project>

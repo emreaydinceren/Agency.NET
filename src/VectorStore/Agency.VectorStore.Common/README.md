@@ -18,7 +18,7 @@ dotnet add package Agency.VectorStore.Common
 
 Use a concrete implementation:
 
-- [`Agency.VectorStore.Sql.Postgre`](https://www.nuget.org/packages/Agency.VectorStore.Sql.Postgre) — PostgreSQL + pgvector
+- [`Agency.VectorStore.Sql.Postgres`](https://www.nuget.org/packages/Agency.VectorStore.Sql.Postgres) — PostgreSQL + pgvector
 - [`Agency.VectorStore.Sql.Sqlite`](https://www.nuget.org/packages/Agency.VectorStore.Sql.Sqlite) — SQLite (cosine via UDF)
 
 Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.

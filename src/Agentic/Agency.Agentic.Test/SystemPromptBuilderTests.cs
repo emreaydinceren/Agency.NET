@@ -1,7 +1,7 @@
-namespace Agency.Agentic.Test;
 
 using Agency.Agentic.Contexts;
 
+namespace Agency.Agentic.Test;
 /// <summary>
 /// Unit tests for <see cref="SystemPromptBuilder"/>.
 /// The builder is a pure function — the same context always produces the same prompt string,

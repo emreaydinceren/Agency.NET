@@ -1,4 +1,3 @@
-namespace Agency.Agentic.Test.Functional;
 
 using Agency.Agentic.Contexts;
 using Agency.Llm.Claude;
@@ -6,6 +5,7 @@ using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
+namespace Agency.Agentic.Test.Functional;
 /// <summary>
 /// End-to-end functional tests for the <see cref="Agent"/> loop using
 /// <see cref="Agency.Llm.Claude.ClaudeClient"/> as the LLM backend.

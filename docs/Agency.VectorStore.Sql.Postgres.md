@@ -1,12 +1,12 @@
-# Agency.VectorStore.Sql.Postgre
+# Agency.VectorStore.Sql.Postgres
 
 #vectorstore #postgresql #pgvector #hnsw #observability
 
 ## What It Is
 
-Agency.VectorStore.Sql.Postgre is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional exact key matching and JSONB metadata filtering.
+Agency.VectorStore.Sql.Postgres is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional exact key matching and JSONB metadata filtering.
 
-**Namespace:** `Agency.VectorStore.Sql.Postgre`
+**Namespace:** `Agency.VectorStore.Sql.Postgres`
 
 ## Prerequisites
 
@@ -15,26 +15,26 @@ Agency.VectorStore.Sql.Postgre is the PostgreSQL-backed vector store implementat
 
 ## API Surface
 
-`PostgreKVStore` implements `IVectorStore` (defined in [[Agency.VectorStore.Common]]) and adds one schema-setup method.
+`PostgresKVStore` implements `IVectorStore` (defined in [[Agency.VectorStore.Common]]) and adds one schema-setup method.
 
 ```csharp
-// File: src/VectorStore/Agency.VectorStore.Sql.Postgre/PostgreKVStore.cs
+// File: src/VectorStore/Agency.VectorStore.Sql.Postgres/PostgresKVStore.cs
 using Agency.VectorStore.Common;
 using Agency.Embeddings.Common;
-using Agency.Sql.Postgre;
+using Agency.Sql.Postgres;
 using Microsoft.Extensions.Logging;
 
-public class PostgreKVStore : IVectorStore
+public class PostgresKVStore : IVectorStore
 {
     // Telemetry names
-    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgre";
-    public const string MeterName          = "Agency.VectorStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.VectorStore.Sql.Postgres";
+    public const string MeterName          = "Agency.VectorStore.Sql.Postgres";
 
     // Constructor
-    public PostgreKVStore(
+    public PostgresKVStore(
         IEmbeddingGenerator embeddingGenerator,
         PostgreSqlRunner postgreSqlRunner,
-        ILogger<PostgreKVStore> logger);
+        ILogger<PostgresKVStore> logger);
 
     // One-time schema setup — call before first use
     public Task InitializeSchemaAsync(int dimensions = 1536, CancellationToken cancellationToken = default);
@@ -123,7 +123,7 @@ Returns `true` when a row was deleted, `false` when no matching row existed. Use
 
 ## Observability
 
-- **Activity source / meter name:** `Agency.VectorStore.Sql.Postgre`
+- **Activity source / meter name:** `Agency.VectorStore.Sql.Postgres`
 - **Activities:** `vectorstore.initialize`, `vectorstore.upsert`, `vectorstore.search`, `vectorstore.delete`
 - **Counter:** `vectorstore.operations` — tagged with `operation` and `status` (`success` / `error`)
 - **Histogram:** `vectorstore.duration` (milliseconds) — tagged with `operation`
@@ -136,7 +136,7 @@ Every activity records an `exception` event with `exception.type`, `exception.me
 |---|---|
 | [[Agency.VectorStore.Common]] | Implements `IVectorStore`; consumes `Query`, `SearchHit<TValue>`, and `JsonMetadataHelpers`. |
 | [[Agency.Embeddings.Common]] | Injects `IEmbeddingGenerator` to produce embeddings for upsert and semantic search. |
-| [[Agency.Sql.Postgre]] | Injects `PostgreSqlRunner` for parameterized SQL execution and result hydration. |
+| [[Agency.Sql.Postgres]] | Injects `PostgreSqlRunner` for parameterized SQL execution and result hydration. |
 
 ## Design Notes
 

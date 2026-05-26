@@ -1,7 +1,7 @@
-namespace Agency.KeyValueStore.Sql.Sqlite.Test;
 
 using Agency.Sql.Sqlite;
 
+namespace Agency.KeyValueStore.Sql.Sqlite.Test;
 /// <summary>
 /// Unit tests that validate constructor argument checks for <see cref="SqliteKVStore"/>.
 /// </summary>

@@ -1,9 +1,5 @@
 global using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Agency.Agentic.Console.Test")]
-
-namespace Agency.Agentic.Console;
-
 using Agency.Agentic;
 using Agency.Agentic.Console.Telemetry;
 using Agency.Agentic.Contexts;
@@ -15,6 +11,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Serilog;
 
+[assembly: InternalsVisibleTo("Agency.Agentic.Console.Test")]
+
+namespace Agency.Agentic.Console;
 internal class Program
 {
     public static async Task Main(string[] args)

@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Console;
 
 using Agency.Agentic.Console.Commands;
 using Spectre.Console;
 using System.Text;
 
+namespace Agency.Agentic.Console;
 /// <summary>
 /// Handles interactive terminal input for the console chat REPL, including
 /// history navigation, cursor management, and slash-command autocompletion.

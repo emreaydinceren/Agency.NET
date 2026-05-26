@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using System.Text.Json;
 using Agency.Agentic.Contexts;
 using Agency.Agentic.Hooks;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies AgentHooks.Compose() merge semantics for all five delegate slots.</summary>
 public sealed class AgentHooksExtensionsTests
 {

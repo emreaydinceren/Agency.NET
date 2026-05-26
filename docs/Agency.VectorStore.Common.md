@@ -116,7 +116,7 @@ public static class JsonMetadataHelpers
 }
 ```
 
-Used by concrete implementations ([[Agency.VectorStore.Sql.Postgre]], [[Agency.VectorStore.Sql.Sqlite]]) to deserialize metadata JSON columns back into typed CLR dictionaries after a database read.
+Used by concrete implementations ([[Agency.VectorStore.Sql.Postgres]], [[Agency.VectorStore.Sql.Sqlite]]) to deserialize metadata JSON columns back into typed CLR dictionaries after a database read.
 
 ## How It Works
 
@@ -160,7 +160,7 @@ Dataset table = hits.ToDataset();
 |---|---|
 | [[Agency.Common]] | Provides `Dataset` and `IColumnMetadata`; `SearchHitExtensions.ToDataset` returns a `Dataset` |
 | [[Agency.Embeddings.Common]] | Project dependency; concrete implementations use `IEmbeddingGenerator` to vectorize query text before ANN search |
-| [[Agency.VectorStore.Sql.Postgre]] | Implements `IVectorStore` using PostgreSQL + pgvector; uses `JsonMetadataHelpers` for metadata round-tripping |
+| [[Agency.VectorStore.Sql.Postgres]] | Implements `IVectorStore` using PostgreSQL + pgvector; uses `JsonMetadataHelpers` for metadata round-tripping |
 | [[Agency.VectorStore.Sql.Sqlite]] | Implements `IVectorStore` using SQLite; uses `JsonMetadataHelpers` for metadata round-tripping |
 | [[Agency.RagFormatter]] | Consumes the `Dataset` produced by `ToDataset()` to render search results as Markdown context for LLM prompts |
 | [[Agency.Mcp.Memory]] | Registers and uses an `IVectorStore` implementation to back agent memory tools |

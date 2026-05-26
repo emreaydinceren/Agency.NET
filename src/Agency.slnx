@@ -18,10 +18,10 @@
     <Project Path="Ingestion\Agency.Ingestion\Agency.Ingestion.csproj" />
   </Folder>
   <Folder Name="/KeyValueStore/">
+    <Project Path="KeyValueStore/Agency.KeyValueStore.Sql.Postgres.Test/Agency.KeyValueStore.Sql.Postgres.Test.csproj" />
+    <Project Path="KeyValueStore/Agency.KeyValueStore.Sql.Postgres/Agency.KeyValueStore.Sql.Postgres.csproj" />
     <Project Path="KeyValueStore\Agency.KeyValueStore.Common.Test\Agency.KeyValueStore.Common.Test.csproj" />
     <Project Path="KeyValueStore\Agency.KeyValueStore.Common\Agency.KeyValueStore.Common.csproj" />
-    <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Postgre.Test\Agency.KeyValueStore.Sql.Postgre.Test.csproj" />
-    <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Postgre\Agency.KeyValueStore.Sql.Postgre.csproj" />
     <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Sqlite.Test\Agency.KeyValueStore.Sql.Sqlite.Test.csproj" />
     <Project Path="KeyValueStore\Agency.KeyValueStore.Sql.Sqlite\Agency.KeyValueStore.Sql.Sqlite.csproj" />
   </Folder>
@@ -32,8 +32,8 @@
     <Project Path="Llm\Agency.Llm.Test\Agency.Llm.Test.csproj" />
   </Folder>
   <Folder Name="/MCP/">
-    <Project Path="Mcp/Agency.Mcp.Memory/Agency.Mcp.Memory.csproj" Id="01412def-20db-4510-b727-416bfb4f3a5f" />
     <Project Path="Mcp/Agency.Mcp.Memory.Test/Agency.Mcp.Memory.Test.csproj" />
+    <Project Path="Mcp/Agency.Mcp.Memory/Agency.Mcp.Memory.csproj" Id="01412def-20db-4510-b727-416bfb4f3a5f" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
@@ -49,10 +49,10 @@
     <Project Path="Sql\Agency.Sql.Sqlite\Agency.Sql.Sqlite.csproj" />
   </Folder>
   <Folder Name="/VectorStore/">
+    <Project Path="VectorStore/Agency.VectorStore.Sql.Postgres.Test/Agency.VectorStore.Sql.Postgres.Test.csproj" />
+    <Project Path="VectorStore/Agency.VectorStore.Sql.Postgres/Agency.VectorStore.Sql.Postgres.csproj" Id="60612533-b6b5-4289-b4bb-d7e5b690262b" />
     <Project Path="VectorStore\Agency.VectorStore.Common.Test\Agency.VectorStore.Common.Test.csproj" />
     <Project Path="VectorStore\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" Id="a5156262-6a37-4d98-88b8-8696f32dc5f9" />
-    <Project Path="VectorStore\Agency.VectorStore.Sql.Postgre.Test\Agency.VectorStore.Sql.Postgre.Test.csproj" />
-    <Project Path="VectorStore\Agency.VectorStore.Sql.Postgre\Agency.VectorStore.Sql.Postgre.csproj" Id="60612533-b6b5-4289-b4bb-d7e5b690262b" />
     <Project Path="VectorStore\Agency.VectorStore.Sql.Sqlite.Test\Agency.VectorStore.Sql.Sqlite.Test.csproj" />
     <Project Path="VectorStore\Agency.VectorStore.Sql.Sqlite\Agency.VectorStore.Sql.Sqlite.csproj" />
   </Folder>

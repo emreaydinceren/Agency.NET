@@ -121,7 +121,7 @@ public static class JsonMetadataHelpers
 
 ## How It Works
 
-A caller acquires an `IKVStore` implementation (e.g. from [[Agency.KeyValueStore.Sql.Postgre]] or [[Agency.KeyValueStore.Sql.Sqlite]]) and interacts through the four operations:
+A caller acquires an `IKVStore` implementation (e.g. from [[Agency.KeyValueStore.Sql.Postgres]] or [[Agency.KeyValueStore.Sql.Sqlite]]) and interacts through the four operations:
 
 ```csharp
 using Agency.KeyValueStore.Common;
@@ -161,7 +161,7 @@ Dataset dataset = hits.ToDataset();
 | Project | Relationship |
 |---|---|
 | [[Agency.Common]] | `SearchHitExtensions.ToDataset` produces a `Dataset` defined in `Agency.Common`, bridging key-value results into the RAG formatting pipeline |
-| [[Agency.KeyValueStore.Sql.Postgre]] | PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` to hydrate the metadata column |
+| [[Agency.KeyValueStore.Sql.Postgres]] | PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` to hydrate the metadata column |
 | [[Agency.KeyValueStore.Sql.Sqlite]] | SQLite implementation of `IKVStore`; follows the same pattern |
 | [[Agency.Agentic]] | Agent tool layers depend on `IKVStore` for persistent session memory |
 

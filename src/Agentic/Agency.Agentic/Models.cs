@@ -1,4 +1,3 @@
-namespace Agency.Agentic;
 
 using Agency.Llm.Claude;
 using Agency.Llm.Common;
@@ -9,6 +8,7 @@ using Microsoft.Extensions.Options;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
+namespace Agency.Agentic;
 public sealed class Models
 {
     public const string ActivitySourceName = "Agency.Agentic.Models";

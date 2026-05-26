@@ -1,8 +1,8 @@
-﻿namespace Agency.RagFormatter;
-
+﻿
 using Agency.Common;
 using System.Text;
 
+namespace Agency.RagFormatter;
 public static class DatasetExtensions
 {
     public static string ToMarkdownTable(this Dataset dataset)

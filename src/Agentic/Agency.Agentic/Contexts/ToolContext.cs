@@ -1,7 +1,7 @@
-namespace Agency.Agentic.Contexts;
 
 using Agency.Agentic.Tools;
 
+namespace Agency.Agentic.Contexts;
 /// <summary>The tool registry available to the agent during this session.</summary>
 public sealed record ToolContext
 {

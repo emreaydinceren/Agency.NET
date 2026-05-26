@@ -1,16 +1,17 @@
 using Agency.Embeddings.Common;
 using Agency.Sql.Postgres;
+using Agency.VectorStore.Sql.Postgres;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace Agency.VectorStore.Sql.Postgre.Test;
+namespace Agency.VectorStore.Sql.Postgres.Test;
 
 /// <summary>
-/// Validation tests for <see cref="PostgreKVStore"/> constructor and parameter validation.
+/// Validation tests for <see cref="PostgresKVStore"/> constructor and parameter validation.
 /// These tests verify input validation without requiring a database.
 /// Run with: dotnet test --filter "Category!=Functional"
 /// </summary>
-public sealed class PostgreKVStoreValidationTests
+public sealed class PostgresKVStoreValidationTests
 {
     // ── Constructor validation ──────────────────────────────────────────────
 
@@ -22,10 +23,10 @@ public sealed class PostgreKVStoreValidationTests
     {
         var connectionString = "Host=localhost;Port=5432;Username=test;Password=test;Database=test";
         var runner = new PostgreSqlRunner(connectionString);
-        var mockLogger = new Mock<ILogger<PostgreKVStore>>();
+        var mockLogger = new Mock<ILogger<PostgresKVStore>>();
 
         Assert.Throws<ArgumentNullException>(() =>
-            new PostgreKVStore(null!, runner, mockLogger.Object));
+            new PostgresKVStore(null!, runner, mockLogger.Object));
     }
 
     /// <summary>
@@ -37,6 +38,6 @@ public sealed class PostgreKVStoreValidationTests
         var mockGenerator = new Mock<IEmbeddingGenerator>();
 
         Assert.Throws<ArgumentNullException>(() =>
-            new PostgreKVStore(mockGenerator.Object, null!, new Mock<ILogger<PostgreKVStore>>().Object));
+            new PostgresKVStore(mockGenerator.Object, null!, new Mock<ILogger<PostgresKVStore>>().Object));
     }
 }

@@ -38,8 +38,8 @@ function Invoke-Secret {
 # ── 1. PostgreSQL connection string ──────────────────────────────────────────
 
 Write-Title "PostgreSQL Connection String"
-Write-Info "Used by: Sql.Postgre.Test, GraphRAG.Code.Postgres.Test,"
-Write-Info "         VectorStore.Sql.Postgre.Test, KeyValueStore.Sql.Postgre.Test"
+Write-Info "Used by: Sql.Postgres.Test, GraphRAG.Code.Postgres.Test,"
+Write-Info "         VectorStore.Sql.Postgres.Test, KeyValueStore.Sql.Postgres.Test"
 Write-Info "These projects share one user-secrets folder: AgencySecrets"
 Write-Info "Connection format: Host=<host>;Port=5432;Username=<user>;Password=<pass>;Database=<db>"
 Write-Host ""

@@ -1,4 +1,3 @@
-namespace Agency.KeyValueStore.Sql.Postgre.Test;
 
 using Agency.KeyValueStore.Common;
 using Agency.Sql.Postgres;
@@ -6,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 
+namespace Agency.KeyValueStore.Sql.Postgres.Test;
 /// <summary>
 /// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml.
 /// Requires the container to be running: docker compose up -d
@@ -14,14 +14,14 @@ using Moq;
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
-public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStoreFunctionalTests.KVStoreFixture>
+public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVStoreFunctionalTests.KVStoreFixture>
 {
     private readonly KVStoreFixture _fixture;
 
     /// <summary>
     /// Creates the test class with its shared database fixture.
     /// </summary>
-    public PostgreKVStoreFunctionalTests(KVStoreFixture fixture)
+    public PostgresKVStoreFunctionalTests(KVStoreFixture fixture)
     {
         this._fixture = fixture;
     }
@@ -577,7 +577,7 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         public KVStoreFixture()
         {
             var config = new ConfigurationBuilder()
-                .AddUserSecrets<PostgreKVStoreFunctionalTests>()
+                .AddUserSecrets<PostgresKVStoreFunctionalTests>()
                 .AddEnvironmentVariables()
                 .Build();
 
@@ -597,7 +597,7 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         /// <summary>
         /// Gets the shared PostgreSQL KV store instance.
         /// </summary>
-        public PostgreKVStore KVStore { get; private set; } = default!;
+        public PostgresKVStore KVStore { get; private set; } = default!;
 
         /// <summary>
         /// Returns a unique key scoped to this test run.
@@ -610,8 +610,8 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         /// </summary>
         public async ValueTask InitializeAsync()
         {
-            var logger = new Mock<ILogger<PostgreKVStore>>();
-            this.KVStore = new PostgreKVStore(this._sqlRunner, logger.Object);
+            var logger = new Mock<ILogger<PostgresKVStore>>();
+            this.KVStore = new PostgresKVStore(this._sqlRunner, logger.Object);
 
             await this.KVStore.InitializeSchemaAsync(TestContext.Current.CancellationToken);
         }

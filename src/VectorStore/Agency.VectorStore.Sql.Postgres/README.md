@@ -1,11 +1,11 @@
-# Agency.VectorStore.Sql.Postgre
+# Agency.VectorStore.Sql.Postgres
 
 PostgreSQL + pgvector implementation of `IVectorStore` for the Agency AI Toolkit.
 
 ## Install
 
 ```
-dotnet add package Agency.VectorStore.Sql.Postgre
+dotnet add package Agency.VectorStore.Sql.Postgres
 ```
 
 ## Prerequisites
@@ -20,7 +20,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 ```csharp
 services.AddScoped<IVectorStore>(sp =>
-    new PostgreKVStore(config.GetConnectionString("Default")!));
+    new PostgresKVStore(config.GetConnectionString("Default")!));
 
 // Initialize schema on startup
 await vectorStore.InitializeSchemaAsync();

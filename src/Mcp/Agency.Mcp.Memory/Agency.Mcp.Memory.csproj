@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Description>Stdio Model Context Protocol server exposing Memorize, Recall, and Forget tools backed by any Agency IKVStore. Gives MCP-capable agents persistent memory across sessions.</Description>
-    <PackageTags>agency.net;ai;mcp;model-context-protocol;memory;agent;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Postgre\Agency.KeyValueStore.Sql.Postgre.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Postgres\Agency.KeyValueStore.Sql.Postgres.csproj" />
     <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Sqlite\Agency.KeyValueStore.Sql.Sqlite.csproj" />
   </ItemGroup>
 

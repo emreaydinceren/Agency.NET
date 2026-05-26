@@ -19,11 +19,11 @@ Documents
           │
           ▼
    Agency.VectorStore.Common          (IVectorStore interface)
-   Agency.VectorStore.Sql.Postgre     (pgvector / HNSW backend)
+   Agency.VectorStore.Sql.Postgres    (pgvector / HNSW backend)
    Agency.VectorStore.Sql.Sqlite      (SQLite + cosine UDF backend)
           │
    Agency.KeyValueStore.Common        (IKVStore interface — metadata/KV layer)
-   Agency.KeyValueStore.Sql.Postgre   (PostgreSQL KV backend)
+   Agency.KeyValueStore.Sql.Postgres  (PostgreSQL KV backend)
    Agency.KeyValueStore.Sql.Sqlite    (SQLite KV backend)
           │
           ▼
@@ -67,13 +67,13 @@ Documents
 ### Vector Store
 
 - [[Agency.VectorStore.Common]] — `IVectorStore`, `Query`, `SearchHit<T>`
-- [[Agency.VectorStore.Sql.Postgre]] — pgvector + HNSW index backend
+- [[Agency.VectorStore.Sql.Postgres]] — pgvector + HNSW index backend
 - [[Agency.VectorStore.Sql.Sqlite]] — SQLite + in-process cosine UDF backend
 
 ### Key-Value Store
 
 - [[Agency.KeyValueStore.Common]] — `IKVStore`, `Query`, `SearchHit<T>`, JSON metadata helpers
-- [[Agency.KeyValueStore.Sql.Postgre]] — PostgreSQL KV backend with metadata filtering
+- [[Agency.KeyValueStore.Sql.Postgres]] — PostgreSQL KV backend with metadata filtering
 - [[Agency.KeyValueStore.Sql.Sqlite]] — SQLite KV backend with metadata filtering
 
 ### RAG

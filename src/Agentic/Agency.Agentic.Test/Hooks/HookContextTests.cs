@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using System.Text.Json;
 using Agency.Agentic.Hooks;
 using Agency.Agentic.Contexts;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies that hook context records round-trip their constructor arguments.</summary>
 public sealed class HookContextTests
 {

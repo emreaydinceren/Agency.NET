@@ -1,11 +1,12 @@
 using Agency.Embeddings.Common;
 using Agency.Sql.Postgres;
 using Agency.VectorStore.Common;
+using Agency.VectorStore.Sql.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace Agency.VectorStore.Sql.Postgre.Test;
+namespace Agency.VectorStore.Sql.Postgres.Test;
 
 /// <summary>
 /// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml.
@@ -15,14 +16,14 @@ namespace Agency.VectorStore.Sql.Postgre.Test;
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
-public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStoreFunctionalTests.VectorStoreFixture>
+public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVStoreFunctionalTests.VectorStoreFixture>
 {
     private readonly VectorStoreFixture _fixture;
 
     /// <summary>
     /// Creates the test class with its shared database fixture.
     /// </summary>
-    public PostgreKVStoreFunctionalTests(VectorStoreFixture fixture)
+    public PostgresKVStoreFunctionalTests(VectorStoreFixture fixture)
     {
         this._fixture = fixture;
     }
@@ -414,7 +415,7 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         public VectorStoreFixture()
         {
             var config = new ConfigurationBuilder()
-                .AddUserSecrets<PostgreKVStoreFunctionalTests>()
+                .AddUserSecrets<PostgresKVStoreFunctionalTests>()
                 .AddEnvironmentVariables()
                 .Build();
 
@@ -453,7 +454,7 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         /// <summary>
         /// Gets the shared PostgreSQL vector store instance.
         /// </summary>
-        public PostgreKVStore KVStore { get; private set; } = default!;
+        public PostgresKVStore KVStore { get; private set; } = default!;
 
         /// <summary>
         /// Returns a unique key scoped to this test run.
@@ -465,8 +466,8 @@ public sealed class PostgreKVStoreFunctionalTests : IClassFixture<PostgreKVStore
         /// </summary>
         public async ValueTask InitializeAsync()
         {
-            var logger = new Mock<ILogger<PostgreKVStore>>();
-            this.KVStore = new PostgreKVStore(this._embeddingGenerator, this._sqlRunner, logger.Object);
+            var logger = new Mock<ILogger<PostgresKVStore>>();
+            this.KVStore = new PostgresKVStore(this._embeddingGenerator, this._sqlRunner, logger.Object);
 
             // Initialize schema with standard embedding dimension
             await this.KVStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);

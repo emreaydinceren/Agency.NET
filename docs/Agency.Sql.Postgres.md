@@ -106,8 +106,8 @@ public partial class SQLQueryEmbedder
 | [[Agency.Sql.Common]] | `PostgreSqlRunner` extends `SqlRunnerBase`, which provides the full telemetry skeleton and the `ExecuteAsync` / `QueryAsync` implementations |
 | [[Agency.Common]] | `QueryAsync` returns `Dataset`; column schema is adapted via `DbColumnAdapter` defined in [[Agency.Sql.Common]] |
 | [[Agency.Embeddings.Common]] | `SQLQueryEmbedder` depends on `IEmbeddingGenerator` to resolve `vectorize()` macros |
-| [[Agency.VectorStore.Sql.Postgre]] | Uses `PostgreSqlRunner` for all database access |
-| [[Agency.KeyValueStore.Sql.Postgre]] | Uses `PostgreSqlRunner` for all database access |
+| [[Agency.VectorStore.Sql.Postgres]] | Uses `PostgreSqlRunner` for all database access |
+| [[Agency.KeyValueStore.Sql.Postgres]] | Uses `PostgreSqlRunner` for all database access |
 | [[Agency.RagFormatter]] | Formats the `Dataset` objects returned by `QueryAsync` into Markdown tables for LLM context |
 
 ## Design Notes

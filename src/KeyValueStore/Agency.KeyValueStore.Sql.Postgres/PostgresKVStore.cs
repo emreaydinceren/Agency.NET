@@ -1,4 +1,3 @@
-namespace Agency.KeyValueStore.Sql.Postgre;
 
 using Agency.KeyValueStore.Common;
 using Agency.Sql.Postgres;
@@ -13,21 +12,22 @@ using System.Diagnostics.Metrics;
 using System.Text.Json;
 using static System.Net.WebRequestMethods;
 
+namespace Agency.KeyValueStore.Sql.Postgres;
 /// <summary>
 /// PostgreSQL-backed implementation of <see cref="IKVStore"/> that stores key-value entries without vector embeddings.
 /// Results are ordered by recency (<c>updated_on DESC</c>) and substring matching is used for value search.
 /// </summary>
-public class PostgreKVStore : IKVStore
+public class PostgresKVStore : IKVStore
 {
     /// <summary>
     /// The activity source name used for KV store telemetry.
     /// </summary>
-    public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Postgre";
+    public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Postgres";
 
     /// <summary>
     /// The meter name used for KV store telemetry.
     /// </summary>
-    public const string MeterName = "Agency.KeyValueStore.Sql.Postgre";
+    public const string MeterName = "Agency.KeyValueStore.Sql.Postgres";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
     private static readonly Meter _meter = new(MeterName);
@@ -38,7 +38,7 @@ public class PostgreKVStore : IKVStore
     private static readonly Histogram<double> _operationDuration =
         _meter.CreateHistogram<double>("kvstore.duration", unit: "ms", description: "Duration of KV store operations in milliseconds.");
 
-    private readonly ILogger<PostgreKVStore> _logger;
+    private readonly ILogger<PostgresKVStore> _logger;
 
     private readonly PostgreSqlRunner _postgreSqlRunner;
 
@@ -46,16 +46,16 @@ public class PostgreKVStore : IKVStore
     private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
 
     /// <summary>
-    /// Initializes a new instance of <see cref="PostgreKVStore"/> with the given SQL runner and logger.
+    /// Initializes a new instance of <see cref="PostgresKVStore"/> with the given SQL runner and logger.
     /// </summary>
     /// <param name="postgreSqlRunner">The PostgreSQL runner used to execute queries. Cannot be null.</param>
     /// <param name="logger">The logger instance. If null, a no-op logger is used.</param>
-    public PostgreKVStore(
+    public PostgresKVStore(
         PostgreSqlRunner postgreSqlRunner,
-        ILogger<PostgreKVStore> logger)
+        ILogger<PostgresKVStore> logger)
     {
         this._postgreSqlRunner = postgreSqlRunner ?? throw new ArgumentNullException(nameof(postgreSqlRunner));
-        this._logger = logger ?? NullLogger<PostgreKVStore>.Instance;
+        this._logger = logger ?? NullLogger<PostgresKVStore>.Instance;
     }
 
     /// <summary>

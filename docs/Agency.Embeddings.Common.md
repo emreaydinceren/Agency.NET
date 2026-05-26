@@ -97,7 +97,7 @@ IReadOnlyList<ReadOnlyMemory<float>> vectors = await batching.GenerateEmbeddings
 | [[Agency.Embeddings.OpenAI]] | Concrete `IEmbeddingGenerator` implementation using the OpenAI-compatible HTTP API |
 | [[Agency.Sql.Postgres]] | `SQLQueryEmbedder` injects `IEmbeddingGenerator` to replace `vectorize(…)` placeholders in SQL |
 | [[Agency.Sql.Sqlite]] | Same `SQLQueryEmbedder` pattern, SQLite variant |
-| [[Agency.VectorStore.Sql.Postgre]] | Injects `IEmbeddingGenerator` to embed stored values and compute query vectors |
+| [[Agency.VectorStore.Sql.Postgres]] | Injects `IEmbeddingGenerator` to embed stored values and compute query vectors |
 | [[Agency.VectorStore.Sql.Sqlite]] | Same vector store pattern, SQLite variant |
 | [[Agency.Ingestion]] | Indirectly — the vector store used by the ingestion pipeline depends on `IEmbeddingGenerator` |
 

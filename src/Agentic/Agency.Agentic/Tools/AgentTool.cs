@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Tools;
 
 using System.Text;
 using System.Text.Json;
-using Agentic.Contexts;
+using Agency.Agentic.Contexts;
 
+namespace Agency.Agentic.Tools;
 public class AgentTool : ITool
 {
     private readonly Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory;

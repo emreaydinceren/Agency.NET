@@ -1,4 +1,3 @@
-namespace Agency.Llm.Claude;
 
 using Agency.Llm.Common;
 using Anthropic;
@@ -8,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+namespace Agency.Llm.Claude;
 /// <summary>
 /// Creates <see cref="IChatClient"/> instances backed by the Anthropic Claude API.
 /// Also implements <see cref="IModelProvider"/> so callers can enumerate available models.

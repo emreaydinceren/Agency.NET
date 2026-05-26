@@ -1,7 +1,7 @@
-namespace Agency.Ingestion.FileSystem;
 
 using System.Runtime.CompilerServices;
 
+namespace Agency.Ingestion.FileSystem;
 /// <summary>
 /// Recursively enumerates files in a directory and loads each as a <see cref="Document"/>.
 /// </summary>

@@ -1,7 +1,7 @@
-namespace Agency.Agentic.Test;
 
 using Agency.Agentic.Contexts;
 
+namespace Agency.Agentic.Test;
 /// <summary>
 /// Unit tests for the <see cref="StopConditions"/> factory methods and delegates.
 /// </summary>

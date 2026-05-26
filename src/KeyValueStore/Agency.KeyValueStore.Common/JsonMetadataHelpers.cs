@@ -1,7 +1,7 @@
-namespace Agency.KeyValueStore.Common;
 
 using System.Text.Json;
 
+namespace Agency.KeyValueStore.Common;
 /// <summary>
 /// Shared helpers for deserializing JSON metadata stored in key-value store rows.
 /// </summary>

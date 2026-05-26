@@ -1,9 +1,9 @@
-namespace Agency.Ingestion.Test;
 
 using Agency.VectorStore.Common;
 using Moq;
 using System.Runtime.CompilerServices;
 
+namespace Agency.Ingestion.Test;
 /// <summary>
 /// DefaultIngestionPipeline orchestrates the full Load → Split → Store flow.
 /// All three dependencies (IDocumentLoader, ITextSplitter, IVectorStore) are mocked

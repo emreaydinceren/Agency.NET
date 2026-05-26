@@ -1,7 +1,7 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using Agency.Agentic.Hooks;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies AgentHooks default state and init-only delegate assignment.</summary>
 public sealed class AgentHooksTests
 {

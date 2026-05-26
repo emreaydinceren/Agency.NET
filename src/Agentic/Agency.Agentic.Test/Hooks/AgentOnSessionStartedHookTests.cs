@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Hooks.Tests;
 
 using Agency.Agentic.Contexts;
 using Agency.Agentic.Hooks;
 using Agency.Agentic.Test.Fakes;
 
+namespace Agency.Agentic.Hooks.Tests;
 /// <summary>Verifies OnSessionStarted hook fires exactly once per agent run.</summary>
 public sealed class AgentOnSessionStartedHookTests
 {

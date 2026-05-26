@@ -1,9 +1,9 @@
-namespace Agency.Agentic.Console;
 
 using Agency.Agentic;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+namespace Agency.Agentic.Console;
 internal sealed class AgentFactory : IAgentFactory
 {
     private readonly Models models;

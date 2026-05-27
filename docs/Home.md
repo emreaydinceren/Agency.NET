@@ -38,12 +38,15 @@ Documents
    Agency.Llm.OpenAI                  (OpenAI SDK implementation)
           │
           ▼
-   Agency.Agentic                     (autonomous agent loop)
+   Agency.Agentic                     (agent loop + lifecycle hooks + stop
+                                       conditions + structured Context +
+                                       tool registry + MCP client pool)
    Agency.Agentic.Console             (interactive REPL chat harness)
    Agency.Console                     (one-shot RAG demo stub)
           │
           ▼
-   Agency.Mcp.Memory                  (MCP server: Memorize / Recall / Forget via IKVStore)
+   Agency.Mcp.Memory                  (MCP server: scoped Memorize / Recall /
+                                       Forget / ListGlobalKeys via IKVStore)
 ```
 
 ## Project Pages
@@ -93,19 +96,19 @@ Documents
 
 ### Agent
 
-- [[Agency.Agentic]] — autonomous agent loop, `Context`, `StopConditions`, `AgentEvent`
+- [[Agency.Agentic]] — agent loop with lifecycle hooks (`OnPreToolUse` can Allow/Deny/Rewrite tool calls), composable `StopConditions` (step/budget/token guards), a structured `Context` assembled from typed sub-contexts (knowledge re-injected every iteration), built-in tools + `ToolRegistry`, an `McpClientPool` so the agent can consume external MCP servers, and a typed `AgentEvent` stream
 - [[Agency.Agentic.Console]] — multi-turn interactive REPL chat harness
 - [[Agency.Console]] — one-shot RAG demo stub
 
 ### MCP Servers
 
-- [[Agency.Mcp.Memory]] — stdio MCP server exposing `Memorize` / `Recall` / `Forget` tools backed by `IKVStore`
+- [[Agency.Mcp.Memory]] — stdio MCP server exposing scoped `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` tools backed by `IKVStore`; memory is scoped by user/session, grouped by domain, and filterable by tags
 
 ## Cross-Cutting Concerns
 
 ### Observability
 
-Every library exposes a named `ActivitySource` and `Meter` following the same pattern. Configure your OpenTelemetry pipeline with these source names to get distributed traces and metrics for every SQL query, embedding call, vector store operation, LLM request, and ingestion run.
+Every library exposes a named `ActivitySource` and `Meter` following the same pattern. Configure your OpenTelemetry pipeline with these source names to get distributed traces and metrics for every SQL query, embedding call, vector store operation, LLM request, and ingestion run. The agent loop adds its own instruments under `Agency.Agentic.Agent` — counters for turns, errors, tool calls, and tokens, plus a turn-duration histogram (all tagged with `agent.model` and `agent.client_type`).
 
 ### Centralized Package Management
 

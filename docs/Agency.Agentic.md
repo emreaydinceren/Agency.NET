@@ -108,7 +108,7 @@ public sealed record AssistantTurnEvent(ChatMessage Message) : AgentEvent;
 public sealed record ToolInvokedEvent(string ToolName, JsonElement Input, ToolResult Result) : AgentEvent;
 
 /// <summary>Emitted after each complete iteration (LLM call + optional tool calls).</summary>
-public sealed record IterationCompletedEvent(int Iteration, LlmTokenUsage TurnUsage) : AgentEvent;
+public sealed record IterationCompletedEvent(int Iteration, LlmTokenUsage TurnUsage, TimeSpan LlmDuration) : AgentEvent;
 
 /// <summary>Terminal event — always the last event emitted by the agent loop.</summary>
 public sealed record AgentResultEvent(
@@ -210,7 +210,7 @@ namespace Agency.Agentic.Contexts;
 public sealed record Context
 {
     public required QueryContext    Query        { get; init; }
-    public KnowledgeContext         Knowledge    { get; init; } = KnowledgeContext.Empty;
+    public KnowledgeContext         Knowledge    { get; set; }  = KnowledgeContext.Empty;  // settable: hooks may refresh facts mid-session
     public MemoryContext            Memory       { get; init; } = MemoryContext.Empty;
     public ToolContext              Tools        { get; init; } = ToolContext.Empty;
     public UserSpecificContext      User         { get; init; } = UserSpecificContext.Empty;
@@ -231,7 +231,7 @@ public sealed record Context
 | `ToolContext` | `Registry: IToolRegistry` |
 | `UserSpecificContext` | `Name: string?` |
 | `TemporalContext` | `CurrentDateUtc: DateTimeOffset?` |
-| `EnvironmentalContext` | `OperatingSystem: string?` |
+| `EnvironmentalContext` | `OperatingSystem: string?`, `ContextWindowSize: int?` |
 
 ### `IConversationManager`
 
@@ -553,7 +553,7 @@ var toolCtx  = new ToolContext { Registry = registry };
 ## Design Notes
 
 - **`IChatClient` over `ILlmClient`** — `Agent` depends on `Microsoft.Extensions.AI.IChatClient` rather than the project's own `ILlmClient`. This allows any MEA-compatible client (including the built-in `OpenAIChatClient`) to drive the loop without an adapter layer; `ILlmClient` implementations expose `.AsChatClient()` bridges where needed.
-- **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only properties mutated by the loop (`internal set`). All other context properties are `init`-only, making session state predictable and easy to snapshot for testing.
+- **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only properties mutated by the loop (`internal set`). `Knowledge` is `set` (not `init`) so lifecycle hooks such as `OnSessionStarted` can refresh domain facts mid-session — the next iteration's `SystemPromptBuilder.Build` picks them up. All remaining context properties are `init`-only, keeping session state predictable and easy to snapshot for testing.
 - **`SystemPromptBuilder` is a pure function** — The system prompt is rebuilt from `Context` on every iteration so `KnowledgeContext` facts are always fresh. Being a `static` pure function makes it unit-testable in complete isolation from the agent loop.
 - **Two-tier tool disabling** — `ToolRegistry` distinguishes user-initiated disables (`DisableToolByUser`) from system-initiated disables (`DisabledToolBySystem`). `ListAllDefinitions()` hides system-disabled tools entirely; user-disabled tools remain visible with `Enabled = false`, enabling UI toggle flows.
 - **`McpProxyTool` is `internal`** — callers never instantiate `McpProxyTool` directly; `McpClientPool.CreateAsync` wraps each discovered `McpClientTool` and exposes the results through the `Tools` property. This keeps the MCP SDK types contained behind the pool boundary.

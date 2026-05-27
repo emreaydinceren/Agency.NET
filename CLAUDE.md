@@ -175,3 +175,8 @@ When adding or updating a dependency:
 
 - When diagnosing bugs, read the actual error and failing code carefully before suggesting fixes. Do NOT guess at the root cause — verify with evidence first.
 - When user says an approach is wrong, pivot immediately rather than doubling down.
+
+## Trackers
+
+- Bug tracker is in Notion : https://www.notion.so/99f10b50431d4089b667a8ec603e9e60 when we talk about bugs this is the place to check and update
+- Task tracker is in Notion : https://www.notion.so/262d51d057a942dcb0af645e4d8d76ae when we talk about tasks this is the place to check and update

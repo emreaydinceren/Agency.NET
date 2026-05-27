@@ -9,8 +9,12 @@ public sealed record Context
     /// <summary>Gets the user's query that seeds the conversation.</summary>
     public required QueryContext Query { get; init; }
 
-    /// <summary>Gets the knowledge context re-injected into the system prompt each iteration.</summary>
-    public KnowledgeContext Knowledge { get; init; } = KnowledgeContext.Empty;
+    /// <summary>
+    /// Gets or sets the knowledge context re-injected into the system prompt each iteration.
+    /// Settable (not <c>init</c>-only) so lifecycle hooks such as <c>OnSessionStarted</c> can refresh
+    /// domain facts mid-session; the rebuilt system prompt picks up the change on the next iteration.
+    /// </summary>
+    public KnowledgeContext Knowledge { get; set; } = KnowledgeContext.Empty;
 
     /// <summary>Gets the memory context for this session.</summary>
     public MemoryContext Memory { get; init; } = MemoryContext.Empty;

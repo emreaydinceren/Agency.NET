@@ -115,4 +115,60 @@ public sealed class AgentOnSessionStartedHookTests
         Exception? ex = await Record.ExceptionAsync(() => RunToCompletion(agent, MakeContext()));
         Assert.Null(ex);
     }
+
+    /// <summary>
+    /// Verifies the documented pattern: an <c>OnSessionStarted</c> hook can append a fact to
+    /// <see cref="Context.Knowledge"/>, and that fact reaches the system prompt the LLM receives.
+    /// </summary>
+    [Fact]
+    public async Task OnSessionStarted_CanAppendKnowledgeFact_ReachesSystemPrompt()
+    {
+        const string fact = "Today's sprint: auth hardening";
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(TextResponse("done"));
+        var hooks = new AgentHooks
+        {
+            OnSessionStarted = (ctx, _) =>
+            {
+                ctx.AgentContext.Knowledge = ctx.AgentContext.Knowledge with
+                {
+                    Facts = [.. ctx.AgentContext.Knowledge.Facts, fact],
+                };
+                return Task.CompletedTask;
+            },
+        };
+        var agent = new Agent(llm, "model", hooks: hooks);
+        await RunToCompletion(agent, MakeContext());
+        Assert.Contains(llm.ReceivedSystemPrompts, p => p.Contains(fact));
+    }
+
+    /// <summary>
+    /// Verifies a fact added at session start is re-injected on every iteration, not just the first —
+    /// the "always fresh" guarantee of the per-iteration system prompt rebuild.
+    /// </summary>
+    [Fact]
+    public async Task OnSessionStarted_AppendedFact_ReInjectedEveryIteration()
+    {
+        const string fact = "Domain rule: never expose internal IDs";
+        var tool = new FakeTool("t");
+        var registry = new ToolRegistry([tool]);
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(ToolCallResponse("id-1", "t"));
+        llm.EnqueueResponse(TextResponse("done"));
+        var hooks = new AgentHooks
+        {
+            OnSessionStarted = (ctx, _) =>
+            {
+                ctx.AgentContext.Knowledge = ctx.AgentContext.Knowledge with
+                {
+                    Facts = [.. ctx.AgentContext.Knowledge.Facts, fact],
+                };
+                return Task.CompletedTask;
+            },
+        };
+        var agent = new Agent(llm, "model", hooks: hooks);
+        await RunToCompletion(agent, MakeContext(tools: new ToolContext { Registry = registry }));
+        Assert.Equal(2, llm.ReceivedSystemPrompts.Count);
+        Assert.All(llm.ReceivedSystemPrompts, p => Assert.Contains(fact, p));
+    }
 }

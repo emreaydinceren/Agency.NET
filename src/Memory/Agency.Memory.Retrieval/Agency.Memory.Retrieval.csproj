@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Retrieval engine for the Agency long-term memory system. Implements the gated vector search, composite ranking, and context injection for the agent hot path.</Description>
+    <PackageTags>agency.net;ai;memory;retrieval;rag;dotnet</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agentic\Agency.Agentic\Agency.Agentic.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
+  </ItemGroup>
+
+</Project>

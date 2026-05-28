@@ -134,6 +134,12 @@ public sealed class Agent
             ctx.Conversation.Append(new ChatMessage(ChatRole.User, userMessage));
         }
 
+        // Fire OnUserPromptSubmit every ChatAsync call, before entering the agent loop.
+        if (this._hooks.OnUserPromptSubmit is { } onUserPromptSubmit)
+        {
+            await onUserPromptSubmit(ctx, ct);
+        }
+
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         int? timeout = options?.TurnTimeoutSeconds;
         if (timeout is > 0)
@@ -246,6 +252,12 @@ public sealed class Agent
         {
             ct.ThrowIfCancellationRequested();
             ctx.IterationCount++;
+
+            // 1.5. OnPreIteration — fires before system prompt rebuild (Spec §6.5, D.4).
+            if (this._hooks.OnPreIteration is { } onPreIteration)
+            {
+                await onPreIteration(ctx, ct);
+            }
 
             // 2. Build a fresh system prompt every iteration.
             string systemPrompt = SystemPromptBuilder.Build(ctx);
@@ -425,6 +437,12 @@ public sealed class Agent
             foreach (ToolInvokedEvent evt in toolEvents)
             {
                 yield return evt;
+            }
+
+            // OnPostToolBatch fires after all parallel tool calls settle (Spec §6.5, D.4).
+            if (this._hooks.OnPostToolBatch is { } onPostToolBatch)
+            {
+                await onPostToolBatch(toolEvents, ctx, ct);
             }
 
             // Add one Tool-role message per result so each callId is paired correctly.

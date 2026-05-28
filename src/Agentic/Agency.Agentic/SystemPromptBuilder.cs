@@ -47,6 +47,38 @@ public static class SystemPromptBuilder
             }
         }
 
+        // Memory-retrieval records: Facts (from retrieval engine, Spec §6.4 / D.3).
+        if (ctx.Knowledge.Records.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Facts");
+            foreach (MemoryRecord record in ctx.Knowledge.Records)
+            {
+                sb.AppendLine($"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
+                sb.AppendLine($"  {record.Value}");
+            }
+        }
+
+        // Memory-retrieval records: Episodic memories (from retrieval engine, Spec §6.4 / D.3).
+        if (ctx.Memory.Records.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Memories");
+            foreach (MemoryRecord record in ctx.Memory.Records)
+            {
+                sb.AppendLine($"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
+                sb.AppendLine($"  {record.Value}");
+            }
+        }
+
+        // When both Record collections are empty, note it explicitly so the LLM knows
+        // there are no retrieved memories (Spec §13 — "No relevant memories yet.").
+        if (ctx.Knowledge.Records.Count == 0 && ctx.Memory.Records.Count == 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("No relevant memories yet.");
+        }
+
         // Temporal grounding.
         if (ctx.Temporal.CurrentDateUtc is { } date)
         {
@@ -80,5 +112,46 @@ public static class SystemPromptBuilder
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Converts a <see cref="TimeSpan"/> age into a human-readable relative string
+    /// such as "just now", "3 minutes ago", "2 hours ago", "5 days ago", etc.
+    /// </summary>
+    /// <param name="age">The elapsed time since the record was last updated.</param>
+    /// <returns>A human-readable recency string.</returns>
+    internal static string Humanize(TimeSpan age)
+    {
+        if (age.TotalSeconds < 60)
+        {
+            return "just now";
+        }
+
+        if (age.TotalMinutes < 60)
+        {
+            int minutes = (int)age.TotalMinutes;
+            return $"{minutes} minute{(minutes == 1 ? string.Empty : "s")} ago";
+        }
+
+        if (age.TotalHours < 24)
+        {
+            int hours = (int)age.TotalHours;
+            return $"{hours} hour{(hours == 1 ? string.Empty : "s")} ago";
+        }
+
+        if (age.TotalDays < 7)
+        {
+            int days = (int)age.TotalDays;
+            return $"{days} day{(days == 1 ? string.Empty : "s")} ago";
+        }
+
+        if (age.TotalDays < 30)
+        {
+            int weeks = (int)(age.TotalDays / 7);
+            return $"{weeks} week{(weeks == 1 ? string.Empty : "s")} ago";
+        }
+
+        int months = (int)(age.TotalDays / 30);
+        return $"{months} month{(months == 1 ? string.Empty : "s")} ago";
     }
 }

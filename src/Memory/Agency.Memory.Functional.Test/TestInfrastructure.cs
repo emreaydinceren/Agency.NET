@@ -12,6 +12,31 @@ using IEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
 namespace Agency.Memory.Functional.Test;
 
 /// <summary>
+/// Thrown by <see cref="TestInfrastructure.WaitForDistillationOrFailAsync"/> when the
+/// distiller emits <see cref="DistillationFailedEvent"/> before completing successfully.
+/// Carries the <see cref="DistillationFailedEvent.Reason"/> text so the test can
+/// surface the real cause instead of a misleading timeout message.
+/// </summary>
+internal sealed class DistillationFailedException : Exception
+{
+    /// <summary>Gets the underlying <see cref="DistillationFailedEvent"/>.</summary>
+    internal DistillationFailedEvent Event { get; }
+
+    /// <summary>
+    /// Initialises the exception with the failed event.
+    /// </summary>
+    /// <param name="failedEvent">The event that caused the failure.</param>
+    internal DistillationFailedException(DistillationFailedEvent failedEvent)
+        : base(
+            $"Distillation failed for session '{failedEvent.SessionId}' " +
+            $"(user '{failedEvent.UserId}'): {failedEvent.Reason} " +
+            $"[dead-lettered={failedEvent.DeadLettered}]")
+    {
+        this.Event = failedEvent;
+    }
+}
+
+/// <summary>
 /// Shared test infrastructure for end-to-end functional tests.
 /// </summary>
 /// <remarks>
@@ -253,6 +278,114 @@ internal static class TestInfrastructure
         {
             throw new TimeoutException(
                 $"Timed out waiting for event {typeof(T).Name} after {timeout}.");
+        }
+    }
+
+    /// <summary>
+    /// Races a <see cref="DistillationCompletedEvent"/> against a
+    /// <see cref="DistillationFailedEvent"/> for the given session on <paramref name="bus"/>.
+    /// </summary>
+    /// <param name="bus">The event bus to subscribe to.</param>
+    /// <param name="userId">The user identifier to match.</param>
+    /// <param name="sessionId">The session identifier to match.</param>
+    /// <param name="timeout">Maximum wait duration before throwing <see cref="TimeoutException"/>.</param>
+    /// <param name="ct">Optional external cancellation token.</param>
+    /// <returns>The matching <see cref="DistillationCompletedEvent"/> on success.</returns>
+    /// <exception cref="DistillationFailedException">
+    /// Thrown when <see cref="DistillationFailedEvent"/> arrives first; the exception carries
+    /// the real failure reason so the test can surface it directly.
+    /// </exception>
+    /// <exception cref="TimeoutException">
+    /// Thrown when neither event arrives within <paramref name="timeout"/>.
+    /// </exception>
+    internal static async Task<DistillationCompletedEvent> WaitForDistillationOrFailAsync(
+        IAsyncEventBus bus,
+        string userId,
+        string sessionId,
+        TimeSpan timeout,
+        CancellationToken ct = default)
+    {
+        var completedTcs =
+            new TaskCompletionSource<DistillationCompletedEvent>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var failedTcs =
+            new TaskCompletionSource<DistillationFailedEvent>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using IDisposable completedSub =
+            bus.Subscribe<DistillationCompletedEvent>(async (evt, _) =>
+            {
+                if (evt.UserId == userId && evt.SessionId == sessionId)
+                {
+                    completedTcs.TrySetResult(evt);
+                }
+
+                await Task.CompletedTask;
+            });
+
+        using IDisposable failedSub =
+            bus.Subscribe<DistillationFailedEvent>(async (evt, _) =>
+            {
+                if (evt.UserId == userId && evt.SessionId == sessionId)
+                {
+                    failedTcs.TrySetResult(evt);
+                }
+
+                await Task.CompletedTask;
+            });
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linkedCts.CancelAfter(timeout);
+
+        try
+        {
+            Task winner = await Task.WhenAny(
+                completedTcs.Task,
+                failedTcs.Task).WaitAsync(linkedCts.Token);
+
+            if (winner == failedTcs.Task)
+            {
+                throw new DistillationFailedException(await failedTcs.Task);
+            }
+
+            return await completedTcs.Task;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Timed out waiting for distillation event for session '{sessionId}' after {timeout}.");
+        }
+    }
+
+    /// <summary>
+    /// Probes the given <paramref name="embedder"/> with a short sentinel string and
+    /// returns the number of dimensions in the returned vector.
+    /// </summary>
+    /// <param name="embedder">The embedding generator to probe.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>
+    /// The detected dimension count, or <c>1536</c> as a safe fallback if the embedder
+    /// is unreachable or returns an empty vector.
+    /// </returns>
+    /// <remarks>
+    /// Call this once per test class initialisation after the LM Studio reachability check
+    /// has passed. If the embedder is transiently unreachable the method returns the fallback
+    /// so that fixture init never hard-fails; the LM Studio skip-reason check will handle
+    /// skipping individual tests.
+    /// </remarks>
+    internal static async Task<int> DetectEmbeddingDimAsync(
+        IEmbeddingGenerator embedder,
+        CancellationToken ct = default)
+    {
+        const int FallbackDim = 1536;
+        try
+        {
+            ReadOnlyMemory<float> probe = await embedder.GenerateEmbeddingAsync("dim-probe", ct);
+            return probe.Length > 0 ? probe.Length : FallbackDim;
+        }
+        catch
+        {
+            return FallbackDim;
         }
     }
 

@@ -24,18 +24,7 @@ public sealed class PostgresMemoryStoreTests_LastWritten : IAsyncLifetime
     /// <summary>Initialises the store.</summary>
     public async ValueTask InitializeAsync()
     {
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<PostgresMemoryStoreTests_LastWritten>()
-            .AddEnvironmentVariables()
-            .Build();
-
-        var cs = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException("Connection string 'PostgreSql' not found.");
-
-        var builder = new NpgsqlDataSourceBuilder(cs);
-        builder.UseVector();
-        this._dataSource = builder.Build();
-
+        this._dataSource = TestHelpers.BuildDataSource<PostgresMemoryStoreTests_LastWritten>();
         await TestHelpers.ResetSchemaAsync(this._dataSource, 1536, TestContext.Current.CancellationToken);
     }
 

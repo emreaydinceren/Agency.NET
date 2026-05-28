@@ -17,17 +17,7 @@ public sealed class WatermarkRepositoryTests : IAsyncLifetime
     /// <summary>Initialises the repository.</summary>
     public async ValueTask InitializeAsync()
     {
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<WatermarkRepositoryTests>()
-            .AddEnvironmentVariables()
-            .Build();
-
-        var cs = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException("Connection string 'PostgreSql' not found.");
-
-        var builder = new NpgsqlDataSourceBuilder(cs);
-        builder.UseVector();
-        this._dataSource = builder.Build();
+        this._dataSource = TestHelpers.BuildDataSource<WatermarkRepositoryTests>();
         this._repo = new WatermarkRepository(this._dataSource);
 
         await TestHelpers.ResetSchemaAsync(this._dataSource, 1536, TestContext.Current.CancellationToken);

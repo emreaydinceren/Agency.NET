@@ -25,17 +25,7 @@ public sealed class PostgresMemoryStoreTests_Forget : IAsyncLifetime
     /// <summary>Initialises the store.</summary>
     public async ValueTask InitializeAsync()
     {
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<PostgresMemoryStoreTests_Forget>()
-            .AddEnvironmentVariables()
-            .Build();
-
-        var cs = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException("Connection string 'PostgreSql' not found.");
-
-        var builder = new NpgsqlDataSourceBuilder(cs);
-        builder.UseVector();
-        this._dataSource = builder.Build();
+        this._dataSource = TestHelpers.BuildDataSource<PostgresMemoryStoreTests_Forget>();
 
         var embedder = CreateDeterministicEmbedder(1536);
         var options = Options.Create(new Agency.Memory.Common.Options.MemoryOptions());

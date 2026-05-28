@@ -20,18 +20,7 @@ public sealed class SchemaInitializerTests : IAsyncLifetime
     /// </summary>
     public async ValueTask InitializeAsync()
     {
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<SchemaInitializerTests>()
-            .AddEnvironmentVariables()
-            .Build();
-
-        var cs = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException(
-                "Connection string 'PostgreSql' not found. Set via user secrets or CONNECTIONSTRINGS__POSTGRESQL env var.");
-
-        var builder = new NpgsqlDataSourceBuilder(cs);
-        builder.UseVector();
-        this._dataSource = builder.Build();
+        this._dataSource = TestHelpers.BuildDataSource<SchemaInitializerTests>();
         this._initializer = new MemorySchemaInitializer(this._dataSource);
 
         // Drop the records table so the schema tests can always (re)create it with dim=1536,
@@ -91,8 +80,9 @@ public sealed class SchemaInitializerTests : IAsyncLifetime
 
         const string sql = @"
             SELECT indexdef FROM pg_indexes
-            WHERE tablename = 'records'
-              AND indexname = 'records_embedding_hnsw';";
+            WHERE schemaname = current_schema()
+              AND tablename  = 'records'
+              AND indexname  = 'records_embedding_hnsw';";
 
         await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
         var result = await cmd.ExecuteScalarAsync(ct) as string;
@@ -114,8 +104,9 @@ public sealed class SchemaInitializerTests : IAsyncLifetime
 
         const string sql = @"
             SELECT COUNT(1) FROM pg_indexes
-            WHERE tablename = 'records'
-              AND indexname = 'records_upsert_key';";
+            WHERE schemaname = current_schema()
+              AND tablename  = 'records'
+              AND indexname  = 'records_upsert_key';";
 
         await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
         var count = (long?)await cmd.ExecuteScalarAsync(ct);
@@ -142,11 +133,15 @@ public sealed class SchemaInitializerTests : IAsyncLifetime
         Assert.Contains("last_distilled_turn_idx", columns);
         Assert.Contains("last_updated_at", columns);
 
-        // Confirm the PK constraint exists
+        // Confirm the PK constraint exists in the current schema (avoid double-counting
+        // a legacy public.watermarks left over from earlier test runs).
         const string pkSql = @"
             SELECT COUNT(1) FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            WHERE t.relname = 'watermarks' AND c.contype = 'p';";
+            JOIN pg_class     t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE t.relname = 'watermarks'
+              AND c.contype = 'p'
+              AND n.nspname = current_schema();";
 
         await using var cmd = new NpgsqlCommand(pkSql, (NpgsqlConnection)conn);
         var count = (long?)await cmd.ExecuteScalarAsync(ct);
@@ -174,8 +169,9 @@ public sealed class SchemaInitializerTests : IAsyncLifetime
 
         const string idxSql = @"
             SELECT COUNT(1) FROM pg_indexes
-            WHERE tablename = 'dead_letter'
-              AND indexname = 'dead_letter_created_at_idx';";
+            WHERE schemaname = current_schema()
+              AND tablename  = 'dead_letter'
+              AND indexname  = 'dead_letter_created_at_idx';";
 
         await using var cmd = new NpgsqlCommand(idxSql, (NpgsqlConnection)conn);
         var count = (long?)await cmd.ExecuteScalarAsync(ct);
@@ -239,9 +235,12 @@ public sealed class SchemaInitializerTests : IAsyncLifetime
         string tableName,
         CancellationToken ct)
     {
+        // Scope to current_schema() so the helper works regardless of whether tests run with
+        // the default search_path or with the isolated per-project schema configured by
+        // TestHelpers.BuildDataSource.
         const string sql = @"
             SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = @tbl;";
+            WHERE table_schema = current_schema() AND table_name = @tbl;";
 
         await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
         cmd.Parameters.AddWithValue("tbl", tableName);

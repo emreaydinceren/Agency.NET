@@ -12,9 +12,23 @@ namespace Agency.Memory.Sql.Postgres.Test;
 internal static class TestHelpers
 {
     /// <summary>
+    /// Per-project Postgres schema. Isolating the <c>records</c>/<c>watermarks</c>/<c>dead_letter</c>/
+    /// <c>user_state</c> tables here keeps this test assembly's schema resets from racing with
+    /// <c>Agency.Memory.Functional.Test</c> (which targets the same database but a different schema)
+    /// when both assemblies run concurrently under <c>dotnet test</c>.
+    /// </summary>
+    private const string TestSchema = "mem_sql_test";
+
+    /// <summary>
     /// Builds a <see cref="NpgsqlDataSource"/> from user secrets / environment variables.
     /// Uses the key <c>ConnectionStrings:PostgreSql</c>.
     /// </summary>
+    /// <remarks>
+    /// Every physical connection opened by the returned data source is initialised to point at
+    /// <see cref="TestSchema"/> (with <c>public</c> as a fallback so the <c>vector</c> extension
+    /// type remains reachable). This guarantees that all DDL/DML for this assembly's tests
+    /// targets a private schema, regardless of how connections are pooled or reused.
+    /// </remarks>
     internal static NpgsqlDataSource BuildDataSource<TSecretContext>() where TSecretContext : class
     {
         var config = new ConfigurationBuilder()
@@ -25,9 +39,38 @@ internal static class TestHelpers
         var cs = config.GetConnectionString("PostgreSql")
             ?? throw new InvalidOperationException("Connection string 'PostgreSql' not found.");
 
-        var builder = new NpgsqlDataSourceBuilder(cs);
+        // Preserve the SET search_path issued by the physical-connection initializer across
+        // pool re-acquires. Without this Npgsql resets the session (DISCARD ALL) on close,
+        // which would drop us back to the default search_path and reintroduce the cross-project
+        // race on the public `records` table.
+        var csb = new NpgsqlConnectionStringBuilder(cs) { NoResetOnClose = true };
+        var builder = new NpgsqlDataSourceBuilder(csb.ConnectionString);
         builder.UseVector();
+        ConfigureSchemaIsolation(builder, TestSchema);
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Wires a physical-connection initialiser that pins every new connection to
+    /// <paramref name="schemaName"/>. The schema is created on first use; the search_path is set
+    /// so that unqualified DDL/DML lands in the project schema while still resolving the shared
+    /// <c>vector</c> type from <c>public</c>.
+    /// </summary>
+    private static void ConfigureSchemaIsolation(NpgsqlDataSourceBuilder builder, string schemaName)
+    {
+        string initSql = $"CREATE SCHEMA IF NOT EXISTS {schemaName}; SET search_path TO {schemaName}, public;";
+
+        builder.UsePhysicalConnectionInitializer(
+            conn =>
+            {
+                using var cmd = new NpgsqlCommand(initSql, conn);
+                cmd.ExecuteNonQuery();
+            },
+            async conn =>
+            {
+                await using var cmd = new NpgsqlCommand(initSql, conn);
+                await cmd.ExecuteNonQueryAsync();
+            });
     }
 
     /// <summary>

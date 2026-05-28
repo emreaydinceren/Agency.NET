@@ -23,17 +23,7 @@ public sealed class PostgresMemoryStoreContractTests : IMemoryStoreContractTests
     /// <summary>Initialises the data source and schema before tests run.</summary>
     public async ValueTask InitializeAsync()
     {
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<PostgresMemoryStoreContractTests>()
-            .AddEnvironmentVariables()
-            .Build();
-
-        var cs = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException("Connection string 'PostgreSql' not found.");
-
-        var builder = new NpgsqlDataSourceBuilder(cs);
-        builder.UseVector();
-        this._dataSource = builder.Build();
+        this._dataSource = TestHelpers.BuildDataSource<PostgresMemoryStoreContractTests>();
 
         // Contract tests use 2-element embedding arrays. We must recreate the schema with dim=2.
         // TestHelpers.ResetSchemaAsync drops the records table first so no mismatch occurs.

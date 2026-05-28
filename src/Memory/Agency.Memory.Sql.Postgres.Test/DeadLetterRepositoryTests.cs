@@ -1,5 +1,4 @@
 using Agency.Memory.Sql.Postgres;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres.Test;
@@ -16,17 +15,7 @@ public sealed class DeadLetterRepositoryTests : IAsyncLifetime
     /// <summary>Initialises the repository.</summary>
     public async ValueTask InitializeAsync()
     {
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<DeadLetterRepositoryTests>()
-            .AddEnvironmentVariables()
-            .Build();
-
-        var cs = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException("Connection string 'PostgreSql' not found.");
-
-        var builder = new NpgsqlDataSourceBuilder(cs);
-        builder.UseVector();
-        this._dataSource = builder.Build();
+        this._dataSource = TestHelpers.BuildDataSource<DeadLetterRepositoryTests>();
         this._repo = new DeadLetterRepository(this._dataSource);
 
         await TestHelpers.ResetSchemaAsync(this._dataSource, 1536, TestContext.Current.CancellationToken);
@@ -44,15 +33,17 @@ public sealed class DeadLetterRepositoryTests : IAsyncLifetime
     public async Task Write_PersistsJobPayloadAsJsonb_AndErrorText()
     {
         var ct = TestContext.Current.CancellationToken;
-        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var uid = UniqueUser();
+        var before = DateTimeOffset.UtcNow.AddMinutes(-1);
         var payload = new { SessionId = "s1", TurnIndex = 42 };
         var error = new InvalidOperationException("LLM returned 400");
 
-        await this._repo.WriteAsync("u1", "s1", "distillation", payload, error, ct);
+        await this._repo.WriteAsync(uid, "s1", "distillation", payload, error, ct);
 
-        var entries = await this._repo.ListSinceAsync(before, ct);
+        var entries = (await this._repo.ListSinceAsync(before, ct))
+            .Where(e => e.UserId == uid)
+            .ToList();
         Assert.Single(entries);
-        Assert.Equal("u1", entries[0].UserId);
         Assert.Equal("s1", entries[0].SessionId);
         Assert.Equal("distillation", entries[0].JobKind);
         Assert.Contains("400", entries[0].Error);
@@ -62,20 +53,35 @@ public sealed class DeadLetterRepositoryTests : IAsyncLifetime
     /// <summary>
     /// ListSince returns only rows created after the specified cutoff.
     /// </summary>
+    /// <remarks>
+    /// The cutoff is derived from the server-assigned <c>created_at</c> of the first row so that
+    /// the comparison stays in Postgres's clock frame — mixing client-side <c>UtcNow</c> with
+    /// server-side <c>now()</c> failed intermittently in CI under container clock skew.
+    /// All assertions are scoped to a unique user id so unrelated dead-letter rows left by
+    /// other tests do not pollute the result.
+    /// </remarks>
     [Fact]
     public async Task ListSince_ReturnsRowsCreatedAfterCutoff()
     {
         var ct = TestContext.Current.CancellationToken;
-        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var uid = UniqueUser();
+        var before = DateTimeOffset.UtcNow.AddMinutes(-1);
 
-        await this._repo.WriteAsync("u1", null, "consolidation", new { }, new Exception("err1"), ct);
-        await Task.Delay(50, ct);
-        var cutoff = DateTimeOffset.UtcNow;
-        await Task.Delay(50, ct);
-        await this._repo.WriteAsync("u1", null, "consolidation", new { }, new Exception("err2"), ct);
+        await this._repo.WriteAsync(uid, null, "consolidation", new { }, new Exception("err1"), ct);
 
-        var sinceStart = await this._repo.ListSinceAsync(before, ct);
-        var sinceCutoff = await this._repo.ListSinceAsync(cutoff, ct);
+        var firstRow = (await this._repo.ListSinceAsync(before, ct))
+            .Single(e => e.UserId == uid);
+        var cutoff = firstRow.CreatedAt;
+
+        await Task.Delay(50, ct);
+        await this._repo.WriteAsync(uid, null, "consolidation", new { }, new Exception("err2"), ct);
+
+        var sinceStart = (await this._repo.ListSinceAsync(before, ct))
+            .Where(e => e.UserId == uid)
+            .ToList();
+        var sinceCutoff = (await this._repo.ListSinceAsync(cutoff, ct))
+            .Where(e => e.UserId == uid)
+            .ToList();
 
         Assert.Equal(2, sinceStart.Count);
         Assert.Single(sinceCutoff);
@@ -83,6 +89,8 @@ public sealed class DeadLetterRepositoryTests : IAsyncLifetime
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static string UniqueUser() => $"u-{Guid.NewGuid():N}";
 
     private async Task TruncateAsync(CancellationToken ct)
     {

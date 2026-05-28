@@ -29,6 +29,13 @@ internal static class TestInfrastructure
     private const string LmStudioBaseUrlConfigKey = "MemoryFunctional:LmStudio:BaseUrl";
     private const string PostgresConnectionStringConfigKey = "ConnectionStrings:PostgreSql";
 
+    /// <summary>
+    /// Per-project Postgres schema. Isolating this assembly's tables here prevents schema-reset
+    /// races against <c>Agency.Memory.Sql.Postgres.Test</c> (which targets the same database but
+    /// uses its own schema) when <c>dotnet test</c> executes the two assemblies in parallel.
+    /// </summary>
+    private const string TestSchema = "mem_func_test";
+
     // ── Configuration ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -99,14 +106,47 @@ internal static class TestInfrastructure
     /// <summary>
     /// Builds an <see cref="NpgsqlDataSource"/> from configuration.
     /// </summary>
+    /// <remarks>
+    /// Each physical connection is initialised to point at <see cref="TestSchema"/> so that all
+    /// table operations are isolated from the sibling <c>Agency.Memory.Sql.Postgres.Test</c>
+    /// assembly. <c>public</c> stays on the search_path so the <c>vector</c> extension type is
+    /// still resolvable.
+    /// </remarks>
     internal static NpgsqlDataSource BuildDataSource(IConfiguration config)
     {
         string cs = config[PostgresConnectionStringConfigKey]
             ?? throw new InvalidOperationException("Postgres connection string not configured.");
 
-        var builder = new NpgsqlDataSourceBuilder(cs);
+        // Preserve the SET search_path issued by the physical-connection initializer across
+        // pool re-acquires. Without this Npgsql resets the session (DISCARD ALL) on close
+        // and our schema isolation would only hold for the first command on each connection.
+        var csb = new NpgsqlConnectionStringBuilder(cs) { NoResetOnClose = true };
+        var builder = new NpgsqlDataSourceBuilder(csb.ConnectionString);
         builder.UseVector();
+        ConfigureSchemaIsolation(builder, TestSchema);
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Wires a physical-connection initialiser that pins every new connection to
+    /// <paramref name="schemaName"/>. Mirrors the helper used by
+    /// <c>Agency.Memory.Sql.Postgres.Test</c>; the schema is created on first use.
+    /// </summary>
+    private static void ConfigureSchemaIsolation(NpgsqlDataSourceBuilder builder, string schemaName)
+    {
+        string initSql = $"CREATE SCHEMA IF NOT EXISTS {schemaName}; SET search_path TO {schemaName}, public;";
+
+        builder.UsePhysicalConnectionInitializer(
+            conn =>
+            {
+                using var cmd = new NpgsqlCommand(initSql, conn);
+                cmd.ExecuteNonQuery();
+            },
+            async conn =>
+            {
+                await using var cmd = new NpgsqlCommand(initSql, conn);
+                await cmd.ExecuteNonQueryAsync();
+            });
     }
 
     /// <summary>

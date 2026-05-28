@@ -51,7 +51,10 @@ public sealed class MemorySchemaInitializer
 
     private static async Task EnsureExtensionAsync(NpgsqlConnection conn, CancellationToken ct)
     {
-        const string sql = "CREATE EXTENSION IF NOT EXISTS vector;";
+        // Pin the extension to the public schema so the vector type is reachable from any
+        // search_path that includes public (the default, and what test infrastructure relies on
+        // when each test project uses its own per-project schema).
+        const string sql = "CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;";
         await using var cmd = new NpgsqlCommand(sql, conn);
         await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -59,10 +62,13 @@ public sealed class MemorySchemaInitializer
     private static async Task CheckDimensionMismatchAsync(NpgsqlConnection conn, int dim, CancellationToken ct)
     {
         // Check if the column already exists and parse its declared dimension from the type name.
+        // We scope to current_schema() (rather than hard-coding 'public') so that callers using
+        // a custom search_path — e.g. test projects that isolate their tables into a private
+        // schema — still get a correct mismatch verdict.
         const string sql = @"
             SELECT udt_name
             FROM information_schema.columns
-            WHERE table_schema = 'public'
+            WHERE table_schema = current_schema()
               AND table_name   = 'records'
               AND column_name  = 'embedding';";
 
@@ -75,14 +81,17 @@ public sealed class MemorySchemaInitializer
         }
 
         // The pg type name for vector(N) is stored as 'vector' in udt_name.
-        // To get N we query pg_attribute / pg_type.
+        // To get N we query pg_attribute / pg_type. Scope to current_schema() so we don't
+        // pick up a same-named table that lives in a different schema.
         const string dimSql = @"
             SELECT atttypmod
             FROM pg_attribute a
             JOIN pg_class     c ON c.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relname  = 'records'
               AND a.attname  = 'embedding'
-              AND a.attnum   > 0;";
+              AND a.attnum   > 0
+              AND n.nspname  = current_schema();";
 
         await using var dimCmd = new NpgsqlCommand(dimSql, conn);
         var raw = await dimCmd.ExecuteScalarAsync(ct);

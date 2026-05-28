@@ -158,4 +158,6 @@ SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
 - Bug tracker is in Notion : https://www.notion.so/99f10b50431d4089b667a8ec603e9e60 when we talk about bugs this is the place to check and update
 - Task tracker is in Notion : https://www.notion.so/262d51d057a942dcb0af645e4d8d76ae when we talk about tasks this is the place to check and update
 
-## C# principles and conventions are documented in `src/Agents/CSharpPrinciples.md` — read before writing or editing C# code.
+## C# principles and conventions
+
+If you are writing code read `src/Agents/CSharpPrinciples.md` for C# best practices and conventions that we follow in this codebase.

@@ -50,18 +50,30 @@ Configure the endpoint and model names in `appsettings.json` or user secrets:
 
 ## Running Tests
 
-```bash
+```powershell
 # Run all functional tests (requires Postgres + LM Studio):
 dotnet test src/Memory/Agency.Memory.Functional.Test --filter "Category=Functional"
 
+# Run a single scenario group (e.g. Capture & Recall):
+dotnet test src/Memory/Agency.Memory.Functional.Test --filter "Category=Functional&Group=Capture"
+
+# Run hygiene-group tests only:
+dotnet test src/Memory/Agency.Memory.Functional.Test --filter "Category=Functional&Group=Hygiene"
+
+# Skip latency-sensitive (Profile=Latency) tests that are flake-prone on slow LLM days:
+dotnet test src/Memory/Agency.Memory.Functional.Test --filter "Category=Functional&Profile!=Latency"
+
 # Run only Postgres-required tests (no LM Studio needed):
 # G.2 (ForgetMe), G.3 (Latency), G.4 (Crash Recovery), G.5 (Consolidator)
-dotnet test src/Memory/Agency.Memory.Functional.Test \
-  --filter "Category=Functional&FullyQualifiedName!~EndToEnd_FactWrittenInSessionN"
+dotnet test src/Memory/Agency.Memory.Functional.Test --filter "Category=Functional&FullyQualifiedName!~EndToEnd_FactWrittenInSessionN"
 
 # Exclude ALL functional tests (CI default):
 dotnet test src/Agency.slnx --filter "Category!=Functional"
 ```
+
+> **CI note:** The functional suite is not part of the default CI run. A nightly job
+> (tracked as a follow-up) executes it against the shared LM Studio host. Do not expect
+> green-on-PR for E2E tests.
 
 ## Tests
 

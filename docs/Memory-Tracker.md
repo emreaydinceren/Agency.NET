@@ -97,11 +97,21 @@ TDD invariant: every `*.T` test task must be **Done** (Red committed) before its
 | F.3 Implement scheduler | | | ✔ |
 | **D7. End-to-end Functional — `Agency.Memory.Functional.Test` (Workstream G)** | | | |
 | G.0 Scaffold `Agency.Memory.Functional.Test` project | | | ✔ |
-| G.1 `EndToEnd_FactWrittenInSessionN_RecalledInSessionNPlus1` | | | ✔ |
-| G.2 `EndToEnd_ForgetMeWipesAllUserData` | | | ✔ |
-| G.3 `EndToEnd_HighFrequencyTurns_HotPathLatencyUnaffected` | | | ✔ |
-| G.4 `EndToEnd_DistillerCrash_RecoversFromWatermark` | | | ✔ |
-| G.5 `EndToEnd_ConsolidatorMergesContradiction_LatestStateRetained` | | | ✔ |
+| G.1 `EndToEnd_FactWrittenInSessionN_RecalledInSessionNPlus1` → E2E **E1.1** | | | ✔ |
+| G.2 `EndToEnd_ForgetMeWipesAllUserData` → E2E **E2.2** | | | ✔ |
+| G.3 `EndToEnd_HighFrequencyTurns_HotPathLatencyUnaffected` → E2E **E6.1** | | | ✔ |
+| G.4 `EndToEnd_DistillerCrash_RecoversFromWatermark` → E2E **E5.1** | | | ✔ |
+| G.5 `EndToEnd_ConsolidatorMergesContradiction_LatestStateRetained` → E2E **E3.1** | | | ✔ |
+
+---
+
+## E2E Suite Status (Memory-TestPlan.md)
+
+The black-box end-to-end suite (`Memory-TestPlan.md`) is tracked in detail in
+[`Memory-TestPlan-Tracker.md`](Memory-TestPlan-Tracker.md); open questions in
+[`Memory-TestPlan-Issues.md`](Memory-TestPlan-Issues.md).
+
+**Status: COMPLETE — 41/41 deliverables Done** (5 `Infrastructure/` primitives + 36 E*.* tests, 8 groups). Full-solution build 0/0; capstone full-suite run 40 pass / 0 fail / 1 skip (the lone skip is this table's legacy G.1 `EndToEndRecallTests`, superseded by E2E **E1.1**). The suite is `[Trait("Category","Functional")]` and excluded from the default CI run (nightly per §5). E2E **E3.4** and **E6.1** are advisory (LLM-variance / latency). Open production-side questions for the owner: **TI-8** (distiller terminal-event asymmetry + `SuppressThinking`; consolidator tool-event observable; reconciliation-prompt DELETE rule) — these are recommendations, not regressions.
 
 ---
 

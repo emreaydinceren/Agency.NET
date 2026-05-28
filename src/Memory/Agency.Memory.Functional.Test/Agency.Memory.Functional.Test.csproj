@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <UserSecretsId>AgencySecrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
+    <ProjectReference Include="..\..\Llm\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Consolidator\Agency.Memory.Consolidator.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Distiller\Agency.Memory.Distiller.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Hygiene\Agency.Memory.Hygiene.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Retrieval\Agency.Memory.Retrieval.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Sql.Postgres\Agency.Memory.Sql.Postgres.csproj" />
+  </ItemGroup>
+
+</Project>

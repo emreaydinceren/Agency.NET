@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Memory.Retrieval\Agency.Memory.Retrieval.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />
+  </ItemGroup>
+
+</Project>

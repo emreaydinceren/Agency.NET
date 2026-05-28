@@ -1,0 +1,109 @@
+using Agency.Agentic;
+using Agency.Agentic.Contexts;
+using Agency.Agentic.Tools;
+using Microsoft.Extensions.AI;
+using Agency.Llm.Common.Tools;
+using Agency.Memory.Common.Options;
+using Agency.Memory.Common.Records;
+using Agency.Memory.Common.Storage;
+using Agency.Memory.Consolidator.Prompts;
+using Agency.Memory.Consolidator.Tools;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Agency.Memory.Consolidator.Services;
+
+/// <summary>
+/// Factory that builds the consolidator sub-agent and returns a delegate suitable
+/// for injection into <see cref="ConsolidatorBackgroundService"/> (Spec §6.3 / §8.4).
+/// </summary>
+/// <remarks>
+/// The sub-agent is an instance of the existing <see cref="Agent"/> harness with:
+/// <list type="bullet">
+///   <item>The four consolidation tools: Merge, Update, Delete, Done.</item>
+///   <item>The reconciliation prompt from <see cref="ConsolidatorReconciliationPrompt"/>.</item>
+///   <item>Two stop conditions: <c>MaxIterations</c> and <c>MaxCostUsd</c>.</item>
+/// </list>
+/// The "done" stop condition fires when <see cref="MemoryDoneTool"/> sets a flag.
+/// Because <see cref="StopCondition"/> only inspects the <see cref="Context"/>, the flag
+/// is stored on a wrapper that the <see cref="StopCondition"/> delegate captures.
+/// </remarks>
+internal static class ConsolidatorSubAgentFactory
+{
+    /// <summary>
+    /// Creates a <see cref="Func{T1,T2,T3,Task}"/> that, when invoked, runs the consolidator
+    /// sub-agent for the given user over the provided record set.
+    /// </summary>
+    /// <param name="llm">The LLM client used by the sub-agent.</param>
+    /// <param name="model">The model identifier forwarded to the LLM.</param>
+    /// <param name="store">The memory store the tools operate on.</param>
+    /// <param name="options">Consolidator configuration (MaxIterations, MaxCostUsd).</param>
+    /// <param name="logger">Logger forwarded to the agent.</param>
+    /// <returns>
+    /// A delegate <c>(userId, records, ct) => Task</c> that drives the sub-agent to completion.
+    /// </returns>
+    internal static Func<string, IReadOnlyList<Record>, CancellationToken, Task> CreateRunner(
+        IChatClient llm,
+        string model,
+        IMemoryStore store,
+        IOptions<ConsolidatorOptions> options,
+        ILogger<Agent>? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(llm);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(options);
+
+        return async (userId, records, ct) =>
+        {
+            var opts = options.Value;
+
+            // Done flag: set by Memory_Done; read by the stop condition.
+            bool done = false;
+
+            // Build tools for this run.
+            var mergeToolInstance = new MemoryMergeTool(store, userId);
+            var updateToolInstance = new MemoryUpdateTool(store, userId);
+            var deleteToolInstance = new MemoryDeleteTool(store, userId);
+            var doneTool = new MemoryDoneTool(onDone: () => { done = true; });
+
+            var registry = new ToolRegistry();
+            registry.Register(mergeToolInstance);
+            registry.Register(updateToolInstance);
+            registry.Register(deleteToolInstance);
+            registry.Register(doneTool);
+
+            // Stop conditions: Memory_Done called OR max iterations OR budget exceeded.
+            var stop = StopConditions.Any(
+                StopConditions.StepCountIs(opts.MaxIterations),
+                StopConditions.BudgetExceeded(opts.MaxCostUsd),
+                (ctx, _) => done);
+
+            var agent = new Agent(
+                llm: llm,
+                model: model,
+                clientType: "Consolidator",
+                stopWhen: stop,
+                logger: logger);
+
+            // Build the initial prompt from the records dump.
+            double factThreshold = 0.85;
+            double memoryThreshold = 0.75;
+            string prompt = ConsolidatorReconciliationPrompt.Render(
+                userId: userId,
+                records: records,
+                maxIterations: opts.MaxIterations,
+                factThreshold: factThreshold,
+                memoryThreshold: memoryThreshold);
+
+            var toolCtx = new ToolContext { Registry = registry };
+            var session = new ChatSession(agent, new AgentOptions(), toolCtx);
+
+            // Drive the agent to completion, discarding events.
+            await foreach (AgentEvent _ in session.SendAsync(prompt, ct).ConfigureAwait(false))
+            {
+                ct.ThrowIfCancellationRequested();
+            }
+        };
+    }
+}

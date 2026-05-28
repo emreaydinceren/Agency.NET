@@ -93,19 +93,10 @@ cd src && docker-compose up -d
 
 This is a .NET 10 solution that provides a RAG (Retrieval-Augmented Generation) pipeline: generate embeddings → store in PostgreSQL/pgvector → query → format results → send to LLM.
 
-### Project Dependency Graph
+### Project Architecture
 
-```
-Agency.Common               (base: Dataset, IEmbeddingGenerator)
-    ↓
-Agency.Embeddings           (IEmbeddingGenerator → OpenAI-compatible API)
-Agency.SQL                  (PostgreSQL + pgvector; SQLQueryEmbedder injects embeddings)
-Agency.RagFormatter         (Dataset → Markdown table for LLM context)
-Agency.Llm.Abstractions     (ILlmClient interface)
-    ↓
-Agency.Llm.Claude           (Anthropic SDK implementation)
-Agency.Llm.OpenAI           (OpenAI SDK implementation)
-```
+For high level: .\Readme.md
+For details: .\docs\Home.md is entry point to architecture docs, with links to other documentation files.
 
 ## C# Conventions
 
@@ -146,20 +137,6 @@ SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
 - Credentials: `dev_user` / `dev_password`, database: `dev_db`, port `5432`
 - Functional LLM tests target LM Studio at `http://llm-host.example:1234`
 
-### Global Build Config & Centralized Package Management
-
-`src/Directory.Build.props` is the single source of truth for:
-
-- **Package versions** — all NuGet dependencies are pinned here and referenced by version in individual `.csproj` files (no duplicate version strings)
-- **Compiler settings** — `TreatWarningsAsErrors=true` and `Nullable=enable` for all projects
-- **Code standards** — all code must be warning-free and null-safe
-
-When adding or updating a dependency:
-
-1. Add/update the version in `Directory.Build.props`
-2. Reference it in the `.csproj` file without repeating the version number
-3. This ensures consistency across the entire solution and makes dependency updates a single-point change
-
 ## Git & Auth
 
 - Git push may fail due to credential/auth issues on this machine. If push fails, inform the user rather than retrying endlessly.
@@ -180,3 +157,5 @@ When adding or updating a dependency:
 
 - Bug tracker is in Notion : https://www.notion.so/99f10b50431d4089b667a8ec603e9e60 when we talk about bugs this is the place to check and update
 - Task tracker is in Notion : https://www.notion.so/262d51d057a942dcb0af645e4d8d76ae when we talk about tasks this is the place to check and update
+
+## C# principles and conventions are documented in `src/Agents/CSharpPrinciples.md` — read before writing or editing C# code.

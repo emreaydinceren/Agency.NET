@@ -1,6 +1,6 @@
 using Agency.Memory.Common.Jobs;
 using Agency.Memory.Common.Records;
-using Agency.Agentic.Contexts;
+using Agency.Harness.Contexts;
 using Microsoft.Extensions.AI;
 
 namespace Agency.Memory.Distiller.Prompts;

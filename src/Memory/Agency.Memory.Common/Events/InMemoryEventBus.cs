@@ -17,7 +17,7 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
     /// Subscriber lists keyed by the subscribed event type. Each handler is stored as a
     /// down-casting wrapper so publication can dispatch polymorphically to base-type subscribers.
     /// </summary>
-    private readonly ConcurrentDictionary<Type, List<Func<Agency.Agentic.AgentEvent, CancellationToken, Task>>> _handlers = new();
+    private readonly ConcurrentDictionary<Type, List<Func<Agency.Harness.AgentEvent, CancellationToken, Task>>> _handlers = new();
     private readonly ILogger<InMemoryEventBus> _logger;
 
     /// <summary>
@@ -31,16 +31,16 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
 
     /// <inheritdoc/>
     public async Task PublishAsync<T>(T evt, CancellationToken ct = default)
-        where T : Agency.Agentic.AgentEvent
+        where T : Agency.Harness.AgentEvent
     {
         ArgumentNullException.ThrowIfNull(evt);
 
         // Dispatch polymorphically against the runtime type so subscribers to a base event type
         // (e.g. DistillationSettledEvent) receive published derived events.
         Type runtimeType = evt.GetType();
-        var snapshot = new List<Func<Agency.Agentic.AgentEvent, CancellationToken, Task>>();
+        var snapshot = new List<Func<Agency.Harness.AgentEvent, CancellationToken, Task>>();
 
-        foreach (KeyValuePair<Type, List<Func<Agency.Agentic.AgentEvent, CancellationToken, Task>>> entry in this._handlers)
+        foreach (KeyValuePair<Type, List<Func<Agency.Harness.AgentEvent, CancellationToken, Task>>> entry in this._handlers)
         {
             if (entry.Key.IsAssignableFrom(runtimeType))
             {
@@ -51,7 +51,7 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
             }
         }
 
-        foreach (Func<Agency.Agentic.AgentEvent, CancellationToken, Task> h in snapshot)
+        foreach (Func<Agency.Harness.AgentEvent, CancellationToken, Task> h in snapshot)
         {
             try
             {
@@ -70,15 +70,15 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
 
     /// <inheritdoc/>
     public IDisposable Subscribe<T>(Func<T, CancellationToken, Task> handler)
-        where T : Agency.Agentic.AgentEvent
+        where T : Agency.Harness.AgentEvent
     {
         ArgumentNullException.ThrowIfNull(handler);
 
         // Wrap the typed handler so it can live in a single AgentEvent-keyed list and be invoked
         // with a down-cast event during polymorphic dispatch.
-        Func<Agency.Agentic.AgentEvent, CancellationToken, Task> wrapper = (evt, ct) => handler((T)evt, ct);
+        Func<Agency.Harness.AgentEvent, CancellationToken, Task> wrapper = (evt, ct) => handler((T)evt, ct);
 
-        List<Func<Agency.Agentic.AgentEvent, CancellationToken, Task>> handlers =
+        List<Func<Agency.Harness.AgentEvent, CancellationToken, Task>> handlers =
             this._handlers.GetOrAdd(typeof(T), static _ => []);
         lock (handlers)
         {
@@ -87,7 +87,7 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
 
         return new Subscription(() =>
         {
-            if (this._handlers.TryGetValue(typeof(T), out List<Func<Agency.Agentic.AgentEvent, CancellationToken, Task>>? list))
+            if (this._handlers.TryGetValue(typeof(T), out List<Func<Agency.Harness.AgentEvent, CancellationToken, Task>>? list))
             {
                 lock (list)
                 {

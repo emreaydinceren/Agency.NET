@@ -253,7 +253,7 @@ internal static class TestInfrastructure
         TimeSpan timeout,
         Func<T, bool>? predicate = null,
         CancellationToken ct = default)
-        where T : Agency.Agentic.AgentEvent
+        where T : Agency.Harness.AgentEvent
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 

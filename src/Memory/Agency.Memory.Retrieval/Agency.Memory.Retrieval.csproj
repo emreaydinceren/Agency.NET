@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Agentic\Agency.Agentic\Agency.Agentic.csproj" />
+    <ProjectReference Include="..\..\Harness\Agency.Harness\Agency.Harness.csproj" />
     <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />
     <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
   </ItemGroup>

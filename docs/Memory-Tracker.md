@@ -146,7 +146,7 @@ The black-box end-to-end suite (`Memory-TestPlan.md`) is tracked in detail in
 |-------|------------------|------------|-----------|-------|
 | SA-A | A.0 → A.7 (`Agency.Memory.Common`) | 2026-05-27 | 2026-05-27 | All 15 D1 tasks green; full solution build clean |
 | SA-B | B.0 → B.8 (`Agency.Memory.Sql.Postgres`) | 2026-05-27 | 2026-05-28 | All 15 D2 tasks done; 48 functional tests green; build 0 errors/0 warnings |
-| SA-D | D.0 → D.4 (`Agency.Memory.Retrieval` + Agentic hook wiring) | 2026-05-28 | 2026-05-28 | All 9 D4 tasks done; 11 retrieval tests + 159 Agentic tests green; build 0 errors/0 warnings |
+| SA-D | D.0 → D.4 (`Agency.Memory.Retrieval` + Harness hook wiring) | 2026-05-28 | 2026-05-28 | All 9 D4 tasks done; 11 retrieval tests + 159 Harness tests green; build 0 errors/0 warnings |
 | SA-F | F.0 → F.3 (`Agency.Memory.Hygiene`) | 2026-05-28 | 2026-05-28 | All 7 D6 tasks done; 11 non-functional tests green; build 0 errors/0 warnings. Added `Microsoft.Extensions.TimeProvider.Testing` v10.1.0 to Directory.Packages.props. |
 | SA-C | C.0 → C.8 (`Agency.Memory.Distiller`) | 2026-05-28 | 2026-05-28 | All 17 D3 tasks done; 38 non-functional tests green; build 0 errors/0 warnings. Circular reference resolved via delegate injection (IQ-1). |
 | SA-E | E.0 → E.3 (`Agency.Memory.Consolidator`) | 2026-05-28 | 2026-05-28 | All 7 D5 tasks done; 16 non-functional tests green; build 0 errors/0 warnings. Added `MergeAsync`, `UpdateRecordAsync`, `DeleteByIdAsync` to `IMemoryStore`; implemented in `PostgresMemoryStore`. `ConsolidatorBackgroundService` subscribes to `DistillationCompletedEvent`, enforces per-user serial execution with coalescing. `ConsolidatorSubAgentFactory` builds sub-agent with 4 tools and 3 stop conditions. |
@@ -160,7 +160,7 @@ The black-box end-to-end suite (`Memory-TestPlan.md`) is tracked in detail in
   3. `RetrievalGate` is also in `Agency.Memory.Retrieval` namespace (internal static).
   4. Both are visible to `Agency.Memory.Common` via `[assembly: InternalsVisibleTo("Agency.Memory.Retrieval")]` that SA-D added to `Agency.Memory.Common/AssemblyInfo.cs` — but the direction of reference matters. SA-C should instead expose a `public` DI registration method from `Agency.Memory.Retrieval` (e.g., `Agency.Memory.Retrieval.DependencyInjection.RetrievalServiceCollectionExtensions`) and wire `MemoryHookFactory.Build()` to accept a factory delegate.
   5. **Alternative (simpler):** Add `Agency.Memory.Retrieval` as a project reference to `Agency.Memory.Common` and expose `RetrievalEngine`/`RetrievalGate` as `public` — this avoids the DI indirection. SA-C should decide based on the desired coupling model.
-- **New context properties added** (SA-D): `UserSpecificContext.Id`, `Context.Focus` (`FocusContext`), `Context.MemoryLastRetrievedAt`, `KnowledgeContext.Records`, `MemoryContext.Records`, `MemoryRecord` DTO — all in `Agency.Agentic`.
+- **New context properties added** (SA-D): `UserSpecificContext.Id`, `Context.Focus` (`FocusContext`), `Context.MemoryLastRetrievedAt`, `KnowledgeContext.Records`, `MemoryContext.Records`, `MemoryRecord` DTO — all in `Agency.Harness`.
 - **Hook invocations added to `Agent.cs`:** `OnUserPromptSubmit` at top of `ChatAsync`; `OnPreIteration` before `SystemPromptBuilder.Build` each iteration; `OnPostToolBatch` after `Task.WhenAll` of tool calls.
 
 ### Carry-over notes for later workstreams (from SA-A report)

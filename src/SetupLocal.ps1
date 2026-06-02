@@ -72,53 +72,53 @@ if ($claudeKey) {
     Write-Skip "Skipped Claude key"
 }
 
-# ── 3. OpenTelemetry config (Agentic Console) ───────────────────────────────
+# ── 3. OpenTelemetry config (Harness Console) ───────────────────────────────
 
-Write-Title "OpenTelemetry Configuration (Agentic.Console)"
-Write-Info "Used by: Agentic.Console for file-based tracing, metrics, and logging."
+Write-Title "OpenTelemetry Configuration (Harness.Console)"
+Write-Info "Used by: Harness.Console for file-based tracing, metrics, and logging."
 Write-Info "These values go into the 'OpenTelemetry' section of that project's user secrets."
 Write-Host ""
 
 $serviceName = Read-Host "  Service name"
-if (-not $serviceName) { $serviceName = "Agency.Agentic.Console" }
-Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:ServiceName" -Value $serviceName
+if (-not $serviceName) { $serviceName = "Agency.Harness.Console" }
+Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:ServiceName" -Value $serviceName
 
 $traceEnabled = Read-Host "  Enable trace export? (Y/N)"
 $traceEnabled = $traceEnabled.Trim().ToUpper() -eq "Y"
-Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Traces:Enabled" -Value $traceEnabled
+Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Traces:Enabled" -Value $traceEnabled
 
 if ($traceEnabled) {
     $tracePrefix = Read-Host "  Trace file prefix"
     if (-not $tracePrefix) { $tracePrefix = "traces" }
-    Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Traces:FilePrefix" -Value $tracePrefix
+    Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Traces:FilePrefix" -Value $tracePrefix
 
     $sampling = Read-Host "  Trace sampling ratio (0.0 - 1.0, 1.0 = always)"
     if (-not $sampling) { $sampling = "1.0" }
-    Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Traces:SamplingRatio" -Value $sampling
+    Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Traces:SamplingRatio" -Value $sampling
 }
 
 $metricEnabled = Read-Host "  Enable metric export? (Y/N)"
 $metricEnabled = $metricEnabled.Trim().ToUpper() -eq "Y"
-Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Metrics:Enabled" -Value $metricEnabled
+Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Metrics:Enabled" -Value $metricEnabled
 
 if ($metricEnabled) {
     $exportMs = Read-Host "  Metric export interval in ms (default 15000)"
     if (-not $exportMs) { $exportMs = "15000" }
-    Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Metrics:ExportIntervalMs" -Value $exportMs
+    Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Metrics:ExportIntervalMs" -Value $exportMs
 }
 
 $logEnabled = Read-Host "  Enable log (Serilog) export? (Y/N)"
 $logEnabled = $logEnabled.Trim().ToUpper() -eq "Y"
-Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Logs:Enabled" -Value $logEnabled
+Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Logs:Enabled" -Value $logEnabled
 
 if ($logEnabled) {
     $logPrefix = Read-Host "  Log file prefix (default 'app')"
     if (-not $logPrefix) { $logPrefix = "app" }
-    Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Logs:FilePrefix" -Value $logPrefix
+    Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Logs:FilePrefix" -Value $logPrefix
 
     $minLevel = Read-Host "  Minimum log level (Verbose/Debug/Information/Warning/Error/Fatal, default Information)"
     if (-not $minLevel) { $minLevel = "Information" }
-    Invoke-Secret -ProjectDir "Agentic\Agency.Agentic.Console" -SecretId "agency-agentic-console" -Key "OpenTelemetry:FileExport:Logs:MinimumLevel" -Value $minLevel
+    Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Logs:MinimumLevel" -Value $minLevel
 }
 
 # ── Done ─────────────────────────────────────────────────────────────────────

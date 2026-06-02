@@ -1,6 +1,6 @@
-using Agency.Agentic;
-using Agency.Agentic.Contexts;
-using Agency.Agentic.Tools;
+using Agency.Harness;
+using Agency.Harness.Contexts;
+using Agency.Harness.Tools;
 using Microsoft.Extensions.AI;
 using Agency.Llm.Common.Tools;
 using Agency.Memory.Common.Events;

@@ -186,7 +186,7 @@ public sealed class EndToEndConsolidatorTests : IAsyncLifetime
             store,
             consolidatorOpts,
             eventBus,
-            NullLogger<Agency.Agentic.Agent>.Instance);
+            NullLogger<Agency.Harness.Agent>.Instance);
 
         IReadOnlyList<MemoryRecord> allRecords = await store.GetAllForUserAsync(UserId, ct);
         await runner(UserId, allRecords, ct);

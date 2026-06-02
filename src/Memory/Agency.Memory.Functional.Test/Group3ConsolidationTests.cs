@@ -1038,7 +1038,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
                 store,
                 consolidatorOpts,
                 eventBus,
-                NullLogger<Agency.Agentic.Agent>.Instance);
+                NullLogger<Agency.Harness.Agent>.Instance);
 
         var service = new ConsolidatorBackgroundService(
             store,

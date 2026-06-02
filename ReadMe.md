@@ -2,7 +2,7 @@
 
 A .NET 10 toolkit for building RAG pipelines and AI agents in idiomatic C#—featuring pluggable vector/KV stores, native MCP integration, and OpenTelemetry throughout.
 
-[![NuGet](https://img.shields.io/nuget/v/Agency.Agentic.svg)](https://www.nuget.org/packages/Agency.Agentic)
+[![NuGet](https://img.shields.io/nuget/v/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
 [![License](https://img.shields.io/github/license/YOUR-GH-USERNAME/Agency.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 
@@ -44,7 +44,7 @@ If you've ever wanted a readable reference implementation of a RAG + agent stack
 ### 1. Install
 
 ```bash
-dotnet add package Agency.Agentic
+dotnet add package Agency.Harness
 dotnet add package Agency.Llm.Claude              # or Agency.Llm.OpenAI
 dotnet add package Agency.Embeddings.OpenAI
 dotnet add package Agency.VectorStore.Sql.Sqlite  # or .Postgres
@@ -78,9 +78,9 @@ await pipeline.RunAsync();
 The agent takes an `IChatClient` (from `Microsoft.Extensions.AI`), a model id, and a structured `Context`. Use `ClaudeClient` / `OpenAIClient` to build the `IChatClient`, `Agent.CreateContext(...)` to assemble the typed context, and consume the `AgentEvent` stream:
 
 ```csharp
-using Agency.Agentic;
-using Agency.Agentic.Contexts;
-using Agency.Agentic.Tools;
+using Agency.Harness;
+using Agency.Harness.Contexts;
+using Agency.Harness.Tools;
 using Agency.Llm.Claude;
 using Agency.Llm.Common;
 using Microsoft.Extensions.AI;
@@ -136,7 +136,7 @@ await foreach (AgentEvent ev in session.SendAsync("Now summarize it in one line.
 `Context` is assembled from typed sub-contexts rather than a raw system-prompt string. Retrieved documents and domain facts go into `KnowledgeContext.Facts`, which `SystemPromptBuilder` re-injects into the system prompt on **every** iteration:
 
 ```csharp
-using Agency.Agentic.Contexts;
+using Agency.Harness.Contexts;
 using Agency.RagFormatter;
 
 var question = "How do I configure the SQLite vector store?";
@@ -154,7 +154,7 @@ Context ctx = Agent.CreateContext(question, tools) with
 `OnPreToolUse` can allow, block, or rewrite a tool call before it runs. Ship-ready hooks cover the common cases, and `Compose` chains them (most-restrictive-wins for the pre-tool decision):
 
 ```csharp
-using Agency.Agentic.Hooks;
+using Agency.Harness.Hooks;
 
 // Block known-dangerous shell patterns and log every tool call.
 AgentHooks hooks = BlockListHooks.Dangerous.Compose(AuditHooks.ForLogger(logger));
@@ -169,7 +169,7 @@ var agent = new Agent(chat, model: "claude-sonnet-4-5", clientType: "Claude", ho
 The harness is itself an MCP client. `McpClientPool` connects to one or more external MCP servers and surfaces their tools as ordinary `ITool`s you can drop into the registry:
 
 ```csharp
-using Agency.Agentic.Tools;
+using Agency.Harness.Tools;
 
 await using McpClientPool pool = await McpClientPool.CreateAsync(new McpClientOptions
 {
@@ -191,7 +191,7 @@ var registry = new ToolRegistry([new ReadFileTool(), .. pool.Tools]);
 ### 7. Try the REPL
 
 ```bash
-dotnet run --project src/Agentic/Agency.Agentic.Console
+dotnet run --project src/Harness/Agency.Harness.Console
 ```
 
 ## Architecture
@@ -227,10 +227,10 @@ Documents
    Agency.Llm.OpenAI                  (OpenAI SDK)
           │
           ▼
-   Agency.Agentic                     (agent loop, hooks, stop conditions,
+   Agency.Harness                     (agent loop, hooks, stop conditions,
                                        structured Context, tool registry,
                                        MCP client pool)
-   Agency.Agentic.Console             (interactive REPL)
+   Agency.Harness.Console             (interactive REPL)
    Agency.Console                     (one-shot RAG demo)
           │
           ▼
@@ -261,8 +261,8 @@ Documents
 | `Agency.Llm.Common` | `IModelProvider`, tool types |
 | `Agency.Llm.Claude` | Anthropic Claude provider |
 | `Agency.Llm.OpenAI` | OpenAI / OpenAI-compatible provider |
-| `Agency.Agentic` | Agent loop, structured `Context`, `StopConditions`, lifecycle `AgentHooks`, `ToolRegistry` + built-in tools, `McpClientPool` (MCP client), `AgentEvent` stream |
-| `Agency.Agentic.Console` | Multi-turn interactive REPL |
+| `Agency.Harness` | Agent loop, structured `Context`, `StopConditions`, lifecycle `AgentHooks`, `ToolRegistry` + built-in tools, `McpClientPool` (MCP client), `AgentEvent` stream |
+| `Agency.Harness.Console` | Multi-turn interactive REPL |
 | `Agency.Console` | One-shot RAG demo |
 | `Agency.Mcp.Memory` | MCP server: scoped `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` |
 
@@ -280,7 +280,7 @@ builder.Services.AddOpenTelemetry()
         .AddOtlpExporter());
 ```
 
-The agent loop (`ActivitySource`/`Meter` named `Agency.Agentic.Agent`) emits these instruments, tagged with `agent.model` and `agent.client_type`:
+The agent loop (`ActivitySource`/`Meter` named `Agency.Harness.Agent`) emits these instruments, tagged with `agent.model` and `agent.client_type`:
 
 | Instrument | Name |
 | --- | --- |

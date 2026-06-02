@@ -1,5 +1,5 @@
-using Agency.Agentic;
-using Agency.Agentic.Hooks;
+using Agency.Harness;
+using Agency.Harness.Hooks;
 using Agency.Embeddings.OpenAI;
 using Agency.Llm.Common;
 using Agency.Llm.OpenAI;

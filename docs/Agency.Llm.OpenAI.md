@@ -96,8 +96,8 @@ No additional `ActivitySource` or `Meter` is declared in this project; telemetry
 | Project | Relationship |
 |---|---|
 | [[Agency.Llm.Common]] | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` |
-| [[Agency.Agentic]] | `Models.cs` calls `new OpenAIClient(options).CreateChatClient()` when `ClientType` is `"OpenAI"` |
-| [[Agency.Agentic.Console]] | Configures `ClientType = "OpenAI"` in `appsettings.json` to select this factory |
+| [[Agency.Harness]] | `Models.cs` calls `new OpenAIClient(options).CreateChatClient()` when `ClientType` is `"OpenAI"` |
+| [[Agency.Harness.Console]] | Configures `ClientType = "OpenAI"` in `appsettings.json` to select this factory |
 | [[Agency.Embeddings.OpenAI]] | Sibling project — both wrap OpenAI-compatible APIs, but for embeddings rather than chat |
 | [[Agency.Llm.Claude]] | Peer factory implementing the same `IModelProvider` pattern for the Anthropic SDK |
 

@@ -1,5 +1,5 @@
-using Agency.Agentic.Contexts;
-using Agency.Agentic.Hooks;
+using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 
 namespace Agency.Memory.Common.Hooks;
 
@@ -43,7 +43,7 @@ public static class MemoryHookFactory
     /// </returns>
     public static AgentHooks Build(
         Func<Context, CancellationToken, Task> retrievalCallback,
-        Func<Agency.Agentic.Hooks.AssistantTurnHookContext, CancellationToken, Task> timerRestartCallback) =>
+        Func<Agency.Harness.Hooks.AssistantTurnHookContext, CancellationToken, Task> timerRestartCallback) =>
         new()
         {
             OnPreIteration = retrievalCallback,

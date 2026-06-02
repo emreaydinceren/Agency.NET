@@ -1,5 +1,5 @@
-using Agency.Agentic;
-using Agency.Agentic.Contexts;
+using Agency.Harness;
+using Agency.Harness.Contexts;
 using Agency.Memory.Common.Events;
 using Agency.Memory.Common.Jobs;
 using Agency.Memory.Common.Options;

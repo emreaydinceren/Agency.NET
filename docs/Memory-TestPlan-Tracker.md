@@ -3,7 +3,7 @@
 **Source plan:** [`Memory-TestPlan.md`](Memory-TestPlan.md)
 **Source spec:** [`Memory-Specifications.md`](Memory-Specifications.md)
 **Companion tracker:** [`Memory-Tracker.md`](Memory-Tracker.md) (Workstream A–G implementation status)
-**Last updated:** 2026-05-28 (**SUITE COMPLETE — 41/41 Done.** Capstone full-suite run: 40 passed / 0 failed / 1 skip [pre-existing `EndToEndRecallTests` G.1, superseded by E1.1]. All 36 E*.* tests green; build 0/0. Open production-side questions: TI-8.)
+**Last updated:** 2026-05-28 (**SUITE COMPLETE — 41/41 Done.** Capstone full-suite run: 40 passed / 0 failed / 1 skip [pre-existing `EndToEndRecallTests` G.1, superseded by E1.1]. All 36 E*.* tests green; build 0/0. Owner decisions applied & implemented 2026-06-02: TI-4, TI-5, TI-8.1, TI-8.2, TI-8.3, TI-8.4 all resolved.)
 
 ## Legend
 

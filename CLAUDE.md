@@ -65,77 +65,21 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
-## Code Style
-
-Read this file only when writing new code or editing existing code: @.editorconfig
-
-## Build & Test Commands
-
-```bash
-# Build the full solution
-dotnet build src/Agency.slnx
-
-# Run all non-functional tests
-dotnet test src/Agency.slnx --filter "Category!=Functional"
-
-# Run a single test project
-dotnet test src/Agency.Embeddings.Test/Agency.Embeddings.Test.csproj
-dotnet test src/Agency.Llm.Test/Agency.Llm.Test.csproj
-
-# Run functional tests (requires LM Studio running at http://llm-host.example:1234)
-dotnet test src/Agency.Llm.Test --filter "Category=Functional"
-
-# Start local infrastructure (PostgreSQL + pgvector)
-cd src && docker-compose up -d
-```
-
-## Architecture Overview
-
-This is a .NET 10 solution that provides a RAG (Retrieval-Augmented Generation) pipeline: generate embeddings → store in PostgreSQL/pgvector → query → format results → send to LLM.
-
-### Project Architecture
-
-For high level: .\Readme.md
-For details: .\docs\Home.md is entry point to architecture docs, with links to other documentation files.
-
-## C# Conventions
-
-- Always use XML doc comments (`///`) for all class and method comments — never plain `//` comments for documentation. Use `<summary>`, `<param>`, `<returns>`, and `<see cref="..."/>` tags as appropriate. This applies to test projects as well as production code.
-- Do NOT use `yield return` inside try-catch blocks — this does not compile in C#
-- Do NOT instantiate abstract classes directly; use interfaces or concrete implementations
-- Sealed classes cannot be mocked — use functional/integration tests or extract an interface
-- Always verify builds pass (`dotnet build`) after code changes before declaring success
-
-### ILlmClient Abstraction
-
-All LLM providers implement `ILlmClient` (`Agency.Llm.Abstractions`):
-
-- `SendAsync()` — single request/response
-- `StreamAsync()` — returns `IAsyncEnumerable<string>` chunks
-
-Both `ClaudeClient` and `OpenAIClient` follow the same structure: constructor takes `IOptions<TOptions>` and `ILogger<T>`, with full OpenTelemetry instrumentation (ActivitySource + Meter with request count, error count, duration, and token usage histograms).
-
-### Observability Pattern
-
-Every client (LLM and embeddings) exposes:
-
-- An `ActivitySource` for distributed tracing
-- A `Meter` with counters (`requests`, `errors`) and histograms (`duration`, `tokens.input`, `tokens.output`)
-- Tags include: `system`, `model`, `method`, `token_type`
-
-### SQLQueryEmbedder
-
-`Agency.SQL/SQLQueryEmbedder.cs` uses regex to find `vectorize('<text>')` placeholders in SQL queries and replaces them with pgvector literal format (`[f1,f2,...]`) using the injected `IEmbeddingGenerator`. This allows writing SQL like:
-
-```sql
-SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
-```
-
 ### Infrastructure
 
 - PostgreSQL 18 + pgvector extension via Docker (`src/docker-compose.yml`)
 - Credentials: `dev_user` / `dev_password`, database: `dev_db`, port `5432`
 - Functional LLM tests target LM Studio at `http://llm-host.example:1234`
+
+## Reference Docs — Load When Relevant
+
+Keep this file lean. Read the linked doc only when its trigger applies:
+
+- **Editor configuration** → read `@.editorconfig` (coding style and formatting rules) (look at parent folder for `.editorconfig` files).
+- **Writing or reviewing C# code** → read `Agents/CSharpPrinciples.md` (conventions, design principles, build config & centralized package management).
+- **Understanding or changing the system** → read `Agents/Architecture.md` (project dependency graph, `ILlmClient`, observability pattern, `SQLQueryEmbedder`, infrastructure).
+- **Building, testing, or running infrastructure** → read `Agents/BuildAndTest.md` (dotnet/docker commands, test configuration).
+- **Discussing or updating bugs or tasks** → read `Agents/Trackers.md` (Obsidian boards + task template locations).
 
 ## Git & Auth
 
@@ -143,21 +87,7 @@ SELECT * FROM docs ORDER BY embedding <-> vectorize('search query') LIMIT 5
 - This repo uses scoped Git credentials via includeIf directives
 - **Do not commit changes unless explicitly asked.** Make changes and ask before committing to ensure the user can review.
 
-## Testing
-
-- Always run the full test suite after changes: `dotnet test`
-- For PostgreSQL tests, ensure connection strings are configured via user secrets — check `dotnet user-secrets list` before assuming config is correct.
-
 ## Debugging Approach
 
 - When diagnosing bugs, read the actual error and failing code carefully before suggesting fixes. Do NOT guess at the root cause — verify with evidence first.
 - When user says an approach is wrong, pivot immediately rather than doubling down.
-
-## Trackers
-
-- Bug tracker is in Notion : https://www.notion.so/99f10b50431d4089b667a8ec603e9e60 when we talk about bugs this is the place to check and update
-- Task tracker is in Notion : https://www.notion.so/262d51d057a942dcb0af645e4d8d76ae when we talk about tasks this is the place to check and update
-
-## C# principles and conventions
-
-If you are writing code read `src/Agents/CSharpPrinciples.md` for C# best practices and conventions that we follow in this codebase.

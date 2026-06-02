@@ -3,6 +3,7 @@ using Agency.Agentic.Contexts;
 using Agency.Agentic.Tools;
 using Microsoft.Extensions.AI;
 using Agency.Llm.Common.Tools;
+using Agency.Memory.Common.Events;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
@@ -38,7 +39,12 @@ internal static class ConsolidatorSubAgentFactory
     /// <param name="model">The model identifier forwarded to the LLM.</param>
     /// <param name="store">The memory store the tools operate on.</param>
     /// <param name="options">Consolidator configuration (MaxIterations, MaxCostUsd).</param>
-    /// <param name="logger">Logger forwarded to the agent.</param>
+    /// <param name="eventBus">
+    /// Bus used to publish a <see cref="MemoryMutatedEvent"/> for each successful Merge / Update /
+    /// Delete the sub-agent performs, so hosts can surface autonomous memory changes to the user
+    /// (TI-8.3).
+    /// </param>
+    /// <param name="logger">Logger forwarded to the agent and used for user-facing mutation lines.</param>
     /// <returns>
     /// A delegate <c>(userId, records, ct) => Task</c> that drives the sub-agent to completion.
     /// </returns>
@@ -47,12 +53,14 @@ internal static class ConsolidatorSubAgentFactory
         string model,
         IMemoryStore store,
         IOptions<ConsolidatorOptions> options,
+        IAsyncEventBus eventBus,
         ILogger<Agent>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(llm);
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(eventBus);
 
         return async (userId, records, ct) =>
         {
@@ -99,11 +107,45 @@ internal static class ConsolidatorSubAgentFactory
             var toolCtx = new ToolContext { Registry = registry };
             var session = new ChatSession(agent, new AgentOptions(), toolCtx);
 
-            // Drive the agent to completion, discarding events.
-            await foreach (AgentEvent _ in session.SendAsync(prompt, ct).ConfigureAwait(false))
+            // Drive the agent to completion. Forward each successful memory-mutating tool call
+            // onto the bus as a MemoryMutatedEvent so hosts can show the user what the agent
+            // changed in its own long-term memory (TI-8.3).
+            await foreach (AgentEvent evt in session.SendAsync(prompt, ct).ConfigureAwait(false))
             {
                 ct.ThrowIfCancellationRequested();
+
+                if (evt is ToolInvokedEvent { Result.IsError: false } tool
+                    && TryMapMutation(tool.ToolName, out string operation))
+                {
+                    logger?.LogInformation(
+                        "🧠 Memory {Operation} for user {UserId}: {Detail}",
+                        operation, userId, tool.Result.Content);
+
+                    await eventBus.PublishAsync(
+                        new MemoryMutatedEvent(userId, operation, tool.Result.Content), ct)
+                        .ConfigureAwait(false);
+                }
             }
         };
+    }
+
+    /// <summary>
+    /// Maps a consolidator tool name to a user-facing mutation verb, or returns
+    /// <see langword="false"/> for non-mutating tools (e.g. <c>Memory_Done</c>).
+    /// </summary>
+    /// <param name="toolName">The invoked tool's name.</param>
+    /// <param name="operation">The mapped operation verb (<c>Merge</c> / <c>Update</c> / <c>Delete</c>).</param>
+    /// <returns><see langword="true"/> when the tool mutated the store.</returns>
+    private static bool TryMapMutation(string toolName, out string operation)
+    {
+        operation = toolName switch
+        {
+            "Memory_Merge" => "Merge",
+            "Memory_Update" => "Update",
+            "Memory_Delete" => "Delete",
+            _ => string.Empty,
+        };
+
+        return operation.Length > 0;
     }
 }

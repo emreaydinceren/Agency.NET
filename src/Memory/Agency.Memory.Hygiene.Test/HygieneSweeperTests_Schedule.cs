@@ -35,11 +35,11 @@ public sealed class HygieneSweeperTests_Schedule
 
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .Callback(() => callCount++)
             .ReturnsAsync(0);
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var options = new MemoryOptions
@@ -103,7 +103,7 @@ public sealed class HygieneSweeperTests_Schedule
 
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var sweeper = CreateSweeper(store.Object, timeProvider: fakeTime);
@@ -128,10 +128,10 @@ public sealed class HygieneSweeperTests_Schedule
     {
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(7);
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(3);
 
         var options = new MemoryOptions

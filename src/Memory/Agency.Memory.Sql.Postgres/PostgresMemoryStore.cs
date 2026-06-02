@@ -386,18 +386,22 @@ public sealed class PostgresMemoryStore : IMemoryStore
     public async Task<int> DeleteWhereTtlExceededAsync(
         ContentType contentType,
         TimeSpan ttl,
+        DateTimeOffset now,
         CancellationToken ct = default)
     {
+        // Compare against the caller-supplied @now (the sweeper's injected clock) rather than the
+        // database now() so the staleness window is deterministic under a virtual clock (TI-4).
         const string sql = @"
             DELETE FROM records
             WHERE content_type = @content_type
-              AND updated_at < now() - @ttl
-              AND (last_accessed_at IS NULL OR last_accessed_at < now() - @ttl);";
+              AND updated_at < @now - @ttl
+              AND (last_accessed_at IS NULL OR last_accessed_at < @now - @ttl);";
 
         await using var conn = await this._dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
         cmd.Parameters.AddWithValue("content_type", (short)contentType);
         cmd.Parameters.Add(new NpgsqlParameter("ttl", NpgsqlDbType.Interval) { Value = ttl });
+        cmd.Parameters.AddWithValue("now", now.UtcDateTime);
 
         return await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -406,17 +410,21 @@ public sealed class PostgresMemoryStore : IMemoryStore
     public async Task<int> DeleteWhereLowImportanceStaleAsync(
         double importanceThreshold,
         TimeSpan staleAge,
+        DateTimeOffset now,
         CancellationToken ct = default)
     {
+        // Compare against the caller-supplied @now (the sweeper's injected clock) rather than the
+        // database now() so the staleness window is deterministic under a virtual clock (TI-4).
         const string sql = @"
             DELETE FROM records
             WHERE importance < @importance_threshold
-              AND (last_accessed_at IS NULL OR last_accessed_at < now() - @stale_age);";
+              AND (last_accessed_at IS NULL OR last_accessed_at < @now - @stale_age);";
 
         await using var conn = await this._dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
         cmd.Parameters.AddWithValue("importance_threshold", importanceThreshold);
         cmd.Parameters.Add(new NpgsqlParameter("stale_age", NpgsqlDbType.Interval) { Value = staleAge });
+        cmd.Parameters.AddWithValue("now", now.UtcDateTime);
 
         return await cmd.ExecuteNonQueryAsync(ct);
     }

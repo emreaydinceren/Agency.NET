@@ -3,6 +3,22 @@ using Agency.Agentic;
 namespace Agency.Memory.Common.Events;
 
 /// <summary>
+/// Terminal marker for a distillation job that has reached a final outcome — either
+/// <see cref="DistillationCompletedEvent"/> (success) or <see cref="DistillationFailedEvent"/>
+/// (permanent failure / dead-letter).
+/// </summary>
+/// <remarks>
+/// Subscribe to this base type via <see cref="IAsyncEventBus.Subscribe{T}"/> to observe a
+/// distillation job <em>settling</em> regardless of its outcome — for example to release a waiter
+/// without racing the completed and failed event types separately. This gives the distiller the
+/// same always-emit-a-terminal-event symmetry the consolidator already has with
+/// <see cref="ConsolidationCompletedEvent"/> (TI-8.1).
+/// </remarks>
+/// <param name="UserId">The user whose distillation settled.</param>
+/// <param name="SessionId">The affected session.</param>
+public abstract record DistillationSettledEvent(string UserId, string SessionId) : AgentEvent;
+
+/// <summary>
 /// Emitted by <c>DistillerBackgroundService</c> when a distillation job completes successfully.
 /// </summary>
 /// <param name="UserId">The user whose turns were distilled.</param>
@@ -13,7 +29,7 @@ public sealed record DistillationCompletedEvent(
     string UserId,
     string SessionId,
     int RecordsWritten,
-    int NewWatermark) : AgentEvent;
+    int NewWatermark) : DistillationSettledEvent(UserId, SessionId);
 
 /// <summary>
 /// Emitted by <c>DistillerBackgroundService</c> when a distillation job fails permanently
@@ -30,7 +46,7 @@ public sealed record DistillationFailedEvent(
     string UserId,
     string SessionId,
     string Reason,
-    bool DeadLettered) : AgentEvent;
+    bool DeadLettered) : DistillationSettledEvent(UserId, SessionId);
 
 /// <summary>
 /// Emitted by <c>ConsolidatorBackgroundService</c> when a consolidation pass completes.
@@ -44,3 +60,21 @@ public sealed record ConsolidationCompletedEvent(
     int Merges,
     int Updates,
     int Deletes) : AgentEvent;
+
+/// <summary>
+/// Emitted by the consolidator sub-agent each time it mutates the memory store through one of
+/// its tools (<c>Memory_Merge</c> / <c>Memory_Update</c> / <c>Memory_Delete</c>).
+/// </summary>
+/// <remarks>
+/// This is a first-class causal observable for autonomous memory changes (TI-8.3). Hosts are
+/// expected to surface these to the user — telling the user when the agent has reorganised its
+/// own long-term memory. That is unconventional for a background process but intentional for this
+/// product: memory edits the user never typed should be transparent.
+/// </remarks>
+/// <param name="UserId">The user whose memory was mutated.</param>
+/// <param name="Operation">The mutation kind: <c>"Merge"</c>, <c>"Update"</c>, or <c>"Delete"</c>.</param>
+/// <param name="Detail">A human-readable description of the change (the tool's result text).</param>
+public sealed record MemoryMutatedEvent(
+    string UserId,
+    string Operation,
+    string Detail) : AgentEvent;

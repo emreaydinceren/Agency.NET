@@ -10,7 +10,8 @@ namespace Agency.Memory.Consolidator.Prompts;
 internal static class ConsolidatorReconciliationPrompt
 {
     /// <summary>The current prompt version. Bump when the template changes (Spec §18.5).</summary>
-    internal const int Version = 1;
+    /// <remarks>v2 (TI-8.4): added the structural DELETE rule for clear-cut stale low-importance records.</remarks>
+    internal const int Version = 2;
 
     /// <summary>
     /// Renders the full reconciliation prompt for the given user and record set.
@@ -69,6 +70,10 @@ internal static class ConsolidatorReconciliationPrompt
         sb.AppendLine();
         sb.AppendLine("- **DELETE** — Record is trivial, contradicted-and-superseded, or no longer");
         sb.AppendLine("  relevant. Use sparingly; deletion is irreversible.");
+        sb.AppendLine("  **Structural rule (overrides the conservative default):** when a Record");
+        sb.AppendLine("  has Importance < 0.1 AND Age > 30 days AND its own Value describes it as");
+        sb.AppendLine("  obsolete, superseded, or no-longer-relevant, DELETE it by default. These");
+        sb.AppendLine("  clear-cut cases are not judgement calls — do not leave them in place.");
         sb.AppendLine();
         sb.AppendLine("- **SKIP** — Record is fine as-is. Take no action.");
         sb.AppendLine();

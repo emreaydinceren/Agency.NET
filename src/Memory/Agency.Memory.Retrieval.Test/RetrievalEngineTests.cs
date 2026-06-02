@@ -66,10 +66,10 @@ public sealed class RetrievalEngineTests
         public Task<IReadOnlyList<Common.Records.Record>> GetAllForUserAsync(string userId, CancellationToken ct = default) =>
             throw new NotImplementedException();
 
-        public Task<int> DeleteWhereTtlExceededAsync(ContentType contentType, TimeSpan ttl, CancellationToken ct = default) =>
+        public Task<int> DeleteWhereTtlExceededAsync(ContentType contentType, TimeSpan ttl, DateTimeOffset now, CancellationToken ct = default) =>
             throw new NotImplementedException();
 
-        public Task<int> DeleteWhereLowImportanceStaleAsync(double importanceThreshold, TimeSpan staleAge, CancellationToken ct = default) =>
+        public Task<int> DeleteWhereLowImportanceStaleAsync(double importanceThreshold, TimeSpan staleAge, DateTimeOffset now, CancellationToken ct = default) =>
             throw new NotImplementedException();
 
         public Task<Common.Records.Record> MergeAsync(IReadOnlyList<string> idsToDelete, Common.Records.Record newRecord, CancellationToken ct = default) =>

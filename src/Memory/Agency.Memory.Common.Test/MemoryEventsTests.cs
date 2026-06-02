@@ -1,5 +1,6 @@
 using Agency.Agentic;
 using Agency.Memory.Common.Events;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Memory.Common.Test;
 
@@ -85,5 +86,70 @@ public sealed class MemoryEventsTests
 
         Assert.Equal(a, b);
         Assert.NotEqual(a, c);
+    }
+
+    /// <summary>
+    /// Verifies that both the success and failure distillation events are
+    /// <see cref="DistillationSettledEvent"/>s, so a single terminal observable covers
+    /// either outcome (TI-8.1).
+    /// </summary>
+    [Fact]
+    public void DistillationCompletedAndFailed_AreBothSettledEvents()
+    {
+        DistillationSettledEvent completed = new DistillationCompletedEvent("u1", "s1", 3, 7);
+        DistillationSettledEvent failed = new DistillationFailedEvent("u1", "s1", "LLM 429", true);
+
+        Assert.Equal("u1", completed.UserId);
+        Assert.Equal("s1", failed.SessionId);
+    }
+
+    /// <summary>
+    /// Verifies that a subscriber to the <see cref="DistillationSettledEvent"/> base type receives
+    /// both a published <see cref="DistillationCompletedEvent"/> and a published
+    /// <see cref="DistillationFailedEvent"/> — the polymorphic dispatch that lets the failure path
+    /// act as a terminal observable (TI-8.1).
+    /// </summary>
+    [Fact]
+    public async Task EventBus_BaseTypeSubscriber_ReceivesBothTerminalOutcomes()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var bus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
+
+        var settled = new List<DistillationSettledEvent>();
+        using IDisposable sub = bus.Subscribe<DistillationSettledEvent>((evt, _) =>
+        {
+            settled.Add(evt);
+            return Task.CompletedTask;
+        });
+
+        await bus.PublishAsync(new DistillationCompletedEvent("u1", "s1", 1, 1), ct);
+        await bus.PublishAsync(new DistillationFailedEvent("u1", "s2", "boom", true), ct);
+
+        Assert.Equal(2, settled.Count);
+        Assert.Contains(settled, e => e is DistillationCompletedEvent);
+        Assert.Contains(settled, e => e is DistillationFailedEvent);
+    }
+
+    /// <summary>
+    /// Verifies that polymorphic dispatch does not over-deliver: a subscriber to the concrete
+    /// <see cref="DistillationCompletedEvent"/> is not invoked for a published
+    /// <see cref="DistillationFailedEvent"/>.
+    /// </summary>
+    [Fact]
+    public async Task EventBus_ConcreteSubscriber_IsNotInvokedForSiblingType()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var bus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
+
+        var completed = new List<DistillationCompletedEvent>();
+        using IDisposable sub = bus.Subscribe<DistillationCompletedEvent>((evt, _) =>
+        {
+            completed.Add(evt);
+            return Task.CompletedTask;
+        });
+
+        await bus.PublishAsync(new DistillationFailedEvent("u1", "s1", "boom", true), ct);
+
+        Assert.Empty(completed);
     }
 }

@@ -7,6 +7,8 @@
 - `Memory-FuctionalSpec.md` — functional requirements (source of behavioural truth)
 - `questions.md`, `OpenItems.md` — architectural decision logs
 
+**Last revised:** 2026-06-02 — reconciled with the shipped implementation: hygiene sweep uses the injected `TimeProvider` clock (§6.6, §8.5); service-unreachable failures are transient/retried (§8.6, §12.2); distiller emits a terminal `DistillationSettledEvent` base and suppresses thinking (§6.2, §18.1, now V2); consolidator emits a user-facing `MemoryMutatedEvent` per mutation (§6.3) and the reconciliation prompt gains a structural DELETE rule (§18.2, now V2).
+
 ---
 
 ## 1. Goal
@@ -322,7 +324,7 @@ Convert recent conversation turns into one or more durable `Record`s, asynchrono
 | In | Out |
 |---|---|
 | `DistillationJob { UserId, SessionId, Trigger, UpToTurnIndex }` | 0..N `Record` writes via `IMemoryStore` |
-| Session's `IConversationManager` (read-only) | `DistillationCompletedEvent` / `DistillationFailedEvent` |
+| Session's `IConversationManager` (read-only) | `DistillationCompletedEvent` / `DistillationFailedEvent` (both derive from terminal base `DistillationSettledEvent`) |
 
 #### Internal flow
 
@@ -336,7 +338,7 @@ loop:
   attempt = 0
   while attempt < MaxRetries:
     try:
-      payload  = await llm.SendAsync(EpisodeExtractionPrompt(turns, focus, knownDomains, knownTags))
+      payload  = await llm.SendAsync(EpisodeExtractionPrompt(turns, focus, knownDomains, recentFacts))
       records  = ParseExtraction(payload)            // 0..N records
       foreach r in records:
         r.Embedding = await embedder.GenerateAsync(r.Title + "\n\n" + r.Value)
@@ -361,6 +363,8 @@ loop:
 - **Per-session sessions dictionary** (`IDistillerSessionRegistry`): a `ConcurrentDictionary<string, DistillerSessionState>` holding the watermark and the inactivity timer reference. Pruned on session disposal.
 - **Embedding text** is `Title + "\n\n" + Value` — title alone is too sparse, value alone loses the semantic anchor. Configurable.
 - **Goal-complete vs. inactivity vs. dispose** all use the same Episode extraction prompt; only metadata differs. The prompt is given `Trigger` as context so it can word the Episode appropriately ("Goal achieved: …" vs. "Session ended without explicit goal completion: …").
+- **Thinking suppression (TI-8.2).** The distiller's chat client sets `LlmClientOptions.SuppressThinking = true` and the extraction prompt opens with a `/no_think` directive (§18.1). Episode extraction is deterministic JSON authoring that does not benefit from chain-of-thought, and the suppression avoids thinking-token latency on the large prompt.
+- **Terminal-event symmetry (TI-8.1).** `DistillationCompletedEvent` and `DistillationFailedEvent` both derive from an abstract `DistillationSettledEvent`. Because `InMemoryEventBus` dispatches polymorphically, a consumer can `Subscribe<DistillationSettledEvent>` to observe a job settling on **either** outcome — so a waiter never hangs when a job fails. This mirrors the Consolidator always emitting `ConsolidationCompletedEvent`.
 
 #### Constraints
 
@@ -410,7 +414,7 @@ Periodically reason over a user's existing Records and resolve duplication, cont
 
 | In | Out |
 |---|---|
-| `ConsolidationJob { UserId, TriggeredBySessionId }` | Idempotent mutations on `IMemoryStore` |
+| `ConsolidationJob { UserId, TriggeredBySessionId }` | Idempotent mutations on `IMemoryStore`; `MemoryMutatedEvent` per mutation; `ConsolidationCompletedEvent` on completion |
 
 #### Internal flow
 
@@ -427,11 +431,15 @@ loop:
   subAgent = ConsolidatorSubAgentFactory.Create(opts.Model, ConsolidationTools(store, userId))
   ctx      = Context.For(consolidationPromptFor(records))
   await foreach evt in subAgent.RunAsync(ctx):
-    // events emitted include tool calls that already mutate the store directly
-    // we just consume the stream to drive the loop
+    // the tools already mutate the store directly; for each successful
+    // Merge/Update/Delete tool call we also emit a MemoryMutatedEvent (TI-8.3)
+    if evt is ToolInvokedEvent t and t maps to Merge/Update/Delete and not t.Result.IsError:
+      emit MemoryMutatedEvent(userId, operation, t.Result.Content)
   
   emit ConsolidationCompletedEvent
 ```
+
+`MemoryMutatedEvent` is a first-class, user-facing observable (TI-8.3): hosts subscribe to it to tell the user when the agent has autonomously reorganised its own long-term memory. The consolidator also logs each mutation at Information level. This is an intentional transparency feature for this product — memory edits the user never typed should be visible.
 
 #### Tools given to the consolidator sub-agent
 
@@ -684,8 +692,9 @@ on schedule:
 
 - The sweep is a **single SQL statement** per content type, not a loop in C#. Postgres handles the batching.
 - The sweep is **not transactional across content types**. Each statement commits independently.
+- **`now` is the injected clock (TI-4).** `RunOnceAsync` reads `_timeProvider.GetUtcNow()` once and passes it to both passes, so the staleness comparison is measured against the service's `TimeProvider` rather than the database wall clock (see §8.5).
 - **`LastAccessedAt` reset by retrieval** means actively used Records get a fresh decay clock. This is the intended decay-reset behaviour.
-- The schedule is configured via `DistillerOptions.HygieneSchedule` (default: every 24h, randomised by 15 min to avoid herd thunder).
+- The schedule is configured via `MemoryOptions.HygieneSchedule` (default: every 24h, randomised by ±15 min to avoid herd thunder).
 
 #### Constraints
 
@@ -1017,22 +1026,24 @@ Two passes, each a single bulk DELETE per content type:
 -- TTL pass (per ContentType where TTL is set)
 DELETE FROM records
 WHERE content_type = :ct
-  AND updated_at < now() - :ttl
-  AND (last_accessed_at IS NULL OR last_accessed_at < now() - :ttl);
+  AND updated_at < :now - :ttl
+  AND (last_accessed_at IS NULL OR last_accessed_at < :now - :ttl);
 
 -- Importance-pruning pass
 DELETE FROM records
 WHERE importance < :imp_threshold
-  AND (last_accessed_at IS NULL OR last_accessed_at < now() - :stale_age);
+  AND (last_accessed_at IS NULL OR last_accessed_at < :now - :stale_age);
 ```
 
 The passes are independent. Deletion counts are reported per pass.
+
+**Reference time (TI-4):** `:now` is supplied by `HygieneSweeperBackgroundService` from its injected `TimeProvider` (`_timeProvider.GetUtcNow()`), **not** the database `now()`. The staleness window is therefore driven by the same clock the service is constructed with, so a `FakeTimeProvider` can drive expiry deterministically in tests (and production uses `TimeProvider.System`, which equals the DB wall clock). `IMemoryStore.DeleteWhereTtlExceededAsync` / `DeleteWhereLowImportanceStaleAsync` take this `now` as an explicit parameter.
 
 ### 8.6 Error Handling — taxonomy
 
 | Class | Examples | Action |
 |---|---|---|
-| **Transient** | LLM 429 / 503; embedding HTTP timeout; Postgres deadlock | Retry with exponential backoff up to `MaxRetries` |
+| **Transient** | LLM 429 / 503; LLM or embedding service **unreachable** — a connection-level `HttpRequestException` with no HTTP response (connection refused / DNS / socket reset / transport timeout, i.e. `StatusCode is null`); Postgres deadlock | Retry with exponential backoff up to `MaxRetries` |
 | **Permanent** | LLM 400 / 401; malformed JSON in extraction response after parse retries; constraint violation | Dead-letter; emit `*FailedEvent`; log |
 | **Cancellation** | `OperationCanceledException` from `stopToken` | Propagate without retry; do not dead-letter |
 | **Programmer error** | `ArgumentNullException`, `InvalidOperationException` | Fail-fast, log, emit `*FailedEvent` |
@@ -1156,7 +1167,7 @@ A hot-path operation crossing its p95 budget should emit a warning log + metric.
 |---|---|---|
 | LLM returns malformed JSON in extraction | Parse exception, classified as transient (1 retry with stricter prompt) → permanent | Dead-letter; next session retries |
 | LLM 429 rate limit | HTTP status | Exponential backoff retry; eventually dead-letter |
-| Embedding service down | HTTP timeout | Distillation retries; if persistent → dead-letter |
+| Embedding service down | HTTP timeout or connection failure (no response) | Distillation retries (classified transient — TI-5); if persistent → dead-letter |
 | Postgres unavailable | Connection exception | Distillation retries; agent hot path also fails (entire system degraded) |
 | Process crash mid-distillation | Watermark not advanced | Next process start picks up via channel rehydration from watermark; turns are re-distilled |
 | Process crash mid-consolidation | Partial mutations committed | Next session-end re-triggers consolidation; LLM observes already-consolidated state and skips |
@@ -1502,12 +1513,20 @@ This appendix contains the canonical LLM system prompts used by the v1 component
 
 **Provenance note:** the original functional spec contained six prompt drafts ([`Untitled.md`](../../../OneDrive/Obsidian/Personal/Projects/Agency/Untitled.md)). Two of them — "Knowledge Capture" and "OAO Memory Capture" — were authored for an agent-driven commit tool that was rejected (Q1.1: capture is system-owned). Their substance is folded into §18.1 below, where the Distiller does the same authoring work after the fact. The remaining four prompts are reproduced here in their v1 form or marked as v2 deferred.
 
-### 18.1 Distiller — Episode Extraction Prompt (V1)
+### 18.1 Distiller — Episode Extraction Prompt (V2)
 
 Used by `DistillerBackgroundService` on every `DistillationJob`. This single prompt covers both Fact and Memory extraction; the LLM decides which (or both, or neither) to emit per excerpt.
 
+**V2 (TI-8.2):** opens with a thinking-suppression directive (`/no_think` + explicit "output only JSON"). This is the prompt-level fallback that complements the SDK-level `LlmClientOptions.SuppressThinking = true` set on the distiller's chat client — for reasoning-capable models/APIs that ignore the SDK flag, the prompt still suppresses chain-of-thought so extraction returns strict JSON.
+
 ````text
 SYSTEM:
+/no_think
+Output discipline: do NOT produce any chain-of-thought, reasoning, analysis, or
+`<think> … </think>` blocks. Reason silently and respond with ONLY the final JSON
+object described under "Response format". This is a prompt-level fallback for models
+or APIs that do not honour the SDK-level thinking-suppression option.
+
 You are a memory distiller for an AI agent. Your job is to read a conversation
 excerpt and produce zero or more durable Records that capture what was learned
 during the exchange. You operate AFTER the fact — the agent has already done its
@@ -1622,9 +1641,11 @@ Respond with strictly valid JSON. No prose, no markdown fences around the JSON.
 - The response parser must tolerate the LLM occasionally wrapping JSON in code fences. Strip ` ```json ` / ` ``` ` before parsing.
 - One parse-retry is allowed if the JSON is malformed; the retry prompt is "Your previous response was not valid JSON. Re-emit strictly the JSON object only." After that, classify as permanent failure → dead-letter.
 
-### 18.2 Consolidator — Reconciliation Prompt (V1)
+### 18.2 Consolidator — Reconciliation Prompt (V2)
 
 Used by `ConsolidatorBackgroundService` to drive the sub-agent that reconciles existing Records. The sub-agent has the Merge/Update/Delete/Done tools defined in §6.3.
+
+**V2 (TI-8.4):** the DELETE decision category gains an explicit structural rule that overrides the conservative default for clear-cut cases, so reliably-deletable stale low-importance records no longer depend on model judgement (the prior conservatism was the root cause of advisory-flaky deletion behaviour).
 
 ````text
 SYSTEM:
@@ -1666,6 +1687,10 @@ For each cluster of related Records, decide one of:
 
 - **DELETE** — Record is trivial, contradicted-and-superseded, or no longer
   relevant. Use sparingly; deletion is irreversible.
+  **Structural rule (overrides the conservative default):** when a Record
+  has Importance < 0.1 AND Age > 30 days AND its own Value describes it as
+  obsolete, superseded, or no-longer-relevant, DELETE it by default. These
+  clear-cut cases are not judgement calls — do not leave them in place.
 
 - **SKIP** — Record is fine as-is. Take no action.
 

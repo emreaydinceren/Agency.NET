@@ -134,7 +134,8 @@ internal sealed class MemoryE2EFixture : IAsyncLifetime
     /// <summary>
     /// Gets a snapshot of all <see cref="AgentEvent"/>s captured since the host was started.
     /// The fixture automatically subscribes to <see cref="DistillationCompletedEvent"/>,
-    /// <see cref="DistillationFailedEvent"/>, and <see cref="ConsolidationCompletedEvent"/>.
+    /// <see cref="DistillationFailedEvent"/>, <see cref="ConsolidationCompletedEvent"/>,
+    /// and <see cref="MemoryMutatedEvent"/>.
     /// </summary>
     internal IReadOnlyList<AgentEvent> CapturedEvents =>
         this._capturedEvents.ToArray();
@@ -265,11 +266,22 @@ internal sealed class MemoryE2EFixture : IAsyncLifetime
 
         // ILlmClientAdapter — consumed by DistillerBackgroundService (internal interface,
         // visible to this project via InternalsVisibleTo on Agency.Memory.Distiller).
-        builder.Services.AddSingleton<ILlmClientAdapter>(sp =>
+        builder.Services.AddSingleton<ILlmClientAdapter>(_ =>
         {
-            IChatClient llm = sp.GetRequiredService<IChatClient>();
             string chatModel = config[LmStudioChatModelKey] ?? "local-model";
-            return new ChatClientLlmAdapter(llm, chatModel);
+
+            // Dedicated chat client for the distiller with SDK-level thinking suppression (TI-8.2),
+            // kept separate from the consolidator/agent IChatClient above so only the distiller's
+            // extraction calls suppress thinking. The EpisodeExtractionPrompt carries a matching
+            // /no_think directive as a fallback for models/APIs that ignore the SDK option.
+            IChatClient distillerLlm = new OpenAIClient(new LlmClientOptions
+            {
+                ApiKey = apiKey,
+                BaseUrl = baseUrl,
+                SuppressThinking = true,
+            }).CreateChatClient();
+
+            return new ChatClientLlmAdapter(distillerLlm, chatModel);
         });
 
         // ── AddAgencyMemory ───────────────────────────────────────────────────
@@ -315,6 +327,13 @@ internal sealed class MemoryE2EFixture : IAsyncLifetime
         }));
 
         this._eventSubscriptions.Add(bus.Subscribe<ConsolidationCompletedEvent>(async (evt, _) =>
+        {
+            this._capturedEvents.Add(evt);
+            await Task.CompletedTask;
+        }));
+
+        // Capture autonomous memory mutations so tests/hosts can surface them to the user (TI-8.3).
+        this._eventSubscriptions.Add(bus.Subscribe<MemoryMutatedEvent>(async (evt, _) =>
         {
             this._capturedEvents.Add(evt);
             await Task.CompletedTask;

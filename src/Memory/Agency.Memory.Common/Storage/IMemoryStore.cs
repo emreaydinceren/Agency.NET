@@ -78,9 +78,14 @@ public interface IMemoryStore
     /// </summary>
     /// <param name="contentType">The content type to sweep.</param>
     /// <param name="ttl">The age threshold.</param>
+    /// <param name="now">
+    /// The reference time the staleness window is measured from. The caller (the hygiene sweeper)
+    /// supplies its injected <see cref="TimeProvider"/> clock so the predicate is deterministic
+    /// under a virtual clock in tests, rather than relying on the database wall clock (TI-4).
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The number of records deleted.</returns>
-    Task<int> DeleteWhereTtlExceededAsync(ContentType contentType, TimeSpan ttl, CancellationToken ct = default);
+    Task<int> DeleteWhereTtlExceededAsync(ContentType contentType, TimeSpan ttl, DateTimeOffset now, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes records whose importance is below <paramref name="importanceThreshold"/>
@@ -88,9 +93,14 @@ public interface IMemoryStore
     /// </summary>
     /// <param name="importanceThreshold">Maximum importance for pruning eligibility.</param>
     /// <param name="staleAge">Minimum time since last access.</param>
+    /// <param name="now">
+    /// The reference time the staleness window is measured from (the sweeper's injected
+    /// <see cref="TimeProvider"/> clock), so the predicate is deterministic under a virtual
+    /// clock in tests rather than the database wall clock (TI-4).
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The number of records deleted.</returns>
-    Task<int> DeleteWhereLowImportanceStaleAsync(double importanceThreshold, TimeSpan staleAge, CancellationToken ct = default);
+    Task<int> DeleteWhereLowImportanceStaleAsync(double importanceThreshold, TimeSpan staleAge, DateTimeOffset now, CancellationToken ct = default);
 
     /// <summary>
     /// Atomically deletes the records identified by <paramref name="idsToDelete"/> and

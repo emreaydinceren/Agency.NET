@@ -31,7 +31,7 @@ public sealed class HygieneSweeperTests_Importance
     {
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(0.2, TimeSpan.FromDays(30), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(0.2, TimeSpan.FromDays(30), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(5);
 
         var options = new MemoryOptions
@@ -46,7 +46,7 @@ public sealed class HygieneSweeperTests_Importance
         await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
 
         store.Verify(
-            s => s.DeleteWhereLowImportanceStaleAsync(0.2, TimeSpan.FromDays(30), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereLowImportanceStaleAsync(0.2, TimeSpan.FromDays(30), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -57,7 +57,7 @@ public sealed class HygieneSweeperTests_Importance
         var store = new Mock<IMemoryStore>();
         // Store returns 0 because recently-accessed records survived the predicate inside the store.
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var sweeper = CreateSweeper(store.Object);
@@ -66,7 +66,7 @@ public sealed class HygieneSweeperTests_Importance
 
         // The sweeper must still call the method; the store correctly returned 0.
         store.Verify(
-            s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -77,7 +77,7 @@ public sealed class HygieneSweeperTests_Importance
         var store = new Mock<IMemoryStore>();
         // Store returns 0 because high-importance records survived the importance < threshold predicate.
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var options = new MemoryOptions
@@ -92,7 +92,7 @@ public sealed class HygieneSweeperTests_Importance
         await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
 
         store.Verify(
-            s => s.DeleteWhereLowImportanceStaleAsync(0.2, TimeSpan.FromDays(30), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereLowImportanceStaleAsync(0.2, TimeSpan.FromDays(30), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }

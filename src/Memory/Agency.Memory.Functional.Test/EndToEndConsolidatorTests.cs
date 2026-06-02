@@ -172,11 +172,20 @@ public sealed class EndToEndConsolidatorTests : IAsyncLifetime
             Model = "stub-model",
         });
 
+        var eventBus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
+        var mutations = new List<MemoryMutatedEvent>();
+        using IDisposable mutationSub = eventBus.Subscribe<MemoryMutatedEvent>((evt, _) =>
+        {
+            mutations.Add(evt);
+            return Task.CompletedTask;
+        });
+
         var runner = ConsolidatorSubAgentFactory.CreateRunner(
             stubLlm.Object,
             "stub-model",
             store,
             consolidatorOpts,
+            eventBus,
             NullLogger<Agency.Agentic.Agent>.Instance);
 
         IReadOnlyList<MemoryRecord> allRecords = await store.GetAllForUserAsync(UserId, ct);
@@ -201,6 +210,11 @@ public sealed class EndToEndConsolidatorTests : IAsyncLifetime
         Assert.True(
             remaining.Importance >= originalImportance,
             $"Importance {remaining.Importance} should be >= original {originalImportance}.");
+
+        // ── 7. Assert the mutation was surfaced as a MemoryMutatedEvent (TI-8.3) ──
+        Assert.NotEmpty(mutations);
+        Assert.All(mutations, m => Assert.Equal(UserId, m.UserId));
+        Assert.Contains(mutations, m => m.Operation is "Update" or "Delete" or "Merge");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

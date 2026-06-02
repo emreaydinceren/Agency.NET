@@ -139,11 +139,29 @@ public class ConsolidatorReconciliationPromptTests
     }
 
     /// <summary>
-    /// Prompt version constant is 1.
+    /// Prompt version constant is 2 (bumped for the TI-8.4 structural DELETE rule).
     /// </summary>
     [Fact]
-    public void Version_IsOne()
+    public void Version_IsTwo()
     {
-        Assert.Equal(1, ConsolidatorReconciliationPrompt.Version);
+        Assert.Equal(2, ConsolidatorReconciliationPrompt.Version);
+    }
+
+    /// <summary>
+    /// The reconciliation prompt carries the explicit structural DELETE rule for clear-cut
+    /// stale low-importance records (TI-8.4).
+    /// </summary>
+    [Fact]
+    public void Render_IncludesStructuralDeleteRule()
+    {
+        string prompt = ConsolidatorReconciliationPrompt.Render(
+            userId: "user1",
+            records: [MakeRecord("id-1")],
+            maxIterations: 20,
+            factThreshold: 0.85,
+            memoryThreshold: 0.75);
+
+        Assert.Contains("Importance < 0.1", prompt);
+        Assert.Contains("Age > 30 days", prompt);
     }
 }

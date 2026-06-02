@@ -4,6 +4,7 @@ using Agency.Memory.Common.Storage;
 using Agency.Memory.Hygiene;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 
 namespace Agency.Memory.Hygiene.Test;
@@ -31,13 +32,13 @@ public sealed class HygieneSweeperTests_Ttl
     {
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(3);
         store
-            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Memory, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Memory, It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var options = new MemoryOptions
@@ -53,7 +54,7 @@ public sealed class HygieneSweeperTests_Ttl
         await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
 
         store.Verify(
-            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -66,10 +67,10 @@ public sealed class HygieneSweeperTests_Ttl
         // We assert that the sweeper always delegates even when 0 rows are deleted.
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0); // store returns 0 because recently-accessed records survived
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var options = new MemoryOptions
@@ -86,7 +87,7 @@ public sealed class HygieneSweeperTests_Ttl
 
         // Call was made; store correctly returned 0.
         store.Verify(
-            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -96,7 +97,7 @@ public sealed class HygieneSweeperTests_Ttl
     {
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         // No TTL configured for any content type.
@@ -107,8 +108,47 @@ public sealed class HygieneSweeperTests_Ttl
         await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
 
         store.Verify(
-            s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies the sweep measures staleness from its injected <see cref="TimeProvider"/> clock,
+    /// passing that virtual "now" to the store rather than relying on the database wall clock (TI-4).
+    /// </summary>
+    [Fact]
+    public async Task Ttl_SweepPassesInjectedClockAsNow_ToStore()
+    {
+        var fakeTime = new FakeTimeProvider(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        DateTimeOffset expectedNow = fakeTime.GetUtcNow();
+
+        var store = new Mock<IMemoryStore>();
+        store
+            .Setup(s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        store
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var options = new MemoryOptions
+        {
+            Ttl = new Dictionary<ContentType, TimeSpan>
+            {
+                [ContentType.Fact] = TimeSpan.FromDays(90),
+            },
+        };
+
+        var sweeper = CreateSweeper(store.Object, options, fakeTime);
+
+        await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
+
+        // Both passes receive the sweeper's injected clock value, not the DB wall clock.
+        store.Verify(
+            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), expectedNow, It.IsAny<CancellationToken>()),
+            Times.Once);
+        store.Verify(
+            s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), expectedNow, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     /// <summary>Verifies that distinct TTLs per content type are applied independently.</summary>
@@ -117,10 +157,10 @@ public sealed class HygieneSweeperTests_Ttl
     {
         var store = new Mock<IMemoryStore>();
         store
-            .Setup(s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereTtlExceededAsync(It.IsAny<ContentType>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
         store
-            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
 
         var options = new MemoryOptions
@@ -137,10 +177,10 @@ public sealed class HygieneSweeperTests_Ttl
         await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
 
         store.Verify(
-            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereTtlExceededAsync(ContentType.Fact, TimeSpan.FromDays(90), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
         store.Verify(
-            s => s.DeleteWhereTtlExceededAsync(ContentType.Memory, TimeSpan.FromDays(365), It.IsAny<CancellationToken>()),
+            s => s.DeleteWhereTtlExceededAsync(ContentType.Memory, TimeSpan.FromDays(365), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }

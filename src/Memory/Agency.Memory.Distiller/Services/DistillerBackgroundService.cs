@@ -365,10 +365,18 @@ internal sealed class DistillerBackgroundService : BackgroundService
     /// <summary>
     /// Returns <see langword="true"/> for exceptions that should be retried (Spec §8.6 transient class).
     /// </summary>
+    /// <remarks>
+    /// A connection-level <see cref="HttpRequestException"/> — one with no
+    /// <see cref="HttpRequestException.StatusCode"/> because the request never received an HTTP
+    /// response (connection refused, DNS failure, socket reset, transport timeout) — indicates the
+    /// LLM or embedding service is down/unreachable and is treated as transient so the job retries
+    /// rather than dead-lettering on the first attempt (TI-5).
+    /// </remarks>
     private static bool IsTransient(Exception ex) =>
         ex is HttpRequestException httpEx
-            && (httpEx.StatusCode == System.Net.HttpStatusCode.TooManyRequests
-                || httpEx.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+            && (httpEx.StatusCode is System.Net.HttpStatusCode.TooManyRequests
+                    or System.Net.HttpStatusCode.ServiceUnavailable
+                || httpEx.StatusCode is null)
         || ex is TaskCanceledException { InnerException: TimeoutException }
         || ex is Npgsql.NpgsqlException { IsTransient: true };
 }

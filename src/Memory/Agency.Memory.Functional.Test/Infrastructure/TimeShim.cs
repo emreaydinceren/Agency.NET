@@ -42,10 +42,24 @@ namespace Agency.Memory.Functional.Test.Infrastructure;
 internal sealed class TimeShim
 {
     /// <summary>
+    /// Initialises a new <see cref="TimeShim"/>.
+    /// </summary>
+    /// <param name="start">
+    /// The initial virtual time. When <see langword="null"/> the underlying
+    /// <see cref="FakeTimeProvider"/> default epoch (2000-01-01) is used. Pass
+    /// <see cref="DateTimeOffset.UtcNow"/> when the virtual clock must align with timestamps
+    /// written by the database wall clock (e.g. the hygiene sweep's TTL predicates — TI-4).
+    /// </param>
+    internal TimeShim(DateTimeOffset? start = null)
+    {
+        this.Provider = start.HasValue ? new FakeTimeProvider(start.Value) : new FakeTimeProvider();
+    }
+
+    /// <summary>
     /// Gets the <see cref="FakeTimeProvider"/> instance.
     /// Inject this wherever a <see cref="TimeProvider"/> is required.
     /// </summary>
-    internal FakeTimeProvider Provider { get; } = new();
+    internal FakeTimeProvider Provider { get; }
 
     /// <summary>
     /// Gets the virtual time currently reported by <see cref="Provider"/>.

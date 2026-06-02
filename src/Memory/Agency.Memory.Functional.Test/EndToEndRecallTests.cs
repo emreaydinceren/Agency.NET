@@ -160,6 +160,7 @@ public sealed class EndToEndRecallTests : IAsyncLifetime
         {
             ApiKey = apiKey,
             BaseUrl = baseUrl,
+            SuppressThinking = true, // distiller suppresses thinking (TI-8.2)
         }).CreateChatClient();
 
         ILlmClientAdapter llmAdapter = new ChatClientLlmAdapter(llm, chatModel);

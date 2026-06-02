@@ -109,11 +109,11 @@ internal sealed class InMemoryMemoryStore : IMemoryStore
     }
 
     /// <inheritdoc/>
-    public Task<int> DeleteWhereTtlExceededAsync(ContentType ct_, TimeSpan ttl, CancellationToken ct = default) =>
+    public Task<int> DeleteWhereTtlExceededAsync(ContentType ct_, TimeSpan ttl, DateTimeOffset now, CancellationToken ct = default) =>
         Task.FromResult(0);
 
     /// <inheritdoc/>
-    public Task<int> DeleteWhereLowImportanceStaleAsync(double importanceThreshold, TimeSpan staleAge, CancellationToken ct = default) =>
+    public Task<int> DeleteWhereLowImportanceStaleAsync(double importanceThreshold, TimeSpan staleAge, DateTimeOffset now, CancellationToken ct = default) =>
         Task.FromResult(0);
 
     /// <inheritdoc/>

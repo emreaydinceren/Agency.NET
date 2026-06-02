@@ -110,10 +110,14 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
         var opts = this._options.Value;
         var ttlDeleted = 0;
 
+        // Measure all staleness windows from the injected clock so the sweep is deterministic
+        // under a virtual clock in tests (TI-4).
+        var now = this._timeProvider.GetUtcNow();
+
         // TTL pass — one DELETE per configured content type.
         foreach (var (contentType, ttl) in opts.Ttl)
         {
-            var deleted = await this._store.DeleteWhereTtlExceededAsync(contentType, ttl, ct);
+            var deleted = await this._store.DeleteWhereTtlExceededAsync(contentType, ttl, now, ct);
             ttlDeleted += deleted;
 
             this._logger.LogInformation(
@@ -126,6 +130,7 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
         var importanceDeleted = await this._store.DeleteWhereLowImportanceStaleAsync(
             opts.ImportancePruneThreshold,
             opts.StalePruneAge,
+            now,
             ct);
 
         this._logger.LogInformation(

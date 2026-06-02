@@ -17,7 +17,8 @@ namespace Agency.Memory.Distiller.Prompts;
 internal static class EpisodeExtractionPrompt
 {
     /// <summary>Prompt template version. Bump when the template changes (Spec §18.5).</summary>
-    internal const int Version = 1;
+    /// <remarks>v2 (TI-8.2): added the prompt-level thinking-suppression directive.</remarks>
+    internal const int Version = 2;
 
     /// <summary>
     /// Renders the full episode-extraction prompt string.
@@ -55,6 +56,12 @@ internal static class EpisodeExtractionPrompt
         string formattedTurns = FormatTurns(turns);
 
         return $@"SYSTEM:
+/no_think
+Output discipline: do NOT produce any chain-of-thought, reasoning, analysis, or
+`<think> … </think>` blocks. Reason silently and respond with ONLY the final JSON
+object described under ""Response format"". This is a prompt-level fallback for models
+or APIs that do not honour the SDK-level thinking-suppression option.
+
 You are a memory distiller for an AI agent. Your job is to read a conversation
 excerpt and produce zero or more durable Records that capture what was learned
 during the exchange. You operate AFTER the fact — the agent has already done its

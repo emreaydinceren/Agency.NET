@@ -483,19 +483,19 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     /// lasting relevance, maximising the LLM's confidence in the delete decision.
     /// </para>
     /// <para>
-    /// <b>Hardening strategy (SA-D3b):</b>
-    /// The primary assertion is <em>causal</em>: a <see cref="DeleteByIdSpyStore"/> wrapper
-    /// intercepts every <c>DeleteByIdAsync</c> call on the real Postgres store and records
-    /// which record ids were deleted. Asserting that the stale record's id was deleted proves
-    /// that the consolidator sub-agent actually invoked the <c>Memory_Delete</c> tool for that
-    /// record — the true §8.4 invariant — independent of any timing or ordering artefacts.
+    /// <b>Hardening strategy (TI-8.3):</b>
+    /// The primary assertion is <em>causal</em> and sourced from production code: the consolidator
+    /// publishes a <see cref="MemoryMutatedEvent"/> for every Merge/Update/Delete its sub-agent
+    /// performs. Asserting that a <c>Delete</c> event fired for the stale record's id (the id is
+    /// embedded in <see cref="MemoryMutatedEvent.Detail"/>) proves the sub-agent actually invoked
+    /// the <c>Memory_Delete</c> tool — the true §8.4 invariant — independent of any timing or
+    /// ordering artefacts, and without a test-only store decorator.
     /// </para>
     /// <para>
-    /// If the LLM declines to delete (genuine LLM variance — the reconciliation prompt is
-    /// deliberately conservative), the test skips with a precise advisory message rather
-    /// than reporting a false red. The causal approach eliminates the previous flakiness
-    /// where the test was asserting final row state that could only be confirmed after
-    /// the agent completed, with no way to distinguish "not called" from "called but failed".
+    /// If the LLM declines to delete, the test skips with a precise advisory rather than a false
+    /// red. With the TI-8.4 structural DELETE rule now in the reconciliation prompt (importance
+    /// &lt; 0.1 AND age &gt; 30 days AND self-described obsolete → delete by default), this case is
+    /// clear-cut and a skip should be rare residual LLM variance.
     /// </para>
     /// <para>LLM-gated: skips if LM Studio has no model loaded.</para>
     /// </remarks>
@@ -561,14 +561,20 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             return;
         }
 
-        // ── Wrap store with spy to observe causal Delete-tool invocations ─────
-        // The spy forwards all calls to the real pgStore and records which record
-        // ids were passed to DeleteByIdAsync. This gives us a causal observable
-        // ("Memory_Delete was called for this id") without requiring any production change.
-        var spyStore = new DeleteByIdSpyStore(pgStore);
-
+        // ── Subscribe to the production MemoryMutatedEvent observable (TI-8.3) ─
+        // The consolidator publishes a MemoryMutatedEvent for every Merge/Update/Delete its
+        // sub-agent performs. Capturing a Delete event for the stale record's id is a causal
+        // observable of the Memory_Delete tool-call sourced from real product code — no
+        // test-only store decorator required.
         (ConsolidatorBackgroundService service, InMemoryEventBus eventBus) =
-            this.BuildConsolidatorService(spyStore);
+            this.BuildConsolidatorService(pgStore);
+
+        var mutations = new System.Collections.Concurrent.ConcurrentBag<MemoryMutatedEvent>();
+        using IDisposable mutationSub = eventBus.Subscribe<MemoryMutatedEvent>((evt, _) =>
+        {
+            mutations.Add(evt);
+            return Task.CompletedTask;
+        });
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(120));
@@ -609,25 +615,26 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         Assert.NotNull(completed);
         Assert.Equal(userId, completed.UserId);
 
-        // Primary (causal) assertion: Memory_Delete was called for the stale record id.
-        // This proves the consolidator sub-agent made the delete decision, independent
-        // of any timing or store-flush ordering artefacts.
-        bool deleteToolCalledForStale = spyStore.DeletedIds.Contains(staleRecord.Id);
+        // Primary (causal) assertion: a Delete MemoryMutatedEvent fired for the stale record id.
+        // This proves the consolidator sub-agent invoked Memory_Delete for that record, independent
+        // of any timing or store-flush ordering artefacts. The delete tool's result text — carried
+        // in MemoryMutatedEvent.Detail ("Deleted record {id}.") — embeds the deleted record id.
+        bool deleteToolCalledForStale = mutations.Any(
+            m => m.Operation == "Delete" && m.Detail.Contains(staleRecord.Id, StringComparison.Ordinal));
 
         if (!deleteToolCalledForStale)
         {
             // The LLM declined to delete despite the unambiguous staleness signals.
-            // This is genuine LLM variance caused by the reconciliation prompt's
-            // conservative "use sparingly" directive. Skip advisory rather than fail.
+            // With the TI-8.4 structural DELETE rule now in the prompt this should be rare;
+            // a residual skip is genuine LLM variance, not a bug. Skip advisory rather than fail.
             IReadOnlyList<MemoryRecord> afterSkip = await pgStore.GetAllForUserAsync(userId, ct);
             Assert.Skip(
-                $"E3.4 [advisory]: The consolidator sub-agent did not invoke Memory_Delete " +
-                $"for the stale record (id={staleRecord.Id}). " +
-                $"The reconciliation prompt is conservative ('use sparingly; deletion is irreversible') " +
-                $"and the LLM chose to SKIP rather than DELETE. This is LLM variance, not a bug. " +
-                $"Remaining records: {string.Join("; ", afterSkip.Select(r => $"id={r.Id} title='{r.Title}'"))}. " +
-                $"Production recommendation: strengthen the reconciliation prompt's DELETE guidance " +
-                $"for records with importance < 0.1 and age > 30 days that self-describe as obsolete.");
+                $"E3.4 [advisory]: No Delete mutation was observed for the stale record " +
+                $"(id={staleRecord.Id}). The reconciliation prompt now carries the TI-8.4 structural " +
+                $"DELETE rule (importance < 0.1 AND age > 30d AND self-described obsolete → delete), " +
+                $"so this is clear-cut; a residual skip is genuine LLM variance, not a bug. " +
+                $"Observed mutations: [{string.Join("; ", mutations.Select(m => $"{m.Operation}:{m.Detail}"))}]. " +
+                $"Remaining records: {string.Join("; ", afterSkip.Select(r => $"id={r.Id} title='{r.Title}'"))}.");
             return;
         }
 
@@ -1022,15 +1029,16 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             Model = chatModel,
         });
 
+        var eventBus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
+
         Func<string, IReadOnlyList<MemoryRecord>, CancellationToken, Task> runner =
             ConsolidatorSubAgentFactory.CreateRunner(
                 llmClient,
                 chatModel,
                 store,
                 consolidatorOpts,
+                eventBus,
                 NullLogger<Agency.Agentic.Agent>.Instance);
-
-        var eventBus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
 
         var service = new ConsolidatorBackgroundService(
             store,
@@ -1086,90 +1094,6 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 }
 
 // ── Internal test helpers ─────────────────────────────────────────────────────
-
-/// <summary>
-/// A transparent <see cref="IMemoryStore"/> decorator that records which record ids
-/// were passed to <see cref="DeleteByIdAsync"/>. All other methods are forwarded
-/// unchanged to the inner store. Used by E3.4 to assert the causal delete action.
-/// </summary>
-internal sealed class DeleteByIdSpyStore : IMemoryStore
-{
-    private readonly IMemoryStore _inner;
-    private readonly System.Collections.Concurrent.ConcurrentBag<string> _deletedIds = new();
-
-    /// <summary>
-    /// Initialises the spy with the store to wrap.
-    /// </summary>
-    /// <param name="inner">The real store all operations are forwarded to.</param>
-    internal DeleteByIdSpyStore(IMemoryStore inner)
-    {
-        this._inner = inner ?? throw new ArgumentNullException(nameof(inner));
-    }
-
-    /// <summary>Gets the collection of record ids for which <see cref="DeleteByIdAsync"/> was called.</summary>
-    internal IReadOnlyCollection<string> DeletedIds => this._deletedIds;
-
-    /// <inheritdoc/>
-    public Task<Agency.Memory.Common.Records.Record> UpsertAsync(
-        Agency.Memory.Common.Records.Record record, CancellationToken ct = default) =>
-        this._inner.UpsertAsync(record, ct);
-
-    /// <inheritdoc/>
-    public Task<IReadOnlyList<Agency.Memory.Common.Storage.SearchHit>> SearchAsync(
-        Agency.Memory.Common.Storage.SearchQuery query, CancellationToken ct = default) =>
-        this._inner.SearchAsync(query, ct);
-
-    /// <inheritdoc/>
-    public Task<Agency.Memory.Common.Records.Record?> GetByKeyAsync(
-        string userId, string? sessionId, string domain, string key, CancellationToken ct = default) =>
-        this._inner.GetByKeyAsync(userId, sessionId, domain, key, ct);
-
-    /// <inheritdoc/>
-    public Task<bool> ForgetAsync(string userId, string domain, string key, CancellationToken ct = default) =>
-        this._inner.ForgetAsync(userId, domain, key, ct);
-
-    /// <inheritdoc/>
-    public Task<int> ForgetMeAsync(string userId, CancellationToken ct = default) =>
-        this._inner.ForgetMeAsync(userId, ct);
-
-    /// <inheritdoc/>
-    public Task<DateTimeOffset?> LastWrittenAtAsync(string userId, CancellationToken ct = default) =>
-        this._inner.LastWrittenAtAsync(userId, ct);
-
-    /// <inheritdoc/>
-    public Task<IReadOnlyList<Agency.Memory.Common.Records.Record>> GetAllForUserAsync(
-        string userId, CancellationToken ct = default) =>
-        this._inner.GetAllForUserAsync(userId, ct);
-
-    /// <inheritdoc/>
-    public Task<int> DeleteWhereTtlExceededAsync(
-        Agency.Memory.Common.Records.ContentType contentType, TimeSpan ttl, CancellationToken ct = default) =>
-        this._inner.DeleteWhereTtlExceededAsync(contentType, ttl, ct);
-
-    /// <inheritdoc/>
-    public Task<int> DeleteWhereLowImportanceStaleAsync(
-        double importanceThreshold, TimeSpan staleAge, CancellationToken ct = default) =>
-        this._inner.DeleteWhereLowImportanceStaleAsync(importanceThreshold, staleAge, ct);
-
-    /// <inheritdoc/>
-    public Task<Agency.Memory.Common.Records.Record> MergeAsync(
-        IReadOnlyList<string> idsToDelete,
-        Agency.Memory.Common.Records.Record newRecord,
-        CancellationToken ct = default) =>
-        this._inner.MergeAsync(idsToDelete, newRecord, ct);
-
-    /// <inheritdoc/>
-    public Task<Agency.Memory.Common.Records.Record?> UpdateRecordAsync(
-        string recordId, string userId, string? newValue, double? newImportance, CancellationToken ct = default) =>
-        this._inner.UpdateRecordAsync(recordId, userId, newValue, newImportance, ct);
-
-    /// <inheritdoc/>
-    public async Task<bool> DeleteByIdAsync(string recordId, string userId, CancellationToken ct = default)
-    {
-        this._deletedIds.Add(recordId);
-        return await this._inner.DeleteByIdAsync(recordId, userId, ct).ConfigureAwait(false);
-    }
-}
 
 /// <summary>
 /// A minimal <see cref="ILogger{T}"/> implementation that counts log entries at

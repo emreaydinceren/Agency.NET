@@ -67,11 +67,22 @@ public sealed class EpisodeExtractionPromptTests
         Assert.Contains("Goal achieved: debug session finished", rendered);
     }
 
-    /// <summary>Verifies that the prompt version constant is 1 (Spec §18.5).</summary>
+    /// <summary>Verifies that the prompt version constant is 2 (Spec §18.5; bumped for the TI-8.2 no-think directive).</summary>
     [Fact]
-    public void Version_Is1()
+    public void Version_Is2()
     {
-        Assert.Equal(1, EpisodeExtractionPrompt.Version);
+        Assert.Equal(2, EpisodeExtractionPrompt.Version);
+    }
+
+    /// <summary>Verifies the rendered prompt carries the thinking-suppression directive (TI-8.2).</summary>
+    [Fact]
+    public void Render_IncludesThinkingSuppressionDirective()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("/no_think", rendered);
+        Assert.Contains("do NOT produce any chain-of-thought", rendered);
     }
 
     // ── Parsing ────────────────────────────────────────────────────────────────

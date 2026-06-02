@@ -507,9 +507,10 @@ public sealed class Group4HygieneTests : IAsyncLifetime
 
     /// <summary>
     /// Builds a <see cref="HygieneSweeperBackgroundService"/> with the given store and options.
-    /// The <see cref="TimeShim"/> is constructed but not advanced — Group 4 tests drive
-    /// the sweeper directly via <c>RunOnceAsync</c> rather than via the periodic timer loop,
-    /// so virtual time advancement is not required for correctness.
+    /// The <see cref="TimeShim"/> is started at wall-clock <see cref="DateTimeOffset.UtcNow"/> so its
+    /// virtual "now" aligns with the database-written timestamps of the records these tests seed
+    /// (the sweep now measures staleness from the injected clock — TI-4). Group 4 tests drive the
+    /// sweeper directly via <c>RunOnceAsync</c> rather than via the periodic timer loop.
     /// </summary>
     /// <param name="store">The memory store to sweep.</param>
     /// <param name="options">The memory options governing TTL and importance thresholds.</param>
@@ -518,7 +519,7 @@ public sealed class Group4HygieneTests : IAsyncLifetime
         IMemoryStore store,
         MemoryOptions options)
     {
-        var shim = new TimeShim();
+        var shim = new TimeShim(DateTimeOffset.UtcNow);
         return new HygieneSweeperBackgroundService(
             store,
             Options.Create(options),

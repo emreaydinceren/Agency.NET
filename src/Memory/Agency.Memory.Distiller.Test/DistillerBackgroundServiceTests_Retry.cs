@@ -116,6 +116,51 @@ public sealed class DistillerBackgroundServiceTests_Retry
     }
 
     /// <summary>
+    /// A connection-level failure — an <see cref="HttpRequestException"/> with no
+    /// <c>StatusCode</c> because the service never answered (down/unreachable) — is transient:
+    /// it retries up to <c>MaxRetries</c> times, then dead-letters (TI-5).
+    /// </summary>
+    [Fact]
+    public async Task Distill_ServiceUnreachable_RetriesUpToMaxRetries_ThenDeadLetters()
+    {
+        // No StatusCode → the request never received an HTTP response (connection refused / DNS /
+        // socket reset). This is what a down LLM or embedding service surfaces.
+        var llm = new FakeLlmClientAdapter();
+        for (int i = 0; i < 4; i++)
+        {
+            llm.QueueException(new HttpRequestException("Connection refused — service unreachable."));
+        }
+
+        DistillerBackgroundService svc = CreateService(
+            llm,
+            out ChannelSessionRegistry registry,
+            out FakeConversationManagerRegistry convoRegistry,
+            out _,
+            out FakeDeadLetterStore deadLetter,
+            out FakeEventBus eventBus,
+            maxRetries: 2);
+
+        convoRegistry.Register(SessionId, MakeConversation());
+        registry.GetOrCreateWriter(UserId, SessionId).TryWrite(
+            new DistillationJob(UserId, SessionId, DistillationTrigger.Inactivity, 2));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        _ = svc.StartAsync(cts.Token);
+
+        for (int i = 0; i < 100 && deadLetter.Entries.Count == 0 && !eventBus.Published.OfType<DistillationFailedEvent>().Any(); i++)
+        {
+            await Task.Delay(30, TestContext.Current.CancellationToken);
+        }
+
+        await cts.CancelAsync();
+
+        // MaxRetries=2 means 3 total attempts — the connection failure was retried, not dead-lettered immediately.
+        Assert.Equal(3, llm.CallCount);
+        Assert.Single(deadLetter.Entries);
+        Assert.Single(eventBus.Published.OfType<DistillationFailedEvent>());
+    }
+
+    /// <summary>
     /// A permanent (HTTP 400) failure dead-letters immediately without retry.
     /// </summary>
     [Fact]

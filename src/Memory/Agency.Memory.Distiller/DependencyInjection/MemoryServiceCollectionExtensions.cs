@@ -131,7 +131,13 @@ public static class MemoryServiceCollectionExtensions
                 return Task.CompletedTask;
             };
 
-            return MemoryHookFactory.Build(retrievalCallback, timerCallback);
+            // Session-started callback: register the live conversation manager so the distiller
+            // can read session turns by session id.
+            IConversationManagerRegistry conversationRegistry = sp.GetRequiredService<IConversationManagerRegistry>();
+            Func<SessionStartedHookContext, CancellationToken, Task> sessionStartedCallback =
+                ConversationRegistrationHook.Create(conversationRegistry);
+
+            return MemoryHookFactory.Build(retrievalCallback, timerCallback, sessionStartedCallback);
         });
 
         return services;

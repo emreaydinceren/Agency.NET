@@ -262,7 +262,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             domain: "Preferences",
             key: "Language",
             title: "Language preference (session A)",
-            value: "User prefers Python for scripting tasks.",
+            value: "User prefers Python for scripting.",
             importance: 0.7,
             ageInDays: 5), ct);
 
@@ -272,7 +272,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             domain: "Preferences",
             key: "Language",
             title: "Language preference (session B)",
-            value: "User likes to use Python; it is their go-to scripting language.",
+            value: "User prefers Python for scripting tasks.",
             importance: 0.7,
             ageInDays: 3), ct);
 

@@ -133,4 +133,92 @@ public sealed class ChatSessionTests
         Assert.NotNull(capturedCtx);
         Assert.Equal("user-42", capturedCtx.User.Id);
     }
+
+    // ── DisposeAsync ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// After one turn, <see cref="ChatSession.DisposeAsync"/> must fire <c>OnSessionEnd</c> exactly once.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAsync_AfterOneTurn_FiresOnSessionEndOnce()
+    {
+        var client = new FakeChatClient();
+        client.EnqueueResponse(TextResponse("hello"));
+
+        int fireCount = 0;
+        var hooks = new AgentHooks
+        {
+            OnSessionEnd = (_, _) =>
+            {
+                fireCount++;
+                return Task.CompletedTask;
+            },
+        };
+
+        var agent = new Agent(client, "model", hooks: hooks);
+        var session = new ChatSession(agent, new AgentOptions());
+
+        await DrainAsync(session, "hello");
+
+        await session.DisposeAsync();
+
+        Assert.Equal(1, fireCount);
+    }
+
+    /// <summary>
+    /// Calling <see cref="ChatSession.DisposeAsync"/> a second time must not fire <c>OnSessionEnd</c> again.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAsync_CalledTwice_FiresOnSessionEndOnce()
+    {
+        var client = new FakeChatClient();
+        client.EnqueueResponse(TextResponse("hello"));
+
+        int fireCount = 0;
+        var hooks = new AgentHooks
+        {
+            OnSessionEnd = (_, _) =>
+            {
+                fireCount++;
+                return Task.CompletedTask;
+            },
+        };
+
+        var agent = new Agent(client, "model", hooks: hooks);
+        var session = new ChatSession(agent, new AgentOptions());
+
+        await DrainAsync(session, "hello");
+
+        await session.DisposeAsync();
+        await session.DisposeAsync();
+
+        Assert.Equal(1, fireCount);
+    }
+
+    /// <summary>
+    /// Disposing a <see cref="ChatSession"/> that has never had a turn (context is null)
+    /// must not throw and must not fire <c>OnSessionEnd</c>.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAsync_NeverUsed_DoesNotThrowAndDoesNotFireHook()
+    {
+        int fireCount = 0;
+        var hooks = new AgentHooks
+        {
+            OnSessionEnd = (_, _) =>
+            {
+                fireCount++;
+                return Task.CompletedTask;
+            },
+        };
+
+        var client = new FakeChatClient();
+        var agent = new Agent(client, "model", hooks: hooks);
+        var session = new ChatSession(agent, new AgentOptions());
+
+        // No turns — context is null.
+        await session.DisposeAsync();
+
+        Assert.Equal(0, fireCount);
+    }
 }

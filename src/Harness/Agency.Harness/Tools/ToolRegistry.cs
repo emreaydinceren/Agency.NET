@@ -8,6 +8,7 @@ namespace Agency.Harness.Tools;
 internal sealed class EmptyToolRegistry : IToolRegistry
 {
     public static EmptyToolRegistry Instance { get; } = new();
+    public void Register(ITool tool) { }
     public IReadOnlyList<ToolDefinition> ListDefinitions() => [];
     public Task<ToolResult> InvokeAsync(string name, JsonElement input, CancellationToken ct)
         => Task.FromResult(new ToolResult($"No tool registered with name '{name}'.", IsError: true));

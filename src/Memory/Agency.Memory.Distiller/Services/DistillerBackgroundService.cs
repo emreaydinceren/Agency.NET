@@ -226,6 +226,19 @@ internal sealed class DistillerBackgroundService : BackgroundService
                     "Distillation complete: {Count} records written, watermark={Watermark}. SessionId={SessionId}",
                     recordsWritten, newWatermark, job.SessionId);
 
+                // Terminal cleanup: after all turns are read and distilled, release the session
+                // resources. Ordering is intentional — cleanup happens only after the successful
+                // write so turns are never lost to an early removal (Spec §A3).
+                if (job.Trigger == DistillationTrigger.SessionDisposed)
+                {
+                    this._conversationRegistry.Unregister(job.SessionId);
+                    this._channelRegistry.Remove(job.SessionId);
+
+                    this._logger.LogInformation(
+                        "Session {SessionId} resources released after SessionDisposed distillation.",
+                        job.SessionId);
+                }
+
                 return; // success
             }
             catch (OperationCanceledException)

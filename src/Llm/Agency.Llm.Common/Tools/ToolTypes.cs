@@ -24,6 +24,14 @@ public interface ITool
 /// <summary>Provides a catalogue of available tools and dispatches invocations by name.</summary>
 public interface IToolRegistry
 {
+    /// <summary>
+    /// Registers <paramref name="tool"/> in the registry, overwriting any existing tool with the
+    /// same <see cref="ToolDefinition.Name"/>. Used by lifecycle hooks to add per-session tools
+    /// after the registry is created.
+    /// </summary>
+    /// <param name="tool">The tool to register.</param>
+    void Register(ITool tool);
+
     /// <summary>Returns the definitions of all registered tools.</summary>
     IReadOnlyList<ToolDefinition> ListDefinitions();
 

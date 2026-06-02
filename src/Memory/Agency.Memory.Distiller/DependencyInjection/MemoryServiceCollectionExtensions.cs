@@ -132,12 +132,25 @@ public static class MemoryServiceCollectionExtensions
             };
 
             // Session-started callback: register the live conversation manager so the distiller
-            // can read session turns by session id.
+            // can read session turns by session id, AND register per-session memory tools.
             IConversationManagerRegistry conversationRegistry = sp.GetRequiredService<IConversationManagerRegistry>();
-            Func<SessionStartedHookContext, CancellationToken, Task> sessionStartedCallback =
+            ChannelSessionRegistry channelRegistry = sp.GetRequiredService<ChannelSessionRegistry>();
+
+            Func<SessionStartedHookContext, CancellationToken, Task> convoCallback =
                 ConversationRegistrationHook.Create(conversationRegistry);
 
-            return MemoryHookFactory.Build(retrievalCallback, timerCallback, sessionStartedCallback);
+            Func<SessionStartedHookContext, CancellationToken, Task> sessionStartedCallback =
+                async (hookCtx, ct) =>
+                {
+                    await convoCallback(hookCtx, ct).ConfigureAwait(false);
+                    MemorySessionTools.RegisterInto(hookCtx.AgentContext, channelRegistry, store);
+                };
+
+            // Session-end callback: enqueue a terminal SessionDisposed distillation job.
+            Func<SessionEndedHookContext, CancellationToken, Task> sessionEndCallback =
+                SessionEndHook.Create(channelRegistry);
+
+            return MemoryHookFactory.Build(retrievalCallback, timerCallback, sessionStartedCallback, sessionEndCallback);
         });
 
         return services;

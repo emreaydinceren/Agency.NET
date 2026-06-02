@@ -80,6 +80,15 @@ public sealed class Agent
     public string ClientType => this._clientType;
 
     /// <summary>
+    /// Fires the <see cref="AgentHooks.OnSessionEnd"/> hook for the given context, if one is set.
+    /// Called by <see cref="ChatSession.DisposeAsync"/> at the end of a session.
+    /// </summary>
+    public Task RaiseSessionEndAsync(Context ctx, CancellationToken ct = default) =>
+        this._hooks.OnSessionEnd is { } onSessionEnd
+            ? onSessionEnd(new SessionEndedHookContext(ctx.Session.Id ?? string.Empty, ctx), ct)
+            : Task.CompletedTask;
+
+    /// <summary>
     /// Creates a new <see cref="Context"/> for a multi-turn conversation session,
     /// pre-populated with temporal context and the initial user prompt.
     /// </summary>

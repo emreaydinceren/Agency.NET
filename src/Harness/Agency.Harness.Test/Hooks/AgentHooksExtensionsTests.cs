@@ -40,6 +40,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.Null(result.OnPostToolUse);
         Assert.Null(result.OnAssistantTurn);
         Assert.Null(result.OnStop);
+        Assert.Null(result.OnSessionEnd);
     }
 
     // ── Sequential execution ───────────────────────────────────────────────────
@@ -54,6 +55,39 @@ public sealed class AgentHooksExtensionsTests
         AgentHooks composed = h1.Compose(h2);
         await composed.OnSessionStarted!(
             new SessionStartedHookContext("s", MakeContext()),
+            CancellationToken.None);
+
+        Assert.Equal([1, 2], log);
+    }
+
+    // ── OnSessionEnd: sequential execution ────────────────────────────────────
+
+    [Fact]
+    public void Compose_FirstOnSessionEndNull_UsesSecond()
+    {
+        Func<SessionEndedHookContext, CancellationToken, Task> h2 = (_, _) => Task.CompletedTask;
+        AgentHooks result = AgentHooks.None.Compose(new AgentHooks { OnSessionEnd = h2 });
+        Assert.Same(h2, result.OnSessionEnd);
+    }
+
+    [Fact]
+    public void Compose_SecondOnSessionEndNull_UsesFirst()
+    {
+        Func<SessionEndedHookContext, CancellationToken, Task> h1 = (_, _) => Task.CompletedTask;
+        AgentHooks result = new AgentHooks { OnSessionEnd = h1 }.Compose(AgentHooks.None);
+        Assert.Same(h1, result.OnSessionEnd);
+    }
+
+    [Fact]
+    public async Task Compose_OnSessionEnd_BothRun_InOrder()
+    {
+        var log = new List<int>();
+        var h1 = new AgentHooks { OnSessionEnd = (_, _) => { log.Add(1); return Task.CompletedTask; } };
+        var h2 = new AgentHooks { OnSessionEnd = (_, _) => { log.Add(2); return Task.CompletedTask; } };
+
+        AgentHooks composed = h1.Compose(h2);
+        await composed.OnSessionEnd!(
+            new SessionEndedHookContext("s", MakeContext()),
             CancellationToken.None);
 
         Assert.Equal([1, 2], log);

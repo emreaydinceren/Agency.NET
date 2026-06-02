@@ -1,6 +1,8 @@
 
 using System.Text.Json;
 using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
+using Agency.Harness.Test.Fakes;
 
 namespace Agency.Harness.Test;
 /// <summary>
@@ -175,6 +177,48 @@ public sealed class AgentInternalsTests
         JsonElement result = Agent.ToJsonElement(args);
 
         Assert.Equal(JsonValueKind.Null, result.GetProperty("key").ValueKind);
+    }
+
+    // ── Agent.RaiseSessionEndAsync ────────────────────────────────────────────
+
+    private static Context MakeSessionContext(string sessionId)
+    {
+        var ctx = new Context { Query = new QueryContext { Prompt = "test" } };
+        ctx.Session = ctx.Session with { Id = sessionId };
+        return ctx;
+    }
+
+    [Fact]
+    public async Task RaiseSessionEndAsync_WithHook_InvokesHookWithSessionId()
+    {
+        string? capturedSessionId = null;
+        var hooks = new AgentHooks
+        {
+            OnSessionEnd = (hc, _) =>
+            {
+                capturedSessionId = hc.SessionId;
+                return Task.CompletedTask;
+            },
+        };
+
+        var llm = new FakeChatClient();
+        var agent = new Agent(llm, "model", hooks: hooks);
+        Context ctx = MakeSessionContext("session-abc");
+
+        await agent.RaiseSessionEndAsync(ctx, TestContext.Current.CancellationToken);
+
+        Assert.Equal("session-abc", capturedSessionId);
+    }
+
+    [Fact]
+    public async Task RaiseSessionEndAsync_NoHook_DoesNotThrow()
+    {
+        var llm = new FakeChatClient();
+        var agent = new Agent(llm, "model");
+        Context ctx = MakeSessionContext("session-xyz");
+
+        // Must complete without throwing when no OnSessionEnd hook is set.
+        await agent.RaiseSessionEndAsync(ctx, TestContext.Current.CancellationToken);
     }
 
     // ── EmptyToolRegistry ─────────────────────────────────────────────────────

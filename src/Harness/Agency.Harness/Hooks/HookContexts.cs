@@ -24,3 +24,6 @@ public sealed record AssistantTurnHookContext(ChatMessage Message, Context Agent
 
 /// <summary>Passed to <c>OnStop</c> hooks.</summary>
 public sealed record StopHookContext(AgentResultEvent Result, Context AgentContext);
+
+/// <summary>Passed to <c>OnSessionEnd</c> hooks when a ChatSession is disposed.</summary>
+public sealed record SessionEndedHookContext(string SessionId, Context AgentContext);

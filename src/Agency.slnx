@@ -1,9 +1,9 @@
 <Solution>
-  <Folder Name="/Agentic/">
-    <Project Path="Agentic\Agency.Agentic.Console.Test\Agency.Agentic.Console.Test.csproj" />
-    <Project Path="Agentic\Agency.Agentic.Console\Agency.Agentic.Console.csproj" />
-    <Project Path="Agentic\Agency.Agentic.Test\Agency.Agentic.Test.csproj" Id="57db7c5d-6ae9-42f0-b756-9d11fc02d6c5" />
-    <Project Path="Agentic\Agency.Agentic\Agency.Agentic.csproj" />
+  <Folder Name="/Harness/">
+    <Project Path="Harness\Agency.Harness.Console.Test\Agency.Harness.Console.Test.csproj" />
+    <Project Path="Harness\Agency.Harness.Console\Agency.Harness.Console.csproj" />
+    <Project Path="Harness\Agency.Harness.Test\Agency.Harness.Test.csproj" Id="57db7c5d-6ae9-42f0-b756-9d11fc02d6c5" />
+    <Project Path="Harness\Agency.Harness\Agency.Harness.csproj" />
   </Folder>
   <Folder Name="/Embeddings/">
     <Project Path="Embeddings\Agency.Embeddings.Common.Test\Agency.Embeddings.Common.Test.csproj" />

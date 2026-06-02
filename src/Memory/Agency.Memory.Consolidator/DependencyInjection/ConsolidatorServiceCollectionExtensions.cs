@@ -49,8 +49,8 @@ public static class ConsolidatorServiceCollectionExtensions
             IOptions<ConsolidatorOptions> opts = sp.GetRequiredService<IOptions<ConsolidatorOptions>>();
             ILogger<ConsolidatorBackgroundService> logger =
                 sp.GetRequiredService<ILogger<ConsolidatorBackgroundService>>();
-            ILogger<Agency.Agentic.Agent> agentLogger =
-                sp.GetRequiredService<ILogger<Agency.Agentic.Agent>>();
+            ILogger<Agency.Harness.Agent> agentLogger =
+                sp.GetRequiredService<ILogger<Agency.Harness.Agent>>();
 
             string model = opts.Value.Model ?? "default";
 

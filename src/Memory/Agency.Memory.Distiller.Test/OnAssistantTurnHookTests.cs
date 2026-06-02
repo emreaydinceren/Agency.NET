@@ -1,6 +1,6 @@
-using Agency.Agentic;
-using Agency.Agentic.Contexts;
-using Agency.Agentic.Hooks;
+using Agency.Harness;
+using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 using Agency.Memory.Common.Hooks;
 using Agency.Memory.Common.Jobs;
 using Agency.Memory.Common.Options;

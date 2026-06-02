@@ -38,10 +38,10 @@ Documents
    Agency.Llm.OpenAI                  (OpenAI SDK implementation)
           │
           ▼
-   Agency.Agentic                     (agent loop + lifecycle hooks + stop
+   Agency.Harness                     (agent loop + lifecycle hooks + stop
                                        conditions + structured Context +
                                        tool registry + MCP client pool)
-   Agency.Agentic.Console             (interactive REPL chat harness)
+   Agency.Harness.Console             (interactive REPL chat harness)
    Agency.Console                     (one-shot RAG demo stub)
           │
           ▼
@@ -96,8 +96,8 @@ Documents
 
 ### Agent
 
-- [[Agency.Agentic]] — agent loop with lifecycle hooks (`OnPreToolUse` can Allow/Deny/Rewrite tool calls), composable `StopConditions` (step/budget/token guards), a structured `Context` assembled from typed sub-contexts (knowledge re-injected every iteration), built-in tools + `ToolRegistry`, an `McpClientPool` so the agent can consume external MCP servers, and a typed `AgentEvent` stream
-- [[Agency.Agentic.Console]] — multi-turn interactive REPL chat harness
+- [[Agency.Harness]] — agent loop with lifecycle hooks (`OnPreToolUse` can Allow/Deny/Rewrite tool calls), composable `StopConditions` (step/budget/token guards), a structured `Context` assembled from typed sub-contexts (knowledge re-injected every iteration), built-in tools + `ToolRegistry`, an `McpClientPool` so the agent can consume external MCP servers, and a typed `AgentEvent` stream
+- [[Agency.Harness.Console]] — multi-turn interactive REPL chat harness
 - [[Agency.Console]] — one-shot RAG demo stub
 
 ### MCP Servers
@@ -108,7 +108,7 @@ Documents
 
 ### Observability
 
-Every library exposes a named `ActivitySource` and `Meter` following the same pattern. Configure your OpenTelemetry pipeline with these source names to get distributed traces and metrics for every SQL query, embedding call, vector store operation, LLM request, and ingestion run. The agent loop adds its own instruments under `Agency.Agentic.Agent` — counters for turns, errors, tool calls, and tokens, plus a turn-duration histogram (all tagged with `agent.model` and `agent.client_type`).
+Every library exposes a named `ActivitySource` and `Meter` following the same pattern. Configure your OpenTelemetry pipeline with these source names to get distributed traces and metrics for every SQL query, embedding call, vector store operation, LLM request, and ingestion run. The agent loop adds its own instruments under `Agency.Harness.Agent` — counters for turns, errors, tool calls, and tokens, plus a turn-duration histogram (all tagged with `agent.model` and `agent.client_type`).
 
 ### Centralized Package Management
 
@@ -118,4 +118,4 @@ All NuGet package versions are pinned in `src/Directory.Build.props`. Add or upd
 
 - Non-functional unit tests: `dotnet test src/Agency.slnx --filter "Category!=Functional"`
 - Functional LLM tests (requires LM Studio): `dotnet test --filter "Category=Functional"`
-- E2E console tests: part of `Agency.Agentic.Console.Test` with `[Trait("Category", "Functional")]`
+- E2E console tests: part of `Agency.Harness.Console.Test` with `[Trait("Category", "Functional")]`

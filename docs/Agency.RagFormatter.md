@@ -68,7 +68,7 @@ string systemPrompt = $"""
 | [[Agency.Sql.Common]] | `Dataset` is produced by SQL runner implementations in this layer |
 | [[Agency.Sql.Postgres]] | `PostgreSqlRunner.QueryAsync` returns a `Dataset` that this formats |
 | [[Agency.Sql.Sqlite]] | `SqliteRunner.QueryAsync` returns a `Dataset` that this formats |
-| [[Agency.Agentic]] | Formatted table can be injected into agent context as factual knowledge |
+| [[Agency.Harness]] | Formatted table can be injected into agent context as factual knowledge |
 | [[Agency.Console]] | The console demo wires RAG query results through this formatter |
 
 ## Design Notes

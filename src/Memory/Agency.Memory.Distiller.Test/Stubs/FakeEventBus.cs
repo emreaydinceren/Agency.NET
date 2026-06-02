@@ -1,4 +1,4 @@
-using Agency.Agentic;
+using Agency.Harness;
 using Agency.Memory.Common.Events;
 
 namespace Agency.Memory.Distiller.Test.Stubs;

@@ -1,8 +1,8 @@
 # AAT-26 — Planner-Worker-Judge Hierarchy
 
-> **Status:** Defined · **Tag:** `llm` · **Target project:** `Agency.Agentic`
+> **Status:** Defined · **Tag:** `llm` · **Target project:** `Agency.Harness`
 > **Document type:** High-Level Design (HLD) / Product + Engineering Specification
-> **Author role:** Senior Product Manager (spec), grounded in the existing `Agency.Agentic` codebase
+> **Author role:** Senior Product Manager (spec), grounded in the existing `Agency.Harness` codebase
 > **Source task:** [AAT-26 — Implement a "Planner-Worker-Judge" Hierarchy](https://www.notion.so/36b5b7b651d880f4b306ffcac5f5e069)
 
 ---
@@ -32,7 +32,7 @@
 
 ## 1. Goal
 
-Introduce a **Planner-Worker-Judge (PWJ) hierarchy** into `Agency.Agentic` — a role-specialized
+Introduce a **Planner-Worker-Judge (PWJ) hierarchy** into `Agency.Harness` — a role-specialized
 multi-agent orchestration that decomposes a single complex objective into three cooperating roles
 running over the *existing* `Agent` loop and `IChatClient` abstraction:
 
@@ -44,7 +44,7 @@ running over the *existing* `Agent` loop and `IChatClient` abstraction:
 
 The deliverable is a new **orchestration layer** — not a new LLM client and not a fork of the agent
 loop. It composes `Agent`, `ChatSession`, `AgentTool`, `AgentHooks`, and `StopConditions` that already
-exist in `src/Agentic/Agency.Agentic`.
+exist in `src/Harness/Agency.Harness`.
 
 **Definition of done (V1):**
 
@@ -59,7 +59,7 @@ exist in `src/Agentic/Agency.Agentic`.
 - ≥ 90% line coverage on the orchestration logic via `FakeChatClient`-driven unit tests, plus one
   functional E2E test gated behind `Category=Functional` against LM Studio.
 
-**Why this matters:** Today `Agency.Agentic` offers a single flat loop (`Agent`) plus opportunistic
+**Why this matters:** Today `Agency.Harness` offers a single flat loop (`Agent`) plus opportunistic
 delegation (`subagent_tool`). That works for "do a task with tools" but degrades on multi-step
 objectives: the model must hold the whole plan in working memory, there is no verification gate, and
 cost is unbounded by structure. PWJ adds *structure* (explicit plan), *specialization* (per-role model
@@ -310,13 +310,13 @@ the spec keeps them **separately configurable**:
 
 ## 7. Data Model / State Layer
 
-All state is **in-memory** in V1 (NG-7). Types live in `Agency.Agentic` as `sealed record`s, matching
+All state is **in-memory** in V1 (NG-7). Types live in `Agency.Harness` as `sealed record`s, matching
 the existing `AgentEvent` / `Context` style (file-scoped namespace, XML docs, nullable-enabled).
 
 ### 7.1 Core records
 
 ```csharp
-namespace Agency.Agentic.Hierarchy;
+namespace Agency.Harness.Hierarchy;
 
 /// <summary>An ordered decomposition of an objective produced by the planner.</summary>
 public sealed record Plan
@@ -655,8 +655,8 @@ Mirrors `Agent` exactly (same ActivitySource+Meter approach, same tag vocabulary
 
 | Signal | Name | Tags |
 |--------|------|------|
-| `ActivitySource` | `Agency.Agentic.Hierarchy` | — |
-| `Meter` | `Agency.Agentic.Hierarchy` | — |
+| `ActivitySource` | `Agency.Harness.Hierarchy` | — |
+| `Meter` | `Agency.Harness.Hierarchy` | — |
 | Counter | `hierarchy.runs` | `status` |
 | Counter | `hierarchy.plans` | `attempt` |
 | Counter | `hierarchy.steps` | `role=worker`, `step.status` |
@@ -740,7 +740,7 @@ Functional E2E tests are tagged `Category=Functional` and target LM Studio (`htt
 
 ### Phase 7 — Console integration (optional, V1.1)
 
-- **T-CON-1 (test):** `Agency.Agentic.Console` renders `PlanCreatedEvent` / `VerdictEvent` to the
+- **T-CON-1 (test):** `Agency.Harness.Console` renders `PlanCreatedEvent` / `VerdictEvent` to the
   terminal via `IChatOutput`.
 - **IMPL-CON-1:** Add rendering cases for the new event types.
 

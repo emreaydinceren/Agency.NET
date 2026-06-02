@@ -1,6 +1,6 @@
-using Agency.Agentic;
-using Agency.Agentic.Contexts;
-using Agency.Agentic.Hooks;
+using Agency.Harness;
+using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 using System.Collections.Concurrent;
 
 namespace Agency.Memory.Functional.Test.Infrastructure;

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Threading.Channels;
-using Agency.Agentic.Contexts;
+using Agency.Harness.Contexts;
 using Agency.Memory.Common.Jobs;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Distiller.Services;

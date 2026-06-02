@@ -49,7 +49,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 - **Read first:** `src/Agency.slnx`, `src/Directory.Build.props`, `src/Directory.Packages.props`, existing project `src/VectorStore/Agency.VectorStore.Common/Agency.VectorStore.Common.csproj` for shape.
 - **Deliverable:**
   - Create directory `src/Memory/Agency.Memory.Common/` and `src/Memory/Agency.Memory.Common.Test/`.
-  - Create `Agency.Memory.Common.csproj` targeting `net10.0`, referencing `Agency.Embeddings.Common`, `Agency.Llm.Common`, `Agency.Agentic` (for `Context`, hooks, events).
+  - Create `Agency.Memory.Common.csproj` targeting `net10.0`, referencing `Agency.Embeddings.Common`, `Agency.Llm.Common`, `Agency.Harness` (for `Context`, hooks, events).
   - Add `AssemblyInfo.cs` containing `[assembly: InternalsVisibleTo("Agency.Memory.Common.Test")]`.
   - Create `Agency.Memory.Common.Test.csproj` matching the test-project layout of `Agency.VectorStore.Common.Test` (xUnit, FluentAssertions, Microsoft.NET.Test.Sdk).
   - Register both in `src/Agency.slnx`.
@@ -210,7 +210,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task A.5.T — Test `MemoryHookFactory` baseline composition
 
 - **Goal:** Capture the baseline-first ordering rule (Spec §6.5, OpenItems Item 6).
-- **Read first:** Spec §6.5, `src/Agentic/Agency.Agentic/Hooks/AgentHooks.cs`, `src/Agentic/Agency.Agentic/Hooks/AgentHooksExtensions.cs`.
+- **Read first:** Spec §6.5, `src/Harness/Agency.Harness/Hooks/AgentHooks.cs`, `src/Harness/Agency.Harness/Hooks/AgentHooksExtensions.cs`.
 - **Deliverable:** In `Agency.Memory.Common.Test/MemoryHookFactoryTests.cs`:
   - `Build_ProducesBaselineWithRetrieval_DistillerTimer_AuditHooks`.
   - `Compose_BaselineFirst_UserHookSeesEnrichedContext` — assert `Context.Knowledge` is populated by baseline before user hook runs.
@@ -223,10 +223,10 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 - **Goal:** Provide the baseline-hook composition layer per Spec §6.5.
 - **Read first:** A.5.T, Spec §6.5, existing `AgentHooksExtensions.Compose`.
 - **Deliverable:**
-  - In `src/Agentic/Agency.Agentic/Hooks/AgentHooks.cs`: add `OnUserPromptSubmit`, `OnPreIteration`, `OnPostToolBatch` delegates. **Remove** `OnPostToolUseFailure` (Spec §14.7). This is a breaking change in the Agentic project — update call sites in `Agent.cs`.
+  - In `src/Harness/Agency.Harness/Hooks/AgentHooks.cs`: add `OnUserPromptSubmit`, `OnPreIteration`, `OnPostToolBatch` delegates. **Remove** `OnPostToolUseFailure` (Spec §14.7). This is a breaking change in the Harness project — update call sites in `Agent.cs`.
   - In `AgentHooksExtensions.cs`: add `public static AgentHooks ComposeBefore(this AgentHooks self, AgentHooks first)`.
   - In `Agency.Memory.Common/Hooks/MemoryHookFactory.cs`: factory taking `IMemoryStore`, `IEmbeddingGenerator`, `Channel<DistillationJob>.Writer`, `InactivityTimerService`, `IOptions<MemoryOptions>`; returns a baseline `AgentHooks` wiring retrieval to `OnPreIteration` and timer-restart to `OnAssistantTurn`.
-  - In `Agency.Memory.Common/DependencyInjection/MemoryServiceCollectionExtensions.cs`: `public static IServiceCollection AddAgencyMemory(this IServiceCollection services, Action<MemoryBuilder> configure)` that registers all options, the factory, and `PostConfigure<AgencyAgenticOptions>` to set baseline hooks.
+  - In `Agency.Memory.Common/DependencyInjection/MemoryServiceCollectionExtensions.cs`: `public static IServiceCollection AddAgencyMemory(this IServiceCollection services, Action<MemoryBuilder> configure)` that registers all options, the factory, and `PostConfigure<AgencyHarnessOptions>` to set baseline hooks.
 - **Acceptance:** All A.5.T pass; `dotnet build` of full solution still succeeds (call sites in `Agent.cs` updated).
 
 ---
@@ -265,7 +265,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task A.7.T — Test memory `AgentEvent` payloads
 
 - **Goal:** Cover the `DistillationCompletedEvent`, `DistillationFailedEvent`, `ConsolidationCompletedEvent` shapes per Spec §6.2.
-- **Read first:** Spec §6.2, `src/Agentic/Agency.Agentic/AgentEvents.cs`.
+- **Read first:** Spec §6.2, `src/Harness/Agency.Harness/AgentEvents.cs`.
 - **Deliverable:** In `Agency.Memory.Common.Test/MemoryEventsTests.cs`: tests for required fields, event-type discriminator, and `IsTerminal` semantics (mirror existing `AgentEvent` pattern).
 - **Acceptance:** Red.
 
@@ -471,7 +471,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 
 - **Goal:** Project skeleton per Spec §6.2 + §10.
 - **Read first:** Spec §6.2, Spec §10, existing `BackgroundService` host wiring in the repo.
-- **Deliverable:** `src/Memory/Agency.Memory.Distiller/` + `.Test`. References: `Agency.Memory.Common`, `Microsoft.Extensions.Hosting`, `Microsoft.Extensions.Logging`, `Agency.Llm.Common`, `Agency.Embeddings.Common`, `Agency.Agentic`. Register in `Agency.slnx`. Add `InternalsVisibleTo`.
+- **Deliverable:** `src/Memory/Agency.Memory.Distiller/` + `.Test`. References: `Agency.Memory.Common`, `Microsoft.Extensions.Hosting`, `Microsoft.Extensions.Logging`, `Agency.Llm.Common`, `Agency.Embeddings.Common`, `Agency.Harness`. Register in `Agency.slnx`. Add `InternalsVisibleTo`.
 - **Acceptance:** Build succeeds.
 
 ---
@@ -603,7 +603,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task C.6 — Implement `MarkGoalCompleteTool` + `SetFocusTool`
 
 - **Goal:** Spec §6.7.
-- **Read first:** C.6.T, existing tools under `src/Agentic/Agency.Agentic/Tools/` for shape.
+- **Read first:** C.6.T, existing tools under `src/Harness/Agency.Harness/Tools/` for shape.
 - **Deliverable:** Two `AgentTool` subclasses in `Agency.Memory.Distiller/Tools/`. `MarkGoalCompleteTool` constructor takes `ChannelWriter<DistillationJob>` + session/turn accessors. `SetFocusTool` takes `IMemoryStore` for dynamic description.
 - **Acceptance:** All C.6.T pass.
 
@@ -647,7 +647,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task D.0 — Scaffold
 
 - **Goal:** Project skeleton per Spec §6.4 + §6.5.
-- **Deliverable:** `src/Memory/Agency.Memory.Retrieval/` + `.Test`. References `Agency.Memory.Common`, `Agency.Agentic`, `Agency.Embeddings.Common`. Register in `Agency.slnx`.
+- **Deliverable:** `src/Memory/Agency.Memory.Retrieval/` + `.Test`. References `Agency.Memory.Common`, `Agency.Harness`, `Agency.Embeddings.Common`. Register in `Agency.slnx`.
 - **Acceptance:** Build succeeds.
 
 ---
@@ -699,7 +699,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 
 - **Goal:** Cover Spec §6.4 ("System prompt rendering") + Spec §13 sample output.
 - **Read first:** Spec §6.4, Spec §13 (Session N+1 system prompt).
-- **Deliverable:** In `Agency.Agentic.Test/SystemPromptBuilderTests_Memory.cs`:
+- **Deliverable:** In `Agency.Harness.Test/SystemPromptBuilderTests_Memory.cs`:
   - `Build_WithFacts_RendersFactsSection_WithRecencyHint_NotRawTimestamp`.
   - `Build_WithMemories_RendersMemoriesSection_OaoMarkdownPreserved`.
   - `Build_EmptyKnowledgeAndMemory_RendersNoRelevantMemoriesNote`.
@@ -709,7 +709,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task D.3 — Extend `SystemPromptBuilder`
 
 - **Goal:** Spec §6.4 prompt assembly.
-- **Read first:** D.3.T, `src/Agentic/Agency.Agentic/SystemPromptBuilder.cs`.
+- **Read first:** D.3.T, `src/Harness/Agency.Harness/SystemPromptBuilder.cs`.
 - **Deliverable:** Edit `SystemPromptBuilder` to add `## Facts` and `## Memories` sections, formatting each as `- **{Title}** (Updated {RelativeTime}) \n  {Value}`. Relative time via a helper `Humanize(TimeSpan)` (no NuGet — implement: "just now" / "{N} minutes ago" / "{N} hours ago" / "{N} days ago" / "{N} weeks ago" / "{N} months ago").
 - **Acceptance:** All D.3.T pass; existing `SystemPromptBuilder` tests still pass.
 
@@ -718,8 +718,8 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task D.4.T — Test `OnUserPromptSubmit` and `OnPostToolBatch` wiring
 
 - **Goal:** Cover the new hook firing points per Spec §6.5.
-- **Read first:** Spec §6.5 Inputs/Outputs table, `src/Agentic/Agency.Agentic/Agent.cs` (locate where to invoke).
-- **Deliverable:** In `Agency.Agentic.Test/HookFiringTests.cs`:
+- **Read first:** Spec §6.5 Inputs/Outputs table, `src/Harness/Agency.Harness/Agent.cs` (locate where to invoke).
+- **Deliverable:** In `Agency.Harness.Test/HookFiringTests.cs`:
   - `OnUserPromptSubmit_FiresOnceBeforeFirstIteration`.
   - `OnUserPromptSubmit_FiresEveryChatAsyncCall`.
   - `OnPreIteration_FiresBeforeSystemPromptBuild`.
@@ -729,7 +729,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task D.4 — Wire new hook invocations in `Agent.cs`
 
 - **Goal:** Spec §6.5.
-- **Read first:** D.4.T, `src/Agentic/Agency.Agentic/Agent.cs`.
+- **Read first:** D.4.T, `src/Harness/Agency.Harness/Agent.cs`.
 - **Deliverable:** Edit `Agent.RunAsync` to invoke `OnUserPromptSubmit` at the top of `ChatAsync`, `OnPreIteration` at top of each iteration before `SystemPromptBuilder.Build`, `OnPostToolBatch` after `Task.WhenAll` of tool calls. Each hook awaited; exceptions propagate per existing exception policy.
 - **Acceptance:** All D.4.T pass.
 
@@ -740,7 +740,7 @@ Workstreams A → B are sequential. B → {C, D, F} fan out and may proceed in p
 ### Task E.0 — Scaffold
 
 - **Goal:** Project skeleton per Spec §6.3.
-- **Deliverable:** `src/Memory/Agency.Memory.Consolidator/` + `.Test`. References: `Agency.Memory.Common`, `Agency.Agentic` (sub-agent reuses Agent harness), `Microsoft.Extensions.Hosting`.
+- **Deliverable:** `src/Memory/Agency.Memory.Consolidator/` + `.Test`. References: `Agency.Memory.Common`, `Agency.Harness` (sub-agent reuses Agent harness), `Microsoft.Extensions.Hosting`.
 - **Acceptance:** Build succeeds.
 
 ---

@@ -29,7 +29,7 @@ Console.WriteLine("Hello, World!");
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Agentic.Console]] | Provides another console entry point in the same solution with a different runtime purpose. |
+| [[Agency.Harness.Console]] | Provides another console entry point in the same solution with a different runtime purpose. |
 
 ## Design Notes
 

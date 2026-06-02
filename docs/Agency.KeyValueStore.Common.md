@@ -163,7 +163,7 @@ Dataset dataset = hits.ToDataset();
 | [[Agency.Common]] | `SearchHitExtensions.ToDataset` produces a `Dataset` defined in `Agency.Common`, bridging key-value results into the RAG formatting pipeline |
 | [[Agency.KeyValueStore.Sql.Postgres]] | PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` to hydrate the metadata column |
 | [[Agency.KeyValueStore.Sql.Sqlite]] | SQLite implementation of `IKVStore`; follows the same pattern |
-| [[Agency.Agentic]] | Agent tool layers depend on `IKVStore` for persistent session memory |
+| [[Agency.Harness]] | Agent tool layers depend on `IKVStore` for persistent session memory |
 
 ## Design Notes
 

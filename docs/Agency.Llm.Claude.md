@@ -97,8 +97,8 @@ Logging of request and response details is enabled via `UseLogging()`.
 | Project | Relationship |
 |---|---|
 | [[Agency.Llm.Common]] | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` from this assembly |
-| [[Agency.Agentic]] | `Models.cs` calls `new ClaudeClient(options).CreateChatClient()` when the provider is `"CLAUDE"` |
-| [[Agency.Agentic.Console]] | Selects the Claude provider via configuration (`Agent:Provider = "Claude"`) |
+| [[Agency.Harness]] | `Models.cs` calls `new ClaudeClient(options).CreateChatClient()` when the provider is `"CLAUDE"` |
+| [[Agency.Harness.Console]] | Selects the Claude provider via configuration (`Agent:Provider = "Claude"`) |
 
 ## Design Notes
 

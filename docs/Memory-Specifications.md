@@ -2,7 +2,7 @@
 
 **Status:** Draft — ready for technical-spec breakdown
 **Audience:** Implementers, reviewers, future maintainers
-**Scope:** `Agency.Agentic`, `Agency.Mcp.Memory`, supporting infrastructure
+**Scope:** `Agency.Harness`, `Agency.Mcp.Memory`, supporting infrastructure
 **Companion documents:**
 - `Memory-FuctionalSpec.md` — functional requirements (source of behavioural truth)
 - `questions.md`, `OpenItems.md` — architectural decision logs
@@ -13,7 +13,7 @@
 
 ## 1. Goal
 
-Endow `Agency.Agentic` agents with a **durable, cross-session memory** that allows them to recall facts about users and domains, remember past lived experience, and improve over time — **without compromising the latency of the agent's hot path**.
+Endow `Agency.Harness` agents with a **durable, cross-session memory** that allows them to recall facts about users and domains, remember past lived experience, and improve over time — **without compromising the latency of the agent's hot path**.
 
 The system answers three questions for every agent turn:
 
@@ -454,7 +454,7 @@ These tools are **only** registered for the Consolidator sub-agent, never for th
 
 #### Implementation notes
 
-- **The Consolidator is itself an Agent** built on `Agency.Agentic`. It uses the same harness primitives (Context, ToolRegistry, hooks, stop conditions) as a user-facing agent — but with a different tool set and a different system prompt.
+- **The Consolidator is itself an Agent** built on `Agency.Harness`. It uses the same harness primitives (Context, ToolRegistry, hooks, stop conditions) as a user-facing agent — but with a different tool set and a different system prompt.
 - **Stop condition**: `Memory_Done` called, or max iterations reached, whichever comes first.
 - **Model**: configured separately (`ConsolidatorOptions.Model`). May be the same as Distiller or different; typically Strong-tier because the reasoning is subtle.
 - **Loading "all records"**: in v1, no scale bound. For users with >`MaxRecordsPerPass` records, the spec notes deferred work (per-domain batching) but does not implement it. A warning log is emitted if the threshold is exceeded.
@@ -602,7 +602,7 @@ services.AddAgencyMemory(cfg => {
 
 // Inside AddAgencyMemory:
 services.AddSingleton<MemoryHookFactory>();
-services.PostConfigure<AgencyAgenticOptions>(o => {
+services.PostConfigure<AgencyHarnessOptions>(o => {
     o.BaselineHooks = MemoryHookFactory.Build();      // baseline FIRST
 });
 

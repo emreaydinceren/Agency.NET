@@ -28,4 +28,11 @@ public sealed class AgentOptions
     /// so the model can avoid generating output that would exceed the window.
     /// </summary>
     public int? ContextWindowSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets the host-supplied user identity used for memory partitioning.
+    /// When set, this value is propagated into <see cref="Contexts.UserSpecificContext.Id"/>
+    /// so retrieved and distilled records are scoped to the correct user.
+    /// </summary>
+    public string? UserId { get; set; }
 }

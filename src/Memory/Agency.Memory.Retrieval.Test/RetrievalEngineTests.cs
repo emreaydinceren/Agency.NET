@@ -314,4 +314,47 @@ public sealed class RetrievalEngineTests
         Assert.Contains("ssl", query);
         Assert.Contains("dns", query);
     }
+
+    /// <summary>
+    /// A record whose <c>SessionId</c> matches <c>ctx.Session.Id</c> must rank ahead of an
+    /// otherwise-comparable record from a different session, because the session-match bonus
+    /// (+0.1 × wₘ) tips the composite score in its favour even when its cosine similarity
+    /// is lower (Spec §8.3 P3 session-match bonus).
+    ///
+    /// Scoring with default weights (sim=0.5, recency=0.3, importance=0.2, sessionMatch=0.1),
+    /// both records fresh (recency=1) and importance=0.5:
+    ///   Record A (session "s1", matching):     sim=0.70 → 0.350 + 0.300 + 0.100 + 0.100 = 0.850
+    ///   Record B (session "s2", non-matching): sim=0.75 → 0.375 + 0.300 + 0.100 + 0.000 = 0.775
+    /// Record A wins despite the lower similarity — the bonus is the decisive factor.
+    /// </summary>
+    [Fact]
+    public async Task Retrieve_SameSessionRecord_OutranksOtherSession_WhenScoresOtherwiseEqual()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var now = DateTimeOffset.UtcNow;
+
+        // Record A: belongs to the current session; slightly lower similarity.
+        var recordA = MakeFact("a", sessionId: "s1", importance: 0.5, updatedAt: now);
+        // Record B: belongs to a different session; slightly higher similarity (would win without the bonus).
+        var recordB = MakeFact("b", sessionId: "s2", importance: 0.5, updatedAt: now);
+
+        var hits = new List<SearchHit>
+        {
+            new(recordA, Similarity: 0.70),
+            new(recordB, Similarity: 0.75),
+        };
+
+        var store = new FakeMemoryStore(hits);
+        var engine = new RetrievalEngine(store, new FakeEmbeddingGenerator(), DefaultOptions(topK: 2, overFetch: 1));
+        var ctx = MakeContext(userId: "u1");
+        ctx.Session = new SessionContext { Id = "s1" };
+
+        await engine.RetrieveAsync(ctx, ct);
+
+        // Both records are Facts → both land in ctx.Knowledge.Records.
+        Assert.Equal(2, ctx.Knowledge.Records.Count);
+        // The session-matched record (A) must be ranked first.
+        Assert.Equal("Title a", ctx.Knowledge.Records[0].Title);
+        Assert.Equal("Title b", ctx.Knowledge.Records[1].Title);
+    }
 }

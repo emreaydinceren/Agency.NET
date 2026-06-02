@@ -36,6 +36,13 @@ public sealed record Context
     /// </summary>
     public FocusContext Focus { get; set; } = FocusContext.Empty;
 
+    /// <summary>
+    /// Gets or sets the stable session identity. Set once by the agent loop on the first turn
+    /// and reused across subsequent turns so the session id is stable for the lifetime of the
+    /// <see cref="Context"/> (Spec P3).
+    /// </summary>
+    public SessionContext Session { get; set; } = SessionContext.Empty;
+
     /// <summary>Gets user-specific context injected into the system prompt.</summary>
     public UserSpecificContext User { get; init; } = UserSpecificContext.Empty;
 

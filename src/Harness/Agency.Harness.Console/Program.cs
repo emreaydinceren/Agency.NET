@@ -1,9 +1,18 @@
 global using System.Runtime.CompilerServices;
 
+using Agency.Embeddings.OpenAI;
 using Agency.Harness;
 using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 using Agency.Harness.Tools;
+using Agency.Memory.Consolidator.DependencyInjection;
+using Agency.Memory.Distiller;
+using Agency.Memory.Distiller.DependencyInjection;
+using Agency.Memory.Hygiene.DependencyInjection;
+using Agency.Memory.Sql.Postgres;
+using Agency.Llm.OpenAI;
+using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,7 +34,7 @@ internal class Program
         var builder = Host.CreateApplicationBuilder(args);
 
         // 1. Configuration:
-        // Host.CreateApplicationBuilder automatically handles appsettings, 
+        // Host.CreateApplicationBuilder automatically handles appsettings,
         // environment variables, and UserSecrets based on DOTNET_ENVIRONMENT.
 
         // 2. Telemetry & Logging:
@@ -40,17 +49,86 @@ internal class Program
             .BindConfiguration("Agent")
             .ValidateOnStart();
 
-        // 5. Factory & Agent Registration:
+        // 5. Memory — opt-in via Memory:Enabled (default false).
+        //    When disabled, NONE of the memory services are registered and the console
+        //    behaves exactly as before. When enabled, Postgres + LM Studio embeddings must
+        //    be reachable; schema init at startup will fail fast with a clear message if not.
+        bool memoryEnabled = builder.Configuration.GetValue<bool>("Memory:Enabled");
+        int embeddingDimensions = 1024;
+
+        if (memoryEnabled)
+        {
+            string connectionString = builder.Configuration.GetConnectionString("PostgreSql")
+                ?? throw new InvalidOperationException(
+                    "Memory is enabled but ConnectionStrings:PostgreSql is not configured.");
+
+            embeddingDimensions = builder.Configuration.GetValue<int>("Embedding:Dimensions", 1024);
+
+            // 5a. Embeddings
+            builder.Services.AddAgencyEmbeddingsOpenAI(opts =>
+            {
+                builder.Configuration.GetSection(EmbeddingOptions.SectionName).Bind(opts);
+            });
+
+            // 5b. Postgres store + repositories + schema initializer
+            builder.Services.AddAgencyMemoryPostgres(connectionString);
+
+            // 5c. IChatClient for the consolidator — reuse the default agent LLM client.
+            //     The distiller gets its own dedicated IChatClient (registered below) so we
+            //     resolve and build both here from the same agent configuration.
+            string defaultClientName = builder.Configuration["Agent:DefaultClientName"]
+                ?? throw new InvalidOperationException("Agent:DefaultClientName is not configured.");
+            string defaultModel = builder.Configuration["Agent:DefaultModel"]
+                ?? throw new InvalidOperationException("Agent:DefaultModel is not configured.");
+
+            // Find the matching LlmClientOptions from configuration.
+            LlmClientOptions[] llmClients = builder.Configuration
+                .GetSection("Agent:LLmClients")
+                .Get<LlmClientOptions[]>() ?? [];
+
+            LlmClientOptions defaultClientOpts = Array.Find(
+                llmClients,
+                c => c.Name.Equals(defaultClientName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException(
+                    $"No LLM client configuration found with name '{defaultClientName}'.");
+
+            // Consolidator IChatClient (shared via singleton)
+            Microsoft.Extensions.AI.IChatClient consolidatorClient =
+                new OpenAIClient(defaultClientOpts).CreateChatClient();
+
+            builder.Services.AddSingleton(consolidatorClient);
+
+            // 5d. Distiller adapter — separate client instance with thinking suppressed.
+            LlmClientOptions distillerClientOpts = defaultClientOpts with { SuppressThinking = true };
+            Microsoft.Extensions.AI.IChatClient distillerClient =
+                new OpenAIClient(distillerClientOpts).CreateChatClient();
+
+            builder.Services.AddAgencyDistillerLlm(distillerClient, defaultModel);
+
+            // 5e. Core memory services (event bus, distiller background service,
+            //     inactivity timer, conversation registry, baseline AgentHooks singleton)
+            builder.Services.AddAgencyMemory();
+
+            // 5f. Consolidator background service
+            builder.Services.AddAgencyConsolidator(opts =>
+            {
+                opts.Model = defaultModel;
+            });
+
+            // 5g. Hygiene sweeper background service
+            builder.Services.AddAgencyHygiene();
+        }
+
+        // 6. Factory & Agent Registration:
         builder.Services.AddScoped<IAgentFactory, AgentFactory>();
 
         builder.Services.AddScoped(sp =>
         {
             var agentFactory = sp.GetRequiredService<IAgentFactory>();
-            var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
             return agentFactory.CreateAgent(null, null);
         });
 
-        // 6. Tool & Context Registration:
+        // 7. Tool & Context Registration:
         builder.Services.AddScoped(sp =>
         {
             var agentFactory = sp.GetRequiredService<IAgentFactory>();
@@ -69,8 +147,29 @@ internal class Program
 
         builder.Services.AddScoped<ConsoleChatSession>();
 
-        // 7. Execution:
+        // 8. Execution:
         using IHost host = builder.Build();
+
+        // 8a. Schema init — only when memory is enabled; fail fast if Postgres is unreachable.
+        if (memoryEnabled)
+        {
+            try
+            {
+                using IServiceScope initScope = host.Services.CreateScope();
+                var initializer = initScope.ServiceProvider
+                    .GetRequiredService<Agency.Memory.Sql.Postgres.MemorySchemaInitializer>();
+                await initializer.InitializeAsync(embeddingDimensions, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                System.Console.Error.WriteLine(
+                    $"[Agency] Memory is enabled but Postgres/embeddings are unreachable: {ex.Message}");
+                System.Console.Error.WriteLine(
+                    "[Agency] Start the Postgres docker container and ensure LM Studio is reachable, " +
+                    "or set Memory:Enabled=false in appsettings.json to run without memory.");
+                throw;
+            }
+        }
 
         using (var scope = host.Services.CreateScope())
         {

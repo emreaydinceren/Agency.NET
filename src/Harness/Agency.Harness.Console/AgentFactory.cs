@@ -1,5 +1,7 @@
 
 using Agency.Harness;
+using Agency.Harness.Hooks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -9,12 +11,20 @@ internal sealed class AgentFactory : IAgentFactory
     private readonly Models models;
     private readonly ILogger<Agent> logger;
     private readonly AgentOptions options;
+    private readonly AgentHooks? _hooks;
 
-    public AgentFactory(Models models, ILogger<Agent> logger, IOptions<AgentOptions> optionsAccessor)
+    public AgentFactory(
+        Models models,
+        ILogger<Agent> logger,
+        IOptions<AgentOptions> optionsAccessor,
+        IServiceProvider serviceProvider)
     {
         this.models = models;
         this.logger = logger;
         this.options = optionsAccessor.Value;
+        // Resolve AgentHooks optionally — null when memory is disabled and the singleton
+        // was never registered. This keeps the factory working in both modes.
+        this._hooks = serviceProvider.GetService<AgentHooks>();
     }
 
     public Agent CreateAgent(string? clientName, string? modelName)
@@ -28,6 +38,6 @@ internal sealed class AgentFactory : IAgentFactory
             : this.options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
-        return new Agent(chatClient, modelName, clientType, null, logger: this.logger);
+        return new Agent(chatClient, modelName, clientType, null, this._hooks, logger: this.logger);
     }
 }

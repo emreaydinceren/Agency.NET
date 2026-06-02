@@ -85,16 +85,20 @@ public sealed class Agent
     /// </summary>
     /// <param name="initialPrompt">The first user message that seeds the conversation.</param>
     /// <param name="tools">Optional tool context; defaults to <see cref="ToolContext.Empty"/>.</param>
+    /// <param name="environment">Optional environmental context; defaults to <see cref="EnvironmentalContext.Empty"/>.</param>
+    /// <param name="user">Optional caller identity; defaults to <see cref="UserSpecificContext.Empty"/>.</param>
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
-        EnvironmentalContext? environment = null) =>
+        EnvironmentalContext? environment = null,
+        UserSpecificContext? user = null) =>
         new()
         {
             Query = new QueryContext { Prompt = initialPrompt },
             Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
             Tools = tools ?? ToolContext.Empty,
             Environment = environment ?? EnvironmentalContext.Empty,
+            User = user ?? UserSpecificContext.Empty,
         };
 
     /// <summary>
@@ -232,7 +236,11 @@ public sealed class Agent
         Context ctx,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        string sessionId = Guid.NewGuid().ToString("N");
+        if (ctx.Session.Id is null)
+        {
+            ctx.Session = ctx.Session with { Id = Guid.NewGuid().ToString("N") };
+        }
+        string sessionId = ctx.Session.Id;
         yield return new SessionStartedEvent(sessionId);
 
         if (this._hooks.OnSessionStarted is { } onSessionStarted)

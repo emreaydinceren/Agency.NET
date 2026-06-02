@@ -19,6 +19,7 @@ public sealed class ChatSession
     private Agent _agent;
     private readonly AgentOptions _options;
     private readonly ToolContext _toolContext;
+    private readonly UserSpecificContext? _user;
     private Context? _ctx;
     private int _turnCount;
 
@@ -30,11 +31,13 @@ public sealed class ChatSession
     /// <param name="toolContext">
     /// Optional tool registry made available to the agent. Defaults to <see cref="ToolContext.Empty"/>.
     /// </param>
-    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null)
+    /// <param name="user">Optional caller identity propagated into the context on first send.</param>
+    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
         this._options = options ?? throw new ArgumentNullException(nameof(options));
         this._toolContext = toolContext ?? ToolContext.Empty;
+        this._user = user;
     }
 
     /// <summary>Gets the accumulated token usage for this session, or zero if no turns have been sent yet.</summary>
@@ -78,7 +81,8 @@ public sealed class ChatSession
         this._ctx ??= Agent.CreateContext(
             userMessage,
             this._toolContext,
-            new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize });
+            new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
+            user: this._user);
 
         await foreach (AgentEvent evt in this._agent.ChatAsync(userMessage, this._ctx, this._options, ct))
         {

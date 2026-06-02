@@ -109,7 +109,8 @@ internal sealed class ConsoleChatSession
         {
             this.WriteHeader();
 
-            this._chatSession = new(this._agent, this._options, this.toolContext);
+            this._chatSession = new(this._agent, this._options, this.toolContext,
+                new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName });
 
             bool shouldExitSession = false;
             CancellationTokenSource? turnCts = null;

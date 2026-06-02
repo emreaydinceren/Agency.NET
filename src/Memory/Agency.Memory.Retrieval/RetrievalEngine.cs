@@ -66,7 +66,7 @@ internal sealed class RetrievalEngine
 
         // Re-rank using the composite formula.
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        string? sessionId = null; // session ID tracking is optional for v1; extend via Context if needed
+        string? sessionId = ctx.Session.Id;
 
         List<(SearchHit Hit, double Score)> scored = hits
             .Select(h => (Hit: h, Score: RankingFormula.Score(

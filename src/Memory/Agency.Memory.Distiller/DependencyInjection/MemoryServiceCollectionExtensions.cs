@@ -125,9 +125,7 @@ public static class MemoryServiceCollectionExtensions
             Func<AssistantTurnHookContext, CancellationToken, Task> timerCallback = (hookCtx, _) =>
             {
                 string userId = hookCtx.AgentContext.User.Id ?? string.Empty;
-                // SessionId is not in Context; use a stable derived key.
-                // Agents must register their session in the registry before using these hooks.
-                string sessionId = hookCtx.AgentContext.User.Id ?? string.Empty;
+                string sessionId = hookCtx.AgentContext.Session.Id ?? string.Empty;
                 int turnIndex = hookCtx.AgentContext.Conversation.Messages.Count;
                 timerService.Restart(userId, sessionId, turnIndex);
                 return Task.CompletedTask;

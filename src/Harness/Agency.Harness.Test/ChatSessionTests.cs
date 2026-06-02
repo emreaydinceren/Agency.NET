@@ -1,3 +1,5 @@
+using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 using Agency.Harness.Test.Fakes;
 
 namespace Agency.Harness.Test;
@@ -98,5 +100,37 @@ public sealed class ChatSessionTests
         var session = new ChatSession(agent, new AgentOptions());
 
         Assert.Throws<ArgumentNullException>(() => session.SetAgent(null!));
+    }
+
+    // ── User identity ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A <see cref="UserSpecificContext"/> passed to the <see cref="ChatSession"/> ctor must
+    /// flow into <see cref="Context.User"/> by the time the first turn fires the
+    /// <c>OnSessionStarted</c> hook.
+    /// </summary>
+    [Fact]
+    public async Task Constructor_WithUser_UserIdReachesContext()
+    {
+        var client = new FakeChatClient();
+        client.EnqueueResponse(TextResponse("hello"));
+
+        Context? capturedCtx = null;
+        var hooks = new AgentHooks
+        {
+            OnSessionStarted = (hc, _) =>
+            {
+                capturedCtx = hc.AgentContext;
+                return Task.CompletedTask;
+            },
+        };
+
+        var agent = new Agent(client, "model", hooks: hooks);
+        var session = new ChatSession(agent, new AgentOptions(), user: new UserSpecificContext { Id = "user-42" });
+
+        await DrainAsync(session, "hello");
+
+        Assert.NotNull(capturedCtx);
+        Assert.Equal("user-42", capturedCtx.User.Id);
     }
 }

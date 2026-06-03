@@ -14,7 +14,7 @@ namespace Agency.Harness;
 /// logical connection and ensure that at most one <see cref="SendAsync"/> call is in
 /// flight at a time.
 /// </remarks>
-public sealed class ChatSession
+public sealed class ChatSession : IAsyncDisposable
 {
     private Agent _agent;
     private readonly AgentOptions _options;
@@ -22,6 +22,7 @@ public sealed class ChatSession
     private readonly UserSpecificContext? _user;
     private Context? _ctx;
     private int _turnCount;
+    private bool _disposed;
 
     /// <summary>
     /// Initialises a new session bound to the supplied <paramref name="agent"/>.
@@ -103,5 +104,23 @@ public sealed class ChatSession
     {
         this._ctx = null;
         this._turnCount = 0;
+    }
+
+    /// <summary>
+    /// Fires the agent's <c>OnSessionEnd</c> hook (once) to signal end-of-session, then
+    /// marks the session disposed. Safe to call multiple times.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (this._disposed)
+        {
+            return;
+        }
+
+        this._disposed = true;
+        if (this._ctx is not null)
+        {
+            await this._agent.RaiseSessionEndAsync(this._ctx);
+        }
     }
 }

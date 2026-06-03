@@ -42,6 +42,13 @@ public sealed record AgentHooks
     /// <summary>Fires just before the agent emits <see cref="Agency.Harness.AgentResultEvent"/> and stops.</summary>
     public Func<StopHookContext, CancellationToken, Task>? OnStop { get; init; }
 
+    /// <summary>
+    /// Fires once when the owning <see cref="Agency.Harness.ChatSession"/> is disposed,
+    /// signalling the end of the whole session (not a single turn). Unlike <see cref="OnStop"/>
+    /// (which fires every turn), this fires exactly once per session lifetime.
+    /// </summary>
+    public Func<SessionEndedHookContext, CancellationToken, Task>? OnSessionEnd { get; init; }
+
     /// <summary>Empty hooks — all delegates are null.</summary>
     public static AgentHooks None { get; } = new();
 }

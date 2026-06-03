@@ -152,4 +152,46 @@ public sealed class MemoryHookFactoryTests
 
         Assert.True(callbackInvoked);
     }
+
+    /// <summary>
+    /// The 4-argument overload of <see cref="MemoryHookFactory.Build"/> must wire
+    /// <see cref="AgentHooks.OnSessionEnd"/> to the supplied callback.
+    /// </summary>
+    [Fact]
+    public async Task Build_FourArgs_WiresOnSessionEnd_AndInvokesCallback()
+    {
+        bool endCallbackInvoked = false;
+        Func<SessionEndedHookContext, CancellationToken, Task> sessionEnd =
+            (_, _) =>
+            {
+                endCallbackInvoked = true;
+                return Task.CompletedTask;
+            };
+
+        AgentHooks hooks = MemoryHookFactory.Build(
+            (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
+            sessionEndCallback: sessionEnd);
+
+        Assert.NotNull(hooks.OnSessionEnd);
+
+        var ctx = new Context { Query = new QueryContext { Prompt = "test" } };
+        await hooks.OnSessionEnd!(new SessionEndedHookContext("s1", ctx), CancellationToken.None);
+
+        Assert.True(endCallbackInvoked);
+    }
+
+    /// <summary>
+    /// When no <c>sessionEndCallback</c> is supplied, <see cref="AgentHooks.OnSessionEnd"/>
+    /// must remain null so existing callers are unaffected.
+    /// </summary>
+    [Fact]
+    public void Build_WithoutSessionEndCallback_LeavesOnSessionEndNull()
+    {
+        AgentHooks hooks = MemoryHookFactory.Build(
+            (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask);
+
+        Assert.Null(hooks.OnSessionEnd);
+    }
 }

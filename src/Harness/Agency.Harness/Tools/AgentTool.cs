@@ -55,7 +55,7 @@ public class AgentTool : ITool
 
         var (agentOptions, agent, toolRegistry) = agentFactory(clientName, model);
 
-        var chatSession = new ChatSession(agent, agentOptions, new ToolContext { Registry = toolRegistry });
+        await using var chatSession = new ChatSession(agent, agentOptions, new ToolContext { Registry = toolRegistry });
 
         AgentResultStatus? status = null;
 

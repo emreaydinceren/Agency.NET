@@ -68,4 +68,13 @@ public sealed class HookContextTests
         Assert.Same(resultEvent, sut.Result);
         Assert.Same(ctx, sut.AgentContext);
     }
+
+    [Fact]
+    public void SessionEndedHookContext_Properties()
+    {
+        Context ctx = MakeContext();
+        var sut = new SessionEndedHookContext("session-99", ctx);
+        Assert.Equal("session-99", sut.SessionId);
+        Assert.Same(ctx, sut.AgentContext);
+    }
 }

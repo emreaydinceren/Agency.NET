@@ -18,6 +18,7 @@ public static class AgentHooksExtensions
         OnPostToolBatch = CombinePostToolBatch(first.OnPostToolBatch, second.OnPostToolBatch),
         OnAssistantTurn = Combine(first.OnAssistantTurn, second.OnAssistantTurn),
         OnStop = Combine(first.OnStop, second.OnStop),
+        OnSessionEnd = Combine(first.OnSessionEnd, second.OnSessionEnd),
     };
 
     /// <summary>

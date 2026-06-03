@@ -43,6 +43,12 @@ public static class MemoryHookFactory
     /// session turns. When <see langword="null"/>, <see cref="AgentHooks.OnSessionStarted"/> is
     /// left null.
     /// </param>
+    /// <param name="sessionEndCallback">
+    /// Optional callback fired once when the owning <see cref="Agency.Harness.ChatSession"/> is
+    /// disposed, signalling the terminal end of the session. Typically enqueues a
+    /// <see cref="Agency.Memory.Common.Jobs.DistillationTrigger.SessionDisposed"/> job.
+    /// When <see langword="null"/>, <see cref="AgentHooks.OnSessionEnd"/> is left null.
+    /// </param>
     /// <returns>
     /// A baseline <see cref="AgentHooks"/> instance with <see cref="AgentHooks.OnPreIteration"/>
     /// and <see cref="AgentHooks.OnAssistantTurn"/> wired. All other hooks are null.
@@ -50,12 +56,14 @@ public static class MemoryHookFactory
     public static AgentHooks Build(
         Func<Context, CancellationToken, Task> retrievalCallback,
         Func<Agency.Harness.Hooks.AssistantTurnHookContext, CancellationToken, Task> timerRestartCallback,
-        Func<Agency.Harness.Hooks.SessionStartedHookContext, CancellationToken, Task>? sessionStartedCallback = null) =>
+        Func<Agency.Harness.Hooks.SessionStartedHookContext, CancellationToken, Task>? sessionStartedCallback = null,
+        Func<Agency.Harness.Hooks.SessionEndedHookContext, CancellationToken, Task>? sessionEndCallback = null) =>
         new()
         {
             OnSessionStarted = sessionStartedCallback,
             OnPreIteration = retrievalCallback,
             OnAssistantTurn = timerRestartCallback,
+            OnSessionEnd = sessionEndCallback,
         };
 
     /// <summary>

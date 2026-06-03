@@ -37,15 +37,23 @@ public static class MemoryHookFactory
     /// Called after each assistant turn to restart the per-session inactivity timer.
     /// Per Spec §14.9, this is the ONLY side effect of <see cref="AgentHooks.OnAssistantTurn"/>.
     /// </param>
+    /// <param name="sessionStartedCallback">
+    /// Optional callback fired once when a session starts. Used to register the agent's live
+    /// conversation manager with the conversation manager registry so the distiller can read
+    /// session turns. When <see langword="null"/>, <see cref="AgentHooks.OnSessionStarted"/> is
+    /// left null.
+    /// </param>
     /// <returns>
     /// A baseline <see cref="AgentHooks"/> instance with <see cref="AgentHooks.OnPreIteration"/>
     /// and <see cref="AgentHooks.OnAssistantTurn"/> wired. All other hooks are null.
     /// </returns>
     public static AgentHooks Build(
         Func<Context, CancellationToken, Task> retrievalCallback,
-        Func<Agency.Harness.Hooks.AssistantTurnHookContext, CancellationToken, Task> timerRestartCallback) =>
+        Func<Agency.Harness.Hooks.AssistantTurnHookContext, CancellationToken, Task> timerRestartCallback,
+        Func<Agency.Harness.Hooks.SessionStartedHookContext, CancellationToken, Task>? sessionStartedCallback = null) =>
         new()
         {
+            OnSessionStarted = sessionStartedCallback,
             OnPreIteration = retrievalCallback,
             OnAssistantTurn = timerRestartCallback,
         };

@@ -109,4 +109,47 @@ public sealed class MemoryHookFactoryTests
         var property = type.GetProperty("OnPostToolUseFailure");
         Assert.Null(property);
     }
+
+    /// <summary>
+    /// The 2-argument overload of <see cref="MemoryHookFactory.Build"/> must leave
+    /// <see cref="AgentHooks.OnSessionStarted"/> null so existing callers are unaffected.
+    /// </summary>
+    [Fact]
+    public void Build_TwoArgs_LeavesOnSessionStartedNull()
+    {
+        AgentHooks hooks = MemoryHookFactory.Build(
+            (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask);
+
+        Assert.Null(hooks.OnSessionStarted);
+    }
+
+    /// <summary>
+    /// The 3-argument overload of <see cref="MemoryHookFactory.Build"/> must wire
+    /// <see cref="AgentHooks.OnSessionStarted"/> to the supplied callback, and invoking
+    /// the hook must call the callback.
+    /// </summary>
+    [Fact]
+    public async Task Build_ThreeArgs_WiresOnSessionStarted_AndInvokesCallback()
+    {
+        bool callbackInvoked = false;
+        Func<SessionStartedHookContext, CancellationToken, Task> sessionStarted =
+            (_, _) =>
+            {
+                callbackInvoked = true;
+                return Task.CompletedTask;
+            };
+
+        AgentHooks hooks = MemoryHookFactory.Build(
+            (_, _) => Task.CompletedTask,
+            (_, _) => Task.CompletedTask,
+            sessionStarted);
+
+        Assert.NotNull(hooks.OnSessionStarted);
+
+        var ctx = new Context { Query = new QueryContext { Prompt = "test" } };
+        await hooks.OnSessionStarted!(new SessionStartedHookContext("s1", ctx), CancellationToken.None);
+
+        Assert.True(callbackInvoked);
+    }
 }

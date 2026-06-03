@@ -1,4 +1,5 @@
 using Agency.Memory.Distiller.Services;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Agency.Memory.Distiller;
@@ -7,13 +8,25 @@ namespace Agency.Memory.Distiller;
 /// Extension methods for registering the distiller's LLM adapter with
 /// <see cref="IServiceCollection"/>.
 /// </summary>
-/// <remarks>
-/// This class is <c>internal</c> because <see cref="ILlmClientAdapter"/> is an internal
-/// interface. Callers outside this assembly must be granted access via
-/// <c>[assembly: InternalsVisibleTo(...)]</c>.
-/// </remarks>
-internal static class DistillerLlmServiceCollectionExtensions
+public static class DistillerLlmServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the distiller LLM adapter wrapping the given chat client and model identifier.
+    /// </summary>
+    /// <remarks>
+    /// Use this overload from external assemblies that cannot reference the internal
+    /// <see cref="ILlmClientAdapter"/> type directly.
+    /// </remarks>
+    /// <param name="services">The service collection to register into.</param>
+    /// <param name="client">The <see cref="IChatClient"/> the adapter will wrap.</param>
+    /// <param name="model">The model identifier sent with every distillation request.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddAgencyDistillerLlm(
+        this IServiceCollection services,
+        IChatClient client,
+        string model)
+        => services.AddSingleton<ILlmClientAdapter>(_ => new Services.ChatClientLlmAdapter(client, model));
+
     /// <summary>
     /// Registers the distiller's <see cref="ILlmClientAdapter"/> as a singleton using
     /// a host-supplied factory delegate.

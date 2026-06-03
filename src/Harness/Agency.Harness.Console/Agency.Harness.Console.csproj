@@ -10,6 +10,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Agency.Harness\Agency.Harness.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
+    <ProjectReference Include="..\..\Memory\Agency.Memory.Distiller\Agency.Memory.Distiller.csproj" />
+    <ProjectReference Include="..\..\Memory\Agency.Memory.Sql.Postgres\Agency.Memory.Sql.Postgres.csproj" />
+    <ProjectReference Include="..\..\Memory\Agency.Memory.Consolidator\Agency.Memory.Consolidator.csproj" />
+    <ProjectReference Include="..\..\Memory\Agency.Memory.Hygiene\Agency.Memory.Hygiene.csproj" />
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

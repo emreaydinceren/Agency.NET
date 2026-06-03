@@ -175,7 +175,13 @@ internal sealed class ConsoleChatSession
                         break;
                         case CommandContinuation.Clear:
                         AnsiConsole.Clear();
-                        this._chatSession.Reset();
+                        if (this._chatSession is not null)
+                        {
+                            await this._chatSession.DisposeAsync();
+                            this._chatSession = null;
+                        }
+                        this._chatSession = new(this._agent, this._options, this.toolContext,
+                            new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName });
                         continue;
                         case CommandContinuation.Continue:
                         continue;
@@ -278,6 +284,12 @@ internal sealed class ConsoleChatSession
         }
         finally
         {
+            // Fire OnSessionEnd → SessionDisposed distillation before metrics are recorded.
+            if (this._chatSession is not null)
+            {
+                await this._chatSession.DisposeAsync();
+            }
+
             sw.Stop();
             _sessionDurationHistogram.Record(sw.Elapsed.TotalMilliseconds, tags);
             _sessionTurnCounter.Add(chatTurns, tags);

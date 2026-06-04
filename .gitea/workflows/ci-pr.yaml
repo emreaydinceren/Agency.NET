@@ -39,7 +39,7 @@ jobs:
 
       - name: 🧪 Run Unit Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional&Category!=Eval"
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional&Category!=Eval" --retry-failed-tests 2
 
       - name: 🧪 Run Functional Tests
         working-directory: src

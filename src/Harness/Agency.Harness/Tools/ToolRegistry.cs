@@ -44,28 +44,50 @@ public sealed class ToolRegistry : IToolRegistry
 
     private HashSet<string> _disabledBySystemToolNames = new();
 
-    private readonly Dictionary<string, ITool> _tools;
+    private readonly Dictionary<string, (ITool Tool, ToolDefinition Definition)> _tools;
 
     /// <param name="tools">The tools to register.</param>
     public ToolRegistry(IEnumerable<ITool> tools)
     {
-        this._tools = tools.ToDictionary(t => t.Definition.Name);
+        this._tools = [];
+        foreach (ITool tool in tools)
+        {
+            this.Register(tool);
+        }
     }
     public ToolRegistry() : this([]) { }
 
-    public void Register(ITool tool) => this._tools[tool.Definition.Name] = tool;
+    /// <inheritdoc/>
+    public void Register(ITool tool)
+    {
+        ValueTask<ToolDefinition> vt = tool.GetDefinitionAsync();
+        if (!vt.IsCompleted)
+        {
+            throw new InvalidOperationException(
+                $"Tool '{tool.Definition.Name}' requires async registration; use RegisterAsync.");
+        }
+        ToolDefinition def = vt.GetAwaiter().GetResult();
+        this._tools[def.Name] = (tool, def);
+    }
+
+    /// <inheritdoc/>
+    public async ValueTask RegisterAsync(ITool tool, CancellationToken ct = default)
+    {
+        ToolDefinition def = await tool.GetDefinitionAsync(ct).ConfigureAwait(false);
+        this._tools[def.Name] = (tool, def);
+    }
 
     /// <inheritdoc/>
     public IReadOnlyList<ToolDefinition> ListDefinitions()
     {
-        return this._tools.Values.Where(t => IsToolDisabled(t.Definition.Name) == false).Select(t => t.Definition).ToList();
+        return this._tools.Values.Where(e => IsToolDisabled(e.Definition.Name) == false).Select(e => e.Definition).ToList();
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<(bool Enabled, ToolDefinition Definition)> ListAllDefinitions()
     {
-        return this._tools.Values.Where(t => this._disabledBySystemToolNames.Contains(t.Definition.Name) == false)
-            .Select (t => (this._disabledByUserToolNames.Contains(t.Definition.Name) == false, t.Definition)).ToList();
+        return this._tools.Values.Where(e => this._disabledBySystemToolNames.Contains(e.Definition.Name) == false)
+            .Select(e => (this._disabledByUserToolNames.Contains(e.Definition.Name) == false, e.Definition)).ToList();
     }
 
     /// <inheritdoc/>
@@ -76,15 +98,15 @@ public sealed class ToolRegistry : IToolRegistry
             return new ToolResult("Tool is disabled.", IsError: true);
         }
 
-        if (!this._tools.TryGetValue(name, out ITool? tool))
+        if (!this._tools.TryGetValue(name, out (ITool Tool, ToolDefinition Definition) entry))
         {
             return new ToolResult($"No tool registered with name '{name}'.", IsError: true);
         }
 
-        return await tool.InvokeAsync(input, ct);
+        return await entry.Tool.InvokeAsync(input, ct);
     }
 
-    private  bool IsToolDisabled(string name) =>
+    private bool IsToolDisabled(string name) =>
         this._disabledBySystemToolNames.Contains(name) || this._disabledByUserToolNames.Contains(name);
 
     /// <inheritdoc/>

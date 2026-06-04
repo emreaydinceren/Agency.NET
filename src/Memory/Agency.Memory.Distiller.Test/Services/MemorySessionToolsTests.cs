@@ -39,11 +39,11 @@ public sealed class MemorySessionToolsTests
     /// <c>MarkGoalComplete</c> and <c>SetFocus</c> tool definitions.
     /// </summary>
     [Fact]
-    public void RegisterInto_AddsBothToolsToRegistry()
+    public async Task RegisterInto_AddsBothToolsToRegistry()
     {
         var (ctx, channels, store) = CreateDependencies();
 
-        MemorySessionTools.RegisterInto(ctx, channels, store);
+        await MemorySessionTools.RegisterInto(ctx, channels, store, TestContext.Current.CancellationToken);
 
         System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ToolDefinition> defs =
             ctx.Tools.Registry.ListDefinitions();
@@ -57,12 +57,12 @@ public sealed class MemorySessionToolsTests
     /// still contains exactly two tool definitions (overwrite-by-name semantics).
     /// </summary>
     [Fact]
-    public void RegisterInto_CalledTwice_IsIdempotent()
+    public async Task RegisterInto_CalledTwice_IsIdempotent()
     {
         var (ctx, channels, store) = CreateDependencies();
 
-        MemorySessionTools.RegisterInto(ctx, channels, store);
-        MemorySessionTools.RegisterInto(ctx, channels, store);
+        await MemorySessionTools.RegisterInto(ctx, channels, store, TestContext.Current.CancellationToken);
+        await MemorySessionTools.RegisterInto(ctx, channels, store, TestContext.Current.CancellationToken);
 
         System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ToolDefinition> defs =
             ctx.Tools.Registry.ListDefinitions();
@@ -77,7 +77,7 @@ public sealed class MemorySessionToolsTests
     /// substitutes empty strings and still registers both tools without throwing.
     /// </summary>
     [Fact]
-    public void RegisterInto_NullUserAndSessionId_RegistrationSucceeds()
+    public async Task RegisterInto_NullUserAndSessionId_RegistrationSucceeds()
     {
         var options = Options.Create(new DistillerOptions());
         var channels = new ChannelSessionRegistry(options, NullLogger<ChannelSessionRegistry>.Instance);
@@ -91,7 +91,8 @@ public sealed class MemorySessionToolsTests
             Conversation = new InMemoryConversationManager(),
         };
 
-        var ex = Record.Exception(() => MemorySessionTools.RegisterInto(ctx, channels, store));
+        var ex = await Record.ExceptionAsync(() =>
+            MemorySessionTools.RegisterInto(ctx, channels, store, TestContext.Current.CancellationToken));
         Assert.Null(ex);
 
         System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ToolDefinition> defs =

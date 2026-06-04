@@ -23,7 +23,8 @@ internal static class MemorySessionTools
     /// <param name="ctx">The live session context whose <see cref="Context.Tools"/> registry receives the tools.</param>
     /// <param name="channels">Registry providing per-session channel writers for <c>MarkGoalComplete</c>.</param>
     /// <param name="store">Memory store used by <c>SetFocus</c> to enumerate known domains.</param>
-    internal static void RegisterInto(Context ctx, ChannelSessionRegistry channels, IMemoryStore store)
+    /// <param name="ct">Cancellation token passed to <c>SetFocus</c>'s async definition resolution.</param>
+    internal static async Task RegisterInto(Context ctx, ChannelSessionRegistry channels, IMemoryStore store, CancellationToken ct = default)
     {
         string userId = ctx.User.Id ?? string.Empty;
         string sessionId = ctx.Session.Id ?? string.Empty;
@@ -31,7 +32,7 @@ internal static class MemorySessionTools
         ctx.Tools.Registry.Register(
             new MarkGoalCompleteTool(channels, userId, sessionId, () => ctx.Conversation.Messages.Count, () => ctx.Focus));
 
-        ctx.Tools.Registry.Register(
-            new SetFocusTool(store, userId, () => ctx));
+        await ctx.Tools.Registry.RegisterAsync(
+            new SetFocusTool(store, userId, () => ctx), ct).ConfigureAwait(false);
     }
 }

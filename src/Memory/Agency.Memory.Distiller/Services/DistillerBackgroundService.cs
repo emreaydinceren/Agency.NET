@@ -91,9 +91,11 @@ internal sealed class DistillerBackgroundService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Poll all active session channels.
+            // Drain all active session channels before waiting for new work.
+            // This loop runs to completion so a burst of jobs across multiple
+            // sessions is fully processed before suspending.
             bool processed = false;
-            foreach (var (sessionId, channel) in this._channelRegistry.GetAll())
+            foreach (var (_, channel) in this._channelRegistry.GetAll())
             {
                 while (channel.Reader.TryRead(out DistillationJob? job))
                 {
@@ -104,13 +106,101 @@ internal sealed class DistillerBackgroundService : BackgroundService
 
             if (!processed)
             {
-                // Yield to avoid busy-waiting when no jobs are pending.
-                await Task.Delay(TimeSpan.FromMilliseconds(50), this._timeProvider, stoppingToken)
+                // All session channels are empty: suspend until a writer signals
+                // that a new job has been enqueued (event-driven wake, no polling).
+                // ChannelSessionRegistry.WaitForWorkAsync is backed by a SemaphoreSlim
+                // released by NotifyingChannelWriter on every successful TryWrite /
+                // WriteAsync (Spec §6.2/§10.2 deviation — see ChannelSessionRegistry).
+                await this._channelRegistry.WaitForWorkAsync(stoppingToken)
                     .ConfigureAwait(false);
             }
         }
 
-        this._logger.LogInformation("DistillerBackgroundService stopping.");
+        this._logger.LogInformation("DistillerBackgroundService draining (timeout={Timeout}).",
+            this._options.Value.ShutdownDrainTimeout);
+
+        // §10.1: Drain queued jobs up to ShutdownDrainTimeout before force-exit.
+        await this.DrainAsync(this._options.Value.ShutdownDrainTimeout).ConfigureAwait(false);
+
+        this._logger.LogInformation("DistillerBackgroundService stopped.");
+    }
+
+    /// <summary>
+    /// Drains all queued jobs from every registered session channel, honouring the given
+    /// <paramref name="timeout"/>. Any jobs still queued after the deadline are dead-lettered
+    /// (Spec §10.1).
+    /// </summary>
+    /// <param name="timeout">Maximum time to spend draining before force-exit.</param>
+    internal async Task DrainAsync(TimeSpan timeout)
+    {
+        using var drainCts = new CancellationTokenSource(timeout);
+        CancellationToken drainToken = drainCts.Token;
+
+        // Tracks the job removed from the channel but not yet processed (in-flight when
+        // cancellation fires). It must be dead-lettered together with the remaining queue.
+        DistillationJob? inFlightJob = null;
+
+        try
+        {
+            bool anyPending = true;
+            while (anyPending && !drainToken.IsCancellationRequested)
+            {
+                anyPending = false;
+                foreach (var (_, channel) in this._channelRegistry.GetAll())
+                {
+                    while (channel.Reader.TryRead(out DistillationJob? job))
+                    {
+                        anyPending = true;
+                        inFlightJob = job; // track it before processing
+                        await this.ProcessJobAsync(job, drainToken).ConfigureAwait(false);
+                        inFlightJob = null; // processed successfully — clear
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (drainCts.IsCancellationRequested)
+        {
+            // Drain timeout expired — fall through to dead-letter in-flight + remaining jobs.
+        }
+
+        // Dead-letter the job whose processing was interrupted by the timeout.
+        if (inFlightJob is not null)
+        {
+            var timeoutError = new TimeoutException(
+                "Distiller shutdown drain timeout exceeded; job dead-lettered for watermark recovery.");
+
+            this._logger.LogWarning(
+                "Dead-lettering in-flight job after shutdown drain timeout. UserId={UserId}, SessionId={SessionId}",
+                inFlightJob.UserId, inFlightJob.SessionId);
+
+            await this.DeadLetterAsync(inFlightJob, timeoutError, CancellationToken.None).ConfigureAwait(false);
+            _errorCounter.Add(1);
+        }
+
+        // Dead-letter any jobs still in the channels after the timeout.
+        await this.DeadLetterRemainingAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Dead-letters every job still sitting in any registered session channel (Spec §10.1).
+    /// </summary>
+    private async Task DeadLetterRemainingAsync()
+    {
+        var timeoutError = new TimeoutException(
+            "Distiller shutdown drain timeout exceeded; job dead-lettered for watermark recovery.");
+
+        foreach (var (_, channel) in this._channelRegistry.GetAll())
+        {
+            while (channel.Reader.TryRead(out DistillationJob? job))
+            {
+                this._logger.LogWarning(
+                    "Dead-lettering job after shutdown drain timeout. UserId={UserId}, SessionId={SessionId}",
+                    job.UserId, job.SessionId);
+
+                await this.DeadLetterAsync(job, timeoutError, CancellationToken.None).ConfigureAwait(false);
+                _errorCounter.Add(1);
+            }
+        }
     }
 
     /// <summary>
@@ -316,7 +406,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
         string prompt = EpisodeExtractionPrompt.Render(
             job,
             turns,
-            FocusContext.Empty,
+            job.Focus ?? FocusContext.Empty,
             knownDomains,
             recentFacts);
 

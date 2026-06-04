@@ -187,11 +187,11 @@ Every background service has an `ActivitySource`, a `Meter`, counters, and struc
 │   domain       text             session_id)       error        text        │
 │   key          text                               created_at   tstz        │
 │   title        text                                                         │
-│   value        text                                                         │
-│   tags         text[]                                                       │
-│   importance   double                                                       │
-│   embedding    vector(N)                                                    │
-│   created_at   tstz                                                         │
+│   value        text                               user_state               │
+│   tags         text[]                             ──────────────            │
+│   importance   double                             user_id      text PK     │
+│   embedding    vector(N)                          last_written_at tstz     │
+│   created_at   tstz                                   NOT NULL             │
 │   updated_at   tstz                                                         │
 │   last_access  tstz?                                                        │
 │                                                                             │
@@ -311,7 +311,7 @@ Convert recent conversation turns into one or more durable `Record`s, asynchrono
 
 #### Responsibilities
 
-- Dequeue `DistillationJob`s from `Channel<DistillationJob>`.
+- Dequeue `DistillationJob`s from per-session bounded channels (see §10.2 for design rationale).
 - Read the relevant conversation turns from the session's `IConversationManager`.
 - Invoke an LLM to extract Episode/Fact Records (Markdown body, Title, Domain, Tags, Scope, Importance).
 - Embed and persist via `IMemoryStore`.
@@ -330,10 +330,19 @@ Convert recent conversation turns into one or more durable `Record`s, asynchrono
 
 ```
 loop:
-  job = await channel.Reader.ReadAsync(stopToken)
+  // Drain all per-session channels before suspending.
+  processed = false
+  for each (sessionId, channel) in channelRegistry.GetAll():
+    while channel.Reader.TryRead(out job):
+      process(job)
+      processed = true
+  if not processed:
+    // Suspend until a NotifyingChannelWriter releases the work semaphore.
+    await channelRegistry.WaitForWorkAsync(stopToken)
+
+process(job):
   using activity = ActivitySource.StartActivity("memory.distill", Internal)
-  using session = sessions.Get(job.SessionId)
-  turns = session.Conversation.MessagesBetween(session.LastDistilledTurnIndex, job.UpToTurnIndex)
+  turns = conversations.Get(job.SessionId).MessagesBetween(watermark, job.UpToTurnIndex)
   if turns is empty: skip + log
   attempt = 0
   while attempt < MaxRetries:
@@ -776,13 +785,20 @@ CREATE TABLE records (
     embedding       vector(1536) NOT NULL,         -- dimension per IEmbeddingGenerator
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_accessed_at TIMESTAMPTZ NULL,
-    CONSTRAINT records_upsert_key UNIQUE (user_id, session_id, domain, key)
+    last_accessed_at TIMESTAMPTZ NULL
 );
+
+-- Upsert key: functional unique index so that NULL session_id (Global scope) is treated
+-- as a single empty-string bucket rather than infinitely many distinct NULLs (the Postgres
+-- default NULL != NULL semantics for plain UNIQUE constraints).  COALESCE(session_id, '')
+-- ensures exactly one row per (user_id, domain, key) for Global-scope records.
+CREATE UNIQUE INDEX records_upsert_key
+    ON records (user_id, COALESCE(session_id, ''), domain, key);
 ```
 
 Notes:
-- `session_id` is `NULL` for Global-scope records. The `UNIQUE` constraint treats `NULL` as distinct (Postgres default), so multiple Global records per `(user_id, domain, key)` would technically be allowed — but the upsert path *never* writes a duplicate because the application enforces single-row-per-upsert-key.
+- `session_id` is `NULL` for Global-scope records. The **functional unique index** `COALESCE(session_id, '')` maps `NULL` to `''`, so all Global records for the same `(user_id, domain, key)` share a single index entry and collapse to one row on upsert. A plain table-level `UNIQUE` constraint would treat each `NULL` as distinct (Postgres default), allowing unbounded duplicates; the functional index closes that gap at the database level.
+- The corresponding `ON CONFLICT` clause in `UpsertAsync` targets the same expression: `ON CONFLICT (user_id, COALESCE(session_id, ''), domain, key) DO UPDATE SET ...`.
 - `embedding vector(N)` — `N` must match the configured `IEmbeddingGenerator`. Mismatch is a startup-time failure, not runtime.
 - `tags TEXT[]` — Postgres-native array. No separate `record_tags` table.
 
@@ -791,7 +807,7 @@ Notes:
 | Index | Purpose |
 |---|---|
 | `PRIMARY KEY (id)` | Surrogate addressing for delete/merge |
-| `UNIQUE (user_id, session_id, domain, key)` | Upsert idempotency |
+| `UNIQUE (user_id, COALESCE(session_id, ''), domain, key)` | Upsert idempotency; functional index collapses NULL session_id (Global scope) to one row per key |
 | `BTREE (user_id, content_type)` | Filtered search prefilter |
 | `BTREE (user_id, domain)` | Domain-scoped queries |
 | `HNSW (embedding vector_cosine_ops)` | Vector search; m=16, ef_construction=64 (defaults; tune later) |
@@ -830,7 +846,22 @@ CREATE INDEX dead_letter_created_at_idx ON dead_letter(created_at);
 
 For operational inspection only. Never read by the live system.
 
-### 7.5 Data flow
+### 7.5 The `user_state` table
+
+```sql
+CREATE TABLE IF NOT EXISTS user_state (
+    user_id         TEXT PRIMARY KEY,
+    last_written_at TIMESTAMPTZ NOT NULL
+);
+```
+
+A single row per user. Written on every `UpsertAsync`, `ForgetAsync`, and `ForgetMeAsync` call via a `GREATEST(...)` upsert (so the column always holds the most recent write timestamp across concurrent writers). Read lazily on cache miss or process restart to warm the in-memory `ConcurrentDictionary<string, DateTimeOffset>` that powers the retrieval gate (§8.1).
+
+Notes:
+- `last_written_at` is `NOT NULL` **without** a `DEFAULT now()`, unlike the timestamp columns in `records`, `watermarks`, and `dead_letter`. This is intentional: every write path supplies the value explicitly, so a server-side default would be redundant. Be aware of this asymmetry if adding new write paths — the column must always receive an explicit value.
+- No index beyond the primary key is needed: all access is a single-row point lookup by `user_id`.
+
+### 7.6 Data flow
 
 ```
 [ Agent loop ]
@@ -875,7 +906,7 @@ For operational inspection only. Never read by the live system.
 [ Context → SystemPromptBuilder → LLM call ]
 ```
 
-### 7.6 Differences between storage backends
+### 7.7 Differences between storage backends
 
 V1 ships with PostgreSQL + pgvector only. The `IMemoryStore` interface is designed to allow:
 
@@ -1088,7 +1119,14 @@ Four background components run outside the agent loop. All are `IHostedService` 
 ### 10.2 Concurrency model
 
 - Channels are MPSC (multi-producer, single-consumer) via `System.Threading.Channels`.
-- The Distiller's `BackgroundService` runs a single `await foreach` loop, dispatching each job synchronously *with respect to the channel* but executing the actual extraction asynchronously on the thread pool.
+- **Distiller channel model (intentional deviation from the original single-channel design):**
+  The Distiller uses **one bounded `Channel<DistillationJob>` per session** (managed by
+  `ChannelSessionRegistry`) rather than a single global channel. This gives per-session
+  `DropOldest` backpressure cheaply (capacity 32 per session, §10.3). The single consumer
+  (`DistillerBackgroundService`) drains all session channels in a sweep, then suspends on a
+  `SemaphoreSlim` that any `NotifyingChannelWriter` releases on every successful enqueue.
+  This event-driven wake eliminates the latency floor and idle CPU wakeups that a polling
+  loop would introduce; a newly-enqueued job is picked up in the next scheduler tick.
 - The Consolidator is **serial per user** but parallel across users — implemented by partitioning the channel by `userId` (each partition gets its own consumer task).
 - The Hygiene Sweeper is single-threaded; bulk SQL handles the heavy lifting.
 

@@ -25,7 +25,7 @@ namespace Agency.Memory.Consolidator.Services;
 /// a real LLM. In production, <see cref="ConsolidatorSubAgentFactory.CreateRunner"/> provides
 /// the real implementation.
 /// </remarks>
-internal sealed class ConsolidatorBackgroundService : BackgroundService
+internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsolidationTrigger
 {
     internal const string ActivitySourceName = "Agency.Memory.Consolidator";
     internal const string MeterName = "Agency.Memory.Consolidator";
@@ -45,10 +45,11 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
     private readonly IMemoryStore _store;
 
     /// <summary>
-    /// The agent runner delegate. Signature: <c>(userId, records, ct) => Task</c>.
-    /// Runs the sub-agent and returns when the agent terminates (Memory_Done or max iterations).
+    /// The agent runner delegate.
+    /// Signature: <c>(userId, records, ct) => Task&lt;(int Merges, int Updates, int Deletes)&gt;</c>.
+    /// Runs the sub-agent and returns the mutation tallies when the agent terminates.
     /// </summary>
-    private readonly Func<string, IReadOnlyList<Record>, CancellationToken, Task>? _agentRunner;
+    private readonly Func<string, IReadOnlyList<Record>, CancellationToken, Task<(int Merges, int Updates, int Deletes)>>? _agentRunner;
 
     private readonly IAsyncEventBus _eventBus;
     private readonly IOptions<ConsolidatorOptions> _options;
@@ -77,7 +78,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
     /// </summary>
     /// <param name="store">The memory store to load records from.</param>
     /// <param name="agentRunner">
-    /// Delegate that executes the consolidator sub-agent for a user.
+    /// Delegate that executes the consolidator sub-agent for a user and returns mutation tallies.
     /// May be <see langword="null"/> in tests that verify empty-store behaviour.
     /// </param>
     /// <param name="eventBus">The in-process event bus for subscribing and publishing.</param>
@@ -85,7 +86,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
     /// <param name="logger">Logger.</param>
     internal ConsolidatorBackgroundService(
         IMemoryStore store,
-        Func<string, IReadOnlyList<Record>, CancellationToken, Task>? agentRunner,
+        Func<string, IReadOnlyList<Record>, CancellationToken, Task<(int Merges, int Updates, int Deletes)>>? agentRunner,
         IAsyncEventBus eventBus,
         IOptions<ConsolidatorOptions> options,
         ILogger<ConsolidatorBackgroundService> logger)
@@ -100,18 +101,30 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
     /// <inheritdoc/>
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        // Subscribe to DistillationCompletedEvent to enqueue consolidation jobs.
-        this._subscription = this._eventBus.Subscribe<DistillationCompletedEvent>(
-            async (evt, ct) =>
-            {
-                var job = new ConsolidationJob(evt.UserId, evt.SessionId);
-                await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
-                this._logger.LogDebug(
-                    "Enqueued ConsolidationJob for UserId={UserId} from session {SessionId}",
-                    evt.UserId, evt.SessionId);
-            });
+        // Only auto-subscribe when trigger mode is OnSessionEnd.
+        // Manual mode requires the host to call IConsolidationTrigger.RequestAsync explicitly.
+        if (this._options.Value.Trigger == ConsolidationTrigger.OnSessionEnd)
+        {
+            this._subscription = this._eventBus.Subscribe<DistillationCompletedEvent>(
+                async (evt, ct) =>
+                {
+                    var job = new ConsolidationJob(evt.UserId, evt.SessionId);
+                    await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
+                    this._logger.LogDebug(
+                        "Enqueued ConsolidationJob for UserId={UserId} from session {SessionId}",
+                        evt.UserId, evt.SessionId);
+                });
+        }
 
         return base.StartAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task RequestAsync(string userId, CancellationToken ct = default)
+    {
+        var job = new ConsolidationJob(userId, string.Empty);
+        await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
+        this._logger.LogDebug("Manual ConsolidationJob enqueued for UserId={UserId}", userId);
     }
 
     /// <inheritdoc/>
@@ -233,9 +246,10 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
             return;
         }
 
+        int merges = 0, updates = 0, deletes = 0;
         try
         {
-            await this._agentRunner(job.UserId, records, ct).ConfigureAwait(false);
+            (merges, updates, deletes) = await this._agentRunner(job.UserId, records, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -247,14 +261,11 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
             this._logger.LogError(ex, "Consolidation sub-agent failed for UserId={UserId}", job.UserId);
         }
 
-        // Emit completion. In v1 we do not track per-call merge/update/delete counts
-        // from within the service (tool calls mutate directly); we emit zeros here.
-        // SA-G functional tests can verify actual record counts via IMemoryStore.GetAllForUserAsync.
         await this._eventBus.PublishAsync(new ConsolidationCompletedEvent(
             UserId: job.UserId,
-            Merges: 0,
-            Updates: 0,
-            Deletes: 0), ct).ConfigureAwait(false);
+            Merges: merges,
+            Updates: updates,
+            Deletes: deletes), ct).ConfigureAwait(false);
 
         this._logger.LogInformation(
             "Consolidation complete for UserId={UserId}.", job.UserId);

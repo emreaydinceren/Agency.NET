@@ -97,6 +97,33 @@ public sealed class PostgresMemoryStoreTests_Upsert : IAsyncLifetime
     }
 
     /// <summary>
+    /// Two upserts with NULL session_id (Global scope) on the same (user_id, domain, key)
+    /// collapse to a single row whose value reflects the second write.
+    /// This is the behaviour enforced by the functional unique index
+    /// <c>COALESCE(session_id, '')</c> (see Spec §7.1).
+    /// </summary>
+    [Fact]
+    public async Task Upsert_TwoGlobalRecords_SameDomainKey_CollapseToOneRow()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var key = UniqueKey("K_Global");
+
+        var first = await this._store.UpsertAsync(MakeRecord("u1", null, "D", key, value: "first value"), ct);
+        var second = await this._store.UpsertAsync(MakeRecord("u1", null, "D", key, value: "second value"), ct);
+
+        // Both calls must return the same row Id (the second is an update, not an insert).
+        Assert.Equal(first.Id, second.Id);
+
+        // Exactly one row must exist for this (user, null-session, domain, key).
+        var all = await this._store.GetAllForUserAsync("u1", ct);
+        var matching = all.Where(r => r.Key == key && r.SessionId == null).ToList();
+        Assert.Single(matching);
+
+        // The surviving row reflects the second write.
+        Assert.Equal("second value", matching[0].Value);
+    }
+
+    /// <summary>
     /// Upserting updates the LastWrittenAt cache and persists to the database.
     /// </summary>
     [Fact]

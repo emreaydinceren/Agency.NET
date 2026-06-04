@@ -1,3 +1,5 @@
+using Agency.Harness.Hooks;
+
 namespace Agency.Harness;
 
 public sealed class AgentOptions
@@ -35,4 +37,19 @@ public sealed class AgentOptions
     /// so retrieved and distilled records are scoped to the correct user.
     /// </summary>
     public string? UserId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the baseline hooks built by the memory pipeline (e.g. retrieval, timer restart).
+    /// Set by <c>AddAgencyMemory</c> via <c>PostConfigure</c>; null when memory is disabled.
+    /// Baseline hooks always run <b>before</b> <see cref="UserHooks"/> per spec §6.5.
+    /// </summary>
+    public AgentHooks? BaselineHooks { get; set; }
+
+    /// <summary>
+    /// Gets or sets user-supplied hooks to compose <b>after</b> the baseline hooks.
+    /// When null, only <see cref="BaselineHooks"/> are used (if present).
+    /// Advanced callers who need to observe pre-retrieval context should use
+    /// <see cref="AgentHooksExtensions.ComposeBefore"/> directly rather than this property.
+    /// </summary>
+    public AgentHooks? UserHooks { get; set; }
 }

@@ -54,7 +54,7 @@ public static class ConsolidatorServiceCollectionExtensions
 
             string model = opts.Value.Model ?? "default";
 
-            Func<string, IReadOnlyList<Record>, CancellationToken, Task> runner =
+            Func<string, IReadOnlyList<Record>, CancellationToken, Task<(int Merges, int Updates, int Deletes)>> runner =
                 ConsolidatorSubAgentFactory.CreateRunner(llm, model, store, opts, eventBus, agentLogger);
 
             return new ConsolidatorBackgroundService(store, runner, eventBus, opts, logger);

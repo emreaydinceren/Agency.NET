@@ -46,9 +46,10 @@ internal static class ConsolidatorSubAgentFactory
     /// </param>
     /// <param name="logger">Logger forwarded to the agent and used for user-facing mutation lines.</param>
     /// <returns>
-    /// A delegate <c>(userId, records, ct) => Task</c> that drives the sub-agent to completion.
+    /// A delegate <c>(userId, records, ct) => Task&lt;(int Merges, int Updates, int Deletes)&gt;</c>
+    /// that drives the sub-agent to completion and returns the mutation tallies.
     /// </returns>
-    internal static Func<string, IReadOnlyList<Record>, CancellationToken, Task> CreateRunner(
+    internal static Func<string, IReadOnlyList<Record>, CancellationToken, Task<(int Merges, int Updates, int Deletes)>> CreateRunner(
         IChatClient llm,
         string model,
         IMemoryStore store,
@@ -68,6 +69,11 @@ internal static class ConsolidatorSubAgentFactory
 
             // Done flag: set by Memory_Done; read by the stop condition.
             bool done = false;
+
+            // Running mutation tallies — incremented as each MemoryMutatedEvent is emitted.
+            int merges = 0;
+            int updates = 0;
+            int deletes = 0;
 
             // Build tools for this run.
             var mergeToolInstance = new MemoryMergeTool(store, userId);
@@ -121,11 +127,21 @@ internal static class ConsolidatorSubAgentFactory
                         "🧠 Memory {Operation} for user {UserId}: {Detail}",
                         operation, userId, tool.Result.Content);
 
+                    // Increment the running tally for this operation type.
+                    switch (operation)
+                    {
+                        case "Merge": merges++; break;
+                        case "Update": updates++; break;
+                        case "Delete": deletes++; break;
+                    }
+
                     await eventBus.PublishAsync(
                         new MemoryMutatedEvent(userId, operation, tool.Result.Content), ct)
                         .ConfigureAwait(false);
                 }
             }
+
+            return (merges, updates, deletes);
         };
     }
 

@@ -711,7 +711,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         // The stub runner blocks on a barrier so we can simulate the second trigger
         // arriving while the first run is in-flight.
         int agentRunCount = 0;
-        var barrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var barrier = new TaskCompletionSource<(int, int, int)>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var mockStore = new Mock<IMemoryStore>(MockBehavior.Loose);
         mockStore
@@ -727,7 +727,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             MaxCostUsd = 1.0m,
         });
 
-        Task StubRunner(string uid, IReadOnlyList<MemoryRecord> records, CancellationToken token)
+        Task<(int, int, int)> StubRunner(string uid, IReadOnlyList<MemoryRecord> records, CancellationToken token)
         {
             Interlocked.Increment(ref agentRunCount);
             return barrier.Task;
@@ -747,7 +747,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         service.EnqueuePendingIfCoalesced(userId);
 
         // Release the barrier so the first run completes.
-        barrier.SetResult(true);
+        barrier.SetResult((0, 0, 0));
         await firstRunTask;
 
         // Drain the pending re-run (the coalesced second pass).
@@ -893,10 +893,10 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         var warningLogger = new WarningCapturingLogger<ConsolidatorBackgroundService>();
         var stubEventBus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
         bool stubAgentInvoked = false;
-        Task StubRunner(string uid, IReadOnlyList<MemoryRecord> records, CancellationToken token)
+        Task<(int, int, int)> StubRunner(string uid, IReadOnlyList<MemoryRecord> records, CancellationToken token)
         {
             stubAgentInvoked = true;
-            return Task.CompletedTask;
+            return Task.FromResult((0, 0, 0));
         }
 
         var consolidatorOpts = Options.Create(new ConsolidatorOptions
@@ -1031,7 +1031,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         var eventBus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
 
-        Func<string, IReadOnlyList<MemoryRecord>, CancellationToken, Task> runner =
+        Func<string, IReadOnlyList<MemoryRecord>, CancellationToken, Task<(int Merges, int Updates, int Deletes)>> runner =
             ConsolidatorSubAgentFactory.CreateRunner(
                 llmClient,
                 chatModel,

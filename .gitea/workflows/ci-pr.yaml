@@ -43,5 +43,4 @@ jobs:
 
       - name: 🧪 Run Functional Tests
         working-directory: src
-        continue-on-error: true
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional"
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional" --retry-failed-tests 2

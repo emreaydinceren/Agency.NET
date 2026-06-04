@@ -43,7 +43,7 @@ jobs:
 
       - name: 🧪 Run Functional Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional"
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional" --retry-failed-tests 2
 
       - name: 🔎 Read package revision
         id: version

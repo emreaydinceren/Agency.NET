@@ -785,13 +785,20 @@ CREATE TABLE records (
     embedding       vector(1536) NOT NULL,         -- dimension per IEmbeddingGenerator
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_accessed_at TIMESTAMPTZ NULL,
-    CONSTRAINT records_upsert_key UNIQUE (user_id, session_id, domain, key)
+    last_accessed_at TIMESTAMPTZ NULL
 );
+
+-- Upsert key: functional unique index so that NULL session_id (Global scope) is treated
+-- as a single empty-string bucket rather than infinitely many distinct NULLs (the Postgres
+-- default NULL != NULL semantics for plain UNIQUE constraints).  COALESCE(session_id, '')
+-- ensures exactly one row per (user_id, domain, key) for Global-scope records.
+CREATE UNIQUE INDEX records_upsert_key
+    ON records (user_id, COALESCE(session_id, ''), domain, key);
 ```
 
 Notes:
-- `session_id` is `NULL` for Global-scope records. The `UNIQUE` constraint treats `NULL` as distinct (Postgres default), so multiple Global records per `(user_id, domain, key)` would technically be allowed — but the upsert path *never* writes a duplicate because the application enforces single-row-per-upsert-key.
+- `session_id` is `NULL` for Global-scope records. The **functional unique index** `COALESCE(session_id, '')` maps `NULL` to `''`, so all Global records for the same `(user_id, domain, key)` share a single index entry and collapse to one row on upsert. A plain table-level `UNIQUE` constraint would treat each `NULL` as distinct (Postgres default), allowing unbounded duplicates; the functional index closes that gap at the database level.
+- The corresponding `ON CONFLICT` clause in `UpsertAsync` targets the same expression: `ON CONFLICT (user_id, COALESCE(session_id, ''), domain, key) DO UPDATE SET ...`.
 - `embedding vector(N)` — `N` must match the configured `IEmbeddingGenerator`. Mismatch is a startup-time failure, not runtime.
 - `tags TEXT[]` — Postgres-native array. No separate `record_tags` table.
 
@@ -800,7 +807,7 @@ Notes:
 | Index | Purpose |
 |---|---|
 | `PRIMARY KEY (id)` | Surrogate addressing for delete/merge |
-| `UNIQUE (user_id, session_id, domain, key)` | Upsert idempotency |
+| `UNIQUE (user_id, COALESCE(session_id, ''), domain, key)` | Upsert idempotency; functional index collapses NULL session_id (Global scope) to one row per key |
 | `BTREE (user_id, content_type)` | Filtered search prefilter |
 | `BTREE (user_id, domain)` | Domain-scoped queries |
 | `HNSW (embedding vector_cosine_ops)` | Vector search; m=16, ef_construction=64 (defaults; tune later) |

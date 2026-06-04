@@ -29,7 +29,8 @@ internal static class SessionEndHook
                 UserId: userId,
                 SessionId: sessionId,
                 Trigger: DistillationTrigger.SessionDisposed,
-                UpToTurnIndex: ctx.Conversation.Messages.Count);
+                UpToTurnIndex: ctx.Conversation.Messages.Count,
+                Focus: ctx.Focus);
             channels.GetOrCreateWriter(userId, sessionId).TryWrite(job);
             return Task.CompletedTask;
         };

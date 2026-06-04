@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Agency.Harness.Contexts;
 using Agency.Memory.Common.Jobs;
 using Agency.Memory.Common.Options;
 using Microsoft.Extensions.Hosting;
@@ -61,7 +62,8 @@ internal sealed class InactivityTimerService : IHostedService, IDisposable
     /// <param name="userId">The owning user.</param>
     /// <param name="sessionId">The session to restart the timer for.</param>
     /// <param name="currentTurnIndex">The most recent turn index at restart time.</param>
-    internal void Restart(string userId, string sessionId, int currentTurnIndex)
+    /// <param name="focus">Snapshot of the session focus at restart time; stored so the enqueued job carries the correct focus (Spec §6.7.1 / P2).</param>
+    internal void Restart(string userId, string sessionId, int currentTurnIndex, FocusContext? focus = null)
     {
         // Dispose any existing timer for this session and create a fresh one.
         if (this._timers.TryGetValue(sessionId, out SessionTimerState? existing))
@@ -69,7 +71,7 @@ internal sealed class InactivityTimerService : IHostedService, IDisposable
             existing.Dispose();
         }
 
-        var state = new SessionTimerState(userId, sessionId, currentTurnIndex);
+        var state = new SessionTimerState(userId, sessionId, currentTurnIndex, focus);
         this._timers[sessionId] = state;
 
         var timer = this._timeProvider.CreateTimer(
@@ -124,7 +126,8 @@ internal sealed class InactivityTimerService : IHostedService, IDisposable
             UserId: state.UserId,
             SessionId: sessionId,
             Trigger: DistillationTrigger.Inactivity,
-            UpToTurnIndex: state.TurnIndex);
+            UpToTurnIndex: state.TurnIndex,
+            Focus: state.Focus);
 
         if (!writer.TryWrite(job))
         {
@@ -143,11 +146,15 @@ internal sealed class InactivityTimerService : IHostedService, IDisposable
         internal string SessionId { get; }
         internal int TurnIndex { get; }
 
-        internal SessionTimerState(string userId, string sessionId, int turnIndex)
+        /// <summary>Gets the session focus snapshot taken at timer-restart time.</summary>
+        internal FocusContext? Focus { get; }
+
+        internal SessionTimerState(string userId, string sessionId, int turnIndex, FocusContext? focus = null)
         {
             this.UserId = userId;
             this.SessionId = sessionId;
             this.TurnIndex = turnIndex;
+            this.Focus = focus;
         }
 
         internal void SetTimer(ITimer timer)

@@ -29,7 +29,7 @@ internal static class MemorySessionTools
         string sessionId = ctx.Session.Id ?? string.Empty;
 
         ctx.Tools.Registry.Register(
-            new MarkGoalCompleteTool(channels, userId, sessionId, () => ctx.Conversation.Messages.Count));
+            new MarkGoalCompleteTool(channels, userId, sessionId, () => ctx.Conversation.Messages.Count, () => ctx.Focus));
 
         ctx.Tools.Registry.Register(
             new SetFocusTool(store, userId, () => ctx));

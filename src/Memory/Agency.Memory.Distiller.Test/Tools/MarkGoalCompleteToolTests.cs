@@ -17,7 +17,7 @@ namespace Agency.Memory.Distiller.Test.Tools;
 public sealed class MarkGoalCompleteToolTests
 {
     private static (MarkGoalCompleteTool Tool, ChannelSessionRegistry Registry)
-        CreateTool(string userId = "u1", string sessionId = "s1", int turnCount = 3)
+        CreateTool(string userId = "u1", string sessionId = "s1", int turnCount = 3, FocusContext? focus = null)
     {
         var options = Options.Create(new DistillerOptions());
         var registry = new ChannelSessionRegistry(options, NullLogger<ChannelSessionRegistry>.Instance);
@@ -26,7 +26,8 @@ public sealed class MarkGoalCompleteToolTests
             registry,
             userId,
             sessionId,
-            () => turnCount);
+            () => turnCount,
+            () => focus ?? FocusContext.Empty);
 
         return (tool, registry);
     }
@@ -74,5 +75,25 @@ public sealed class MarkGoalCompleteToolTests
 
         Assert.False(result.IsError);
         Assert.Contains("complete", result.Content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The focus active at invocation time is snapshotted into the enqueued job (P2 / Spec §6.7.1).
+    /// </summary>
+    [Fact]
+    public async Task Invoke_SnapshotsFocus_IntoJob()
+    {
+        FocusContext focus = new() { Title = "Auth Debugging", Domain = "Security", Tags = ["oauth"] };
+        var (tool, registry) = CreateTool(turnCount: 4, focus: focus);
+
+        JsonElement input = JsonDocument.Parse("{}").RootElement;
+        await tool.InvokeAsync(input, CancellationToken.None);
+
+        Channel<DistillationJob> ch = registry.GetOrCreate("u1", "s1");
+        Assert.True(ch.Reader.TryRead(out DistillationJob? job));
+        Assert.NotNull(job!.Focus);
+        Assert.Equal("Auth Debugging", job.Focus.Title);
+        Assert.Equal("Security", job.Focus.Domain);
+        Assert.Equal(["oauth"], job.Focus.Tags);
     }
 }

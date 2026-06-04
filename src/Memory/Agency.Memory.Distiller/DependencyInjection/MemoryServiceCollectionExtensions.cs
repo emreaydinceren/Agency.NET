@@ -127,7 +127,7 @@ public static class MemoryServiceCollectionExtensions
                 string userId = hookCtx.AgentContext.User.Id ?? string.Empty;
                 string sessionId = hookCtx.AgentContext.Session.Id ?? string.Empty;
                 int turnIndex = hookCtx.AgentContext.Conversation.Messages.Count;
-                timerService.Restart(userId, sessionId, turnIndex);
+                timerService.Restart(userId, sessionId, turnIndex, hookCtx.AgentContext.Focus);
                 return Task.CompletedTask;
             };
 

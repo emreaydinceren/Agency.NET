@@ -187,11 +187,11 @@ Every background service has an `ActivitySource`, a `Meter`, counters, and struc
 │   domain       text             session_id)       error        text        │
 │   key          text                               created_at   tstz        │
 │   title        text                                                         │
-│   value        text                                                         │
-│   tags         text[]                                                       │
-│   importance   double                                                       │
-│   embedding    vector(N)                                                    │
-│   created_at   tstz                                                         │
+│   value        text                               user_state               │
+│   tags         text[]                             ──────────────            │
+│   importance   double                             user_id      text PK     │
+│   embedding    vector(N)                          last_written_at tstz     │
+│   created_at   tstz                                   NOT NULL             │
 │   updated_at   tstz                                                         │
 │   last_access  tstz?                                                        │
 │                                                                             │
@@ -846,7 +846,22 @@ CREATE INDEX dead_letter_created_at_idx ON dead_letter(created_at);
 
 For operational inspection only. Never read by the live system.
 
-### 7.5 Data flow
+### 7.5 The `user_state` table
+
+```sql
+CREATE TABLE IF NOT EXISTS user_state (
+    user_id         TEXT PRIMARY KEY,
+    last_written_at TIMESTAMPTZ NOT NULL
+);
+```
+
+A single row per user. Written on every `UpsertAsync`, `ForgetAsync`, and `ForgetMeAsync` call via a `GREATEST(...)` upsert (so the column always holds the most recent write timestamp across concurrent writers). Read lazily on cache miss or process restart to warm the in-memory `ConcurrentDictionary<string, DateTimeOffset>` that powers the retrieval gate (§8.1).
+
+Notes:
+- `last_written_at` is `NOT NULL` **without** a `DEFAULT now()`, unlike the timestamp columns in `records`, `watermarks`, and `dead_letter`. This is intentional: every write path supplies the value explicitly, so a server-side default would be redundant. Be aware of this asymmetry if adding new write paths — the column must always receive an explicit value.
+- No index beyond the primary key is needed: all access is a single-row point lookup by `user_id`.
+
+### 7.6 Data flow
 
 ```
 [ Agent loop ]
@@ -891,7 +906,7 @@ For operational inspection only. Never read by the live system.
 [ Context → SystemPromptBuilder → LLM call ]
 ```
 
-### 7.6 Differences between storage backends
+### 7.7 Differences between storage backends
 
 V1 ships with PostgreSQL + pgvector only. The `IMemoryStore` interface is designed to allow:
 

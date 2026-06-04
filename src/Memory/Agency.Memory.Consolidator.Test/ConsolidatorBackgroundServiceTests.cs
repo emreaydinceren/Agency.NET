@@ -257,10 +257,10 @@ public class ConsolidatorBackgroundServiceTests
             .Returns(Task.CompletedTask);
 
         bool agentInvoked = false;
-        Task StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct)
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct)
         {
             agentInvoked = true;
-            return Task.CompletedTask;
+            return Task.FromResult((0, 0, 0));
         }
 
         var manualOptions = Options.Create(new ConsolidatorOptions

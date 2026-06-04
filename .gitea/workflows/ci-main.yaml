@@ -39,11 +39,23 @@ jobs:
 
       - name: 🧪 Run Unit Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional&Category!=Eval" --retry-failed-tests 2
+        run: |
+          for i in 1 2 3; do
+            if dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional&Category!=Eval"; then
+              break
+            fi
+            [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."
+          done
 
       - name: 🧪 Run Functional Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional" --retry-failed-tests 2
+        run: |
+          for i in 1 2 3; do
+            if dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional"; then
+              break
+            fi
+            [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."
+          done
 
       - name: 🔎 Read package revision
         id: version

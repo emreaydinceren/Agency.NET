@@ -25,7 +25,7 @@ namespace Agency.Memory.Consolidator.Services;
 /// a real LLM. In production, <see cref="ConsolidatorSubAgentFactory.CreateRunner"/> provides
 /// the real implementation.
 /// </remarks>
-internal sealed class ConsolidatorBackgroundService : BackgroundService
+internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsolidationTrigger
 {
     internal const string ActivitySourceName = "Agency.Memory.Consolidator";
     internal const string MeterName = "Agency.Memory.Consolidator";
@@ -101,18 +101,30 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService
     /// <inheritdoc/>
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        // Subscribe to DistillationCompletedEvent to enqueue consolidation jobs.
-        this._subscription = this._eventBus.Subscribe<DistillationCompletedEvent>(
-            async (evt, ct) =>
-            {
-                var job = new ConsolidationJob(evt.UserId, evt.SessionId);
-                await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
-                this._logger.LogDebug(
-                    "Enqueued ConsolidationJob for UserId={UserId} from session {SessionId}",
-                    evt.UserId, evt.SessionId);
-            });
+        // Only auto-subscribe when trigger mode is OnSessionEnd.
+        // Manual mode requires the host to call IConsolidationTrigger.RequestAsync explicitly.
+        if (this._options.Value.Trigger == ConsolidationTrigger.OnSessionEnd)
+        {
+            this._subscription = this._eventBus.Subscribe<DistillationCompletedEvent>(
+                async (evt, ct) =>
+                {
+                    var job = new ConsolidationJob(evt.UserId, evt.SessionId);
+                    await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
+                    this._logger.LogDebug(
+                        "Enqueued ConsolidationJob for UserId={UserId} from session {SessionId}",
+                        evt.UserId, evt.SessionId);
+                });
+        }
 
         return base.StartAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task RequestAsync(string userId, CancellationToken ct = default)
+    {
+        var job = new ConsolidationJob(userId, string.Empty);
+        await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
+        this._logger.LogDebug("Manual ConsolidationJob enqueued for UserId={UserId}", userId);
     }
 
     /// <inheritdoc/>

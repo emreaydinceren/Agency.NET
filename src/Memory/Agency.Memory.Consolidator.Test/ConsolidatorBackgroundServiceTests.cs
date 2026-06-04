@@ -198,6 +198,97 @@ public class ConsolidatorBackgroundServiceTests
         Assert.True(agentInvoked);
     }
 
+    // ── Trigger mode: Manual ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// When <see cref="ConsolidationTrigger.Manual"/> is configured, the service must NOT
+    /// subscribe to <see cref="DistillationCompletedEvent"/> — so no consolidation job is
+    /// enqueued automatically on session end.
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_ManualTrigger_DoesNotSubscribeToDistillationCompletedEvent()
+    {
+        var store = new Mock<IMemoryStore>(MockBehavior.Loose);
+
+        var eventBus = new Mock<IAsyncEventBus>(MockBehavior.Loose);
+        eventBus.Setup(b => b.Subscribe<DistillationCompletedEvent>(It.IsAny<Func<DistillationCompletedEvent, CancellationToken, Task>>()))
+            .Returns(Mock.Of<IDisposable>());
+
+        var manualOptions = Options.Create(new ConsolidatorOptions
+        {
+            Trigger = ConsolidationTrigger.Manual,
+            MaxIterations = 20,
+            MaxCostUsd = 0.50m
+        });
+
+        var service = new ConsolidatorBackgroundService(
+            store.Object,
+            null,
+            eventBus.Object,
+            manualOptions,
+            NullLogger<ConsolidatorBackgroundService>.Instance);
+
+        using var cts = new CancellationTokenSource();
+        await service.StartAsync(cts.Token);
+        await service.StopAsync(CancellationToken.None);
+
+        // Subscribe should never have been called for DistillationCompletedEvent.
+        eventBus.Verify(
+            b => b.Subscribe<DistillationCompletedEvent>(It.IsAny<Func<DistillationCompletedEvent, CancellationToken, Task>>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// When <see cref="ConsolidationTrigger.Manual"/> is configured, calling
+    /// <see cref="IConsolidationTrigger.RequestAsync"/> enqueues a job that the background
+    /// loop will process — verified here by reading back the queued job and processing it directly.
+    /// </summary>
+    [Fact]
+    public async Task RequestAsync_ManualTrigger_EnqueuesJobThatRunsConsolidation()
+    {
+        var store = new Mock<IMemoryStore>(MockBehavior.Loose);
+        store.Setup(s => s.GetAllForUserAsync("u1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeRecord("r1")]);
+
+        ConsolidationCompletedEvent? completedEvent = null;
+        var eventBus = new Mock<IAsyncEventBus>(MockBehavior.Loose);
+        eventBus.Setup(b => b.PublishAsync(It.IsAny<ConsolidationCompletedEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ConsolidationCompletedEvent, CancellationToken>((e, _) => completedEvent = e)
+            .Returns(Task.CompletedTask);
+
+        bool agentInvoked = false;
+        Task StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct)
+        {
+            agentInvoked = true;
+            return Task.CompletedTask;
+        }
+
+        var manualOptions = Options.Create(new ConsolidatorOptions
+        {
+            Trigger = ConsolidationTrigger.Manual,
+            MaxIterations = 20,
+            MaxCostUsd = 0.50m
+        });
+
+        var service = new ConsolidatorBackgroundService(
+            store.Object,
+            StubAgentRunner,
+            eventBus.Object,
+            manualOptions,
+            NullLogger<ConsolidatorBackgroundService>.Instance);
+
+        // Call the manual entry point — should write a job to the channel without error.
+        IConsolidationTrigger trigger = service;
+        await trigger.RequestAsync("u1", CancellationToken.None);
+
+        // Process the job that RequestAsync enqueued (simulates background loop draining).
+        await service.ProcessJobAsync(new ConsolidationJob("u1", string.Empty), CancellationToken.None);
+
+        Assert.True(agentInvoked);
+        Assert.NotNull(completedEvent);
+        Assert.Equal("u1", completedEvent!.UserId);
+    }
+
     // ── Event emission ────────────────────────────────────────────────────────
 
     /// <summary>

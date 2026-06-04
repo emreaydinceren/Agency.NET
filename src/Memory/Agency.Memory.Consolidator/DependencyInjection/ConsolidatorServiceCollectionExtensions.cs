@@ -17,8 +17,13 @@ namespace Agency.Memory.Consolidator.DependencyInjection;
 /// <remarks>
 /// Call <c>AddAgencyConsolidator()</c> after <c>AddAgencyMemory()</c> and after an
 /// <see cref="IMemoryStore"/> implementation and an <see cref="IChatClient"/> have been
-/// registered. The consolidator subscribes to <see cref="DistillationCompletedEvent"/>
-/// via <see cref="IAsyncEventBus"/> to enqueue <see cref="Common.Jobs.ConsolidationJob"/>s.
+/// registered. When <see cref="ConsolidatorOptions.Trigger"/> is
+/// <see cref="ConsolidationTrigger.OnSessionEnd"/> (the default), the consolidator
+/// subscribes to <see cref="DistillationCompletedEvent"/> via <see cref="IAsyncEventBus"/>
+/// to enqueue <see cref="Common.Jobs.ConsolidationJob"/>s automatically. When
+/// <see cref="ConsolidationTrigger.Manual"/> is configured, the host must resolve
+/// <see cref="IConsolidationTrigger"/> and call
+/// <see cref="IConsolidationTrigger.RequestAsync"/> explicitly.
 /// </remarks>
 public static class ConsolidatorServiceCollectionExtensions
 {
@@ -41,7 +46,7 @@ public static class ConsolidatorServiceCollectionExtensions
             services.AddOptions<ConsolidatorOptions>();
         }
 
-        services.AddHostedService<ConsolidatorBackgroundService>(sp =>
+        services.AddSingleton<ConsolidatorBackgroundService>(sp =>
         {
             IChatClient llm = sp.GetRequiredService<IChatClient>();
             IMemoryStore store = sp.GetRequiredService<IMemoryStore>();
@@ -59,6 +64,9 @@ public static class ConsolidatorServiceCollectionExtensions
 
             return new ConsolidatorBackgroundService(store, runner, eventBus, opts, logger);
         });
+
+        services.AddHostedService(sp => sp.GetRequiredService<ConsolidatorBackgroundService>());
+        services.AddSingleton<IConsolidationTrigger>(sp => sp.GetRequiredService<ConsolidatorBackgroundService>());
 
         return services;
     }

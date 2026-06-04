@@ -90,11 +90,11 @@ public class ConsolidatorBackgroundServiceTests
 
         // Agent factory returns a stub that simulates the sub-agent calling Memory_Done immediately.
         bool agentInvoked = false;
-        Task StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> records, CancellationToken ct)
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> records, CancellationToken ct)
         {
             agentInvoked = true;
             // Simulate agent calling Memory_Done by doing nothing (the service handles this).
-            return Task.CompletedTask;
+            return Task.FromResult((0, 0, 0));
         }
 
         var service = new ConsolidatorBackgroundService(
@@ -129,8 +129,8 @@ public class ConsolidatorBackgroundServiceTests
             .Returns(Task.CompletedTask);
 
         int agentRunCount = 0;
-        var barrier = new TaskCompletionSource();
-        Task StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> records, CancellationToken ct)
+        var barrier = new TaskCompletionSource<(int, int, int)>();
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> records, CancellationToken ct)
         {
             Interlocked.Increment(ref agentRunCount);
             return barrier.Task; // hold until released
@@ -150,7 +150,7 @@ public class ConsolidatorBackgroundServiceTests
         service.EnqueuePendingIfCoalesced("u1");
 
         // Release the first run.
-        barrier.SetResult();
+        barrier.SetResult((0, 0, 0));
         await firstTask;
 
         // After first completes, the pending flag should have triggered a second run.
@@ -179,10 +179,10 @@ public class ConsolidatorBackgroundServiceTests
             .Returns(Task.CompletedTask);
 
         bool agentInvoked = false;
-        Task StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct)
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct)
         {
             agentInvoked = true;
-            return Task.CompletedTask;
+            return Task.FromResult((0, 0, 0));
         }
 
         var service = new ConsolidatorBackgroundService(
@@ -216,8 +216,8 @@ public class ConsolidatorBackgroundServiceTests
             .Callback<ConsolidationCompletedEvent, CancellationToken>((e, _) => evt = e)
             .Returns(Task.CompletedTask);
 
-        Task StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct) =>
-            Task.CompletedTask;
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct) =>
+            Task.FromResult((0, 0, 0));
 
         var service = new ConsolidatorBackgroundService(
             store.Object,
@@ -230,5 +230,79 @@ public class ConsolidatorBackgroundServiceTests
 
         Assert.NotNull(evt);
         Assert.Equal("u1", evt!.UserId);
+    }
+
+    // ── Mutation count aggregation ────────────────────────────────────────────
+
+    /// <summary>
+    /// When the agent runner reports 2 merges, 0 updates, 1 delete,
+    /// <see cref="ConsolidationCompletedEvent"/> carries exactly those tallies.
+    /// </summary>
+    [Fact]
+    public async Task Consolidate_MutationCounts_PropagatedToCompletedEvent()
+    {
+        var store = new Mock<IMemoryStore>(MockBehavior.Loose);
+        store.Setup(s => s.GetAllForUserAsync("u1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeRecord("r1"), MakeRecord("r2"), MakeRecord("r3")]);
+
+        ConsolidationCompletedEvent? evt = null;
+        var eventBus = new Mock<IAsyncEventBus>(MockBehavior.Loose);
+        eventBus.Setup(b => b.PublishAsync(It.IsAny<ConsolidationCompletedEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ConsolidationCompletedEvent, CancellationToken>((e, _) => evt = e)
+            .Returns(Task.CompletedTask);
+
+        // Stub returns 2 merges, 0 updates, 1 delete.
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct) =>
+            Task.FromResult((2, 0, 1));
+
+        var service = new ConsolidatorBackgroundService(
+            store.Object,
+            StubAgentRunner,
+            eventBus.Object,
+            DefaultOptions(),
+            NullLogger<ConsolidatorBackgroundService>.Instance);
+
+        await service.ProcessJobAsync(new ConsolidationJob("u1", "session1"), CancellationToken.None);
+
+        Assert.NotNull(evt);
+        Assert.Equal("u1", evt!.UserId);
+        Assert.Equal(2, evt.Merges);
+        Assert.Equal(0, evt.Updates);
+        Assert.Equal(1, evt.Deletes);
+    }
+
+    /// <summary>
+    /// A no-op pass (agent performs no mutations) emits <see cref="ConsolidationCompletedEvent"/>
+    /// with all counts zero.
+    /// </summary>
+    [Fact]
+    public async Task Consolidate_NoMutations_CompletedEventHasZeroCounts()
+    {
+        var store = new Mock<IMemoryStore>(MockBehavior.Loose);
+        store.Setup(s => s.GetAllForUserAsync("u1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeRecord("r1")]);
+
+        ConsolidationCompletedEvent? evt = null;
+        var eventBus = new Mock<IAsyncEventBus>(MockBehavior.Loose);
+        eventBus.Setup(b => b.PublishAsync(It.IsAny<ConsolidationCompletedEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<ConsolidationCompletedEvent, CancellationToken>((e, _) => evt = e)
+            .Returns(Task.CompletedTask);
+
+        Task<(int, int, int)> StubAgentRunner(string userId, IReadOnlyList<Agency.Memory.Common.Records.Record> recs, CancellationToken ct) =>
+            Task.FromResult((0, 0, 0));
+
+        var service = new ConsolidatorBackgroundService(
+            store.Object,
+            StubAgentRunner,
+            eventBus.Object,
+            DefaultOptions(),
+            NullLogger<ConsolidatorBackgroundService>.Instance);
+
+        await service.ProcessJobAsync(new ConsolidationJob("u1", "session1"), CancellationToken.None);
+
+        Assert.NotNull(evt);
+        Assert.Equal(0, evt!.Merges);
+        Assert.Equal(0, evt.Updates);
+        Assert.Equal(0, evt.Deletes);
     }
 }

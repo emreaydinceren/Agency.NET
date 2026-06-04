@@ -59,24 +59,25 @@ internal sealed class SetFocusTool : ITool
     }
 
     /// <inheritdoc/>
-    public ToolDefinition Definition
-    {
-        get
-        {
-            // Build the dynamic part of the description synchronously by querying the store.
-            // In v1 the full corpus is listed; v2 will use top-N by frequency (Spec §O5).
-            string[] knownDomains = this.GetKnownDomainsSync();
-            string domainList = knownDomains.Length > 0
-                ? string.Join(", ", knownDomains)
-                : "(none yet)";
+    public ToolDefinition Definition => new(
+        Name: "SetFocus",
+        Description: "Update the session focus to bias memory retrieval toward a particular task domain. Returns the previous focus values.",
+        InputSchema: _baseInputSchema);
 
-            return new ToolDefinition(
-                Name: "SetFocus",
-                Description: $"Update the session focus to bias memory retrieval toward a particular task domain. " +
-                             $"Known domains for this user: [{domainList}]. " +
-                             "Returns the previous focus values.",
-                InputSchema: _baseInputSchema);
-        }
+    /// <inheritdoc/>
+    public async ValueTask<ToolDefinition> GetDefinitionAsync(CancellationToken ct = default)
+    {
+        string[] knownDomains = await this.GetKnownDomainsAsync(ct).ConfigureAwait(false);
+        string domainList = knownDomains.Length > 0
+            ? string.Join(", ", knownDomains)
+            : "(none yet)";
+
+        return new ToolDefinition(
+            Name: "SetFocus",
+            Description: $"Update the session focus to bias memory retrieval toward a particular task domain. " +
+                         $"Known domains for this user: [{domainList}]. " +
+                         "Returns the previous focus values.",
+            InputSchema: _baseInputSchema);
     }
 
     /// <inheritdoc/>
@@ -117,14 +118,13 @@ internal sealed class SetFocusTool : ITool
         return Task.FromResult(new ToolResult($"Focus updated. Prior focus: {priorJson}"));
     }
 
-    private string[] GetKnownDomainsSync()
+    private async ValueTask<string[]> GetKnownDomainsAsync(CancellationToken ct)
     {
         try
         {
-            // Fire-and-forget using a ValueTask — acceptable for description generation.
-            IReadOnlyList<Record> records = this._store
-                .GetAllForUserAsync(this._userId, CancellationToken.None)
-                .GetAwaiter().GetResult();
+            IReadOnlyList<Record> records = await this._store
+                .GetAllForUserAsync(this._userId, ct)
+                .ConfigureAwait(false);
 
             return records
                 .Select(static r => r.Domain)

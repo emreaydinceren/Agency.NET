@@ -57,9 +57,9 @@ public sealed class SetFocusToolTests
         Assert.Equal("Auth Debugging", ctx.Focus.Title); // unchanged
     }
 
-    /// <summary>The tool description lists known domains for the user.</summary>
+    /// <summary>GetDefinitionAsync lists known domains for the user in the description.</summary>
     [Fact]
-    public async Task ToolDescription_ListsDistinctDomainsForUser()
+    public async Task GetDefinitionAsync_ListsDistinctDomainsForUser()
     {
         var store = new InMemoryMemoryStore();
 
@@ -74,8 +74,26 @@ public sealed class SetFocusToolTests
 
         SetFocusTool tool = CreateTool(out _, store, "u1");
 
-        string description = tool.Definition.Description;
-        Assert.Contains("Preferences", description);
-        Assert.Contains("Debugging", description);
+        Agency.Llm.Common.Tools.ToolDefinition def = await tool.GetDefinitionAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Preferences", def.Description);
+        Assert.Contains("Debugging", def.Description);
+    }
+
+    /// <summary>
+    /// The sync Definition property returns the static fallback — it does NOT query the store.
+    /// </summary>
+    [Fact]
+    public async Task Definition_ReturnsStaticFallback_DoesNotContainDomains()
+    {
+        var store = new InMemoryMemoryStore();
+
+        await store.UpsertAsync(MemoryRecord.Create(
+            "r1", "u1", null, ContentType.Fact, "Preferences", "LangKey", "Python", "V", [], 0.5,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow), TestContext.Current.CancellationToken);
+
+        SetFocusTool tool = CreateTool(out _, store, "u1");
+
+        // The sync property must NOT contain the seeded domain — it is the static fallback.
+        Assert.DoesNotContain("Preferences", tool.Definition.Description);
     }
 }

@@ -149,7 +149,7 @@ public static class MemoryServiceCollectionExtensions
                         async (hookCtx, ct) =>
                         {
                             await convoCallback(hookCtx, ct).ConfigureAwait(false);
-                            MemorySessionTools.RegisterInto(hookCtx.AgentContext, channelRegistry, store);
+                            await MemorySessionTools.RegisterInto(hookCtx.AgentContext, channelRegistry, store, ct).ConfigureAwait(false);
                         };
 
                     // Session-end callback: enqueue a terminal SessionDisposed distillation job.

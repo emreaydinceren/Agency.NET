@@ -17,6 +17,13 @@ public interface ITool
     /// <summary>Gets the tool's definition, including its JSON schema.</summary>
     ToolDefinition Definition { get; }
 
+    /// <summary>
+    /// Resolves the tool's definition, allowing async I/O to build a dynamic description.
+    /// Defaults to the synchronous <see cref="Definition"/>; override only when the definition
+    /// requires asynchronous work (e.g. querying a store).
+    /// </summary>
+    ValueTask<ToolDefinition> GetDefinitionAsync(CancellationToken ct = default) => new(this.Definition);
+
     /// <summary>Invokes the tool with the given JSON input.</summary>
     Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct);
 }
@@ -31,6 +38,16 @@ public interface IToolRegistry
     /// </summary>
     /// <param name="tool">The tool to register.</param>
     void Register(ITool tool);
+
+    /// <summary>
+    /// Registers <paramref name="tool"/>, awaiting its asynchronously-resolved definition once
+    /// and caching it. Use when a tool's definition requires I/O (e.g. a dynamic description).
+    /// </summary>
+    ValueTask RegisterAsync(ITool tool, CancellationToken ct = default)
+    {
+        this.Register(tool);
+        return default;
+    }
 
     /// <summary>Returns the definitions of all registered tools.</summary>
     IReadOnlyList<ToolDefinition> ListDefinitions();

@@ -19,4 +19,11 @@ public sealed class DistillerOptions
 
     /// <summary>Gets or sets the backpressure policy when the per-session queue is full (default: <see cref="BackpressurePolicy.DropOldest"/>).</summary>
     public BackpressurePolicy Backpressure { get; set; } = BackpressurePolicy.DropOldest;
+
+    /// <summary>
+    /// Gets or sets the maximum time to spend draining queued jobs during graceful shutdown
+    /// before force-exiting and dead-lettering any remaining jobs (default: 30 seconds).
+    /// </summary>
+    /// <remarks>Implements the shutdown drain described in Spec §10.1.</remarks>
+    public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(30);
 }

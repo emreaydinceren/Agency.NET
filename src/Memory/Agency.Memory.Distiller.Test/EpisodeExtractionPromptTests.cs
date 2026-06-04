@@ -242,6 +242,48 @@ public sealed class EpisodeExtractionPromptTests
         Assert.Equal(goldenContent, actual);
     }
 
+    // ── Focus threading (P2 / Spec §6.7.1) ────────────────────────────────────
+
+    /// <summary>
+    /// When <see cref="DistillationJob.Focus"/> carries a session focus, the rendered prompt
+    /// includes the focus title, domain, and tags — verifying the P2 plumbing introduced by the
+    /// fix for "Session Focus never reaches the Distiller".
+    /// </summary>
+    [Fact]
+    public void Render_WithFocusOnJob_FocusFieldsAppearInPrompt()
+    {
+        FocusContext focus = new() { Title = "Auth Debugging", Domain = "Security", Tags = ["oauth", "jwt"] };
+        DistillationJob job = new(
+            UserId: "u1",
+            SessionId: "s1",
+            Trigger: DistillationTrigger.GoalCompletion,
+            UpToTurnIndex: 3,
+            Focus: focus);
+
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), focus, [], []);
+
+        Assert.Contains("Auth Debugging", rendered);
+        Assert.Contains("Security", rendered);
+        Assert.Contains("oauth", rendered);
+        Assert.Contains("jwt", rendered);
+    }
+
+    /// <summary>
+    /// When <see cref="DistillationJob.Focus"/> is <see langword="null"/> (no focus set),
+    /// the session-focus line in the rendered prompt shows "(none)" for all three fields —
+    /// regression guard ensuring the empty-focus case still works.
+    /// </summary>
+    [Fact]
+    public void Render_WithNullFocusOnJob_FocusFieldsRenderAsNone()
+    {
+        DistillationJob job = MakeJob();
+
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        // All three focus placeholders should be "(none)".
+        Assert.Contains("(none) / (none) / (none)", rendered);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static MemoryRecord MakeRecord(string title, string value) =>

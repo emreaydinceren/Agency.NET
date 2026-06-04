@@ -316,7 +316,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
         string prompt = EpisodeExtractionPrompt.Render(
             job,
             turns,
-            FocusContext.Empty,
+            job.Focus ?? FocusContext.Empty,
             knownDomains,
             recentFacts);
 

@@ -36,6 +36,7 @@ internal sealed class MarkGoalCompleteTool : ITool
     private readonly string _userId;
     private readonly string _sessionId;
     private readonly Func<int> _turnIndexAccessor;
+    private readonly Func<FocusContext> _focusAccessor;
 
     /// <summary>
     /// Initialises a new <see cref="MarkGoalCompleteTool"/>.
@@ -44,16 +45,19 @@ internal sealed class MarkGoalCompleteTool : ITool
     /// <param name="userId">The user id for this session.</param>
     /// <param name="sessionId">The session id for this session.</param>
     /// <param name="turnIndexAccessor">Returns the current conversation turn count at invocation time.</param>
+    /// <param name="focusAccessor">Returns the current session focus at invocation time, for snapshotting into the job.</param>
     internal MarkGoalCompleteTool(
         ChannelSessionRegistry channelRegistry,
         string userId,
         string sessionId,
-        Func<int> turnIndexAccessor)
+        Func<int> turnIndexAccessor,
+        Func<FocusContext> focusAccessor)
     {
         this._channelRegistry = channelRegistry ?? throw new ArgumentNullException(nameof(channelRegistry));
         this._userId = userId ?? throw new ArgumentNullException(nameof(userId));
         this._sessionId = sessionId ?? throw new ArgumentNullException(nameof(sessionId));
         this._turnIndexAccessor = turnIndexAccessor ?? throw new ArgumentNullException(nameof(turnIndexAccessor));
+        this._focusAccessor = focusAccessor ?? throw new ArgumentNullException(nameof(focusAccessor));
     }
 
     /// <inheritdoc/>
@@ -75,6 +79,7 @@ internal sealed class MarkGoalCompleteTool : ITool
         }
 
         int turnIndex = this._turnIndexAccessor();
+        FocusContext focus = this._focusAccessor();
 
         ChannelWriter<DistillationJob> writer = this._channelRegistry.GetOrCreateWriter(
             this._userId, this._sessionId);
@@ -84,7 +89,8 @@ internal sealed class MarkGoalCompleteTool : ITool
             SessionId: this._sessionId,
             Trigger: DistillationTrigger.GoalCompletion,
             UpToTurnIndex: turnIndex,
-            TriggerSummary: summary);
+            TriggerSummary: summary,
+            Focus: focus);
 
         writer.TryWrite(job);
 

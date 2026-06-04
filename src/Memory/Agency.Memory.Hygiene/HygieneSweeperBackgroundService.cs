@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
@@ -24,6 +26,18 @@ namespace Agency.Memory.Hygiene;
 /// </remarks>
 internal sealed class HygieneSweeperBackgroundService : BackgroundService
 {
+    internal const string ActivitySourceName = "Agency.Memory.Hygiene";
+    internal const string MeterName = "Agency.Memory.Hygiene";
+
+    private static readonly ActivitySource _activitySource = new(ActivitySourceName);
+    private static readonly Meter _meter = new(MeterName);
+
+    private static readonly Counter<long> _ttlCounter =
+        _meter.CreateCounter<long>("memory.swept.ttl", description: "Records deleted by the TTL pass");
+
+    private static readonly Counter<long> _importanceCounter =
+        _meter.CreateCounter<long>("memory.swept.importance", description: "Records deleted by the importance-pruning pass");
+
     private readonly IMemoryStore _store;
     private readonly IOptions<MemoryOptions> _options;
     private readonly TimeProvider _timeProvider;
@@ -107,6 +121,8 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
     /// <returns>The <see cref="SweepResult"/> containing deletion counts for each pass.</returns>
     internal async Task<SweepResult> RunOnceAsync(CancellationToken ct)
     {
+        using Activity? activity = _activitySource.StartActivity("memory.sweep", ActivityKind.Internal);
+
         var opts = this._options.Value;
         var ttlDeleted = 0;
 
@@ -120,6 +136,8 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
             var deleted = await this._store.DeleteWhereTtlExceededAsync(contentType, ttl, now, ct);
             ttlDeleted += deleted;
 
+            _ttlCounter.Add(deleted, new KeyValuePair<string, object?>("content_type", contentType.ToString()));
+
             this._logger.LogInformation(
                 "TTL sweep deleted {Count} {ContentType} records.",
                 deleted,
@@ -132,6 +150,8 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
             opts.StalePruneAge,
             now,
             ct);
+
+        _importanceCounter.Add(importanceDeleted);
 
         this._logger.LogInformation(
             "Importance pruning deleted {Count} records.",

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
@@ -122,7 +124,10 @@ public sealed class HygieneSweeperTests_Schedule
         Assert.True(stopTask.IsCompleted, "StopAsync did not complete after cancellation");
     }
 
-    /// <summary>Verifies that deletion counts are reported via metrics for each sweep pass.</summary>
+    /// <summary>
+    /// Verifies that deletion counts are reported via the <c>memory.swept.ttl</c> and
+    /// <c>memory.swept.importance</c> counters, and that the <see cref="SweepResult"/> totals match.
+    /// </summary>
     [Fact]
     public async Task Schedule_EmitsDeletionCountMetric_PerPass()
     {
@@ -144,12 +149,69 @@ public sealed class HygieneSweeperTests_Schedule
 
         var sweeper = CreateSweeper(store.Object, options);
 
-        // RunOnceAsync exposes a single sweep pass; metrics must be emitted.
+        long ttlMeasured = 0;
+        long importanceMeasured = 0;
+
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == HygieneSweeperBackgroundService.MeterName)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, measurement, _, _) =>
+        {
+            if (instrument.Name == "memory.swept.ttl")
+            {
+                Interlocked.Add(ref ttlMeasured, measurement);
+            }
+            else if (instrument.Name == "memory.swept.importance")
+            {
+                Interlocked.Add(ref importanceMeasured, measurement);
+            }
+        });
+        listener.Start();
+
         var result = await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
 
-        // Total = 7 (TTL) + 3 (importance) = 10
+        // SweepResult totals
         Assert.Equal(10, result.TotalDeleted);
         Assert.Equal(7, result.TtlDeleted);
         Assert.Equal(3, result.ImportanceDeleted);
+
+        // Actual counter emissions
+        Assert.Equal(7, ttlMeasured);
+        Assert.Equal(3, importanceMeasured);
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="HygieneSweeperBackgroundService.RunOnceAsync"/> starts a
+    /// <c>memory.sweep</c> activity span for distributed tracing.
+    /// </summary>
+    [Fact]
+    public async Task Schedule_RunOnceAsync_StartsMemorySweepActivitySpan()
+    {
+        var store = new Mock<IMemoryStore>();
+        store
+            .Setup(s => s.DeleteWhereLowImportanceStaleAsync(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var sweeper = CreateSweeper(store.Object);
+
+        Activity? recorded = null;
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == HygieneSweeperBackgroundService.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = a => recorded = a,
+        };
+        ActivitySource.AddActivityListener(activityListener);
+
+        await sweeper.RunOnceAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(recorded);
+        Assert.Equal("memory.sweep", recorded!.OperationName);
+        Assert.Equal(ActivityKind.Internal, recorded.Kind);
     }
 }

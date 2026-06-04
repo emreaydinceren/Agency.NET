@@ -10,8 +10,8 @@ namespace Agency.Memory.Consolidator.Prompts;
 internal static class ConsolidatorReconciliationPrompt
 {
     /// <summary>The current prompt version. Bump when the template changes (Spec §18.5).</summary>
-    /// <remarks>v2 (TI-8.4): added the structural DELETE rule for clear-cut stale low-importance records.</remarks>
-    internal const int Version = 2;
+    /// <remarks>v3: added same-Domain/Key merge priority rule to prevent LLM skipping obvious near-duplicates.</remarks>
+    internal const int Version = 3;
 
     /// <summary>
     /// Renders the full reconciliation prompt for the given user and record set.
@@ -79,6 +79,10 @@ internal static class ConsolidatorReconciliationPrompt
         sb.AppendLine();
         sb.AppendLine("## Guidelines");
         sb.AppendLine();
+        sb.AppendLine("- **Same Domain + Key = strong merge signal.** When two Records share the exact");
+        sb.AppendLine("  same Domain AND Key they describe the same fact slot. If their Values overlap");
+        sb.AppendLine("  in meaning, MERGE them — do not leave duplicates in the same slot.");
+        sb.AppendLine("  The merged Value should preserve the most specific detail from either record.");
         sb.AppendLine("- **Be conservative.** When in doubt, leave a Record alone. False merges lose");
         sb.AppendLine("  information; false deletes lose information; false updates corrupt");
         sb.AppendLine("  information. The cost of inaction is small.");

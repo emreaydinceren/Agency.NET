@@ -139,12 +139,12 @@ public class ConsolidatorReconciliationPromptTests
     }
 
     /// <summary>
-    /// Prompt version constant is 2 (bumped for the TI-8.4 structural DELETE rule).
+    /// Prompt version constant is 3 (bumped for the same-Domain/Key merge priority rule).
     /// </summary>
     [Fact]
-    public void Version_IsTwo()
+    public void Version_IsThree()
     {
-        Assert.Equal(2, ConsolidatorReconciliationPrompt.Version);
+        Assert.Equal(3, ConsolidatorReconciliationPrompt.Version);
     }
 
     /// <summary>

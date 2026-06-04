@@ -103,6 +103,18 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
 
             return result.Value.ToFloats();
         }
+        catch (System.ClientModel.ClientResultException ex)
+        {
+            stopwatch.Stop();
+            _requestCount.Add(1, new TagList { { "operation", "single" }, { "status", "error" } });
+            _requestDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "single" } });
+
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            string body = ex.GetRawResponse()?.Content?.ToString() ?? "(no response body)";
+            throw new InvalidOperationException(
+                $"Embedding request failed (HTTP {ex.Status}) for model '{this._modelId}' at '{this._client}'. " +
+                $"Response body: {body}", ex);
+        }
         catch (Exception ex)
         {
             stopwatch.Stop();
@@ -110,13 +122,6 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
             _requestDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "single" } });
 
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                { "exception.type", ex.GetType().FullName },
-                { "exception.message", ex.Message },
-                { "exception.stacktrace", ex.ToString() },
-            }));
-
             this._logger.LogError(ex, "Error generating embedding after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }

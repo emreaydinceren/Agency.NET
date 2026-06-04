@@ -91,9 +91,11 @@ internal sealed class DistillerBackgroundService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Poll all active session channels.
+            // Drain all active session channels before waiting for new work.
+            // This loop runs to completion so a burst of jobs across multiple
+            // sessions is fully processed before suspending.
             bool processed = false;
-            foreach (var (sessionId, channel) in this._channelRegistry.GetAll())
+            foreach (var (_, channel) in this._channelRegistry.GetAll())
             {
                 while (channel.Reader.TryRead(out DistillationJob? job))
                 {
@@ -104,8 +106,12 @@ internal sealed class DistillerBackgroundService : BackgroundService
 
             if (!processed)
             {
-                // Yield to avoid busy-waiting when no jobs are pending.
-                await Task.Delay(TimeSpan.FromMilliseconds(50), this._timeProvider, stoppingToken)
+                // All session channels are empty: suspend until a writer signals
+                // that a new job has been enqueued (event-driven wake, no polling).
+                // ChannelSessionRegistry.WaitForWorkAsync is backed by a SemaphoreSlim
+                // released by NotifyingChannelWriter on every successful TryWrite /
+                // WriteAsync (Spec §6.2/§10.2 deviation — see ChannelSessionRegistry).
+                await this._channelRegistry.WaitForWorkAsync(stoppingToken)
                     .ConfigureAwait(false);
             }
         }

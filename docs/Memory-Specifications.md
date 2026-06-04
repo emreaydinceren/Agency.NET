@@ -311,7 +311,7 @@ Convert recent conversation turns into one or more durable `Record`s, asynchrono
 
 #### Responsibilities
 
-- Dequeue `DistillationJob`s from `Channel<DistillationJob>`.
+- Dequeue `DistillationJob`s from per-session bounded channels (see §10.2 for design rationale).
 - Read the relevant conversation turns from the session's `IConversationManager`.
 - Invoke an LLM to extract Episode/Fact Records (Markdown body, Title, Domain, Tags, Scope, Importance).
 - Embed and persist via `IMemoryStore`.
@@ -330,10 +330,19 @@ Convert recent conversation turns into one or more durable `Record`s, asynchrono
 
 ```
 loop:
-  job = await channel.Reader.ReadAsync(stopToken)
+  // Drain all per-session channels before suspending.
+  processed = false
+  for each (sessionId, channel) in channelRegistry.GetAll():
+    while channel.Reader.TryRead(out job):
+      process(job)
+      processed = true
+  if not processed:
+    // Suspend until a NotifyingChannelWriter releases the work semaphore.
+    await channelRegistry.WaitForWorkAsync(stopToken)
+
+process(job):
   using activity = ActivitySource.StartActivity("memory.distill", Internal)
-  using session = sessions.Get(job.SessionId)
-  turns = session.Conversation.MessagesBetween(session.LastDistilledTurnIndex, job.UpToTurnIndex)
+  turns = conversations.Get(job.SessionId).MessagesBetween(watermark, job.UpToTurnIndex)
   if turns is empty: skip + log
   attempt = 0
   while attempt < MaxRetries:
@@ -1088,7 +1097,14 @@ Four background components run outside the agent loop. All are `IHostedService` 
 ### 10.2 Concurrency model
 
 - Channels are MPSC (multi-producer, single-consumer) via `System.Threading.Channels`.
-- The Distiller's `BackgroundService` runs a single `await foreach` loop, dispatching each job synchronously *with respect to the channel* but executing the actual extraction asynchronously on the thread pool.
+- **Distiller channel model (intentional deviation from the original single-channel design):**
+  The Distiller uses **one bounded `Channel<DistillationJob>` per session** (managed by
+  `ChannelSessionRegistry`) rather than a single global channel. This gives per-session
+  `DropOldest` backpressure cheaply (capacity 32 per session, §10.3). The single consumer
+  (`DistillerBackgroundService`) drains all session channels in a sweep, then suspends on a
+  `SemaphoreSlim` that any `NotifyingChannelWriter` releases on every successful enqueue.
+  This event-driven wake eliminates the latency floor and idle CPU wakeups that a polling
+  loop would introduce; a newly-enqueued job is picked up in the next scheduler tick.
 - The Consolidator is **serial per user** but parallel across users — implemented by partitioning the channel by `userId` (each partition gets its own consumer task).
 - The Hygiene Sweeper is single-threaded; bulk SQL handles the heavy lifting.
 

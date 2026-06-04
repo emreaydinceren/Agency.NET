@@ -257,7 +257,7 @@ For `UpsertAsync`:
 For `SearchAsync`:
 
 1. Build SQL with `WHERE user_id = ?` plus optional `content_type IN (...)`, optional `domain IN (...)`.
-2. `ORDER BY embedding <=> :query_vec LIMIT topK * over_fetch_factor`.
+2. `ORDER BY embedding <=> :query_vec LIMIT topK`. The store honours the `topK` it is handed verbatim and applies **no** over-fetch; widening the candidate pool (over-fetch) and re-ranking are the Retrieval Engine's job (§6.4).
 3. Return `SearchHit { Record, Similarity }`. **Ranking beyond similarity is the caller's job.**
 4. After return, asynchronously bump `last_accessed_at` for the hits (fire-and-forget batched UPDATE).
 
@@ -543,7 +543,7 @@ inside OnPreIteration hook:
 
 #### Implementation notes
 
-- **Over-fetch factor** (default 3×): retrieve more candidates than `topK` from the store, then re-rank with the full formula. Pure vector similarity is not the final ranking signal.
+- **Over-fetch factor** (default 3×): the engine owns over-fetch. It inflates `topK` to `RetrievalTopK * OverFetchFactor` before calling `SearchAsync` (which honours that value verbatim, §6.1), then re-ranks the wider pool with the full formula and trims back to `RetrievalTopK`. Pure vector similarity is not the final ranking signal, so the store alone cannot decide the cut — over-fetch only has meaning paired with the engine's re-rank.
 - **Query composition**: free text from the last user turn + `Focus.Title + Focus.Domain + " ".Join(Focus.Tags)`. Focus terms get appended to bias retrieval without forcing exact-match.
 - **System prompt rendering**: see §8.4 of the functional spec. Each Record is rendered with a human-readable recency string ("Updated 3 days ago"). The LLM never sees raw timestamps or scores.
 - **Empty results**: both `Context.Knowledge` and `Context.Memory` become empty lists. `SystemPromptBuilder` may insert a "No relevant memories yet." note when both are empty for explicitness.
@@ -1440,7 +1440,7 @@ Every implementation task is preceded by its test task. Tests are written first 
 |---|---|---|
 | B.1 | `SchemaInitTests` — fresh DB gets correct tables + indexes | `MemorySchemaInitializer` |
 | B.2 | `PostgresMemoryStoreTests.Upsert*` — insert, update, race | `PostgresMemoryStore.UpsertAsync` |
-| B.3 | `PostgresMemoryStoreTests.Search*` — filters, ordering, top-K, over-fetch | `PostgresMemoryStore.SearchAsync` |
+| B.3 | `PostgresMemoryStoreTests.Search*` — filters, ordering, top-K (honoured verbatim; over-fetch is the engine's, §6.4) | `PostgresMemoryStore.SearchAsync` |
 | B.4 | `PostgresMemoryStoreTests.Forget*` — single-record delete, multi-user isolation | `ForgetAsync`, `ForgetMeAsync` |
 | B.5 | `PostgresMemoryStoreTests.LastWritten*` — cache hit, persistence, restart recovery | `LastWrittenAtAsync` + cache |
 | B.6 | `WatermarkRepositoryTests` — monotonic advancement, restart re-hydration | `WatermarkRepository` |

@@ -70,6 +70,8 @@
     <Project Path="Memory\Agency.Memory.Consolidator\Agency.Memory.Consolidator.csproj" />
     <Project Path="Memory\Agency.Memory.Consolidator.Test\Agency.Memory.Consolidator.Test.csproj" />
     <Project Path="Memory\Agency.Memory.Functional.Test\Agency.Memory.Functional.Test.csproj" />
+    <Project Path="Memory\Agency.Memory.Sql.Sqlite\Agency.Memory.Sql.Sqlite.csproj" />
+    <Project Path="Memory\Agency.Memory.Sql.Sqlite.Test\Agency.Memory.Sql.Sqlite.Test.csproj" />
   </Folder>
   <Project Path="Agency.Common/Agency.Common.csproj" Id="127d1616-af99-4c94-817a-9992c8c21a6e" />
   <Project Path="Agency.RagFormatter/Agency.RagFormatter.csproj" Id="edd114b8-6e08-4377-8f25-67cd133df6e5" />

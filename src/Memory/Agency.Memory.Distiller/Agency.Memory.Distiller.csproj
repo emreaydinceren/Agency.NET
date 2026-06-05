@@ -16,7 +16,6 @@
     <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.Common\Agency.Embeddings.Common.csproj" />
     <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />
     <ProjectReference Include="..\Agency.Memory.Retrieval\Agency.Memory.Retrieval.csproj" />
-    <ProjectReference Include="..\Agency.Memory.Sql.Postgres\Agency.Memory.Sql.Postgres.csproj" />
   </ItemGroup>
 
 </Project>

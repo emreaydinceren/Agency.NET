@@ -1,9 +1,9 @@
+using System.Globalization;
 using System.Text.Json;
 using Agency.Memory.Common.Storage;
-using Npgsql;
-using NpgsqlTypes;
+using Microsoft.Data.Sqlite;
 
-namespace Agency.Memory.Sql.Postgres;
+namespace Agency.Memory.Sql.Sqlite;
 
 /// <summary>
 /// Persists failed distillation and consolidation jobs to the <c>dead_letter</c> table
@@ -14,17 +14,17 @@ namespace Agency.Memory.Sql.Postgres;
 /// or encounters a permanent error (Spec §8.6). The contents are meant for manual inspection
 /// and potential replay tooling in future versions.
 /// </remarks>
-public sealed class DeadLetterRepository : IDeadLetterStore
+public sealed class SqliteDeadLetterRepository : IDeadLetterStore
 {
-    private readonly NpgsqlDataSource _dataSource;
+    private readonly string _connectionString;
 
     /// <summary>
-    /// Creates a new <see cref="DeadLetterRepository"/>.
+    /// Creates a new <see cref="SqliteDeadLetterRepository"/>.
     /// </summary>
-    /// <param name="dataSource">The Npgsql data source.</param>
-    public DeadLetterRepository(NpgsqlDataSource dataSource)
+    /// <param name="connectionString">The SQLite connection string.</param>
+    public SqliteDeadLetterRepository(string connectionString)
     {
-        this._dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        this._connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
     /// <summary>
@@ -33,7 +33,7 @@ public sealed class DeadLetterRepository : IDeadLetterStore
     /// <param name="userId">The user whose job failed.</param>
     /// <param name="sessionId">The session, or <see langword="null"/> for consolidation jobs.</param>
     /// <param name="jobKind">A short label identifying the job type (e.g. <c>"distillation"</c>).</param>
-    /// <param name="payload">The job payload; serialised to JSONB.</param>
+    /// <param name="payload">The job payload; serialised to JSON.</param>
     /// <param name="error">The exception that caused the failure.</param>
     /// <param name="ct">Cancellation token.</param>
     public async Task WriteAsync(
@@ -45,19 +45,23 @@ public sealed class DeadLetterRepository : IDeadLetterStore
         CancellationToken ct = default)
     {
         const string sql = @"
-            INSERT INTO dead_letter (user_id, session_id, job_kind, job_payload, error, stack, created_at)
-            VALUES (@user_id, @session_id, @job_kind, @job_payload, @error, @stack, now());";
+            INSERT INTO dead_letter (id, user_id, session_id, job_kind, job_payload, error, stack, created_at)
+            VALUES (@id, @user_id, @session_id, @job_kind, @job_payload, @error, @stack, @created_at);";
 
         string json = JsonSerializer.Serialize(payload);
+        string now = DateTimeOffset.UtcNow.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
 
-        await using var conn = await this._dataSource.OpenConnectionAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
-        cmd.Parameters.AddWithValue("user_id", userId);
-        cmd.Parameters.AddWithValue("session_id", (object?)sessionId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("job_kind", jobKind);
-        cmd.Parameters.Add(new NpgsqlParameter("job_payload", NpgsqlDbType.Jsonb) { Value = json });
-        cmd.Parameters.AddWithValue("error", error.Message);
-        cmd.Parameters.AddWithValue("stack", (object?)error.StackTrace ?? DBNull.Value);
+        await using var conn = new SqliteConnection(this._connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", Guid.NewGuid().ToString());
+        cmd.Parameters.AddWithValue("@user_id", userId);
+        cmd.Parameters.AddWithValue("@session_id", (object?)sessionId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@job_kind", jobKind);
+        cmd.Parameters.AddWithValue("@job_payload", json);
+        cmd.Parameters.AddWithValue("@error", error.Message);
+        cmd.Parameters.AddWithValue("@stack", (object?)error.StackTrace ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@created_at", now);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -73,34 +77,34 @@ public sealed class DeadLetterRepository : IDeadLetterStore
         CancellationToken ct = default)
     {
         const string sql = @"
-            SELECT id::text, user_id, session_id, job_kind, job_payload, error, created_at
+            SELECT id, user_id, session_id, job_kind, job_payload, error, created_at
             FROM dead_letter
             WHERE created_at > @cutoff
             ORDER BY created_at ASC;";
 
-        await using var conn = await this._dataSource.OpenConnectionAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
-        cmd.Parameters.AddWithValue("cutoff", cutoff.UtcDateTime);
+        string cutoffStr = cutoff.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
+
+        await using var conn = new SqliteConnection(this._connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqliteCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@cutoff", cutoffStr);
 
         var results = new List<DeadLetterEntry>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            string payloadJson = reader.GetValue(4) switch
-            {
-                System.Text.Json.JsonDocument doc => doc.RootElement.GetRawText(),
-                System.Text.Json.JsonElement el => el.GetRawText(),
-                _ => reader.GetValue(4)?.ToString() ?? "{}"
-            };
+            string createdAtRaw = reader.GetString(6);
+            var createdAt = DateTimeOffset.Parse(createdAtRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            createdAt = new DateTimeOffset(createdAt.UtcDateTime, TimeSpan.Zero);
 
             results.Add(new DeadLetterEntry(
                 Id: reader.GetString(0),
                 UserId: reader.GetString(1),
                 SessionId: reader.IsDBNull(2) ? null : reader.GetString(2),
                 JobKind: reader.GetString(3),
-                JobPayloadJson: payloadJson,
+                JobPayloadJson: reader.GetString(4),
                 Error: reader.GetString(5),
-                CreatedAt: new DateTimeOffset(reader.GetDateTime(6), TimeSpan.Zero)));
+                CreatedAt: createdAt));
         }
 
         return results;
@@ -108,7 +112,7 @@ public sealed class DeadLetterRepository : IDeadLetterStore
 }
 
 /// <summary>
-/// A dead-letter table row, returned by <see cref="DeadLetterRepository.ListSinceAsync"/>.
+/// A dead-letter table row, returned by <see cref="SqliteDeadLetterRepository.ListSinceAsync"/>.
 /// </summary>
 /// <param name="Id">The surrogate primary key.</param>
 /// <param name="UserId">The affected user.</param>

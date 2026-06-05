@@ -49,6 +49,12 @@ public static class PostgresMemoryServiceCollectionExtensions
         services.AddSingleton<DeadLetterRepository>();
         services.AddSingleton<MemorySchemaInitializer>();
 
+        // Provider-neutral abstractions so the Distiller and host can resolve storage without
+        // referencing this concrete provider (enables config-driven provider selection).
+        services.AddSingleton<IWatermarkStore>(sp => sp.GetRequiredService<WatermarkRepository>());
+        services.AddSingleton<IDeadLetterStore>(sp => sp.GetRequiredService<DeadLetterRepository>());
+        services.AddSingleton<IMemorySchemaInitializer>(sp => sp.GetRequiredService<MemorySchemaInitializer>());
+
         services.AddSingleton<IMemoryStore>(sp =>
             new PostgresMemoryStore(
                 sp.GetRequiredService<NpgsqlDataSource>(),

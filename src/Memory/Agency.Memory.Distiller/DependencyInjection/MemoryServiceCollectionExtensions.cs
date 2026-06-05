@@ -7,7 +7,6 @@ using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Storage;
 using Agency.Memory.Distiller.Services;
 using Agency.Memory.Retrieval;
-using Agency.Memory.Sql.Postgres;
 using Agency.Embeddings.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -93,8 +92,8 @@ public static class MemoryServiceCollectionExtensions
             sp.GetRequiredService<ILlmClientAdapter>(),
             sp.GetRequiredService<IEmbeddingGenerator>(),
             sp.GetRequiredService<IMemoryStore>(),
-            new WatermarkStoreAdapter(sp.GetRequiredService<WatermarkRepository>()),
-            new DeadLetterStoreAdapter(sp.GetRequiredService<DeadLetterRepository>()),
+            sp.GetRequiredService<IWatermarkStore>(),
+            sp.GetRequiredService<IDeadLetterStore>(),
             sp.GetRequiredService<IAsyncEventBus>(),
             sp.GetRequiredService<IOptions<DistillerOptions>>(),
             TimeProvider.System,

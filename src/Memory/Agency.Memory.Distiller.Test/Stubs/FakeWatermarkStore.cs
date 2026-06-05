@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using Agency.Memory.Distiller.Services;
+using Agency.Memory.Common.Storage;
 
 namespace Agency.Memory.Distiller.Test.Stubs;
 

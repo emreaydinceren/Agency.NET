@@ -481,5 +481,5 @@ internal sealed class DistillerBackgroundService : BackgroundService
                     or System.Net.HttpStatusCode.ServiceUnavailable
                 || httpEx.StatusCode is null)
         || ex is TaskCanceledException { InnerException: TimeoutException }
-        || ex is Npgsql.NpgsqlException { IsTransient: true };
+        || ex is System.Data.Common.DbException { IsTransient: true };
 }

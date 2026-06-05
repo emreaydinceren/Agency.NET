@@ -52,6 +52,7 @@ Documents
    Agency.Memory.Common               (Record, ContentType, IMemoryStore,
                                        RankingFormula, MemoryOptions)
    Agency.Memory.Sql.Postgres         (PostgreSQL + pgvector memory store)
+   Agency.Memory.Sql.Sqlite           (SQLite + cosine UDF memory store)
    Agency.Memory.Retrieval            (gate + over-fetch + composite re-rank
                                        → ctx.Knowledge / ctx.Memory)
    Agency.Memory.Distiller            (async distillation pipeline)
@@ -118,6 +119,7 @@ Documents
 
 - [[Projects/Agency.Memory.Common]] — Shared types for the memory system: `Record` (fact or episodic memory with embedding, importance, tags, timestamps), `ContentType` (Fact vs. Memory), `IMemoryStore`, search queries/hits, job payloads, and event types. Zero dependencies; all subsystems (Distiller, Retrieval, Consolidator, Hygiene) depend only on this. **TLDR:** The shared contract for all memory subsystems—one stable surface, no circular deps.
 - [[Projects/Agency.Memory.Sql.Postgres]] — PostgreSQL memory store with pgvector for semantic search. Handles upsert keys, schema init, in-process caching, dead-lettering, and watermark advancement. **TLDR:** Production memory store—semantic search on Postgres with all the scaffolding.
+- [[Projects/Agency.Memory.Sql.Sqlite]] — SQLite sibling of the memory store: same `IMemoryStore` contract, embeddings as JSON-array TEXT, in-process cosine-distance UDF, and a schema-init dimension guard. Zero external server. **TLDR:** Embedded memory store for local agents and infra-free tests.
 - [[Projects/Agency.Memory.Retrieval]] — Read-path orchestration: gate check → query embedding → over-fetch → composite re-rank (similarity + recency + importance + session-match) → partition by `ContentType` → inject into agent `Context`. **TLDR:** Smart memory retrieval—combines semantic similarity, freshness, importance, and user session to serve the right facts and memories.
 - [[Projects/Agency.Memory.Distiller]] — Async background job that extracts high-level insights (episodes, lessons, summaries) from conversation history via an LLM and stores them as new memory records. Per-session bounded channels, exponential backoff on failure, dead-letter queue for persistent failures. **TLDR:** Automatically learn from conversations—turn raw chat history into distilled insights.
 - [[Projects/Agency.Memory.Consolidator]] — Sub-agent that reconciles duplicate or stale memory records using LLM-assisted merge/delete decisions. Triggered by mutations, runs per-user with an internal agent using four tools. **TLDR:** Keep memory clean—automatically merge duplicates and remove stale records.

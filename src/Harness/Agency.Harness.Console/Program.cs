@@ -10,7 +10,9 @@ using Agency.Memory.Consolidator.DependencyInjection;
 using Agency.Memory.Distiller;
 using Agency.Memory.Distiller.DependencyInjection;
 using Agency.Memory.Hygiene.DependencyInjection;
+using Agency.Memory.Common.Storage;
 using Agency.Memory.Sql.Postgres;
+using Agency.Memory.Sql.Sqlite;
 using Agency.Llm.OpenAI;
 using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
@@ -58,9 +60,8 @@ internal class Program
 
         if (memoryEnabled)
         {
-            string connectionString = builder.Configuration.GetConnectionString("PostgreSql")
-                ?? throw new InvalidOperationException(
-                    "Memory is enabled but ConnectionStrings:PostgreSql is not configured.");
+            // Provider selection: "postgres" (default) or "sqlite".
+            string provider = builder.Configuration.GetValue<string>("Memory:Provider") ?? "postgres";
 
             embeddingDimensions = builder.Configuration.GetValue<int>("Embedding:Dimensions", 1024);
 
@@ -70,8 +71,25 @@ internal class Program
                 builder.Configuration.GetSection(EmbeddingOptions.SectionName).Bind(opts);
             });
 
-            // 5b. Postgres store + repositories + schema initializer
-            builder.Services.AddAgencyMemoryPostgres(connectionString);
+            // 5b. Memory store + repositories + schema initializer — provider chosen via Memory:Provider.
+            switch (provider.ToLowerInvariant())
+            {
+                case "postgres":
+                    string postgresConnectionString = builder.Configuration.GetConnectionString("PostgreSql")
+                        ?? throw new InvalidOperationException(
+                            "Memory provider is 'postgres' but ConnectionStrings:PostgreSql is not configured.");
+                    builder.Services.AddAgencyMemoryPostgres(postgresConnectionString);
+                    break;
+                case "sqlite":
+                    string sqliteConnectionString = builder.Configuration.GetConnectionString("Sqlite")
+                        ?? throw new InvalidOperationException(
+                            "Memory provider is 'sqlite' but ConnectionStrings:Sqlite is not configured.");
+                    builder.Services.AddAgencyMemorySqlite(sqliteConnectionString);
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unsupported Memory:Provider '{provider}'. Expected 'postgres' or 'sqlite'.");
+            }
 
             // 5c. IChatClient for the consolidator — reuse the default agent LLM client.
             //     The distiller gets its own dedicated IChatClient (registered below) so we
@@ -157,16 +175,17 @@ internal class Program
             {
                 using IServiceScope initScope = host.Services.CreateScope();
                 var initializer = initScope.ServiceProvider
-                    .GetRequiredService<Agency.Memory.Sql.Postgres.MemorySchemaInitializer>();
+                    .GetRequiredService<IMemorySchemaInitializer>();
                 await initializer.InitializeAsync(embeddingDimensions, CancellationToken.None);
             }
             catch (Exception ex)
             {
                 System.Console.Error.WriteLine(
-                    $"[Agency] Memory is enabled but Postgres/embeddings are unreachable: {ex.Message}");
+                    $"[Agency] Memory is enabled but the store/embeddings are unreachable: {ex.Message}");
                 System.Console.Error.WriteLine(
-                    "[Agency] Start the Postgres docker container and ensure LM Studio is reachable, " +
-                    "or set Memory:Enabled=false in appsettings.json to run without memory.");
+                    "[Agency] Ensure the configured Memory:Provider backend (Postgres requires its docker " +
+                    "container) and the embeddings endpoint are reachable, or set Memory:Enabled=false in " +
+                    "appsettings.json to run without memory.");
                 throw;
             }
         }

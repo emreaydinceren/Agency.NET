@@ -1,3 +1,4 @@
+using Agency.Memory.Common.Storage;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres;
@@ -13,7 +14,7 @@ namespace Agency.Memory.Sql.Postgres;
 /// <c>records</c> table throws <see cref="InvalidOperationException"/> as a fail-fast guard
 /// (per Spec §12.3 "Embedding dimension change").
 /// </remarks>
-public sealed class MemorySchemaInitializer
+public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 {
     private readonly NpgsqlDataSource _dataSource;
 

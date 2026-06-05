@@ -132,7 +132,7 @@ public sealed record DeadLetterEntry(
 
 ## Registration
 
-Call `AddAgencyMemoryPostgres` after `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent). The extension method registers the `NpgsqlDataSource` (with pgvector enabled), `WatermarkRepository`, `DeadLetterRepository`, `MemorySchemaInitializer`, and `IMemoryStore → PostgresMemoryStore`, all as singletons.
+Call `AddAgencyMemoryPostgres` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers the `NpgsqlDataSource` (with pgvector enabled), `WatermarkRepository`, `DeadLetterRepository`, `MemorySchemaInitializer`, and `IMemoryStore → PostgresMemoryStore`, all as singletons.
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Postgres/PostgresMemoryServiceCollectionExtensions.cs
@@ -149,7 +149,7 @@ var initializer = app.Services.GetRequiredService<MemorySchemaInitializer>();
 await initializer.InitializeAsync(embeddingDim: 1536);
 ```
 
-`IEmbeddingGenerator` and `IOptions<MemoryOptions>` must already be registered before `AddAgencyMemoryPostgres` is called; the extension method resolves them from the container at singleton construction time.
+`IEmbeddingGenerator` and `IOptions<MemoryOptions>` must be registered before the store is first resolved, but the relative order of the `AddX` registration calls is immaterial. `AddAgencyMemoryPostgres` registers `IMemoryStore` via a lazy factory lambda; the factory runs on first resolution of `IMemoryStore` (after `host.Build()`), not at the time the extension method is called. The code sample above is illustrative — in `Agency.Harness.Console/Program.cs`, `AddAgencyMemoryPostgres` is actually called *before* `AddAgencyMemory`.
 
 ## How It Works
 

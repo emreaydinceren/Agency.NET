@@ -31,21 +31,10 @@ internal sealed class AgentFactory : IAgentFactory
             ? modelName
             : this.options.DefaultModel ?? throw new InvalidOperationException("DefaultModel must be specified in the configuration.");
 
-        // Compose baseline-first per spec §6.5.
-        // BaselineHooks is null when memory is disabled; UserHooks is null unless
-        // the host configures it via AgentOptions. All combinations handled:
-        //   baseline only  → use baseline
-        //   user only      → use user
-        //   both           → baseline.Compose(user) so baseline always runs first
-        //   neither        → null (no hooks)
-        AgentHooks? hooks =
-            (this.options.BaselineHooks, this.options.UserHooks) switch
-            {
-                (AgentHooks baseline, AgentHooks user) => baseline.Compose(user),
-                (AgentHooks baseline, null) => baseline,
-                (null, AgentHooks user) => user,
-                _ => null,
-            };
+        AgentHooks? hooks = AgentHooksExtensions.Fold(
+            this.options.BaselineHooks,
+            this.options.ConfiguredHooks,
+            this.options.UserHooks);
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
         return new Agent(chatClient, modelName, clientType, null, hooks, logger: this.logger);

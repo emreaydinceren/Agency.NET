@@ -173,6 +173,9 @@ Hook context records passed to each delegate:
 | `AssistantTurnHookContext` | `ChatMessage Message, Context AgentContext` |
 | `StopHookContext` | `AgentResultEvent Result, Context AgentContext` |
 | `SessionEndedHookContext` | `string SessionId, Context AgentContext` |
+| `UserPromptSubmitHookContext` *(internal)* | `string Prompt, Context AgentContext` |
+| `PreIterationHookContext` *(internal)* | `Context AgentContext` |
+| `PostToolBatchHookContext` *(internal)* | `IReadOnlyList<ToolInvokedEvent> Events, Context AgentContext` |
 
 ```csharp
 // File: src/Harness/Agency.Harness/Hooks/AgentHooks.cs
@@ -236,6 +239,12 @@ public static class AgentHooksExtensions
     /// callers who need to observe the un-enriched Context before baseline hooks have run.
     /// </summary>
     public static AgentHooks ComposeBefore(this AgentHooks self, AgentHooks first);
+
+    /// <summary>
+    /// Folds three hook sources — baseline, configured, user — into a single composed AgentHooks.
+    /// Null sources are skipped. Deny-wins across all three sources is guaranteed by Compose.
+    /// </summary>
+    internal static AgentHooks? Fold(AgentHooks? baseline, AgentHooks? configured, AgentHooks? user);
 }
 ```
 
@@ -344,6 +353,12 @@ public sealed class AgentOptions
     /// Baseline hooks always run before UserHooks per spec §6.5.
     /// </summary>
     public AgentHooks?        BaselineHooks      { get; set; }
+
+    /// <summary>
+    /// Operator config hooks, composed between Baseline and User per §14.5.
+    /// Set by AddAgencyConfiguredHooks via PostConfigure; null when config-driven hooks are disabled.
+    /// </summary>
+    public AgentHooks?        ConfiguredHooks    { get; set; }
 
     /// <summary>
     /// User-supplied hooks composed after the baseline hooks.
@@ -468,6 +483,292 @@ public sealed class McpClientPool : IAsyncDisposable
 }
 ```
 
+### Configuration-Driven Hooks
+
+Types in `Agency.Harness.Hooks.Configuration` support operator-defined hooks loaded from `appsettings.json` (or any `IConfiguration` source). They are wired into the three-source fold as the middle `ConfiguredHooks` layer.
+
+#### Enums
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookEventName.cs
+namespace Agency.Harness.Hooks.Configuration;
+
+// internal — used as dictionary key in HooksOptions and as the event router inside HookRegistry
+internal enum HookEventName
+{
+    SessionStart,
+    UserPromptSubmit,
+    PreIteration,
+    PreToolUse,
+    PostToolUse,
+    PostToolBatch,
+    AssistantTurn,
+    Stop,
+    SessionEnd
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookHandlerKind.cs
+namespace Agency.Harness.Hooks.Configuration;
+
+// internal — selects the concrete IHookHandler implementation in HookHandlerFactory
+internal enum HookHandlerKind
+{
+    Command,   // spawn an external process; payload delivered via stdin
+    Http,      // POST to a URL; payload delivered as JSON body
+    McpTool,   // reserved — V2
+    Prompt,    // reserved — V2
+    Agent      // reserved — V2
+}
+```
+
+#### Configuration Model
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookHandlerConfig.cs
+namespace Agency.Harness.Hooks.Configuration;
+
+internal sealed class HookHandlerConfig
+{
+    public HookHandlerKind           Type    { get; set; } = HookHandlerKind.Command;
+    public string?                   Command { get; set; }           // Command only
+    public string[]                  Args    { get; set; } = [];     // Command only
+    public int?                      Timeout { get; set; }           // seconds; default 30
+    public string?                   Url     { get; set; }           // Http only
+    public Dictionary<string, string>? Headers { get; set; }        // Http only
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookMatcherGroupConfig.cs
+namespace Agency.Harness.Hooks.Configuration;
+
+internal sealed class HookMatcherGroupConfig
+{
+    /// <summary>
+    /// Tool-name filter applied before dispatching. Null / "*" matches all tools.
+    /// Pipe-separated names (e.g. "bash|execute_powershell") match an exact set.
+    /// Any other string is compiled as a Regex (250 ms timeout).
+    /// </summary>
+    public string?             Matcher { get; set; }
+    public HookHandlerConfig[] Hooks   { get; set; } = [];
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HooksOptions.cs
+namespace Agency.Harness.Hooks.Configuration;
+
+/// <summary>
+/// Root configuration object. Extends Dictionary so IConfiguration.Bind can populate
+/// it directly from a JSON object whose keys are HookEventName values.
+/// </summary>
+internal sealed class HooksOptions : Dictionary<HookEventName, HookMatcherGroupConfig[]>
+{
+    public Dictionary<HookEventName, HookMatcherGroupConfig[]> Hooks => this;
+}
+```
+
+#### Handler Interfaces and Output
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/Handlers/IHookHandler.cs
+using Agency.Harness.Hooks.Configuration;
+
+namespace Agency.Harness.Hooks.Configuration.Handlers;
+
+internal interface IHookHandler
+{
+    Task<HookHandlerOutput> InvokeAsync(HookPayload payload, CancellationToken ct);
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/Handlers/IHookHandlerFactory.cs
+using Agency.Harness.Hooks.Configuration;
+
+namespace Agency.Harness.Hooks.Configuration.Handlers;
+
+internal interface IHookHandlerFactory
+{
+    IHookHandler Create(HookHandlerConfig config);
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/Handlers/HookHandlerOutput.cs
+namespace Agency.Harness.Hooks.Configuration.Handlers;
+
+internal sealed record HookHandlerOutput(
+    int             ExitCode,
+    JsonElement?    Json,       // leading JSON object parsed from stdout/body, if any
+    string?         RawStdout,
+    string?         RawStderr);
+
+internal static class HookExitCodes
+{
+    internal const int Ok               = 0;
+    internal const int NonBlockingError = 1;
+    internal const int BlockingDeny     = 2;  // causes PreToolUse → Deny
+    internal const int Timeout          = -1;
+}
+```
+
+#### `HookRegistry` (internal)
+
+`HookRegistry` is built once at DI startup. It compiles all matchers in its constructor so that per-invocation work is limited to `IsMatch` calls against the pre-built `HookMatcher` set.
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookRegistry.cs
+using Agency.Harness.Hooks;
+using Agency.Harness.Hooks.Configuration.Handlers;
+using Microsoft.Extensions.Logging;
+
+namespace Agency.Harness.Hooks.Configuration;
+
+internal sealed class HookRegistry
+{
+    internal static readonly HookRegistry Empty;  // no-op registry; used when config hooks are absent
+
+    internal HookRegistry(HooksOptions options, IHookHandlerFactory factory, ILogger? logger);
+
+    /// <summary>
+    /// Converts the compiled registry into an AgentHooks instance suitable for insertion as
+    /// ConfiguredHooks in AgentOptions. Only hook slots that have at least one configured group
+    /// are populated — the rest remain null so Compose short-circuits cleanly.
+    /// </summary>
+    internal AgentHooks ToAgentHooks();
+
+    /// <summary>
+    /// Aggregates multiple HookHandlerOutput values into a single PreToolUseDecision.
+    /// Priority: BlockingDeny (exit 2 or JSON deny) > JSON Rewrite (tool_input field) > Allow.
+    /// Non-zero / non-2 exit codes and handler errors are treated as non-blocking (fail-open).
+    /// </summary>
+    internal static PreToolUseDecision AggregateDecision(
+        IEnumerable<HookHandlerOutput> outputs,
+        JsonElement _);
+}
+```
+
+#### `HookMatcher` (internal)
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookMatcher.cs
+namespace Agency.Harness.Hooks.Configuration;
+
+/// <summary>
+/// Compiled matcher for a HookMatcherGroupConfig.Matcher string.
+/// Supports three modes: MatchAll ("*" or null), ExactSet ("bash|powershell"), Regex (anything else).
+/// Regex patterns are compiled with a 250 ms match timeout.
+/// </summary>
+internal sealed class HookMatcher
+{
+    internal static HookMatcher Create(string? matcher);
+    internal bool IsMatch(string candidate);
+}
+```
+
+#### `HookPayload` (internal)
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookPayload.cs
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Agency.Harness.Hooks.Configuration;
+
+/// <summary>
+/// JSON payload sent to every hook handler (via stdin for Command, via POST body for Http).
+/// Serialized with snake_case_lower naming; null fields are omitted.
+/// </summary>
+internal sealed record HookPayload
+{
+    public string?              SessionId      { get; init; }
+    public string?              HookEventName  { get; init; }
+    public string?              Cwd            { get; init; }
+    public int                  IterationCount { get; init; }
+    public double               TotalCostUsd   { get; init; }
+    public string?              ToolName       { get; init; }
+    public JsonElement?         ToolInput      { get; init; }
+    public ToolResponsePayload? ToolResponse   { get; init; }
+    public string?              Prompt         { get; init; }
+    public string?              Message        { get; init; }
+
+    public static readonly JsonSerializerOptions SerializerOptions; // snake_case_lower, WhenWritingNull
+}
+
+internal sealed record ToolResponsePayload(string Content, bool IsError);
+```
+
+## Registration
+
+`AddAgencyConfiguredHooks` registers the configuration-driven hook pipeline and wires it into `AgentOptions.ConfiguredHooks` via `IPostConfigureOptions<AgentOptions>`.
+
+```csharp
+// File: src/Harness/Agency.Harness/Hooks/Configuration/HookServiceCollectionExtensions.cs
+using Agency.Harness.Hooks.Configuration;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Agency.Harness.Hooks.Configuration;
+
+public static class HookServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers the configuration-driven hook pipeline. Reads hook definitions from
+    /// <paramref name="config"/> under <paramref name="sectionName"/> (default: "Hooks"),
+    /// builds a singleton HookRegistry, and sets AgentOptions.ConfiguredHooks via PostConfigure.
+    /// </summary>
+    public static IServiceCollection AddAgencyConfiguredHooks(
+        this IServiceCollection services,
+        IConfiguration config,
+        string sectionName = "Hooks");
+}
+```
+
+**Typical registration in `Program.cs`:**
+
+```csharp
+using Agency.Harness.Hooks.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+builder.Services.AddAgencyConfiguredHooks(builder.Configuration);
+```
+
+**Matching `appsettings.json` shape:**
+
+```json
+{
+  "Hooks": {
+    "PreToolUse": [
+      {
+        "Matcher": "bash|execute_powershell",
+        "Hooks": [
+          {
+            "Type": "Command",
+            "Command": "python",
+            "Args": ["hooks/audit.py"],
+            "Timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "Hooks": [
+          {
+            "Type": "Http",
+            "Url": "http://localhost:9090/hook",
+            "Timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 ## How It Works
 
 The loop implemented internally in `Agent` follows this pattern on every iteration:
@@ -566,12 +867,13 @@ var customHooks = new AgentHooks
 
 ### Hook Composition and Baseline Hooks
 
-`AgentOptions` supports two hook slots that compose in a fixed order:
+`AgentOptions` supports three hook slots that compose in a fixed order via `AgentHooksExtensions.Fold`:
 
 - `BaselineHooks` — populated by the memory pipeline (e.g. retrieval, timer restart) via `PostConfigure`. Always runs first.
-- `UserHooks` — caller-supplied hooks. Always runs after `BaselineHooks`.
+- `ConfiguredHooks` — populated by `AddAgencyConfiguredHooks` via `PostConfigure`. Runs after baseline, before user hooks. Represents operator policy expressed in `appsettings.json`.
+- `UserHooks` — caller-supplied hooks. Always runs last.
 
-The final effective hooks are resolved as `BaselineHooks.Compose(UserHooks)`. Advanced callers who need to observe the un-enriched `Context` before baseline hooks run can use `ComposeBefore` directly:
+The final effective hooks are resolved as `Fold(BaselineHooks, ConfiguredHooks, UserHooks)`, which is equivalent to `BaselineHooks.Compose(ConfiguredHooks).Compose(UserHooks)`. Advanced callers who need to observe the un-enriched `Context` before baseline hooks run can use `ComposeBefore` directly:
 
 ```csharp
 using Agency.Harness.Hooks;
@@ -680,6 +982,9 @@ var toolCtx  = new ToolContext { Registry = registry };
 - **`ChatSession` is `IAsyncDisposable`** — disposing fires `Agent.RaiseSessionEndAsync` exactly once, which invokes the `OnSessionEnd` hook. This is the correct signal for end-of-session side-effects such as memory distillation. Create one instance per user or logical connection; at most one `SendAsync` call should be in flight at a time. Call `Reset()` to clear conversation history and start a fresh session without creating a new instance.
 - **Hooks are interceptors, events are observers** — `IAsyncEnumerable<AgentEvent>` lets callers observe what happened after the fact; `AgentHooks` lets callers block, rewrite, or react *before* the action completes. `OnPreToolUse` is the only hook that can alter agent behaviour (via `Deny`/`Rewrite`); all others are fire-and-forget.
 - **`Compose()` uses most-restrictive-wins for `OnPreToolUse`** — when composing two hooks that both have `OnPreToolUse`, they run concurrently via `Task.WhenAll`; the result priority is Deny > Rewrite > Allow. All other delegate slots run sequentially (first then second) so ordering is deterministic.
-- **Baseline-first hook composition** — `AgentOptions` separates `BaselineHooks` (memory pipeline, set by DI infrastructure) from `UserHooks` (caller-supplied). The effective hooks are always `BaselineHooks.Compose(UserHooks)`, guaranteeing retrieval runs before user observation hooks regardless of registration order (Spec §6.5).
+- **Three-source hook fold: Baseline ▸ Configured ▸ User** — `AgentOptions` now has three hook slots. `BaselineHooks` (memory pipeline) runs first, `ConfiguredHooks` (operator `appsettings.json` policy, set by `AddAgencyConfiguredHooks`) runs second, and `UserHooks` (caller-supplied) runs last. `AgentHooksExtensions.Fold` composes all three in one pass, skipping null slots. This ordering guarantees that retrieval runs before policy enforcement, and policy runs before application-layer observation (Spec §14.5).
 - **`SessionContext` provides stable session identity** — the agent loop assigns a `Guid`-based `Id` to `Context.Session` on the very first `RunAsync` call and reuses it for all subsequent turns. Memory records and distillation triggers use this id to scope data to the correct session.
 - **`UserSpecificContext.Id` is the memory partition key** — `AgentOptions.UserId` flows into `UserSpecificContext.Id` via `ChatSession`, ensuring retrieved and distilled memory records are scoped to the correct user even when multiple sessions share an infrastructure.
+- **`HooksOptions` extends `Dictionary<HookEventName, HookMatcherGroupConfig[]>`** — `IConfiguration.Bind` cannot populate a plain class property of dictionary type when the source JSON is a flat object with dynamic keys. By making `HooksOptions` itself a `Dictionary` subtype, the binder maps each top-level JSON key directly to a dictionary entry without needing an intermediate property wrapper. The `Hooks` property is a self-referential convenience accessor that returns `this`.
+- **Fail-open principle for config-driven hooks** — a hook handler that exits with a non-zero code other than `2` (e.g. `1` for a non-blocking error, or `-1` for timeout) is treated as `Allow`. Only exit code `2` or a JSON body containing `{ "hookSpecificOutput": { "permissionDecision": "deny" } }` causes a blocking `Deny`. This means transient script failures and timeouts never silently block tool execution; operators must be explicit to deny.
+- **Compile-once `HookRegistry` pattern** — `HookRegistry` resolves all `HookMatcher` instances and creates all `IHookHandler` instances in its constructor. At invocation time only `IsMatch(toolName)` calls are made against the pre-compiled matcher set. This avoids repeated regex compilation on hot paths and makes the registry safe to register as a DI singleton. `ToAgentHooks()` converts the registry to a standard `AgentHooks` instance once at startup; the resulting delegates close over the pre-compiled state.

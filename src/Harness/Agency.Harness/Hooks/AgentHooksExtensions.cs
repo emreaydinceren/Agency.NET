@@ -32,6 +32,18 @@ public static class AgentHooksExtensions
     /// <returns>Composed hooks with <paramref name="first"/> executing before <paramref name="self"/>.</returns>
     public static AgentHooks ComposeBefore(this AgentHooks self, AgentHooks first) => first.Compose(self);
 
+    /// <summary>
+    /// Folds three hook sources — baseline, configured, user — into a single composed
+    /// <see cref="AgentHooks"/> instance. Null sources are skipped. Deny-wins across all
+    /// three sources is guaranteed by <see cref="Compose"/>/<c>CombinePreToolUse</c>.
+    /// </summary>
+    internal static AgentHooks? Fold(AgentHooks? baseline, AgentHooks? configured, AgentHooks? user)
+    {
+        return new[] { baseline, configured, user }
+            .Where(h => h is not null)
+            .Aggregate((AgentHooks?)null, (acc, h) => acc is null ? h : acc.Compose(h!));
+    }
+
     private static Func<T, CancellationToken, Task>? Combine<T>(
         Func<T, CancellationToken, Task>? a,
         Func<T, CancellationToken, Task>? b) =>

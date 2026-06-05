@@ -53,6 +53,7 @@ internal interface IAgentFactory
 using Agency.Harness;
 using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
+using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -68,6 +69,7 @@ builder.Services.AddTelemetry(builder.Configuration);          // traces, metric
 builder.Services.AddSingleton<IChatOutput, ConsoleOutput>();
 builder.Services.AddTransient<Models>();
 builder.Services.AddOptions<AgentOptions>().BindConfiguration("Agent").ValidateOnStart();
+builder.Services.AddAgencyConfiguredHooks(builder.Configuration);
 builder.Services.AddScoped<IAgentFactory, AgentFactory>();
 
 // Default Agent resolved from config
@@ -150,7 +152,8 @@ await Log.CloseAndFlushAsync();
         "MinimumLevel": "Information"
       }
     }
-  }
+  },
+  "Hooks": {}
 }
 ```
 
@@ -268,3 +271,4 @@ All files are written under the directory specified by `FileExport.OutputDirecto
 - **`sessionCts` is never recreated** — once Ctrl+C fires, `sessionCts.Cancel()` is called and `sessionCts.IsCancellationRequested` remains `true`. The REPL detects this after the interrupted turn and exits. The session is not designed to be restartable after cancellation.
 - **Per-session log files, not daily-rolling** — traces and metrics use `DailyRollingFileWriter` (rolls at UTC midnight), but Serilog logs use a single per-session file stamped with `yyyy-MM-dd-HHmmss` and `RollingInterval.Infinite`. This means each process launch produces a distinct log file, which makes correlating a log file to a specific run trivial without needing to filter by time within a shared daily file.
 - **Independent per-signal enable flags** — setting `Enabled: false` for traces or metrics skips building the corresponding OTel provider entirely (no `TracerProvider`/`MeterProvider` is registered). Setting `Enabled: false` for logs registers `NullLoggerProvider` rather than Serilog, so the `ILogger<T>` injection chain remains valid throughout the application.
+- **Three-source hook fold** — `AgentFactory.CreateAgent` assembles hooks via `AgentHooksExtensions.Fold(BaselineHooks, ConfiguredHooks, UserHooks)`, producing a single merged `AgentHooks?`. The order is intentional: `BaselineHooks` (memory pipeline, registered by `AddAgencyMemory`) forms the foundation; `ConfiguredHooks` (JSON-driven declarative hooks, registered by `AddAgencyConfiguredHooks`) layer on top; `UserHooks` (code-supplied hooks set directly on `AgentOptions`) override both. This lets the memory subsystem always run first, JSON config extend it without code changes, and caller code have the final word.

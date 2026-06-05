@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Agency.Harness;
 using Agency.Harness.Contexts;
 
 namespace Agency.Harness.Hooks;
@@ -27,3 +28,12 @@ public sealed record StopHookContext(AgentResultEvent Result, Context AgentConte
 
 /// <summary>Passed to <c>OnSessionEnd</c> hooks when a ChatSession is disposed.</summary>
 public sealed record SessionEndedHookContext(string SessionId, Context AgentContext);
+
+/// <summary>Passed to <c>OnUserPromptSubmit</c> hooks.</summary>
+internal sealed record UserPromptSubmitHookContext(string Prompt, Context AgentContext);
+
+/// <summary>Passed to <c>OnPreIteration</c> hooks.</summary>
+internal sealed record PreIterationHookContext(Context AgentContext);
+
+/// <summary>Passed to <c>OnPostToolBatch</c> hooks.</summary>
+internal sealed record PostToolBatchHookContext(IReadOnlyList<ToolInvokedEvent> Events, Context AgentContext);

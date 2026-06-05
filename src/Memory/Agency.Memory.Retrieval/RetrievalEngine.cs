@@ -80,7 +80,8 @@ internal sealed class RetrievalEngine
             .Take(opts.RetrievalTopK)
             .ToList();
 
-        // Partition by ContentType.
+        // Partition by ContentType — explicit arms, no default, so a future enum value
+        // forces a compile-time decision (CS8509) rather than silently routing to Memory.
         List<MemoryRecord> facts = [];
         List<MemoryRecord> memories = [];
 
@@ -88,14 +89,12 @@ internal sealed class RetrievalEngine
         {
             Common.Records.Record r = hit.Record;
             var projected = new MemoryRecord(r.Title, r.Value, r.UpdatedAt);
-            if (r.ContentType == ContentType.Fact)
+            (r.ContentType switch
             {
-                facts.Add(projected);
-            }
-            else
-            {
-                memories.Add(projected);
-            }
+                ContentType.Fact => facts,
+                ContentType.Memory => memories,
+                _ => throw new InvalidOperationException($"Unhandled ContentType {r.ContentType}."),
+            }).Add(projected);
         }
 
         ctx.Knowledge = ctx.Knowledge with { Records = facts };

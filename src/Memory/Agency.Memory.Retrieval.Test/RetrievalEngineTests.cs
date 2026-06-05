@@ -286,6 +286,38 @@ public sealed class RetrievalEngineTests
     }
 
     /// <summary>
+    /// A record with an unrecognised <c>ContentType</c> must not silently land in the Memory
+    /// bucket — it should throw rather than misroute. This guards against a future third value
+    /// (e.g., <c>Reflection</c>) slipping through unnoticed (Spec §18.4).
+    /// </summary>
+    [Fact]
+    public async Task Retrieve_UnknownContentType_ThrowsRatherThanSilentlyRoutingToMemory()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        // (ContentType)99 simulates a future third enum value not yet handled by the partition.
+        var unknownRecord = Common.Records.Record.Create(
+            id: "x1",
+            userId: "u1",
+            sessionId: null,
+            contentType: (ContentType)99,
+            domain: "Unknown",
+            key: "Key_x1",
+            title: "Unknown x1",
+            value: "some value",
+            tags: [],
+            importance: 0.5,
+            createdAt: DateTimeOffset.UtcNow,
+            updatedAt: DateTimeOffset.UtcNow,
+            embedding: new ReadOnlyMemory<float>([0.1f, 0.2f, 0.3f]));
+
+        var store = new FakeMemoryStore([new SearchHit(unknownRecord, Similarity: 0.8)]);
+        var engine = new RetrievalEngine(store, new FakeEmbeddingGenerator(), DefaultOptions(topK: 5, overFetch: 1));
+        var ctx = MakeContext();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => engine.RetrieveAsync(ctx, ct));
+    }
+
+    /// <summary>
     /// When a <c>Focus</c> context is present, the query text sent to the embedder appends
     /// the focus title, domain, and tag csv.
     /// </summary>

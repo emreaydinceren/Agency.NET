@@ -37,15 +37,23 @@ public sealed class Agent
     public string Model      { get; }
     public string ClientType { get; }
 
+    /// <summary>
+    /// Fires the OnSessionEnd hook for the given context, if one is set.
+    /// Called by ChatSession.DisposeAsync at the end of a session.
+    /// </summary>
+    public Task RaiseSessionEndAsync(Context ctx, CancellationToken ct = default);
+
     /// <summary>Creates a Context pre-populated with temporal context and the initial prompt.</summary>
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
-        EnvironmentalContext? environment = null);
+        EnvironmentalContext? environment = null,
+        UserSpecificContext? user = null);
 
     /// <summary>
     /// Executes one user turn. On the first call, delegates to the internal loop; on subsequent calls,
-    /// appends the message then runs the loop. Applies TurnTimeoutSeconds when configured.
+    /// appends the message then runs the loop. Fires OnUserPromptSubmit before entering the loop.
+    /// Applies TurnTimeoutSeconds when configured.
     /// </summary>
     public IAsyncEnumerable<AgentEvent> ChatAsync(
         string userMessage,
@@ -57,7 +65,7 @@ public sealed class Agent
 
 ### `ChatSession`
 
-Higher-level stateful wrapper — the preferred surface for REPL hosts and HTTP endpoints.
+Higher-level stateful wrapper — the preferred surface for REPL hosts and HTTP endpoints. Implements `IAsyncDisposable`; dispose fires the `OnSessionEnd` hook once.
 
 ```csharp
 // File: src/Harness/Agency.Harness/ChatSession.cs
@@ -65,14 +73,23 @@ using Agency.Harness.Contexts;
 
 namespace Agency.Harness;
 
-public sealed class ChatSession
+public sealed class ChatSession : IAsyncDisposable
 {
-    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null);
+    public ChatSession(
+        Agent agent,
+        AgentOptions options,
+        ToolContext? toolContext = null,
+        UserSpecificContext? user = null);
 
     public LlmTokenUsage TotalUsage   { get; }
     public decimal       TotalCostUsd { get; }
     public int           TurnCount    { get; }
     public bool          IsStarted    { get; }
+
+    /// <summary>
+    /// Switches the agent used for subsequent turns. Conversation history is preserved.
+    /// </summary>
+    public void SetAgent(Agent agent);
 
     /// <summary>
     /// Sends a message and streams back AgentEvents. Context is created lazily on the first call
@@ -85,6 +102,12 @@ public sealed class ChatSession
     /// The next SendAsync call starts a fresh conversation.
     /// </summary>
     public void Reset();
+
+    /// <summary>
+    /// Fires the agent's OnSessionEnd hook (once) then marks the session disposed.
+    /// Safe to call multiple times.
+    /// </summary>
+    public ValueTask DisposeAsync();
 }
 ```
 
@@ -149,18 +172,49 @@ Hook context records passed to each delegate:
 | `PostToolUseHookContext` | `string ToolName, JsonElement Input, ToolResult Result, Context AgentContext` |
 | `AssistantTurnHookContext` | `ChatMessage Message, Context AgentContext` |
 | `StopHookContext` | `AgentResultEvent Result, Context AgentContext` |
+| `SessionEndedHookContext` | `string SessionId, Context AgentContext` |
 
 ```csharp
 // File: src/Harness/Agency.Harness/Hooks/AgentHooks.cs
+using Agency.Harness.Contexts;
+
 namespace Agency.Harness.Hooks;
 
 public sealed record AgentHooks
 {
-    public Func<SessionStartedHookContext, CancellationToken, Task>?                         OnSessionStarted { get; init; }
-    public Func<PreToolUseHookContext, CancellationToken, Task<PreToolUseDecision>>?         OnPreToolUse     { get; init; }
-    public Func<PostToolUseHookContext, CancellationToken, Task>?                            OnPostToolUse    { get; init; }
-    public Func<AssistantTurnHookContext, CancellationToken, Task>?                          OnAssistantTurn  { get; init; }
-    public Func<StopHookContext, CancellationToken, Task>?                                   OnStop           { get; init; }
+    /// <summary>Fires once before the first iteration of the agent loop.</summary>
+    public Func<SessionStartedHookContext, CancellationToken, Task>?                         OnSessionStarted    { get; init; }
+
+    /// <summary>
+    /// Fires every time ChatAsync is called (i.e., on every user turn), before the agent loop starts.
+    /// Receives the raw Context; intended for prompt-level side-effects such as recording turn timestamps.
+    /// </summary>
+    public Func<Context, CancellationToken, Task>?                                           OnUserPromptSubmit  { get; init; }
+
+    /// <summary>
+    /// Fires at the start of every agent loop iteration, before the system prompt is rebuilt.
+    /// Intended for retrieval-engine injection (mutate Context.Knowledge and Context.Memory here).
+    /// </summary>
+    public Func<Context, CancellationToken, Task>?                                           OnPreIteration      { get; init; }
+
+    public Func<PreToolUseHookContext, CancellationToken, Task<PreToolUseDecision>>?         OnPreToolUse        { get; init; }
+    public Func<PostToolUseHookContext, CancellationToken, Task>?                            OnPostToolUse       { get; init; }
+
+    /// <summary>
+    /// Fires after Task.WhenAll of all parallel tool calls completes, before the next LLM call.
+    /// Receives all tool events from the batch.
+    /// </summary>
+    public Func<IReadOnlyList<ToolInvokedEvent>, Context, CancellationToken, Task>?          OnPostToolBatch     { get; init; }
+
+    public Func<AssistantTurnHookContext, CancellationToken, Task>?                          OnAssistantTurn     { get; init; }
+    public Func<StopHookContext, CancellationToken, Task>?                                   OnStop              { get; init; }
+
+    /// <summary>
+    /// Fires once when the owning ChatSession is disposed, signalling end-of-session.
+    /// Unlike OnStop (which fires every turn), this fires exactly once per session lifetime.
+    /// </summary>
+    public Func<SessionEndedHookContext, CancellationToken, Task>?                           OnSessionEnd        { get; init; }
+
     public static AgentHooks None { get; }
 }
 ```
@@ -171,7 +225,17 @@ namespace Agency.Harness.Hooks;
 
 public static class AgentHooksExtensions
 {
+    /// <summary>
+    /// Returns a new AgentHooks where second runs after first. For OnPreToolUse, the most
+    /// restrictive decision wins (Deny > Rewrite > Allow). All other delegates run sequentially.
+    /// </summary>
     public static AgentHooks Compose(this AgentHooks first, AgentHooks second);
+
+    /// <summary>
+    /// Returns a new AgentHooks where first runs before self (the baseline). Escape hatch for
+    /// callers who need to observe the un-enriched Context before baseline hooks have run.
+    /// </summary>
+    public static AgentHooks ComposeBefore(this AgentHooks self, AgentHooks first);
 }
 ```
 
@@ -211,15 +275,18 @@ public sealed record Context
 {
     public required QueryContext    Query        { get; init; }
     public KnowledgeContext         Knowledge    { get; set; }  = KnowledgeContext.Empty;  // settable: hooks may refresh facts mid-session
-    public MemoryContext            Memory       { get; init; } = MemoryContext.Empty;
+    public MemoryContext            Memory       { get; set; }  = MemoryContext.Empty;      // settable: retrieval engine injects records in OnPreIteration
     public ToolContext              Tools        { get; init; } = ToolContext.Empty;
+    public FocusContext             Focus        { get; set; }  = FocusContext.Empty;       // settable: SetFocusTool biases retrieval
+    public SessionContext           Session      { get; set; }  = SessionContext.Empty;     // set once by the loop; stable for session lifetime
     public UserSpecificContext      User         { get; init; } = UserSpecificContext.Empty;
     public TemporalContext          Temporal     { get; init; } = TemporalContext.Empty;
     public EnvironmentalContext     Environment  { get; init; } = EnvironmentalContext.Empty;
     public IConversationManager     Conversation { get; init; }  // default: InMemoryConversationManager
-    public int                      IterationCount { get; }      // loop-owned
-    public decimal                  TotalCostUsd   { get; }      // loop-owned
-    public LlmTokenUsage            TotalUsage     { get; }      // loop-owned
+    public int                      IterationCount         { get; }      // loop-owned
+    public decimal                  TotalCostUsd           { get; }      // loop-owned
+    public LlmTokenUsage            TotalUsage             { get; }      // loop-owned
+    public DateTimeOffset?          MemoryLastRetrievedAt  { get; set; } // written by retrieval engine in OnPreIteration
 }
 ```
 
@@ -229,7 +296,9 @@ public sealed record Context
 | `KnowledgeContext` | `Facts: IReadOnlyList<string>` — re-injected into the system prompt each iteration |
 | `MemoryContext` | `ShortTermMemory` (seeded as prior turns), `LongTermMemory` (injected into system prompt) |
 | `ToolContext` | `Registry: IToolRegistry` |
-| `UserSpecificContext` | `Name: string?` |
+| `FocusContext` | `Title: string?`, `Domain: string?`, `Tags: IReadOnlyList<string>` — narrows retrieval toward a task domain (Spec §6.7.1) |
+| `SessionContext` | `Id: string?` — stable session identifier; assigned once by the loop on first turn |
+| `UserSpecificContext` | `Id: string?` (memory partitioning key), `Name: string?` |
 | `TemporalContext` | `CurrentDateUtc: DateTimeOffset?` |
 | `EnvironmentalContext` | `OperatingSystem: string?`, `ContextWindowSize: int?` |
 
@@ -252,6 +321,8 @@ public interface IConversationManager
 
 ```csharp
 // File: src/Harness/Agency.Harness/AgentOptions.cs
+using Agency.Harness.Hooks;
+
 namespace Agency.Harness;
 
 public sealed class AgentOptions
@@ -261,6 +332,24 @@ public sealed class AgentOptions
     public int?               TurnTimeoutSeconds { get; set; }
     public LlmClientOptions[] LLmClients         { get; set; } = [];
     public int?               ContextWindowSize  { get; set; }
+
+    /// <summary>
+    /// Host-supplied user identity propagated into UserSpecificContext.Id for memory partitioning.
+    /// </summary>
+    public string?            UserId             { get; set; }
+
+    /// <summary>
+    /// Baseline hooks built by the memory pipeline (e.g. retrieval, timer restart).
+    /// Set by AddAgencyMemory via PostConfigure; null when memory is disabled.
+    /// Baseline hooks always run before UserHooks per spec §6.5.
+    /// </summary>
+    public AgentHooks?        BaselineHooks      { get; set; }
+
+    /// <summary>
+    /// User-supplied hooks composed after the baseline hooks.
+    /// When null, only BaselineHooks are used (if present).
+    /// </summary>
+    public AgentHooks?        UserHooks          { get; set; }
 }
 ```
 
@@ -318,7 +407,15 @@ public sealed class ToolRegistry : IToolRegistry
     public ToolRegistry(IEnumerable<ITool> tools);
     public ToolRegistry();
 
+    /// <summary>
+    /// Synchronous registration path. Throws if the tool requires async definition resolution.
+    /// Use RegisterAsync for tools whose GetDefinitionAsync is not immediately completed.
+    /// </summary>
     public void Register(ITool tool);
+
+    /// <summary>Async registration path for tools whose definition is not synchronously available.</summary>
+    public ValueTask RegisterAsync(ITool tool, CancellationToken ct = default);
+
     public IReadOnlyList<ToolDefinition> ListDefinitions();
     public IReadOnlyList<(bool Enabled, ToolDefinition Definition)> ListAllDefinitions();
     public Task<ToolResult> InvokeAsync(string name, JsonElement input, CancellationToken ct);
@@ -379,23 +476,28 @@ The loop implemented internally in `Agent` follows this pattern on every iterati
 1. Yield SessionStartedEvent
 2. → OnSessionStarted hook (if set)
 3. Seed conversation with the user prompt (first iteration only)
-4. Build system prompt via SystemPromptBuilder.Build(ctx) [every iteration]
-5. Call IChatClient.GetResponseAsync (single batch response)
-6. Append assistant message to conversation
-7. Yield AssistantTurnEvent
-8. → OnAssistantTurn hook (if set)
-9. Yield IterationCompletedEvent
-10. Evaluate StopCondition(ctx, lastMessage)
+4. → OnUserPromptSubmit hook (fires on every ChatAsync call, before the loop)
+5. → OnPreIteration hook (fires at the top of every loop iteration, before system prompt rebuild)
+6. Build system prompt via SystemPromptBuilder.Build(ctx) [every iteration]
+7. Call IChatClient.GetResponseAsync (single batch response)
+8. Append assistant message to conversation
+9. Yield AssistantTurnEvent
+10. → OnAssistantTurn hook (if set)
+11. Yield IterationCompletedEvent
+12. Evaluate StopCondition(ctx, lastMessage)
     └── true → OnStop hook → yield AgentResultEvent → break
-11. Extract FunctionCallContent items from the assistant message
-12. For each tool call (in parallel):
+13. Extract FunctionCallContent items from the assistant message
+14. For each tool call (in parallel):
     a. → OnPreToolUse hook → Allow / Deny (skip InvokeAsync) / Rewrite (replace input)
     b. InvokeAsync(name, input, ct)
     c. → OnPostToolUse hook (fires even on error)
     d. Yield ToolInvokedEvent
-13. Append tool results to conversation as Tool-role messages
-14. Repeat from step 4
+15. → OnPostToolBatch hook (fires after all parallel tool calls settle)
+16. Append tool results to conversation as Tool-role messages
+17. Repeat from step 5
 ```
+
+On session disposal (`ChatSession.DisposeAsync`), `Agent.RaiseSessionEndAsync` fires the `OnSessionEnd` hook exactly once.
 
 ### Practical Usage
 
@@ -414,7 +516,7 @@ IChatClient chatClient = /* e.g. claudeClient.AsChatClient() */;
 var agent = new Agent(chatClient, "claude-opus-4-6", clientType: "Claude");
 
 // Use ChatSession for multi-turn convenience
-var session = new ChatSession(agent, new AgentOptions(), toolCtx);
+await using var session = new ChatSession(agent, new AgentOptions(), toolCtx);
 
 await foreach (AgentEvent evt in session.SendAsync("List files in /tmp", ct))
 {
@@ -460,6 +562,22 @@ var customHooks = new AgentHooks
         return Task.FromResult(PreToolUseDecision.Allowed);
     },
 };
+```
+
+### Hook Composition and Baseline Hooks
+
+`AgentOptions` supports two hook slots that compose in a fixed order:
+
+- `BaselineHooks` — populated by the memory pipeline (e.g. retrieval, timer restart) via `PostConfigure`. Always runs first.
+- `UserHooks` — caller-supplied hooks. Always runs after `BaselineHooks`.
+
+The final effective hooks are resolved as `BaselineHooks.Compose(UserHooks)`. Advanced callers who need to observe the un-enriched `Context` before baseline hooks run can use `ComposeBefore` directly:
+
+```csharp
+using Agency.Harness.Hooks;
+
+// earlyHooks run before the baseline (retrieval) hooks
+AgentHooks effective = options.BaselineHooks!.ComposeBefore(earlyHooks);
 ```
 
 ### Stop Conditions
@@ -553,11 +671,15 @@ var toolCtx  = new ToolContext { Registry = registry };
 ## Design Notes
 
 - **`IChatClient` over `ILlmClient`** — `Agent` depends on `Microsoft.Extensions.AI.IChatClient` rather than the project's own `ILlmClient`. This allows any MEA-compatible client (including the built-in `OpenAIChatClient`) to drive the loop without an adapter layer; `ILlmClient` implementations expose `.AsChatClient()` bridges where needed.
-- **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only properties mutated by the loop (`internal set`). `Knowledge` is `set` (not `init`) so lifecycle hooks such as `OnSessionStarted` can refresh domain facts mid-session — the next iteration's `SystemPromptBuilder.Build` picks them up. All remaining context properties are `init`-only, keeping session state predictable and easy to snapshot for testing.
-- **`SystemPromptBuilder` is a pure function** — The system prompt is rebuilt from `Context` on every iteration so `KnowledgeContext` facts are always fresh. Being a `static` pure function makes it unit-testable in complete isolation from the agent loop.
+- **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only properties mutated by the loop (`internal set`). `Knowledge` and `Memory` are `set` (not `init`) so lifecycle hooks such as `OnPreIteration` can inject retrieved records mid-session — the next iteration's `SystemPromptBuilder.Build` picks them up. `Session` is also `set` so the loop can assign a stable `Id` on first turn. All remaining context properties are `init`-only, keeping session state predictable and easy to snapshot for testing.
+- **`SystemPromptBuilder` is a pure function** — The system prompt is rebuilt from `Context` on every iteration so `KnowledgeContext` facts and `MemoryContext` records are always fresh. Being a `static` pure function makes it unit-testable in complete isolation from the agent loop.
 - **Two-tier tool disabling** — `ToolRegistry` distinguishes user-initiated disables (`DisableToolByUser`) from system-initiated disables (`DisabledToolBySystem`). `ListAllDefinitions()` hides system-disabled tools entirely; user-disabled tools remain visible with `Enabled = false`, enabling UI toggle flows.
+- **Async tool registration** — `ToolRegistry.Register` is synchronous and throws if the tool's `GetDefinitionAsync` does not complete immediately. `RegisterAsync` is the correct path for tools whose schema is fetched asynchronously (e.g. MCP proxy tools resolving remote schemas).
 - **`McpProxyTool` is `internal`** — callers never instantiate `McpProxyTool` directly; `McpClientPool.CreateAsync` wraps each discovered `McpClientTool` and exposes the results through the `Tools` property. This keeps the MCP SDK types contained behind the pool boundary.
 - **`McpClientPool` is `IAsyncDisposable`** — each `McpClient` holds an open connection to its server process or HTTP endpoint. Disposing the pool closes all connections; callers should use `await using` to ensure cleanup even on cancellation.
-- **`ChatSession` is not thread-safe** — create one instance per user or logical connection; at most one `SendAsync` call should be in flight at a time. Call `Reset()` to clear conversation history and start a fresh session without creating a new instance.
+- **`ChatSession` is `IAsyncDisposable`** — disposing fires `Agent.RaiseSessionEndAsync` exactly once, which invokes the `OnSessionEnd` hook. This is the correct signal for end-of-session side-effects such as memory distillation. Create one instance per user or logical connection; at most one `SendAsync` call should be in flight at a time. Call `Reset()` to clear conversation history and start a fresh session without creating a new instance.
 - **Hooks are interceptors, events are observers** — `IAsyncEnumerable<AgentEvent>` lets callers observe what happened after the fact; `AgentHooks` lets callers block, rewrite, or react *before* the action completes. `OnPreToolUse` is the only hook that can alter agent behaviour (via `Deny`/`Rewrite`); all others are fire-and-forget.
 - **`Compose()` uses most-restrictive-wins for `OnPreToolUse`** — when composing two hooks that both have `OnPreToolUse`, they run concurrently via `Task.WhenAll`; the result priority is Deny > Rewrite > Allow. All other delegate slots run sequentially (first then second) so ordering is deterministic.
+- **Baseline-first hook composition** — `AgentOptions` separates `BaselineHooks` (memory pipeline, set by DI infrastructure) from `UserHooks` (caller-supplied). The effective hooks are always `BaselineHooks.Compose(UserHooks)`, guaranteeing retrieval runs before user observation hooks regardless of registration order (Spec §6.5).
+- **`SessionContext` provides stable session identity** — the agent loop assigns a `Guid`-based `Id` to `Context.Session` on the very first `RunAsync` call and reuses it for all subsequent turns. Memory records and distillation triggers use this id to scope data to the correct session.
+- **`UserSpecificContext.Id` is the memory partition key** — `AgentOptions.UserId` flows into `UserSpecificContext.Id` via `ChatSession`, ensuring retrieved and distilled memory records are scoped to the correct user even when multiple sessions share an infrastructure.

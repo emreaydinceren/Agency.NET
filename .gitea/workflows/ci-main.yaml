@@ -3,6 +3,8 @@ name: CI (Main)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   build-and-publish:

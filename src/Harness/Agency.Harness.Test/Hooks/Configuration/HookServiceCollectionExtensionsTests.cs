@@ -1,0 +1,117 @@
+using System.Text;
+using Agency.Harness.Hooks.Configuration;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Agency.Harness.Test.Hooks.Configuration;
+
+/// <summary>
+/// Verifies the DI contract of <c>AddAgencyConfiguredHooks</c> (spec §6.6):
+/// HooksOptions binding, HookRegistry registration, PostConfigure wiring onto
+/// AgentOptions.ConfiguredHooks, empty-section behaviour, and unknown-event validation.
+/// </summary>
+public sealed class HookServiceCollectionExtensionsTests
+{
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static IConfiguration BuildConfig(string hooksJson)
+    {
+        var json = $$"""{"Hooks": {{hooksJson}}}""";
+        return new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            .Build();
+    }
+
+    private static ServiceProvider BuildProvider(IConfiguration config)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<AgentOptions>();
+        services.AddAgencyConfiguredHooks(config);
+        return services.BuildServiceProvider();
+    }
+
+    // ── Test 1 ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Di_BindsHooksSection_BuildsRegistry()
+    {
+        const string hooksJson = """
+            {
+              "PreToolUse": [
+                {
+                  "matcher": "*",
+                  "hooks": [{ "type": "Command", "command": "pwsh" }]
+                }
+              ]
+            }
+            """;
+
+        IConfiguration config = BuildConfig(hooksJson);
+        using ServiceProvider provider = BuildProvider(config);
+
+        HookRegistry registry = provider.GetRequiredService<HookRegistry>();
+
+        Assert.NotNull(registry);
+    }
+
+    // ── Test 2 ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Di_PostConfigure_SetsConfiguredHooks()
+    {
+        const string hooksJson = """
+            {
+              "PreToolUse": [
+                {
+                  "matcher": "*",
+                  "hooks": [{ "type": "Command", "command": "pwsh" }]
+                }
+              ]
+            }
+            """;
+
+        IConfiguration config = BuildConfig(hooksJson);
+        using ServiceProvider provider = BuildProvider(config);
+
+        IOptions<AgentOptions> options = provider.GetRequiredService<IOptions<AgentOptions>>();
+
+        Assert.NotNull(options.Value.ConfiguredHooks);
+        Assert.NotNull(options.Value.ConfiguredHooks.OnPreToolUse);
+    }
+
+    // ── Test 3 ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Di_NoHooksSection_ConfiguredHooksEmptyNone()
+    {
+        IConfiguration config = BuildConfig("{}");
+        using ServiceProvider provider = BuildProvider(config);
+
+        IOptions<AgentOptions> options = provider.GetRequiredService<IOptions<AgentOptions>>();
+
+        bool isEmpty =
+            options.Value.ConfiguredHooks == null ||
+            options.Value.ConfiguredHooks.OnPreToolUse == null;
+
+        Assert.True(isEmpty);
+    }
+
+    // ── Test 4 ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Di_UnknownEventName_ThrowsOnBuild()
+    {
+        const string hooksJson = """{"UnknownEvent": []}""";
+
+        IConfiguration config = BuildConfig(hooksJson);
+        using ServiceProvider provider = BuildProvider(config);
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => provider.GetRequiredService<HookRegistry>());
+
+        Assert.Contains("UnknownEvent", ex.Message);
+    }
+}

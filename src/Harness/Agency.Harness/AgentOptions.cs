@@ -52,4 +52,7 @@ public sealed class AgentOptions
     /// <see cref="AgentHooksExtensions.ComposeBefore"/> directly rather than this property.
     /// </summary>
     public AgentHooks? UserHooks { get; set; }
+
+    /// <summary>Operator config hooks, composed between Baseline and User per §14.5.</summary>
+    public AgentHooks? ConfiguredHooks { get; set; }
 }

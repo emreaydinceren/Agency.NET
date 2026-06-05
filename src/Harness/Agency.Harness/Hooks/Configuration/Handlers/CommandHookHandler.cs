@@ -39,12 +39,21 @@ internal sealed class CommandHookHandler : IHookHandler
         using var proc = new Process { StartInfo = psi };
         proc.Start();
 
-        var payloadJson = JsonSerializer.Serialize(payload, HookPayload.SerializerOptions);
-        await proc.StandardInput.WriteAsync(payloadJson);
-        proc.StandardInput.Close();
-
+        // Start draining stdout/stderr before writing stdin to prevent pipe-buffer deadlock.
         var outTask = proc.StandardOutput.ReadToEndAsync(cts.Token);
         var errTask = proc.StandardError.ReadToEndAsync(cts.Token);
+
+        var payloadJson = JsonSerializer.Serialize(payload, HookPayload.SerializerOptions);
+        try
+        {
+            await proc.StandardInput.WriteAsync(payloadJson);
+            proc.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // Process exited before reading stdin (e.g. "exit 1" scripts). Harmless — continue
+            // to collect exit code and any output already written.
+        }
 
         try
         {

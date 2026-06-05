@@ -1,11 +1,9 @@
 # Long-Term Memory & Asynchronous Distillation — Design Specifications (HLD)
 
-**Status:** Draft — ready for technical-spec breakdown
+**Status:** Implemented
 **Audience:** Implementers, reviewers, future maintainers
 **Scope:** `Agency.Harness`, `Agency.Mcp.Memory`, supporting infrastructure
-**Companion documents:**
-- `Memory-FuctionalSpec.md` — functional requirements (source of behavioural truth)
-- `questions.md`, `OpenItems.md` — architectural decision logs
+
 
 **Last revised:** 2026-06-02 — reconciled with the shipped implementation: hygiene sweep uses the injected `TimeProvider` clock (§6.6, §8.5); service-unreachable failures are transient/retried (§8.6, §12.2); distiller emits a terminal `DistillationSettledEvent` base and suppresses thinking (§6.2, §18.1, now V2); consolidator emits a user-facing `MemoryMutatedEvent` per mutation (§6.3) and the reconciliation prompt gains a structural DELETE rule (§18.2, now V2).
 

@@ -1,5 +1,3 @@
-
-using Agency.Sql.Postgres;
 using Microsoft.Extensions.Logging;
 using Moq;
 

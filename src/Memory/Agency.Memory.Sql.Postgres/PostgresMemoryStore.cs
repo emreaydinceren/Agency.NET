@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Text.Json;
 using Agency.Embeddings.Common;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;

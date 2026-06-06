@@ -1,6 +1,3 @@
-
-using Agency.Harness.Hooks;
-
 namespace Agency.Harness.Hooks.Tests;
 /// <summary>Verifies AgentHooks default state and init-only delegate assignment.</summary>
 public sealed class AgentHooksTests

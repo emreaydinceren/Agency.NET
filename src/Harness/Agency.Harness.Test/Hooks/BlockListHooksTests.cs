@@ -1,7 +1,6 @@
 
 using System.Text.Json;
 using Agency.Harness.Contexts;
-using Agency.Harness.Hooks;
 
 namespace Agency.Harness.Hooks.Tests;
 /// <summary>Verifies BlockListHooks.Dangerous blocks dangerous shell commands.</summary>

@@ -1,7 +1,6 @@
 using Agency.Embeddings.Common;
 using Agency.Sql.Postgres;
 using Agency.VectorStore.Common;
-using Agency.VectorStore.Sql.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;

@@ -1,10 +1,8 @@
 global using System.Runtime.CompilerServices;
 
 using Agency.Embeddings.OpenAI;
-using Agency.Harness;
 using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
-using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Permissions;
 using Agency.Harness.Tools;
@@ -20,7 +18,6 @@ using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Serilog;
 

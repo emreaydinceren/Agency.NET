@@ -1,5 +1,3 @@
-
-using Agency.Harness;
 using Agency.Harness.Hooks;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.Logging;

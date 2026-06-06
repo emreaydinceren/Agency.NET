@@ -12,7 +12,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Npgsql;
-using System.Text.Json;
 using IEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
 using MemoryRecord = Agency.Memory.Common.Records.Record;
 

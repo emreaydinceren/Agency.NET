@@ -1,7 +1,6 @@
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
-using Agency.Memory.Hygiene;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;

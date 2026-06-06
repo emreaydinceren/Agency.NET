@@ -1,8 +1,6 @@
 using Agency.Harness;
 using Agency.Harness.Contexts;
 using Agency.Memory.Common.Options;
-using Agency.Memory.Common.Records;
-using Agency.Memory.Common.Storage;
 using Agency.Memory.Retrieval;
 using Agency.Memory.Sql.Postgres;
 using Microsoft.Extensions.Configuration;

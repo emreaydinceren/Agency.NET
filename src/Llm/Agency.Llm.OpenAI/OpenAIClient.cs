@@ -1,6 +1,5 @@
 
 using Agency.Llm.Common;
-using global::OpenAI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

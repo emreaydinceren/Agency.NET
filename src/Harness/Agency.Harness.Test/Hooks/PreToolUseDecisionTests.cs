@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Agency.Harness.Hooks;
 
 namespace Agency.Harness.Hooks.Tests;
 

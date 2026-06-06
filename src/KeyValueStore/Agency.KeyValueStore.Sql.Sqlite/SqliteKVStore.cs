@@ -3,7 +3,6 @@ using Agency.KeyValueStore.Common;
 using Agency.Sql.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Collections;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;

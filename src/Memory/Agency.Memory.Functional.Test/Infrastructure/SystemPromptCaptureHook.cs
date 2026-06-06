@@ -1,4 +1,3 @@
-using Agency.Harness;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using System.Collections.Concurrent;

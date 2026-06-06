@@ -1,6 +1,5 @@
 using Agency.Memory.Sql.Postgres;
 using Npgsql;
-using Xunit;
 
 namespace Agency.Memory.Functional.Test.Infrastructure;
 

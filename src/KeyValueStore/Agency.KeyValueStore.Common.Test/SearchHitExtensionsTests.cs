@@ -1,5 +1,3 @@
-using Agency.KeyValueStore.Common;
-
 namespace Agency.KeyValueStore.Common.Test;
 
 public sealed class SearchHitExtensionsTests

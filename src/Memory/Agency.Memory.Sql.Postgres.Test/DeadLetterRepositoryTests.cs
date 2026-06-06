@@ -1,4 +1,3 @@
-using Agency.Memory.Sql.Postgres;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres.Test;

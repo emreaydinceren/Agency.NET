@@ -2,7 +2,6 @@ using System.Text;
 using Agency.Harness.Hooks.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Agency.Harness.Test.Hooks.Configuration;

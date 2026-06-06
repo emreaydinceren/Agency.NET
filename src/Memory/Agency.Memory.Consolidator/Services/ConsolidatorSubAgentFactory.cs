@@ -2,7 +2,6 @@ using Agency.Harness;
 using Agency.Harness.Contexts;
 using Agency.Harness.Tools;
 using Microsoft.Extensions.AI;
-using Agency.Llm.Common.Tools;
 using Agency.Memory.Common.Events;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;

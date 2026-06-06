@@ -1,5 +1,3 @@
-
-using Agency.Harness;
 using Agency.Harness.Console.Commands;
 using Agency.Harness.Contexts;
 using Agency.Harness.Permissions;
@@ -11,7 +9,6 @@ using Spectre.Console;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
-using System.Text.Json;
 
 namespace Agency.Harness.Console;
 internal sealed class ConsoleChatSession

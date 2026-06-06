@@ -1,5 +1,4 @@
 using Agency.Memory.Common.Options;
-using Agency.Memory.Common.Records;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

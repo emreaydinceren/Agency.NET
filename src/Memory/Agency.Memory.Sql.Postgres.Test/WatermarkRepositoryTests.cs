@@ -1,5 +1,3 @@
-using Agency.Memory.Sql.Postgres;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres.Test;

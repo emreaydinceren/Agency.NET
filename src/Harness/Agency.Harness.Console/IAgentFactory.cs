@@ -1,6 +1,3 @@
-
-using Agency.Harness;
-
 namespace Agency.Harness.Console;
 internal interface IAgentFactory
 {

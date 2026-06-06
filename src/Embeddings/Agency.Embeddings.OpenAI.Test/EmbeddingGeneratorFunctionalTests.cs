@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Options;
 
 namespace Agency.Embeddings.OpenAI.Test;
 

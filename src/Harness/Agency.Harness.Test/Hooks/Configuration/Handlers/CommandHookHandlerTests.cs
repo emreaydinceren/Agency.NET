@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Hooks.Configuration.Handlers;
 

@@ -1,5 +1,3 @@
-using Agency.Embeddings.Common;
-
 namespace Agency.Embeddings.Common.Test;
 
 public sealed class BatchingEmbeddingGeneratorTests

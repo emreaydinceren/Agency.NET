@@ -5,12 +5,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NpgsqlTypes;
-using System.Collections;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
-using static System.Net.WebRequestMethods;
 
 namespace Agency.KeyValueStore.Sql.Postgres;
 /// <summary>

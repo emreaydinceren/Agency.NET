@@ -1,6 +1,3 @@
-using Agency.Harness.Hooks;
-using Microsoft.Extensions.AI;
-
 namespace Agency.Harness.Hooks.Configuration;
 
 internal static class HookPayloadFactory

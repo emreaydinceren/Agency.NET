@@ -1,7 +1,6 @@
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Memory.Common.Hooks;
-using Agency.Memory.Common.Storage;
 
 namespace Agency.Memory.Common.Test;
 

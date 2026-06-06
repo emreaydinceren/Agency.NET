@@ -1,9 +1,7 @@
 using Agency.Memory.Common.Records;
-using Agency.Memory.Common.Storage;
 using Agency.Memory.Sql.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Npgsql;
 using MemoryRecord = Agency.Memory.Common.Records.Record;
 using IEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;

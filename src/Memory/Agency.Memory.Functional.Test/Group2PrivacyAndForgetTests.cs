@@ -9,7 +9,6 @@ using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
 using Agency.Memory.Distiller.Services;
-using Agency.Memory.Functional.Test.Infrastructure;
 using Agency.Memory.Retrieval;
 using Agency.Memory.Sql.Postgres;
 using Microsoft.Extensions.AI;

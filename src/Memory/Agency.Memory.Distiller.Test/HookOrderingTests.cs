@@ -2,7 +2,6 @@ using Agency.Harness;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Memory.Common.Hooks;
-using Microsoft.Extensions.Options;
 
 namespace Agency.Memory.Distiller.Test;
 

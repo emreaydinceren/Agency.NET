@@ -1,6 +1,5 @@
 
 using Agency.Harness.Contexts;
-using Agency.Harness.Hooks;
 using Agency.Harness.Test.Fakes;
 
 namespace Agency.Harness.Hooks.Tests;

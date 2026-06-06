@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 
 namespace Agency.Harness.Hooks.Configuration.Handlers;

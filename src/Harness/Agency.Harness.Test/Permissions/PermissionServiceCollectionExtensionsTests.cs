@@ -2,7 +2,6 @@ using System.Text;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Agency.Harness.Test.Permissions;
 

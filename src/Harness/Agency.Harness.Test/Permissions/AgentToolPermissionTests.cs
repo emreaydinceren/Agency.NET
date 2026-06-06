@@ -2,7 +2,6 @@ using System.Text.Json;
 using Agency.Harness.Contexts;
 using Agency.Harness.Permissions;
 using Agency.Harness.Test.Fakes;
-using Agency.Harness.Tools;
 
 namespace Agency.Harness.Test.Permissions;
 

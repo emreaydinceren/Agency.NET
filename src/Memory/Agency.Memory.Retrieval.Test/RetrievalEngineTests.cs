@@ -4,7 +4,6 @@ using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Ranking;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
-using Agency.Memory.Retrieval;
 using Microsoft.Extensions.Options;
 
 namespace Agency.Memory.Retrieval.Test;

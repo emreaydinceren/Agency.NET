@@ -1,5 +1,4 @@
 using Agency.Embeddings.Common;
-using Agency.Memory.Sql.Postgres;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Npgsql;

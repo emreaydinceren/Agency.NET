@@ -1,6 +1,5 @@
 
 using System.Text.Json;
-using Agency.Harness.Hooks;
 using Agency.Harness.Contexts;
 
 namespace Agency.Harness.Hooks.Tests;

@@ -1,5 +1,3 @@
-using Agency.Harness;
-using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration.Handlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

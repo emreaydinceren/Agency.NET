@@ -6,7 +6,7 @@ public static class AgentHooksExtensions
     /// <summary>
     /// Returns a new <see cref="AgentHooks"/> where <paramref name="second"/> runs after
     /// <paramref name="first"/>. For <c>OnPreToolUse</c>, the most restrictive decision wins
-    /// (Deny &gt; Rewrite &gt; Allow). All other delegates run sequentially.
+    /// (Deny &gt; Ask &gt; Rewrite &gt; Allow). All other delegates run sequentially.
     /// </summary>
     public static AgentHooks Compose(this AgentHooks first, AgentHooks second) => new()
     {
@@ -34,8 +34,8 @@ public static class AgentHooksExtensions
 
     /// <summary>
     /// Folds three hook sources — baseline, configured, user — into a single composed
-    /// <see cref="AgentHooks"/> instance. Null sources are skipped. Deny-wins across all
-    /// three sources is guaranteed by <see cref="Compose"/>/<c>CombinePreToolUse</c>.
+    /// <see cref="AgentHooks"/> instance. Null sources are skipped. Deny-wins (Deny &gt; Ask &gt; Rewrite &gt; Allow)
+    /// across all three sources is guaranteed by <see cref="Compose"/>/<c>CombinePreToolUse</c>.
     /// </summary>
     internal static AgentHooks? Fold(AgentHooks? baseline, AgentHooks? configured, AgentHooks? user)
     {
@@ -70,6 +70,20 @@ public static class AgentHooksExtensions
                 PreToolUseDecision da = results[0], db = results[1];
                 if (da is PreToolUseDecision.Deny) { return da; }
                 if (db is PreToolUseDecision.Deny) { return db; }
+                if (da is PreToolUseDecision.Ask askA)
+                {
+                    // Deny > Ask > Rewrite > Allow: ask from either source wins over rewrite/allow.
+                    // If both ask, keep the first non-null reason.
+                    if (db is PreToolUseDecision.Ask askB)
+                    {
+                        string? reason = askA.Reason ?? askB.Reason;
+                        return new PreToolUseDecision.Ask(reason);
+                    }
+
+                    return askA;
+                }
+
+                if (db is PreToolUseDecision.Ask) { return db; }
                 if (da is PreToolUseDecision.Rewrite) { return da; }
                 return db;
             },

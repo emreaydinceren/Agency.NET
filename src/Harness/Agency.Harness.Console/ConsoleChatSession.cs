@@ -2,6 +2,7 @@
 using Agency.Harness;
 using Agency.Harness.Console.Commands;
 using Agency.Harness.Contexts;
+using Agency.Harness.Permissions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,6 +11,7 @@ using Spectre.Console;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
+using System.Text.Json;
 
 namespace Agency.Harness.Console;
 internal sealed class ConsoleChatSession
@@ -201,54 +203,34 @@ internal sealed class ConsoleChatSession
                 {
                     this.output.StartSpinner();
 
-                    await foreach (AgentEvent evt in this._chatSession.SendAsync(input, turnCts.Token))
+                    // Park loop: process the stream, and if the turn parks for permission,
+                    // gather answers and resume — repeating until the turn is no longer parked
+                    // or the user cancels the permission picker.
+                    var pendingRequests = new List<PermissionRequestedEvent>();
+                    (bool parked, lastLlmDuration) = await this.ProcessStreamAsync(
+                        this._chatSession.SendAsync(input, turnCts.Token),
+                        pendingRequests,
+                        prevIn, prevOut,
+                        lastLlmDuration,
+                        turnCts.Token);
+
+                    while (parked)
                     {
-                        switch (evt)
+                        var responses = this.CollectPermissionResponses(pendingRequests);
+                        if (responses is null)
                         {
-                            case AssistantTurnEvent turn:
-                            this.PrintAssistantTurn(turn.Message);
-                            this.output.StopSpinner();
+                            // User cancelled the picker (Escape) — abandon: the next SendAsync
+                            // will auto-deny all pending calls via the abandonment path (§6.4).
                             break;
-
-                            case ToolInvokedEvent tool:
-                            //  This fires after the agent has actually executed the tool and result is ready.
-
-                            var resultPreview = TruncateString(tool.Result.Content, 100, 3);
-                            if (tool.Result.IsError)
-                            {
-                                this.output.WriteLine("red", resultPreview);
-                            }
-                            else
-                            {
-                                this.output.WriteMarkdownInBorderedPanel($"Calling {tool.ToolName}", $"[gray]{resultPreview}[/]");
-                            }
-                            break;
-
-                            case IterationCompletedEvent iteration:
-                            lastLlmDuration = iteration.LlmDuration;
-                            break;
-
-                            case AgentResultEvent result:
-                            // This is the final event of the turn, showing the overall result and token usage for the turn.
-
-                            long deltaIn = this._chatSession.TotalUsage.InputTokens - prevIn;
-                            long deltaOut = this._chatSession.TotalUsage.OutputTokens - prevOut;
-                            long totalDelta = deltaIn + deltaOut;
-
-                            string throughput = lastLlmDuration.TotalSeconds > 0
-                                ? $"  {(totalDelta / lastLlmDuration.TotalSeconds):F1} tok/s"
-                                : string.Empty;
-
-                            this.output.WriteLine("gray",
-                                $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out{throughput}  [{result.Status}]");
-                            if (result.Status == AgentResultStatus.Error && result.FinalText is { } errorText)
-                            {
-                                this.output.WriteLine("red", $"  {errorText}");
-                            }
-                            break;
-
-                            // SessionStartedEvent: intentionally suppressed.
                         }
+
+                        pendingRequests.Clear();
+                        (parked, lastLlmDuration) = await this.ProcessStreamAsync(
+                            this._chatSession.ResumeWithPermissionsAsync(responses, turnCts.Token),
+                            pendingRequests,
+                            prevIn, prevOut,
+                            lastLlmDuration,
+                            turnCts.Token);
                     }
                 }
                 catch (OperationCanceledException)
@@ -321,6 +303,188 @@ internal sealed class ConsoleChatSession
                     chatTurns, sw.Elapsed.TotalMilliseconds);
             }
         }
+    }
+
+    /// <summary>
+    /// Drains <paramref name="stream"/> through the standard rendering switch.
+    /// Returns <c>(Parked: true, …)</c> when the stream ends with
+    /// <see cref="AgentResultStatus.AwaitingPermission"/> (turn parked);
+    /// <c>(Parked: false, …)</c> for any other terminal status.
+    /// The returned <c>LastLlmDuration</c> reflects any <see cref="IterationCompletedEvent"/>
+    /// observed in this stream segment, or <paramref name="priorLlmDuration"/> when none was seen.
+    /// Collected <see cref="PermissionRequestedEvent"/>s are appended to
+    /// <paramref name="pendingRequests"/> (caller clears between park cycles).
+    /// </summary>
+    private async Task<(bool Parked, TimeSpan LastLlmDuration)> ProcessStreamAsync(
+        IAsyncEnumerable<AgentEvent> stream,
+        List<PermissionRequestedEvent> pendingRequests,
+        long prevIn,
+        long prevOut,
+        TimeSpan priorLlmDuration,
+        CancellationToken ct)
+    {
+        bool parked = false;
+        TimeSpan lastLlmDuration = priorLlmDuration;
+
+        await foreach (AgentEvent evt in stream.WithCancellation(ct))
+        {
+            switch (evt)
+            {
+                case AssistantTurnEvent turn:
+                this.PrintAssistantTurn(turn.Message);
+                this.output.StopSpinner();
+                break;
+
+                case ToolInvokedEvent tool:
+                //  This fires after the agent has actually executed the tool and result is ready.
+
+                var resultPreview = TruncateString(tool.Result.Content, 100, 3);
+                if (tool.Result.IsError)
+                {
+                    this.output.WriteLine("red", resultPreview);
+                }
+                else
+                {
+                    this.output.WriteMarkdownInBorderedPanel($"Calling {tool.ToolName}", $"[gray]{resultPreview}[/]");
+                }
+                break;
+
+                case PermissionRequestedEvent permReq:
+                pendingRequests.Add(permReq);
+                break;
+
+                case IterationCompletedEvent iteration:
+                lastLlmDuration = iteration.LlmDuration;
+                break;
+
+                case AgentResultEvent result:
+                // This is the final event of the turn, showing the overall result and token usage for the turn.
+
+                if (result.Status == AgentResultStatus.AwaitingPermission)
+                {
+                    // The turn has parked. The spinner has not been stopped yet (no AssistantTurnEvent
+                    // was emitted before parking), so stop it now before rendering permission panels.
+                    this.output.StopSpinner();
+                    parked = true;
+                    break;
+                }
+
+                long deltaIn = this._chatSession!.TotalUsage.InputTokens - prevIn;
+                long deltaOut = this._chatSession!.TotalUsage.OutputTokens - prevOut;
+                long totalDelta = deltaIn + deltaOut;
+
+                string throughput = lastLlmDuration.TotalSeconds > 0
+                    ? $"  {(totalDelta / lastLlmDuration.TotalSeconds):F1} tok/s"
+                    : string.Empty;
+
+                this.output.WriteLine("gray",
+                    $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out{throughput}  [{result.Status}]");
+                if (result.Status == AgentResultStatus.Error && result.FinalText is { } errorText)
+                {
+                    this.output.WriteLine("red", $"  {errorText}");
+                }
+                break;
+
+                // SessionStartedEvent: intentionally suppressed.
+            }
+        }
+
+        return (parked, lastLlmDuration);
+    }
+
+    /// <summary>
+    /// Renders a permission panel and picker for each pending request, then returns
+    /// the collected <see cref="PermissionResponse"/> list.  Returns
+    /// <see langword="null"/> if the user cancels (Escape) on any picker — the caller
+    /// must not resume in that case and should fall back to the REPL; the next
+    /// <see cref="ChatSession.SendAsync"/> call will auto-abandon the parked turn.
+    /// </summary>
+    private IReadOnlyList<PermissionResponse>? CollectPermissionResponses(
+        List<PermissionRequestedEvent> pending)
+    {
+        var responses = new List<PermissionResponse>(pending.Count);
+
+        foreach (PermissionRequestedEvent req in pending)
+        {
+            // ── Panel content ────────────────────────────────────────────────
+            var sb = new StringBuilder();
+            sb.AppendLine($"Tool: [bold]{Markup.Escape(req.ToolName)}[/]");
+
+            if (req.KeyValue is not null)
+            {
+                sb.AppendLine($"Input: [gray]{Markup.Escape(req.KeyValue)}[/]");
+            }
+            else
+            {
+                // Truncate raw JSON to ~200 chars for readability.
+                string rawJson = req.Input.GetRawText();
+                if (rawJson.Length > 200)
+                {
+                    rawJson = string.Concat(rawJson.AsSpan(0, 200), "…");
+                }
+                sb.AppendLine($"Input: [gray]{Markup.Escape(rawJson)}[/]");
+            }
+
+            sb.AppendLine($"Proposed rule: [yellow]{Markup.Escape(req.ProposedRule)}[/]");
+
+            if (req.Source == PermissionRequestSource.Hook && req.Reason is not null)
+            {
+                sb.AppendLine($"Hook reason: [orange3]{Markup.Escape(req.Reason)}[/]");
+            }
+
+            this.output.WriteMarkdownInBorderedPanel("Permission required", sb.ToString().TrimEnd());
+
+            // ── Picker rows ──────────────────────────────────────────────────
+            // §3.5: hide "Allow always" for Hook-sourced requests because persisted allow
+            // rules cannot suppress a recurring hook Ask.
+            var rows = req.Source == PermissionRequestSource.Hook
+                ? new List<ConsolePickerRow>
+                {
+                    new("Allow once",  "AllowOnce"),
+                    new("Deny once",   "DenyOnce"),
+                    new("Deny always", "DenyAlways"),
+                }
+                : new List<ConsolePickerRow>
+                {
+                    new("Allow once",  "AllowOnce"),
+                    new("Allow always", "AllowAlways"),
+                    new("Deny once",   "DenyOnce"),
+                    new("Deny always", "DenyAlways"),
+                };
+
+            // returnItemIndex = 1 returns the second column (the internal kind key).
+            string? picked = ConsolePicker.Show(rows, returnItemIndex: 1, title: "Choose an action:");
+
+            if (picked is null)
+            {
+                // User pressed Escape / cancelled — signal caller to abandon.
+                return null;
+            }
+
+            PermissionResponseKind kind = picked switch
+            {
+                "AllowOnce"   => PermissionResponseKind.AllowOnce,
+                "AllowAlways" => PermissionResponseKind.AllowAlways,
+                "DenyOnce"    => PermissionResponseKind.DenyOnce,
+                "DenyAlways"  => PermissionResponseKind.DenyAlways,
+                _             => PermissionResponseKind.DenyOnce,
+            };
+
+            string? message = null;
+            if (kind is PermissionResponseKind.DenyOnce or PermissionResponseKind.DenyAlways)
+            {
+                this.output.Write("gray", "  Reason for the model (Enter to skip): ");
+                message = System.Console.ReadLine()?.Trim();
+                if (string.IsNullOrEmpty(message))
+                {
+                    message = null;
+                }
+            }
+
+            responses.Add(new PermissionResponse(req.RequestId, kind, message));
+        }
+
+        return responses;
     }
 
     private void PrintAssistantTurn(ChatMessage message)

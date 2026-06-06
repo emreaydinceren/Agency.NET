@@ -1,4 +1,52 @@
+using System.Text.Json;
+using Agency.Harness;
+using Agency.Harness.Permissions;
+
 namespace Agency.Harness.Contexts;
+
+// ── Pending-turn types (spec §3.3) ────────────────────────────────────────────
+
+/// <summary>
+/// Holds the parked state of a mid-batch permission pause: the completed siblings'
+/// results and the list of calls waiting for user approval (spec §3.3, §6.1).
+/// </summary>
+internal sealed class PendingToolBatch
+{
+    /// <summary>The loop iteration this batch belongs to.</summary>
+    internal int Iteration { get; init; }
+
+    /// <summary>
+    /// FunctionResultContent entries for the completed siblings, indexed by batch position.
+    /// Pended slots are null; they are filled in on resume.
+    /// </summary>
+    internal FunctionResultContent?[] Results { get; init; } = [];
+
+    /// <summary>Calls that are waiting for a user permission response.</summary>
+    internal List<PendingToolCall> Pending { get; init; } = [];
+
+    /// <summary>
+    /// ToolInvokedEvent entries for the completed siblings at park time, indexed by batch position.
+    /// Pended slots are null; they are filled in on resume to reconstruct the full batch for
+    /// <c>OnPostToolBatch</c> (spec §6.3 step 5).
+    /// </summary>
+    internal ToolInvokedEvent?[] SiblingToolEvents { get; init; } = [];
+}
+
+/// <summary>
+/// Represents a single tool call that has been pended for user permission (spec §3.3).
+/// </summary>
+internal sealed record PendingToolCall(
+    Guid RequestId,
+    int BatchIndex,
+    string CallId,
+    string ToolName,
+    JsonElement Input,           // post-Rewrite — what will execute on approval
+    string? KeyValue,
+    string ProposedRule,
+    PermissionRequestSource Source,
+    string? Reason);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
 /// Canonical session state. The wire-format <c>messages[]</c> array is derived from this object on every loop
@@ -75,4 +123,14 @@ public sealed record Context
     /// (Spec §8.1) to decide whether to skip a redundant search.
     /// </summary>
     public DateTimeOffset? MemoryLastRetrievedAt { get; set; }
+
+    // ── Permission park state ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Gets or sets the pending tool batch when the turn is parked awaiting user permission
+    /// (<see cref="AgentResultStatus.AwaitingPermission"/>). Null when no turn is parked.
+    /// Cleared on resume or abandonment. This is the serialization target for the harness
+    /// state-persistence project (spec §6.6).
+    /// </summary>
+    internal PendingToolBatch? PendingToolBatch { get; set; }
 }

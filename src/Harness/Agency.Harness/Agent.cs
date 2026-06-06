@@ -5,6 +5,7 @@ using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
+using Agency.Harness.Permissions;
 using Agency.Harness.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -50,6 +51,7 @@ public sealed class Agent
     private readonly StopCondition _stop;
     private readonly ILogger<Agent> _logger;
     private readonly AgentHooks _hooks;
+    private readonly IPermissionEvaluator? _permissions;
 
     /// <param name="llm">The <see cref="IChatClient"/> used for all LLM calls.</param>
     /// <param name="model">The model identifier forwarded to the provider on every call.</param>
@@ -58,6 +60,12 @@ public sealed class Agent
     /// Predicate evaluated after each turn. Defaults to <c>Any(NoToolCalls, StepCountIs(20))</c>.
     /// </param>
     /// <param name="hooks">Optional lifecycle hook delegates; defaults to <see cref="AgentHooks.None"/>.</param>
+    /// <param name="permissions">
+    /// Optional permission evaluator. When supplied, every tool call is evaluated against
+    /// configured allow/deny rules before invocation; unresolved calls park the turn.
+    /// When null, the rules layer is absent and behavior is unchanged — hook <c>Ask</c> results
+    /// still park the turn (park/resume is agent machinery, not evaluator machinery).
+    /// </param>
     /// <param name="logger">Optional structured logger.</param>
     public Agent(
         IChatClient llm,
@@ -65,6 +73,7 @@ public sealed class Agent
         string? clientType = null,
         StopCondition? stopWhen = null,
         AgentHooks? hooks = null,
+        IPermissionEvaluator? permissions = null,
         ILogger<Agent>? logger = null)
     {
         this._llm = llm ?? throw new ArgumentNullException(nameof(llm));
@@ -72,6 +81,7 @@ public sealed class Agent
         this._clientType = clientType ?? "Unknown";
         this._stop = stopWhen ?? StopConditions.Any(StopConditions.NoToolCalls, StopConditions.StepCountIs(20));
         this._hooks = hooks ?? AgentHooks.None;
+        this._permissions = permissions;
         this._logger = logger ?? NullLogger<Agent>.Instance;
     }
 
@@ -265,6 +275,240 @@ public sealed class Agent
 
         IReadOnlyList<ToolDefinition> toolDefs = ctx.Tools.Registry.ListDefinitions();
 
+        await foreach (AgentEvent evt in this.RunIterationsAsync(ctx, toolDefs, ct))
+        {
+            yield return evt;
+        }
+    }
+
+    /// <summary>
+    /// Resumes a turn that is parked with <see cref="AgentResultStatus.AwaitingPermission"/>.
+    /// Validates responses, executes or denies the pended calls, completes the batch, and
+    /// continues the standard loop. Throws eagerly (before the first yield) on invalid input.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No turn is parked (<see cref="Context.PendingToolBatch"/> is null).</exception>
+    /// <exception cref="ArgumentException">Responses are missing, duplicated, or reference unknown request IDs.</exception>
+    // options is part of the public API contract (spec §3.1) and reserved for turn-timeout wiring;
+    // suppress the unused-parameter diagnostic rather than removing it from the signature.
+#pragma warning disable IDE0060
+    internal IAsyncEnumerable<AgentEvent> ResumeAsync(
+        Context ctx,
+        IReadOnlyList<PermissionResponse> responses,
+        AgentOptions? options = null,
+        CancellationToken ct = default)
+#pragma warning restore IDE0060
+    {
+        // Eager validation (spec §6.3 steps 1–2): runs before the first MoveNextAsync.
+        if (ctx.PendingToolBatch is null)
+        {
+            throw new InvalidOperationException(
+                "No turn is parked. Call SendAsync / RunAsync before ResumeAsync.");
+        }
+
+        PendingToolBatch batch = ctx.PendingToolBatch;
+        List<PendingToolCall> pending = batch.Pending;
+
+        // Validate: exactly one response per pending RequestId, no unknowns, no duplicates.
+        var pendingById = pending.ToDictionary(p => p.RequestId);
+        var seenIds = new HashSet<Guid>(responses.Count);
+        foreach (PermissionResponse resp in responses)
+        {
+            if (!pendingById.ContainsKey(resp.RequestId))
+            {
+                throw new ArgumentException(
+                    $"Unknown RequestId {resp.RequestId} in responses.", nameof(responses));
+            }
+
+            if (!seenIds.Add(resp.RequestId))
+            {
+                throw new ArgumentException(
+                    $"Duplicate RequestId {resp.RequestId} in responses.", nameof(responses));
+            }
+        }
+
+        if (seenIds.Count != pending.Count)
+        {
+            var missing = pending.Where(p => !seenIds.Contains(p.RequestId)).Select(p => p.RequestId);
+            throw new ArgumentException(
+                $"Missing responses for RequestIds: {string.Join(", ", missing)}.", nameof(responses));
+        }
+
+        return this.ResumeIteratorAsync(ctx, batch, responses.ToDictionary(r => r.RequestId), ct);
+    }
+
+    private async IAsyncEnumerable<AgentEvent> ResumeIteratorAsync(
+        Context ctx,
+        PendingToolBatch batch,
+        Dictionary<Guid, PermissionResponse> responseById,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        // Steps 3–6: execute/deny pended calls, merge, OnPostToolBatch, append messages, clear.
+        ToolInvokedEvent[] resumedToolEvents =
+            await this.ExecutePendingBatchAsync(ctx, batch, responseById, ct);
+
+        // Yield ToolInvokedEvents for the resumed calls.
+        foreach (ToolInvokedEvent evt in resumedToolEvents)
+        {
+            yield return evt;
+        }
+
+        // Step 7 (spec §6.3): continue the standard loop (may re-park).
+        IReadOnlyList<ToolDefinition> toolDefs = ctx.Tools.Registry.ListDefinitions();
+        await foreach (AgentEvent evt in this.RunIterationsAsync(ctx, toolDefs, ct))
+        {
+            yield return evt;
+        }
+    }
+
+    /// <summary>
+    /// Executes steps 3–6 of the resume algorithm (spec §6.3): record always-grants,
+    /// execute or deny pended calls, merge results, fire <c>OnPostToolBatch</c>,
+    /// append all result messages, and clear <see cref="Context.PendingToolBatch"/>.
+    /// Returns the <see cref="ToolInvokedEvent"/>s for the newly-executed/denied calls only
+    /// (completed siblings are already in <paramref name="batch"/>.<see cref="PendingToolBatch.SiblingToolEvents"/>).
+    /// Called by both <see cref="ResumeIteratorAsync"/> (yields the events, then continues the loop)
+    /// and the abandonment path in <see cref="ChatSession.SendAsync"/> (discards the events, then
+    /// proceeds with the new user message).
+    /// </summary>
+    internal async Task<ToolInvokedEvent[]> ExecutePendingBatchAsync(
+        Context ctx,
+        PendingToolBatch batch,
+        Dictionary<Guid, PermissionResponse> responseById,
+        CancellationToken ct = default)
+    {
+        List<PendingToolCall> pending = batch.Pending;
+
+        // Step 3 (spec §6.3): record AllowAlways / DenyAlways grants.
+        if (this._permissions is not null)
+        {
+            foreach (PendingToolCall pendingCall in pending)
+            {
+                PermissionResponse resp = responseById[pendingCall.RequestId];
+                if (resp.Kind is PermissionResponseKind.AllowAlways or PermissionResponseKind.DenyAlways)
+                {
+                    await this._permissions.RecordAlwaysAsync(
+                        pendingCall.ProposedRule,
+                        deny: resp.Kind == PermissionResponseKind.DenyAlways,
+                        ct);
+                }
+            }
+        }
+
+        // Step 4 (spec §6.3): execute pended calls in parallel (OnPreToolUse NOT re-run).
+        var resumedResults = new FunctionResultContent?[batch.Results.Length];
+        var resumedEvents = new ToolInvokedEvent?[batch.Results.Length];
+
+        var resumeTasks = pending.Select(async pendingCall =>
+        {
+            ct.ThrowIfCancellationRequested();
+            PermissionResponse resp = responseById[pendingCall.RequestId];
+
+            ToolInvokedEvent evt;
+            FunctionResultContent resultContent;
+
+            if (resp.Kind is PermissionResponseKind.AllowOnce or PermissionResponseKind.AllowAlways)
+            {
+                // Execute the tool (OnPreToolUse already ran pre-park — do NOT re-run).
+                ToolResult result;
+                using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
+                toolActivity?.SetTag("agent.tool.name", pendingCall.ToolName);
+                toolActivity?.SetTag("agent.model", this._model);
+                toolActivity?.SetTag("agent.client_type", this._clientType);
+
+                try
+                {
+                    result = await ctx.Tools.Registry.InvokeAsync(pendingCall.ToolName, pendingCall.Input, ct);
+                    toolActivity?.SetStatus(result.IsError ? ActivityStatusCode.Error : ActivityStatusCode.Ok, result.IsError ? result.Content : null);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    this._logger.LogWarning(ex, "Tool {Tool} failed on resume", pendingCall.ToolName);
+                    toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
+                }
+
+                // OnPostToolUse fires for resumed calls (spec §6.3 step 4).
+                if (this._hooks.OnPostToolUse is { } onPostToolUse)
+                {
+                    await onPostToolUse(
+                        new PostToolUseHookContext(pendingCall.ToolName, pendingCall.Input, result, ctx), ct);
+                }
+
+                _toolCallCounter.Add(1, new TagList
+                {
+                    { "agent.model", this._model },
+                    { "agent.client_type", this._clientType },
+                    { "agent.tool.name", pendingCall.ToolName },
+                    { "agent.tool.error", result.IsError },
+                });
+
+                resultContent = result.IsError
+                    ? new FunctionResultContent(pendingCall.CallId, $"[Error] {result.Content}")
+                    : new FunctionResultContent(pendingCall.CallId, result.Content);
+
+                evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, result);
+            }
+            else
+            {
+                // Deny: produce a [Blocked] result (spec §2.5).
+                string reason = resp.Message is { Length: > 0 } msg
+                    ? $"[Blocked] The user denied permission for this tool call: {msg}"
+                    : "[Blocked] The user denied permission for this tool call.";
+                var deniedResult = new ToolResult(reason, IsError: true);
+                resultContent = new FunctionResultContent(pendingCall.CallId, reason);
+                evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, deniedResult);
+            }
+
+            resumedResults[pendingCall.BatchIndex] = resultContent;
+            resumedEvents[pendingCall.BatchIndex] = evt;
+            return evt;
+        });
+
+        ToolInvokedEvent[] resumedToolEvents = await Task.WhenAll(resumeTasks);
+
+        // Step 5 (spec §6.3): merge into Results by BatchIndex; fire OnPostToolBatch with FULL batch.
+        FunctionResultContent?[] fullResults = batch.Results;
+        for (int i = 0; i < resumedResults.Length; i++)
+        {
+            if (resumedResults[i] is not null)
+            {
+                fullResults[i] = resumedResults[i];
+            }
+        }
+
+        // Reconstruct the full ToolInvokedEvent[] in batch order for OnPostToolBatch.
+        var fullBatchEvents = new ToolInvokedEvent[fullResults.Length];
+        for (int i = 0; i < fullResults.Length; i++)
+        {
+            fullBatchEvents[i] = batch.SiblingToolEvents[i] ?? resumedEvents[i]!;
+        }
+
+        if (this._hooks.OnPostToolBatch is { } onPostToolBatch)
+        {
+            await onPostToolBatch(fullBatchEvents, ctx, ct);
+        }
+
+        // Step 6 (spec §6.3): append ALL result messages in batch order; clear PendingToolBatch.
+        foreach (FunctionResultContent? resultContent in fullResults)
+        {
+            ctx.Conversation.Append(new ChatMessage(ChatRole.Tool, [resultContent!]));
+        }
+
+        ctx.PendingToolBatch = null;
+
+        return resumedToolEvents;
+    }
+
+    /// <summary>
+    /// The core agent iteration loop: check stop conditions, call LLM, execute tools.
+    /// Shared by <see cref="RunAsync"/> and <see cref="ResumeIteratorAsync"/> so the two
+    /// paths cannot drift (spec §6.3 implementation note).
+    /// </summary>
+    private async IAsyncEnumerable<AgentEvent> RunIterationsAsync(
+        Context ctx,
+        IReadOnlyList<ToolDefinition> toolDefs,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -380,7 +624,12 @@ public sealed class Agent
                 yield break;
             }
 
-            var resultMessages = new FunctionResultContent[toolCalls.Count];
+            var resultMessages = new FunctionResultContent?[toolCalls.Count];
+
+            // Pended calls are collected into this pre-sized array by batch index so parallel
+            // tasks can write their slot without a lock (each index is written by exactly one task).
+            var pendingSlots = new PendingToolCall?[toolCalls.Count];
+
             var toolTasks = toolCalls.Select(async (call, index) =>
             {
                 ct.ThrowIfCancellationRequested();
@@ -388,6 +637,9 @@ public sealed class Agent
                 ToolResult result;
 
                 // PreToolUse hook
+                bool hookAsk = false;
+                string? hookReason = null;
+
                 if (this._hooks.OnPreToolUse is { } onPreToolUse)
                 {
                     PreToolUseDecision decision = await onPreToolUse(
@@ -400,9 +652,82 @@ public sealed class Agent
                         return new ToolInvokedEvent(call.Name, input, blocked);
                     }
 
-                    if (decision is PreToolUseDecision.Rewrite rewrite)
+                    if (decision is PreToolUseDecision.Ask ask)
+                    {
+                        // Flag the call for the permission gate below — do NOT fail-close here.
+                        // The gate applies the combined per-call order (spec §2.3):
+                        //   deny rule > hook Ask > allow rule.
+                        hookAsk = true;
+                        hookReason = ask.Reason;
+                    }
+                    else if (decision is PreToolUseDecision.Rewrite rewrite)
                     {
                         input = rewrite.NewInput;
+                    }
+                }
+
+                // ── Permission gate (spec §2.3, §2.4) ────────────────────────────
+                // Evaluates post-Rewrite input. Combined per-call order:
+                //   1. Hook Deny  — handled above (already returned).
+                //   2. Rule Deny  — blocks even a hook-Ask-flagged call (deny always wins).
+                //   3. Hook Ask   — pends (unless killed by deny in step 2).
+                //   4. Rule Allow — executes.
+                //   5. Unresolved — pends (or denies when OnUnresolved=Deny).
+                //
+                // Mechanism for hook-Ask + evaluator:
+                //   Call Evaluate regardless of hookAsk. A Deny result (rule deny OR
+                //   OnUnresolved=Deny) always blocks — the deny reason is used as-is (the
+                //   evaluator/stub returns the §2.5 headless string when appropriate). An Allow
+                //   or Ask result does NOT clear a hook Ask — the call still pends with
+                //   Source=Hook. This keeps the evaluator pure and avoids adding surface to
+                //   IPermissionEvaluator.
+                if (hookAsk || this._permissions != null)
+                {
+                    if (this._permissions != null)
+                    {
+                        PermissionDecision permDecision = this._permissions.Evaluate(call.Name, input);
+
+                        if (permDecision is PermissionDecision.Deny permDeny)
+                        {
+                            // Rule deny beats hook Ask — no park, just block.
+                            ToolResult blocked = new($"[Blocked] {permDeny.Reason}", IsError: true);
+                            resultMessages[index] = new FunctionResultContent(call.CallId, blocked.Content);
+                            return new ToolInvokedEvent(call.Name, input, blocked);
+                        }
+
+                        if (hookAsk)
+                        {
+                            // Allow or Ask from evaluator does NOT clear a hook Ask (spec §2.3 step 3).
+                            // Pend with Source=Hook; use evaluator's Ask KeyValue/ProposedRule if it
+                            // returned Ask, otherwise fall back to null KeyValue + bare tool name.
+                            string? keyValue = permDecision is PermissionDecision.Ask askDecision ? askDecision.KeyValue : null;
+                            string proposedRule = permDecision is PermissionDecision.Ask askDecision2 ? askDecision2.ProposedRule : call.Name;
+                            pendingSlots[index] = new PendingToolCall(
+                                Guid.NewGuid(), index, call.CallId, call.Name,
+                                input, keyValue, proposedRule, PermissionRequestSource.Hook, hookReason);
+                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                        }
+
+                        if (permDecision is PermissionDecision.Ask ruleAsk)
+                        {
+                            // Unresolved rule — pend with Source=UnresolvedRule.
+                            pendingSlots[index] = new PendingToolCall(
+                                Guid.NewGuid(), index, call.CallId, call.Name,
+                                input, ruleAsk.KeyValue, ruleAsk.ProposedRule,
+                                PermissionRequestSource.UnresolvedRule, null);
+                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                        }
+
+                        // Allow — fall through to InvokeAsync.
+                    }
+                    else if (hookAsk)
+                    {
+                        // No evaluator: hook Ask still pends (spec §3.5 "Without an evaluator").
+                        // KeyValue=null, ProposedRule=bare tool name.
+                        pendingSlots[index] = new PendingToolCall(
+                            Guid.NewGuid(), index, call.CallId, call.Name,
+                            input, null, call.Name, PermissionRequestSource.Hook, hookReason);
+                        return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
                     }
                 }
 
@@ -428,12 +753,6 @@ public sealed class Agent
                     result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
                 }
 
-                // PostToolUse hook
-                if (this._hooks.OnPostToolUse is { } onPostToolUse)
-                {
-                    await onPostToolUse(new PostToolUseHookContext(call.Name, input, result, ctx), ct);
-                }
-
                 _toolCallCounter.Add(1, new TagList
                 {
                     { "agent.model", this._model },
@@ -451,9 +770,87 @@ public sealed class Agent
             });
 
             ToolInvokedEvent[] toolEvents = await Task.WhenAll(toolTasks);
-            foreach (ToolInvokedEvent evt in toolEvents)
+
+            // ── Post-batch: park if any calls are pended ──────────────────────────
+            // Collect the pending calls in batch order (spec §6.1).
+            List<PendingToolCall> pendingCalls = [];
+            for (int i = 0; i < pendingSlots.Length; i++)
             {
-                yield return evt;
+                if (pendingSlots[i] is { } pending)
+                {
+                    pendingCalls.Add(pending);
+                }
+            }
+
+            if (pendingCalls.Count > 0)
+            {
+                // Yield ToolInvokedEvents for completed siblings only (not for pended calls —
+                // their placeholder events carry an empty result that should not surface).
+                for (int i = 0; i < toolEvents.Length; i++)
+                {
+                    if (pendingSlots[i] is null)
+                    {
+                        yield return toolEvents[i];
+                    }
+                }
+
+                // Yield one PermissionRequestedEvent per pended call, in batch order (spec §6.1).
+                foreach (PendingToolCall pending in pendingCalls)
+                {
+                    yield return new PermissionRequestedEvent(
+                        pending.RequestId,
+                        pending.ToolName,
+                        pending.Input,
+                        pending.KeyValue,
+                        pending.ProposedRule,
+                        pending.Source,
+                        pending.Reason);
+                }
+
+                // Park: store the batch on the context and emit AwaitingPermission (spec §6.1).
+                // Do NOT append result messages and do NOT fire OnPostToolBatch — the batch is
+                // incomplete. The conversation remains in the legal intermediate state the LLM
+                // protocol uses between tool_use and tool_result.
+                // SiblingToolEvents stores the completed siblings' events so ResumeAsync can
+                // reconstruct the full batch for OnPostToolBatch (spec §6.3 step 5).
+                var siblingEvents = new ToolInvokedEvent?[toolEvents.Length];
+                for (int i = 0; i < toolEvents.Length; i++)
+                {
+                    if (pendingSlots[i] is null)
+                    {
+                        siblingEvents[i] = toolEvents[i];
+                    }
+                }
+
+                ctx.PendingToolBatch = new PendingToolBatch
+                {
+                    Iteration = ctx.IterationCount,
+                    Results = resultMessages,
+                    Pending = pendingCalls,
+                    SiblingToolEvents = siblingEvents,
+                };
+
+                yield return new AgentResultEvent(
+                    AgentResultStatus.AwaitingPermission,
+                    null,
+                    ctx.TotalUsage,
+                    ctx.TotalCostUsd);
+                yield break;
+            }
+
+            // No pended calls — unchanged behavior.
+            // OnPostToolUse fires per-call now that we know the batch is complete
+            // (deferred from the task lambda so it never fires for completed siblings
+            // in a parked batch — per spec, OnPostToolUse fires only for fully-settled calls).
+            for (int i = 0; i < toolEvents.Length; i++)
+            {
+                yield return toolEvents[i];
+                if (this._hooks.OnPostToolUse is { } onPostToolUse)
+                {
+                    await onPostToolUse(
+                        new PostToolUseHookContext(
+                            toolCalls[i].Name, toolEvents[i].Input, toolEvents[i].Result, ctx), ct);
+                }
             }
 
             // OnPostToolBatch fires after all parallel tool calls settle (Spec §6.5, D.4).
@@ -465,7 +862,7 @@ public sealed class Agent
             // Add one Tool-role message per result so each callId is paired correctly.
             foreach (var resultContent in resultMessages)
             {
-                ctx.Conversation.Append(new ChatMessage(ChatRole.Tool, [resultContent]));
+                ctx.Conversation.Append(new ChatMessage(ChatRole.Tool, [resultContent!]));
             }
         }
     }

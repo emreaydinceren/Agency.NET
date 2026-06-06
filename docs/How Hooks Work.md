@@ -30,7 +30,7 @@ This is the single control point where outside policy can stop the agent from do
 
 Multiple hook sets can be merged into one. When two `OnPreToolUse` hooks disagree, the most restrictive decision wins:
 
-**Deny > Rewrite > Allow**
+**Deny > Ask > Rewrite > Allow**
 
 That precedence holds everywhere — across hooks, across configuration entries, and across sources. Nothing downstream can weaken an upstream deny.
 
@@ -184,12 +184,14 @@ public abstract record PreToolUseDecision
     public sealed record Allow : PreToolUseDecision;
     public sealed record Deny(string Reason) : PreToolUseDecision;
     public sealed record Rewrite(JsonElement NewInput) : PreToolUseDecision;
+    public sealed record Ask(string? Reason) : PreToolUseDecision;
 }
 ```
 
 - **Allow** — the tool runs with its original input.
 - **Deny** — the tool never runs. The agent instead receives a tool error reading `[Blocked] {reason}`, observes the block, and can replan. (The model is told *why*, which usually produces better behavior than a silent failure.)
 - **Rewrite** — the tool runs, but with substituted input. Useful for normalizing arguments (for example, forcing a `--no-color` flag) without blocking the call.
+- **Ask** — the operator hook flags the call for user confirmation via the permission layer. Deny still beats Ask; an allow rule cannot clear it (operator escalation cannot be overridden by config). The optional `Reason` is surfaced to the user so they understand why confirmation is needed.
 
 > Teaching note: a deny does not crash or end the conversation. It becomes an error *result* that the model sees, the same way a tool that genuinely failed would. The agent stays in control of what to do next; it just cannot do the blocked thing.
 
@@ -210,7 +212,7 @@ AgentHooks effective = memoryHooks
 The rules are simple:
 
 - **Observer hooks run sequentially** — first's delegate, then second's.
-- **`OnPreToolUse` hooks run concurrently, and the most restrictive decision wins**: Deny > Rewrite > Allow. If both sides deny, the first one's reason is used.
+- **`OnPreToolUse` hooks run concurrently, and the most restrictive decision wins**: Deny > Ask > Rewrite > Allow. If both sides deny, the first one's reason is used. If both sides ask, the first non-null reason is kept.
 - **Null stays cheap** — composing a null delegate with a non-null one just keeps the non-null one; composing two nulls stays null, preserving the loop's skip path.
 
 ### The three sources, folded in order
@@ -367,7 +369,8 @@ Handlers receive a snake_case JSON document (over stdin or as the POST body). Fi
 | Exit code `2` | **Blocking deny** |
 | Any other exit code | Non-blocking error → fail open (Allow) |
 | `hookSpecificOutput.permissionDecision: "deny"` in stdout JSON | Deny |
-| `hookSpecificOutput.permissionDecisionReason` | The reason shown as `[Blocked] {reason}` |
+| `hookSpecificOutput.permissionDecision: "ask"` in stdout JSON | Ask — flags the call for user confirmation |
+| `hookSpecificOutput.permissionDecisionReason` | The reason shown on deny (`[Blocked] {reason}`) or surfaced to the user on ask |
 | A `tool_input` field in stdout JSON | Rewrite — the tool runs with this input instead |
 | HTTP 2xx | Same as exit `0`; body parsed as above |
 | HTTP non-2xx / transport error | Non-blocking error → fail open |
@@ -379,15 +382,23 @@ So the smallest possible deny script is: read stdin, decide, and either `exit 2`
                         "permissionDecisionReason": "rm -rf blocked"}}
 ```
 
+To flag a call for user confirmation instead of blocking outright:
+
+```json
+{"hookSpecificOutput": {"permissionDecision": "ask",
+                        "permissionDecisionReason": "sensitive path — confirm?"}}
+```
+
 One precedence rule inside a single handler: an exit code of `2` dominates whatever is in stdout. An explicit blocking exit beats document content.
 
 ### 7.6 Aggregation: many handlers, one decision
 
-Several handlers can match one tool call (within a group, or across groups). They all run concurrently via `Task.WhenAll`, and then their outputs are folded into one decision:
+Several handlers can match one tool call (within a group, or across groups). They all run concurrently via `Task.WhenAll`, and then their outputs are folded into one decision using the precedence **Deny > Ask > Rewrite > Allow**:
 
 1. If any output maps to **Deny**, return the first deny (in config-declared order).
-2. Otherwise, if any maps to **Rewrite**, return the first rewrite.
-3. Otherwise, **Allow**.
+2. Otherwise, if any maps to **Ask**, return an Ask whose reason is the first non-null `permissionDecisionReason` among the asking handlers (null if none provided a reason).
+3. Otherwise, if any maps to **Rewrite**, return the first rewrite.
+4. Otherwise, **Allow**.
 
 The phrase "config-declared order" is load-bearing. The fold iterates outputs in the order handlers were declared, never in the order they happened to finish. Without that, two runs of identical config could pick different denies depending on handler latency — a nondeterminism bug that only shows up under load. With it, the verdict is a pure function of config plus payload: reproducible and auditable.
 
@@ -436,7 +447,7 @@ A few boundaries, so the reference is honest:
 
 - **Only `PreToolUse` can block.** For the other eight events, handler output is ignored for control flow — the handlers are awaited (so timeouts and cancellation are honored), but they cannot stop the loop.
 - **Matchers filter by tool name only.** Matching on session id or file path is V2.
-- **`ask` collapses to allow.** Claude Code's interactive `ask` decision has no UI to land in here, so it is documented as allow.
+- **`ask` flags the call for user confirmation.** `permissionDecision: "ask"` maps to `PreToolUseDecision.Ask(reason)` and outranks Rewrite and Allow in the aggregation fold. Deny still beats Ask. The optional `permissionDecisionReason` is passed to the permission layer so the user understands why confirmation is needed. Hook asks recur by design — persisting an allow rule cannot suppress a future hook Ask (rules cannot override operator escalation).
 - **No shell-form commands.** Pipes, `&&`, and redirects are intentionally unsupported (see the injection-safety point in §7.3). Wrap them in a script.
 - **Heavier handler kinds** (`mcp_tool`, `prompt`, `agent`) are reserved in the enum but throw `NotSupportedException` if configured.
 

@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Agency.Harness.Permissions;
+
 namespace Agency.Harness;
 
 /// <summary>Base type for all events emitted by <see cref="Agent.RunAsync"/>.</summary>
@@ -23,6 +25,34 @@ public sealed record IterationCompletedEvent(
     LlmTokenUsage TurnUsage,
     TimeSpan LlmDuration) : AgentEvent;
 
+/// <summary>Emitted for each tool call that needs user permission. The turn ends with
+/// <see cref="AgentResultStatus.AwaitingPermission"/> after all such events are yielded.</summary>
+/// <param name="RequestId">Unique identifier for this permission request; must be echoed back in <see cref="PermissionResponse"/>.</param>
+/// <param name="ToolName">The name of the tool whose invocation requires approval.</param>
+/// <param name="Input">The (post-rewrite) input the tool would receive on approval.</param>
+/// <param name="KeyValue">Extracted key field (command/path) for concise display; <see langword="null"/> when none.</param>
+/// <param name="ProposedRule">Rule persisted to the local rules file if the answer is an "always", e.g. <c>ExecutePowershell(git status)</c>.</param>
+/// <param name="Source">Why this call is asking: no rule matched, or a hook escalated.</param>
+/// <param name="Reason">Hook-supplied reason when <paramref name="Source"/> is <see cref="PermissionRequestSource.Hook"/>; <see langword="null"/> otherwise.</param>
+public sealed record PermissionRequestedEvent(
+    Guid RequestId,
+    string ToolName,
+    JsonElement Input,
+    string? KeyValue,
+    string ProposedRule,
+    PermissionRequestSource Source,
+    string? Reason) : AgentEvent;
+
+/// <summary>Why a tool call is asking: no rule matched, or a hook escalated.</summary>
+public enum PermissionRequestSource
+{
+    /// <summary>No configured allow or deny rule matched this tool call.</summary>
+    UnresolvedRule,
+
+    /// <summary>A hook returned an escalation decision requiring user confirmation.</summary>
+    Hook,
+}
+
 /// <summary>Terminal event — always the last event emitted by <see cref="Agent.RunAsync"/>.</summary>
 public sealed record AgentResultEvent(
     AgentResultStatus Status,
@@ -44,6 +74,10 @@ public enum AgentResultStatus
 
     /// <summary>An unrecoverable error occurred.</summary>
     Error,
+
+    /// <summary>The turn is parked: one or more tool calls await user permission.
+    /// Answer via <see cref="ChatSession.ResumeWithPermissionsAsync"/>.</summary>
+    AwaitingPermission,
 }
 
 /// <summary>Accumulated token usage for a session or turn.</summary>

@@ -1,6 +1,7 @@
 
 using Agency.Harness;
 using Agency.Harness.Hooks;
+using Agency.Harness.Permissions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -10,15 +11,18 @@ internal sealed class AgentFactory : IAgentFactory
     private readonly Models models;
     private readonly ILogger<Agent> logger;
     private readonly AgentOptions options;
+    private readonly IPermissionEvaluator? permissions;
 
     public AgentFactory(
         Models models,
         ILogger<Agent> logger,
-        IOptions<AgentOptions> optionsAccessor)
+        IOptions<AgentOptions> optionsAccessor,
+        IPermissionEvaluator? permissions = null)
     {
         this.models = models;
         this.logger = logger;
         this.options = optionsAccessor.Value;
+        this.permissions = permissions;
     }
 
     public Agent CreateAgent(string? clientName, string? modelName)
@@ -37,6 +41,6 @@ internal sealed class AgentFactory : IAgentFactory
             this.options.UserHooks);
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
-        return new Agent(chatClient, modelName, clientType, null, hooks, logger: this.logger);
+        return new Agent(chatClient, modelName, clientType, null, hooks, permissions: this.permissions, logger: this.logger);
     }
 }

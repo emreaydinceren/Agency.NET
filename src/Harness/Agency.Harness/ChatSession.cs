@@ -1,5 +1,6 @@
 
 using Agency.Harness.Contexts;
+using Agency.Harness.Permissions;
 using System.Runtime.CompilerServices;
 
 namespace Agency.Harness;
@@ -85,6 +86,24 @@ public sealed class ChatSession : IAsyncDisposable
             new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
             user: this._user);
 
+        // Abandonment (spec §6.4): if a turn is parked and the user sends a new message,
+        // implicitly deny all pending calls with the abandonment reason, complete the batch
+        // (steps 5–6 of §6.3), then proceed normally with the new message.
+        // We do NOT continue the loop here — ChatAsync below handles the new user message.
+        if (this._ctx.PendingToolBatch is { } parkedBatch)
+        {
+            var abandonResponseById = parkedBatch.Pending.ToDictionary(
+                p => p.RequestId,
+                p => new PermissionResponse(
+                    p.RequestId,
+                    PermissionResponseKind.DenyOnce,
+                    "The user did not respond to the permission request."));
+
+            // Complete the batch (execute/deny pending calls, append results, clear PendingToolBatch).
+            // Events are discarded — the abandoned results are already in conversation history.
+            await this._agent.ExecutePendingBatchAsync(this._ctx, parkedBatch, abandonResponseById, ct);
+        }
+
         await foreach (AgentEvent evt in this._agent.ChatAsync(userMessage, this._ctx, this._options, ct))
         {
             if (evt is AgentResultEvent)
@@ -94,6 +113,32 @@ public sealed class ChatSession : IAsyncDisposable
 
             yield return evt;
         }
+    }
+
+    /// <summary>
+    /// Resumes a turn parked with <see cref="AgentResultStatus.AwaitingPermission"/>.
+    /// Every pending <see cref="PermissionRequestedEvent.RequestId"/> must have exactly one response.
+    /// Streams the remainder of the turn (completed-batch <see cref="ToolInvokedEvent"/>s, then the loop continues).
+    /// </summary>
+    /// <param name="responses">
+    /// One <see cref="PermissionResponse"/> per pending <see cref="PermissionRequestedEvent"/>.
+    /// </param>
+    /// <param name="ct">Cancellation token for the resumed turn.</param>
+    /// <exception cref="InvalidOperationException">No turn is parked.</exception>
+    /// <exception cref="ArgumentException">Responses are missing, duplicated, or unknown.</exception>
+    public IAsyncEnumerable<AgentEvent> ResumeWithPermissionsAsync(
+        IReadOnlyList<PermissionResponse> responses,
+        CancellationToken ct = default)
+    {
+        if (this._ctx is null)
+        {
+            throw new InvalidOperationException(
+                "No turn is in progress. Call SendAsync before ResumeWithPermissionsAsync.");
+        }
+
+        // Delegate to Agent.ResumeAsync, which performs the remaining eager validation
+        // (PendingToolBatch null check and response validation).
+        return this._agent.ResumeAsync(this._ctx, responses, this._options, ct);
     }
 
     /// <summary>

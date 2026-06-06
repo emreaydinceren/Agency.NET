@@ -9,6 +9,9 @@
 # MCP config (contains access tokens)
 .mcp.json
 
+# Per-machine permission grants (like Claude Code's settings.local.json)
+permissions.local.json
+
 # User-specific files
 *.rsuser
 *.suo

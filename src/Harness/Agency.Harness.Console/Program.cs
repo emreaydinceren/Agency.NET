@@ -6,6 +6,7 @@ using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
+using Agency.Harness.Permissions;
 using Agency.Harness.Tools;
 using Agency.Memory.Consolidator.DependencyInjection;
 using Agency.Memory.Distiller;
@@ -53,6 +54,7 @@ internal class Program
             .ValidateOnStart();
 
         builder.Services.AddAgencyConfiguredHooks(builder.Configuration);
+        builder.Services.AddAgencyPermissions(builder.Configuration);
 
         // 5. Memory — opt-in via Memory:Enabled (default false).
         //    When disabled, NONE of the memory services are registered and the console

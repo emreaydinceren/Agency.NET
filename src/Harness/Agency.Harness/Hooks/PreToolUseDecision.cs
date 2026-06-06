@@ -16,6 +16,13 @@ public abstract record PreToolUseDecision
     /// <summary>Rewrite the tool's input before invocation.</summary>
     public sealed record Rewrite(JsonElement NewInput) : PreToolUseDecision;
 
+    /// <summary>
+    /// Flag the tool call for user confirmation. Deny beats Ask; allow rules cannot clear it.
+    /// When aggregating, Ask outranks Rewrite and Allow (Deny &gt; Ask &gt; Rewrite &gt; Allow).
+    /// The first non-null <paramref name="Reason"/> among multiple Ask results is kept.
+    /// </summary>
+    public sealed record Ask(string? Reason) : PreToolUseDecision;
+
     /// <summary>Shorthand singleton for <see cref="Allow"/>.</summary>
     public static PreToolUseDecision Allowed { get; } = new Allow();
 }

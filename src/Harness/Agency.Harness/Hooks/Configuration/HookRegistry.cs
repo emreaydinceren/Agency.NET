@@ -225,6 +225,13 @@ internal sealed class HookRegistry
             return firstDeny;
         }
 
+        var asks = decisions.OfType<PreToolUseDecision.Ask>().ToList();
+        if (asks.Count > 0)
+        {
+            string? reason = asks.Select(a => a.Reason).FirstOrDefault(r => r is not null);
+            return new PreToolUseDecision.Ask(reason);
+        }
+
         var firstRewrite = decisions.OfType<PreToolUseDecision.Rewrite>().FirstOrDefault();
         if (firstRewrite is not null)
         {
@@ -249,6 +256,12 @@ internal sealed class HookRegistry
         {
             string reason = TryGetPermissionDecisionReason(output.Json) ?? string.Empty;
             return new PreToolUseDecision.Deny(reason);
+        }
+
+        if (output.Json.HasValue && TryGetPermissionDecision(output.Json.Value) == "ask")
+        {
+            string? reason = TryGetPermissionDecisionReason(output.Json);
+            return new PreToolUseDecision.Ask(reason);
         }
 
         if (output.Json.HasValue && output.Json.Value.TryGetProperty("tool_input", out var toolInput)

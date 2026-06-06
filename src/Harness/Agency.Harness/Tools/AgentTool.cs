@@ -2,10 +2,14 @@
 using System.Text;
 using System.Text.Json;
 using Agency.Harness.Contexts;
+using Agency.Harness.Permissions;
 
 namespace Agency.Harness.Tools;
 public class AgentTool : ITool
 {
+    private const string SubAgentDenyMessage =
+        "Sub-agents cannot request permission; grant a rule to the parent session instead.";
+
     private readonly Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory;
 
     public AgentTool(Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory)
@@ -44,8 +48,8 @@ public class AgentTool : ITool
 
         string prompt = accessor.prompt;
 
-        if (string.IsNullOrEmpty(prompt)) 
-        { 
+        if (string.IsNullOrEmpty(prompt))
+        {
             return new ToolResult("Prompt is required.", IsError: true);
         }
 
@@ -62,25 +66,54 @@ public class AgentTool : ITool
         var verboseSB = new StringBuilder();
         string finalText = string.Empty;
 
-        await foreach (AgentEvent agentEvent in chatSession.SendAsync(prompt, ct))
+        // §9.5: collect pending requests; on AwaitingPermission auto-deny all and resume.
+        // Loop over "current stream" — start with SendAsync, swap to ResumeWithPermissionsAsync on park.
+        IAsyncEnumerable<AgentEvent> currentStream = chatSession.SendAsync(prompt, ct);
+
+        while (true)
         {
-            switch (agentEvent)
+            var pendingRequests = new List<PermissionRequestedEvent>();
+            bool parked = false;
+
+            await foreach (AgentEvent agentEvent in currentStream)
             {
-                case SessionStartedEvent ev:
-                    verboseSB.AppendLine($"Session started: {ev.SessionId}");
-                    break;
-                case ToolInvokedEvent ev:
-                    verboseSB.AppendLine($"Tool invoked: {ev.ToolName} with input {ev.Input}");
-                    break;
-                case IterationCompletedEvent ev:
-                    verboseSB.AppendLine($"Iteration {ev.Iteration} completed.");
-                    break;
-                case AgentResultEvent ev:
-                    verboseSB.AppendLine($"Agent result: {ev.Status} with {ev.FinalText}");
-                    finalText = ev.FinalText ?? string.Empty;
-                    status = ev.Status;
-                    break;
+                switch (agentEvent)
+                {
+                    case SessionStartedEvent ev:
+                        verboseSB.AppendLine($"Session started: {ev.SessionId}");
+                        break;
+                    case ToolInvokedEvent ev:
+                        verboseSB.AppendLine($"Tool invoked: {ev.ToolName} with input {ev.Input}");
+                        break;
+                    case IterationCompletedEvent ev:
+                        verboseSB.AppendLine($"Iteration {ev.Iteration} completed.");
+                        break;
+                    case PermissionRequestedEvent ev:
+                        pendingRequests.Add(ev);
+                        break;
+                    case AgentResultEvent ev:
+                        verboseSB.AppendLine($"Agent result: {ev.Status} with {ev.FinalText}");
+                        finalText = ev.FinalText ?? string.Empty;
+                        status = ev.Status;
+                        if (ev.Status == AgentResultStatus.AwaitingPermission)
+                        {
+                            parked = true;
+                        }
+                        break;
+                }
             }
+
+            if (!parked)
+            {
+                break;
+            }
+
+            // Auto-deny every pending request (§9.5) and resume.
+            PermissionResponse[] responses = pendingRequests
+                .Select(r => new PermissionResponse(r.RequestId, PermissionResponseKind.DenyOnce, SubAgentDenyMessage))
+                .ToArray();
+
+            currentStream = chatSession.ResumeWithPermissionsAsync(responses, ct);
         }
 
         return new ToolResult(finalText, IsError: (status ?? AgentResultStatus.Error) != AgentResultStatus.Success);

@@ -1,0 +1,27 @@
+{
+  "Method": "POST",
+  "PathAndQuery": "/v1/messages",
+  "BodyHash": "8296550be6d86c8c4f47d1acafcf9bdcf4fa6e2e29f54edd4a0bc5534917279d",
+  "StatusCode": 200,
+  "Headers": {
+    "X-Powered-By": [
+      "Express"
+    ],
+    "Access-Control-Allow-Origin": [
+      "*"
+    ],
+    "Access-Control-Allow-Headers": [
+      "*"
+    ],
+    "ETag": [
+      "W/\u002234e-rCvQGuhD2xdBe/y42IyDaa6IpBY\u0022"
+    ],
+    "Date": [
+      "Tue, 09 Jun 2026 20:26:13 GMT"
+    ],
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ]
+  },
+  "Body": "ewogICJpZCI6ICJtc2dfMGN4bDZmaW8wYTNkdzR0NGRxMHUxIiwKICAidHlwZSI6ICJtZXNzYWdlIiwKICAicm9sZSI6ICJhc3Npc3RhbnQiLAogICJjb250ZW50IjogWwogICAgewogICAgICAidHlwZSI6ICJ0ZXh0IiwKICAgICAgInRleHQiOiAiVGhlIHVzZXIgd2FudHMgbWUgdG8gdXNlIHRoZSBgZWNob2AgdG9vbCB3aXRoIHRoZSBpbnB1dCBcInBpbmdcIiBhbmQgdGhlbiByZXBvcnQgdGhlIHJlc3VsdCBvZiB0aGF0IGFjdGlvbi5cblxuMS4gICoqR29hbDoqKiBFeGVjdXRlIGBlY2hvKFwicGluZ1wiKWAgYW5kIHJlcG9ydCB0aGUgb3V0cHV0LlxuMi4gICoqVG9vbCBTZWxlY3Rpb246KiogVGhlIGF2YWlsYWJsZSB0b29sIGlzIGBlY2hvYC5cbjMuICAqKkFjdGlvbiBQbGFuOioqIENhbGwgYGVjaG9gIHdpdGggdGhlIGFyZ3VtZW50IFwicGluZ1wiLlxuNC4gICoqTmV4dCBTdGVwOioqIFdhaXQgZm9yIHRoZSB0b29sIG91dHB1dCBhbmQgdGhlbiBwcmVzZW50IGl0IHRvIHRoZSB1c2VyLiIKICAgIH0sCiAgICB7CiAgICAgICJ0eXBlIjogInRvb2xfdXNlIiwKICAgICAgImlkIjogIjQ4NzU0NTg4NyIsCiAgICAgICJuYW1lIjogImVjaG8iLAogICAgICAiaW5wdXQiOiB7CiAgICAgICAgImlucHV0IjogInBpbmciCiAgICAgIH0KICAgIH0KICBdLAogICJtb2RlbCI6ICJnb29nbGUvZ2VtbWEtNC1lMmIiLAogICJzdG9wX3JlYXNvbiI6ICJ0b29sX3VzZSIsCiAgInN0b3Bfc2VxdWVuY2UiOiBudWxsLAogICJ1c2FnZSI6IHsKICAgICJpbnB1dF90b2tlbnMiOiAxNTYsCiAgICAib3V0cHV0X3Rva2VucyI6IDExMywKICAgICJjYWNoZV9yZWFkX2lucHV0X3Rva2VucyI6IDY3CiAgfQp9"
+}

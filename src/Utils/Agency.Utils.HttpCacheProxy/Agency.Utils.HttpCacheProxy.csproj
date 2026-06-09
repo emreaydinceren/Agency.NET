@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <IsPackable>false</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>agency-cache-proxy</ToolCommandName>
     <UserSecretsId>agency-utils-httpcacheproxy</UserSecretsId>
     <Description>Configurable HTTP caching reverse proxy for local developer testing. Listens on one or more ports, caches responses by request parameters, and forwards cache misses to target URLs. Emits OpenTelemetry metrics and structured logs to local files.</Description>
     <PackageTags>agency.net;proxy;cache;http;utils;dotnet</PackageTags>
@@ -19,6 +20,13 @@
     <None Update="appsettings*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <!-- Persisted cache blobs live under cache/ and are checked in, but must not be copied to
+       the build output or packed into the tool. Exclude them from the Web SDK's default globs. -->
+  <ItemGroup>
+    <Content Remove="cache/**" />
+    <None Remove="cache/**" />
   </ItemGroup>
 
 </Project>

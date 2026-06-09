@@ -1,0 +1,27 @@
+{
+  "Method": "POST",
+  "PathAndQuery": "/v1/messages",
+  "BodyHash": "faf5a0cd98e92576680b4ad59ff6932d07864c26bbcf43f74b7b9d65a18d050f",
+  "StatusCode": 200,
+  "Headers": {
+    "X-Powered-By": [
+      "Express"
+    ],
+    "Access-Control-Allow-Origin": [
+      "*"
+    ],
+    "Access-Control-Allow-Headers": [
+      "*"
+    ],
+    "ETag": [
+      "W/\u002215b-dc78zJ39hXOZlg8Nf1qlB0has/Y\u0022"
+    ],
+    "Date": [
+      "Tue, 09 Jun 2026 20:26:17 GMT"
+    ],
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ]
+  },
+  "Body": "ewogICJpZCI6ICJtc2dfb2VnNGM4OWFmd212ZmNkMmNiOXd0YiIsCiAgInR5cGUiOiAibWVzc2FnZSIsCiAgInJvbGUiOiAiYXNzaXN0YW50IiwKICAiY29udGVudCI6IFsKICAgIHsKICAgICAgInR5cGUiOiAidGV4dCIsCiAgICAgICJ0ZXh0IjogImhlbGxvIgogICAgfQogIF0sCiAgIm1vZGVsIjogImdvb2dsZS9nZW1tYS00LWUyYiIsCiAgInN0b3BfcmVhc29uIjogImVuZF90dXJuIiwKICAic3RvcF9zZXF1ZW5jZSI6IG51bGwsCiAgInVzYWdlIjogewogICAgImlucHV0X3Rva2VucyI6IDMwLAogICAgIm91dHB1dF90b2tlbnMiOiAzLAogICAgImNhY2hlX3JlYWRfaW5wdXRfdG9rZW5zIjogMTQKICB9Cn0="
+}

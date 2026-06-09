@@ -15,7 +15,7 @@ The cache is in-process (`ConcurrentDictionary`) and lives for the lifetime of t
 
 ### Persistent filesystem cache (optional)
 
-An optional second tier persists each cached response as a JSON blob in a checked-in directory, so responses survive across runs, machines, and CI. When `FileCache` is enabled the proxy eager-loads every blob at startup (logging `Loaded N cached responses`) and writes each new entry through to disk; **persisted entries never expire** (infinite TTL). This is what lets the functional-test CI step run offline — the checked-in `cache/` blobs serve every LLM/embedding request without an upstream. See [`cache/README.md`](cache/README.md) for how the cache is generated, why misses happen, and how to regenerate it.
+An optional second tier persists each cached response as a JSON blob in a checked-in directory, so responses survive across runs, machines, and CI. When `FileCache` is enabled the proxy eager-loads every blob at startup (logging `Loaded N cached responses`) and writes each new entry through to disk; **persisted entries never expire** (infinite TTL). This is what lets the functional-test CI step run offline — the checked-in `cache/` blobs serve every LLM/embedding request without an upstream. See the [HTTP Cache Proxy hand-off](../../../docs/HTTP-Cache-Proxy-Handoff.md) for how the cache is generated, why misses happen, and how to regenerate it.
 
 ```json
 "Proxy": {

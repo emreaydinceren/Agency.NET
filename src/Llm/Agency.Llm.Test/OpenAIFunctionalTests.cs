@@ -111,7 +111,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
         var sb = new System.Text.StringBuilder();
 
         await foreach (var update in this._fixture.Client.GetStreamingResponseAsync(
-            SimpleMessages("What is 2 + 2? Reply with just the number."),
+            SimpleMessages("Reply with one word: hello"),
             MakeChatOptions(),
             TestContext.Current.CancellationToken))
         {
@@ -130,7 +130,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
     [Fact]
     public async Task GetStreamingResponseAsync_ChunksAreConsistentWithGetResponseAsync()
     {
-        const string userPrompt = "Reply with exactly: streaming works";
+        const string userPrompt = "Reply with one word: hello";
 
         var streamed = new System.Text.StringBuilder();
         await foreach (var update in this._fixture.Client.GetStreamingResponseAsync(

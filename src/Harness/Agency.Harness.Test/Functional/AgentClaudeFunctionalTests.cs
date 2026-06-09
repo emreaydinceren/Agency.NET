@@ -89,7 +89,7 @@ public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.Claude
             this._fixture.Model,
             stopWhen: StopConditions.StepCountIs(1));
 
-        var ctx = new Context { Query = new QueryContext { Prompt = "Count from 1 to 100." } };
+        var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
         var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 
@@ -105,7 +105,7 @@ public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.Claude
     public async Task Agent_TokenUsage_IsAccumulatedAndNonZero()
     {
         var agent = new Agent(this._fixture.LlmClient, this._fixture.Model);
-        var ctx = new Context { Query = new QueryContext { Prompt = "What is 2 + 2? Reply with just the number." } };
+        var ctx = new Context { Query = new QueryContext { Prompt = "Reply with exactly one word: hello" } };
 
         var result = await RunToResultAsync(agent, ctx, ct: TestContext.Current.CancellationToken);
 

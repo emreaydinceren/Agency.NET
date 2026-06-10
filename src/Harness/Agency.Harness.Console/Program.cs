@@ -45,6 +45,16 @@ internal class Program
         builder.Services.AddSingleton<IChatOutput, ConsoleOutput>();
         builder.Services.AddTransient<Models>();
 
+        // Deterministic clock for functional cache-replay: under DOTNET_ENVIRONMENT=Test the
+        // agent's "Current date/time (UTC)" line is frozen to a fixed literal so console agent
+        // turns produce byte-identical request bodies on every run (local record and CI replay).
+        // Production registers nothing here, so the agent uses TimeProvider.System as before.
+        if (builder.Environment.IsEnvironment("Test"))
+        {
+            builder.Services.AddSingleton<TimeProvider>(
+                new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+        }
+
         // 4. Options Pattern:
         builder.Services.AddOptions<AgentOptions>()
             .BindConfiguration("Agent")

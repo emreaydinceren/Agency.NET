@@ -10,17 +10,20 @@ internal sealed class AgentFactory : IAgentFactory
     private readonly ILogger<Agent> logger;
     private readonly AgentOptions options;
     private readonly IPermissionEvaluator? permissions;
+    private readonly TimeProvider timeProvider;
 
     public AgentFactory(
         Models models,
         ILogger<Agent> logger,
         IOptions<AgentOptions> optionsAccessor,
-        IPermissionEvaluator? permissions = null)
+        IPermissionEvaluator? permissions = null,
+        TimeProvider? timeProvider = null)
     {
         this.models = models;
         this.logger = logger;
         this.options = optionsAccessor.Value;
         this.permissions = permissions;
+        this.timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public Agent CreateAgent(string? clientName, string? modelName)
@@ -39,6 +42,6 @@ internal sealed class AgentFactory : IAgentFactory
             this.options.UserHooks);
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
-        return new Agent(chatClient, modelName, clientType, null, hooks, permissions: this.permissions, logger: this.logger);
+        return new Agent(chatClient, modelName, clientType, null, hooks, permissions: this.permissions, logger: this.logger, timeProvider: this.timeProvider);
     }
 }

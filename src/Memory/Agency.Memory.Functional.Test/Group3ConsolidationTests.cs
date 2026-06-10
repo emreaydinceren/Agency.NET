@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Npgsql;
 using IEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
@@ -31,19 +32,76 @@ namespace Agency.Memory.Functional.Test;
 /// dotnet test src/Memory/Agency.Memory.Functional.Test
 ///     --filter "Category=Functional&amp;Group=Consolidation"
 /// </code>
-/// Each test uses a unique <c>userId</c> of the form <c>{TestName}-{Guid}</c>
-/// so residue from a failed run cannot poison subsequent runs.
 ///
 /// Schema dim is fixed at 1 536 for the entire class — do NOT call
 /// <c>ResetSchemaAsync</c> with a different dimension from within this class.
 ///
 /// Tests E3.1–E3.4 are LLM-driven: they seed Postgres with deterministic preconditions,
-/// drive consolidation via the real <see cref="ConsolidatorBackgroundService"/> wired
-/// with a real LM Studio endpoint, and await <see cref="ConsolidationCompletedEvent"/>.
-/// They skip gracefully when LM Studio has no model loaded.
+/// drive consolidation via the real <see cref="ConsolidatorBackgroundService"/> through the
+/// HTTP cache proxy (BaseUrl <c>localhost:12345</c>), and await
+/// <see cref="ConsolidationCompletedEvent"/>. They skip gracefully when the proxy is
+/// unreachable. Tests E3.5 and E3.6 have deterministic sub-invariants verified without an LLM,
+/// plus optional LLM-gated halves that skip gracefully.
 ///
-/// Tests E3.5 and E3.6 have deterministic sub-invariants that are verified without
-/// an LLM, plus optional LLM-gated halves that skip gracefully.
+/// <para>
+/// <b>HTTP cache replay &amp; determinism contract (E3.1–E3.4).</b>
+/// The proxy keys every entry on <c>SHA256(request body)</c>, so a recorded response only
+/// replays when the consolidator's LLM request body is byte-identical run-to-run. The
+/// consolidator is a multi-turn agent, so EVERY turn's body must be stable. Three sources of
+/// per-run variation are pinned here so these tests are cacheable (instead of cache-missing and
+/// degrading to no-ops, the behaviour before this was added):
+/// <list type="number">
+///   <item>
+///     <b>Agent clock.</b> <see cref="DeterministicClock"/> is injected via
+///     <c>BuildConsolidatorService</c> → <c>CreateRunner(timeProvider:)</c> so the agent's
+///     "Current date/time (UTC)" system-prompt line is fixed (otherwise it changes every second).
+///   </item>
+///   <item>
+///     <b>Prompt identifiers.</b> Each test uses a fixed <c>userId</c> literal and each seeded
+///     record a fixed, <c>Guid</c>-parseable <c>id</c> literal (see <see cref="MakeRecord"/>) —
+///     both are rendered verbatim into the reconciliation prompt and echoed across turns.
+///     Per-test row isolation comes from the schema reset in <c>InitializeAsync</c> (xUnit
+///     instantiates the class once per test method), NOT from random ids.
+///   </item>
+///   <item>
+///     <b>Merge id.</b> A deterministic, <c>Guid</c>-parseable id factory is injected via
+///     <c>CreateRunner(mergeIdFactory:)</c> so the id <c>Memory_Merge</c> mints — and echoes
+///     into the next turn — is stable.
+///   </item>
+/// </list>
+/// Keep seeded <c>ageInDays</c> values off the <c>HumanizeAge</c> bucket boundaries (7, 30) so
+/// the relative "… ago" rendering can't flip between record and replay.
+/// </para>
+///
+/// <para>
+/// <b>Replay enforcement.</b> When <c>MEMORY_CACHE_REPLAY=1</c> (set by CI when a cassette is
+/// present) the LLM-driven mutation is REQUIRED — E3.2 (merge) and E3.4 (delete) hard-fail if it
+/// is not observed (see <see cref="CacheReplayRequired"/>). Unset (dev machine without a cassette,
+/// or live-LLM variance) they keep an advisory <c>Assert.Skip</c>.
+/// </para>
+///
+/// <para>
+/// <b>Recording / regenerating cassettes.</b> The cache proxy lives in a separate repo,
+/// <c>E:\Repos\Agency.HttpCacheProxy</c> (cassettes under
+/// <c>src/Agency.Utils.HttpCacheProxy/cache/</c>). The determinism changes above must be built
+/// BEFORE recording, or per-run GUIDs get baked into cassettes that never replay. Procedure:
+/// <list type="number">
+///   <item>Start LM Studio (the CI baseline model) and Postgres (<c>cd src; docker-compose up -d</c>).</item>
+///   <item>Clear the proxy's <c>cache/*.json</c> and restart it fresh via the proxy repo's
+///     <c>run.ps1</c> (a stale in-memory hit masks a miss and never persists).</item>
+///   <item>Run this group to record:
+///     <c>dotnet test … --filter "Group=Consolidation" -- RunConfiguration.MaxCpuCount=1</c>.
+///     Only chat completions hit the proxy — embeddings use a Moq stub
+///     (<see cref="TestInfrastructure.DeterministicEmbedder"/>).</item>
+///   <item>Validate offline: point the proxy's upstream at an unreachable host, restart it, re-run
+///     <c>--no-build</c>; expect ZERO <c>[MISS]</c> for E3.1–E3.4 and all four to execute (not skip).</item>
+/// </list>
+/// Cassettes are invalidated by any change to the request body: the reconciliation prompt
+/// (<c>ConsolidatorReconciliationPrompt.Version</c>), <c>SystemPromptBuilder</c>, the record
+/// rendering, the tool definitions/order, <c>MaxIterations</c>, or the model — re-record after any
+/// of these. Keep <c>[Collection("memory-db")]</c> and <c>MaxCpuCount=1</c> (the schema reset is a
+/// global DROP; serialization prevents cross-class corruption).
+/// </para>
 /// </remarks>
 [Trait("Category", "Functional")]
 [Trait("Group", "Consolidation")]
@@ -62,6 +120,25 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     /// Must match the schema reset in <see cref="InitializeAsync"/>.
     /// </summary>
     private const int EmbeddingDim = 1536;
+
+    /// <summary>
+    /// Fixed wall-clock instant injected into the consolidator sub-agent so the system-prompt
+    /// "Current date/time (UTC)" line is byte-identical across runs, keeping the LLM request
+    /// bodies replayable from the HTTP response cache. Must stay a hard-coded literal kept in
+    /// lockstep with <c>MemoryE2EFixture.DeterministicClock</c> so cassettes recorded by either
+    /// path share the same timestamp.
+    /// </summary>
+    private static readonly DateTimeOffset DeterministicClock =
+        new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// When set (CI sets <c>MEMORY_CACHE_REPLAY=1</c>), the LLM-driven mutation MUST be observed —
+    /// the determinism work plus a recorded cassette guarantees it replays, so a missing merge/
+    /// delete is a real failure, not graceful degradation. Unset on dev machines (no cassette or
+    /// live LLM variance), the tests keep their advisory <c>Assert.Skip</c>.
+    /// </summary>
+    private static readonly bool CacheReplayRequired =
+        Environment.GetEnvironmentVariable("MEMORY_CACHE_REPLAY") == "1";
 
     private NpgsqlDataSource _dataSource = default!;
 
@@ -122,7 +199,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         var ct = TestContext.Current.CancellationToken;
-        string userId = $"Consolidator_MergesContradiction-{Guid.NewGuid():N}";
+        string userId = "e31-consolidator-contradiction";
 
         IEmbeddingGenerator embedder = TestInfrastructure.DeterministicEmbedder(EmbeddingDim);
         PostgresMemoryStore store = TestInfrastructure.BuildMemoryStore(
@@ -131,6 +208,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         // ── Seed two contradictory records ────────────────────────────────────
         // Old: user prefers Postgres (7 days ago, lower importance).
         await store.UpsertAsync(MakeRecord(
+            id: "11111111-1111-1111-1111-000000000001",
             userId: userId,
             sessionId: "session-old",
             domain: "Preferences",
@@ -138,10 +216,11 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             title: "Database preference",
             value: "User prefers Postgres for data persistence.",
             importance: 0.55,
-            ageInDays: 7), ct);
+            ageInDays: 8), ct);
 
         // New: user switched to SQLite (1 day ago, higher importance).
         await store.UpsertAsync(MakeRecord(
+            id: "11111111-1111-1111-1111-000000000002",
             userId: userId,
             sessionId: "session-new",
             domain: "Preferences",
@@ -248,7 +327,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         var ct = TestContext.Current.CancellationToken;
-        string userId = $"Consolidator_MergesDuplicates-{Guid.NewGuid():N}";
+        string userId = "e32-consolidator-duplicates";
 
         IEmbeddingGenerator embedder = TestInfrastructure.DeterministicEmbedder(EmbeddingDim);
         PostgresMemoryStore store = TestInfrastructure.BuildMemoryStore(
@@ -256,6 +335,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         // ── Seed two duplicate records ────────────────────────────────────────
         await store.UpsertAsync(MakeRecord(
+            id: "22222222-2222-2222-2222-000000000001",
             userId: userId,
             sessionId: "session-a",
             domain: "Preferences",
@@ -266,6 +346,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             ageInDays: 5), ct);
 
         await store.UpsertAsync(MakeRecord(
+            id: "22222222-2222-2222-2222-000000000002",
             userId: userId,
             sessionId: "session-b",
             domain: "Preferences",
@@ -330,21 +411,23 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         Assert.NotNull(completed);
         Assert.Equal(userId, completed.UserId);
 
-        // The merge is LLM-driven and cannot be replayed from the HTTP response cache: the
-        // consolidator's reconciliation prompt embeds per-run GUIDs (the userId and each record
-        // id), so its request body differs every run and never hits the cache. Under a cache-only
-        // run (e.g. CI, where LM Studio is unreachable) the consolidation degrades to a no-op.
-        // When no merge is observed — whether from that cache-miss path or genuine LLM variance —
-        // skip with an advisory rather than fail, mirroring the graceful-degradation contract of
-        // the sibling consolidation tests (see E3.4).
+        // With determinism in place (pinned agent clock + fixed record/user ids + deterministic
+        // merge id) the request bodies are byte-stable, so this merge IS replayable from the HTTP
+        // response cache. When MEMORY_CACHE_REPLAY=1 (CI, cassette present) a missing merge is a
+        // real failure; otherwise (dev machine without a cassette, or live LLM variance) keep the
+        // advisory skip.
         if (after.Count >= before.Count)
         {
-            Assert.Skip(
-                $"E3.2 [advisory]: No merge was observed (before={before.Count}, after={after.Count}). " +
-                $"The consolidator sub-agent's prompt embeds per-run record/user GUIDs, so this " +
-                $"LLM-driven merge cannot be served from the HTTP response cache; under a cache-only " +
-                $"run it degrades to a no-op. It is also subject to genuine LLM variance. " +
-                $"Remaining records: {string.Join("; ", after.Select(r => $"{r.Title}: {r.Value}"))}.");
+            string detail =
+                $"No merge was observed (before={before.Count}, after={after.Count}). " +
+                $"Remaining records: {string.Join("; ", after.Select(r => $"{r.Title}: {r.Value}"))}.";
+
+            if (CacheReplayRequired)
+            {
+                Assert.Fail($"E3.2: {detail}");
+            }
+
+            Assert.Skip($"E3.2 [advisory]: {detail} Subject to live LLM variance when no cassette is present.");
             return;
         }
 
@@ -383,7 +466,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         var ct = TestContext.Current.CancellationToken;
-        string userId = $"Consolidator_ExpandsSparse-{Guid.NewGuid():N}";
+        string userId = "e33-consolidator-sparse";
 
         IEmbeddingGenerator embedder = TestInfrastructure.DeterministicEmbedder(EmbeddingDim);
         PostgresMemoryStore store = TestInfrastructure.BuildMemoryStore(
@@ -391,6 +474,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         // ── Seed sparse record (old) ──────────────────────────────────────────
         MemoryRecord sparseRecord = await store.UpsertAsync(MakeRecord(
+            id: "33333333-3333-3333-3333-000000000001",
             userId: userId,
             sessionId: "session-sparse",
             domain: "Tools",
@@ -402,6 +486,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         // ── Seed richer record (newer, different session) ─────────────────────
         await store.UpsertAsync(MakeRecord(
+            id: "33333333-3333-3333-3333-000000000002",
             userId: userId,
             sessionId: "session-rich",
             domain: "Tools",
@@ -523,7 +608,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         var ct = TestContext.Current.CancellationToken;
-        string userId = $"Consolidator_DeletesStale-{Guid.NewGuid():N}";
+        string userId = "e34-consolidator-stale";
 
         IEmbeddingGenerator embedder = TestInfrastructure.DeterministicEmbedder(EmbeddingDim);
         PostgresMemoryStore pgStore = TestInfrastructure.BuildMemoryStore(
@@ -537,6 +622,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         //   • Session "session-old-debug" is distinct from the trigger session,
         //     removing any ambiguity about it being a "freshly written" record
         MemoryRecord staleRecord = await pgStore.UpsertAsync(MakeRecord(
+            id: "44444444-4444-4444-4444-000000000001",
             userId: userId,
             sessionId: "session-old-debug",
             domain: "Debugging",
@@ -550,6 +636,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         // ── Seed high-importance anchor record (must NOT be deleted) ──────────
         MemoryRecord anchorRecord = await pgStore.UpsertAsync(MakeRecord(
+            id: "44444444-4444-4444-4444-000000000002",
             userId: userId,
             sessionId: "session-anchor",
             domain: "Preferences",
@@ -636,17 +723,24 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         if (!deleteToolCalledForStale)
         {
-            // The LLM declined to delete despite the unambiguous staleness signals.
-            // With the TI-8.4 structural DELETE rule now in the prompt this should be rare;
-            // a residual skip is genuine LLM variance, not a bug. Skip advisory rather than fail.
+            // With determinism in place the delete is replayable from the HTTP response cache, so
+            // when MEMORY_CACHE_REPLAY=1 (CI, cassette present) a missing delete is a real failure.
+            // Otherwise (dev machine without a cassette, or live LLM variance) keep the advisory
+            // skip — the TI-8.4 structural DELETE rule makes a residual miss rare but possible.
             IReadOnlyList<MemoryRecord> afterSkip = await pgStore.GetAllForUserAsync(userId, ct);
-            Assert.Skip(
-                $"E3.4 [advisory]: No Delete mutation was observed for the stale record " +
-                $"(id={staleRecord.Id}). The reconciliation prompt now carries the TI-8.4 structural " +
-                $"DELETE rule (importance < 0.1 AND age > 30d AND self-described obsolete → delete), " +
-                $"so this is clear-cut; a residual skip is genuine LLM variance, not a bug. " +
+            string detail =
+                $"No Delete mutation was observed for the stale record (id={staleRecord.Id}). " +
                 $"Observed mutations: [{string.Join("; ", mutations.Select(m => $"{m.Operation}:{m.Detail}"))}]. " +
-                $"Remaining records: {string.Join("; ", afterSkip.Select(r => $"id={r.Id} title='{r.Title}'"))}.");
+                $"Remaining records: {string.Join("; ", afterSkip.Select(r => $"id={r.Id} title='{r.Title}'"))}.";
+
+            if (CacheReplayRequired)
+            {
+                Assert.Fail($"E3.4: {detail}");
+            }
+
+            Assert.Skip(
+                $"E3.4 [advisory]: {detail} The reconciliation prompt carries the TI-8.4 structural " +
+                $"DELETE rule, so this is clear-cut; a residual skip is genuine LLM variance when no cassette is present.");
             return;
         }
 
@@ -709,7 +803,9 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
             this._dataSource, embedder, NullLogger<PostgresMemoryStore>.Instance);
 
         // Seed one record so the service does not exit on empty-store guard.
+        // E3.5 verifies coalescing via stub runners and is not cache-replayed, so a random id is fine.
         await store.UpsertAsync(MakeRecord(
+            id: Guid.NewGuid().ToString(),
             userId: userId,
             sessionId: "session-coalesce",
             domain: "Preferences",
@@ -960,6 +1056,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         for (int i = 0; i < LlmSeedCount; i++)
         {
             await realStore.UpsertAsync(MakeRecord(
+                id: Guid.NewGuid().ToString(),
                 userId: llmUserId,
                 sessionId: null,
                 domain: $"Domain{i % 10}",
@@ -1043,6 +1140,14 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         var eventBus = new InMemoryEventBus(NullLogger<InMemoryEventBus>.Instance);
 
+        // Pin the agent clock so the system-prompt timestamp is byte-stable, and supply a
+        // deterministic, Guid-parseable id for Memory_Merge so the merged-record id echoed into
+        // later turns is stable. Both keep the consolidator's request bodies replayable from the
+        // HTTP response cache. One counter per service instance — each test runs a single pass.
+        var timeProvider = new FakeTimeProvider(DeterministicClock);
+        int mergeSeq = 0;
+        Func<string> mergeIdFactory = () => $"00000000-0000-0000-0000-{(++mergeSeq):D12}";
+
         Func<string, IReadOnlyList<MemoryRecord>, CancellationToken, Task<(int Merges, int Updates, int Deletes)>> runner =
             ConsolidatorSubAgentFactory.CreateRunner(
                 llmClient,
@@ -1050,7 +1155,9 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
                 store,
                 consolidatorOpts,
                 eventBus,
-                NullLogger<Agency.Harness.Agent>.Instance);
+                NullLogger<Agency.Harness.Agent>.Instance,
+                timeProvider,
+                mergeIdFactory);
 
         var service = new ConsolidatorBackgroundService(
             store,
@@ -1065,6 +1172,11 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     /// <summary>
     /// Creates a <see cref="MemoryRecord"/> with minimal required fields and sensible defaults.
     /// </summary>
+    /// <param name="id">
+    /// The record's stable primary key. Tests pass fixed, Guid-parseable literals (not random
+    /// GUIDs) so the id rendered into the reconciliation prompt — and echoed in tool-call
+    /// args/results — is byte-stable, keeping the request bodies replayable from the HTTP cache.
+    /// </param>
     /// <param name="userId">The owning user.</param>
     /// <param name="sessionId">The session, or <see langword="null"/> for global records.</param>
     /// <param name="domain">The semantic domain.</param>
@@ -1078,6 +1190,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     /// </param>
     /// <returns>A new <see cref="MemoryRecord"/> ready for upsert.</returns>
     private static MemoryRecord MakeRecord(
+        string id,
         string userId,
         string? sessionId,
         string domain,
@@ -1090,7 +1203,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     {
         DateTimeOffset ts = DateTimeOffset.UtcNow.AddDays(-ageInDays);
         return MemoryRecord.Create(
-            id: Guid.NewGuid().ToString(),
+            id: id,
             userId: userId,
             sessionId: sessionId,
             contentType: contentType,

@@ -13,6 +13,7 @@ namespace Agency.Llm.Test;
 /// Requires LM Studio running with a compatible model loaded. Configure the endpoint in appsettings.json.
 /// </summary>
 [Trait("Category", "Functional")]
+[Trait("Category", "Cloud")]
 public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fixture)
     : IClassFixture<OpenAIFunctionalTests.OpenAiFixture>
 {

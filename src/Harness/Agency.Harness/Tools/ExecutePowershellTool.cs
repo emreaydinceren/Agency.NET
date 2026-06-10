@@ -6,9 +6,29 @@ namespace Agency.Harness.Tools;
 
 public class ExecutePowershellTool : ITool
 {
-    private static readonly string Description = $"Executes a PowerShell command and returns the output. OS: {Environment.OSVersion}, " +
-        $"CurrentDirectory: {Environment.CurrentDirectory} , " +
-        $"PathSeparator: {Path.PathSeparator}";
+    // The OS / working directory / path-separator advertised in the tool description are
+    // machine-dependent, which makes the serialized tool definition (and therefore the LLM
+    // request body) differ between machines — defeating cross-machine HTTP-cache replay
+    // (dev records the cache; CI replays it in a Linux container). Each value falls back to
+    // the live environment, so production and CI behaviour is byte-identical to before. When
+    // regenerating the offline cache locally, set the *_OVERRIDE env vars to the values the
+    // build machine will emit so the recorded blobs match the CI request bodies. CI itself
+    // leaves the vars unset and uses its real environment.
+    private static readonly string Description = BuildDescription();
+
+    private static string BuildDescription()
+    {
+        string os = Environment.GetEnvironmentVariable("AGENCY_TOOL_OS_OVERRIDE")
+            ?? Environment.OSVersion.ToString();
+        string cwd = Environment.GetEnvironmentVariable("AGENCY_TOOL_CWD_OVERRIDE")
+            ?? Environment.CurrentDirectory;
+        string pathSeparator = Environment.GetEnvironmentVariable("AGENCY_TOOL_PATHSEP_OVERRIDE")
+            ?? Path.PathSeparator.ToString();
+
+        return $"Executes a PowerShell command and returns the output. OS: {os}, " +
+            $"CurrentDirectory: {cwd} , " +
+            $"PathSeparator: {pathSeparator}";
+    }
 
     private static readonly JsonElement InputSchema = JsonDocument.Parse(@"{
         ""type"": ""object"",

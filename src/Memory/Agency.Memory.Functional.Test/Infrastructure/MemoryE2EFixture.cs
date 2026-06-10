@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using System.Collections.Concurrent;
 using IEmbeddingGenerator = Agency.Embeddings.Common.IEmbeddingGenerator;
@@ -67,6 +68,16 @@ internal sealed class MemoryE2EFixture : IAsyncLifetime
     private const string LmStudioApiKeyKey = "MemoryFunctional:LmStudio:ApiKey";
     private const string LmStudioChatModelKey = "MemoryFunctional:LmStudio:ChatModel";
     private const string LmStudioEmbeddingModelKey = "MemoryFunctional:LmStudio:EmbeddingModel";
+
+    /// <summary>
+    /// Fixed wall-clock instant injected into the conversational agent so the system-prompt
+    /// "Current date/time (UTC)" line is byte-identical across runs, which keeps the agent's
+    /// chat requests replayable from the HTTP cache. Must stay a hard-coded literal — a
+    /// per-run <see cref="DateTimeOffset.UtcNow"/> would differ between the cache-record run
+    /// and a later cache-replay run and defeat the cache.
+    /// </summary>
+    private static readonly DateTimeOffset DeterministicClock =
+        new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     /// <summary>
     /// The actual embedding dimension produced by the configured LM Studio embedding model,
@@ -166,7 +177,8 @@ internal sealed class MemoryE2EFixture : IAsyncLifetime
                     llmClient,
                     chatModel,
                     clientType: "lmstudio",
-                    hooks: baselineHooks);
+                    hooks: baselineHooks,
+                    timeProvider: new FakeTimeProvider(DeterministicClock));
 
                 var convo = new InMemoryConversationManager();
 

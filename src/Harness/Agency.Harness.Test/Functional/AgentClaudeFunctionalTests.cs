@@ -16,6 +16,7 @@ namespace Agency.Harness.Test.Functional;
 /// </para>
 /// </summary>
 [Trait("Category", "Functional")]
+[Trait("Category", "Cloud")]
 public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.ClaudeAgentFixture fixture)
     : IClassFixture<AgentClaudeFunctionalTests.ClaudeAgentFixture>
 {

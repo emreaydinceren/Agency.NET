@@ -44,6 +44,18 @@ internal static class ConsolidatorSubAgentFactory
     /// (TI-8.3).
     /// </param>
     /// <param name="logger">Logger forwarded to the agent and used for user-facing mutation lines.</param>
+    /// <param name="timeProvider">
+    /// Optional time source forwarded to the sub-agent. When <see langword="null"/> the agent
+    /// defaults to <see cref="TimeProvider.System"/> (production behaviour). Tests inject a fixed
+    /// provider so the agent's "Current date/time (UTC)" system-prompt line is byte-stable, which
+    /// keeps the LLM request bodies replayable from the HTTP response cache.
+    /// </param>
+    /// <param name="mergeIdFactory">
+    /// Optional generator for the id of the record produced by <c>Memory_Merge</c>. When
+    /// <see langword="null"/> a random GUID is used (production behaviour). Tests inject a
+    /// deterministic factory so the merged-record id echoed back into later turns is stable and
+    /// the multi-turn request bodies stay replayable from the cache.
+    /// </param>
     /// <returns>
     /// A delegate <c>(userId, records, ct) => Task&lt;(int Merges, int Updates, int Deletes)&gt;</c>
     /// that drives the sub-agent to completion and returns the mutation tallies.
@@ -54,7 +66,9 @@ internal static class ConsolidatorSubAgentFactory
         IMemoryStore store,
         IOptions<ConsolidatorOptions> options,
         IAsyncEventBus eventBus,
-        ILogger<Agent>? logger = null)
+        ILogger<Agent>? logger = null,
+        TimeProvider? timeProvider = null,
+        Func<string>? mergeIdFactory = null)
     {
         ArgumentNullException.ThrowIfNull(llm);
         ArgumentNullException.ThrowIfNull(model);
@@ -75,7 +89,7 @@ internal static class ConsolidatorSubAgentFactory
             int deletes = 0;
 
             // Build tools for this run.
-            var mergeToolInstance = new MemoryMergeTool(store, userId);
+            var mergeToolInstance = new MemoryMergeTool(store, userId, mergeIdFactory);
             var updateToolInstance = new MemoryUpdateTool(store, userId);
             var deleteToolInstance = new MemoryDeleteTool(store, userId);
             var doneTool = new MemoryDoneTool(onDone: () => { done = true; });
@@ -97,7 +111,8 @@ internal static class ConsolidatorSubAgentFactory
                 model: model,
                 clientType: "Consolidator",
                 stopWhen: stop,
-                logger: logger);
+                logger: logger,
+                timeProvider: timeProvider);
 
             // Build the initial prompt from the records dump.
             double factThreshold = 0.85;

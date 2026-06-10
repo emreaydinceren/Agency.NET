@@ -40,20 +40,41 @@ public sealed class EndToEndRecallTests : IAsyncLifetime
     private static readonly IConfiguration _config = TestInfrastructure.BuildConfiguration();
 
     private NpgsqlDataSource _dataSource = default!;
-    private const int Dim = 1536; // standard LM Studio embedding dimension
+
+    // Actual embedding dimension emitted by the configured model, detected at init time by
+    // probing the real embedder. Hardcoding this caused the schema's vector(N) column to
+    // mismatch the model's output (e.g. "expected 1536 dimensions, not 1024") and fail
+    // UpsertAsync inside the distiller; see MemoryE2EFixture.DetectEmbeddingDimAsync.
+    private int _embeddingDim = 1536;
 
     /// <summary>Initialises the schema. Skips setup if Postgres is unreachable.</summary>
     public async ValueTask InitializeAsync()
     {
-        string? pgSkip = await TestInfrastructure.CheckPostgresAsync(_config, TestContext.Current.CancellationToken);
+        var ct = TestContext.Current.CancellationToken;
+
+        string? pgSkip = await TestInfrastructure.CheckPostgresAsync(_config, ct);
         if (pgSkip is not null)
         {
             return;
         }
 
+        // Probe the real embedding dimension before creating the schema so the vector(N)
+        // column matches the loaded model's output. Skipped when LM Studio is unreachable —
+        // the per-test LM Studio check then handles skipping.
+        if (await TestInfrastructure.CheckLmStudioAsync(_config, ct) is null)
+        {
+            var probeEmbedder = new EmbeddingGenerator(new EmbeddingOptions
+            {
+                BaseUrl = _config["MemoryFunctional:LmStudio:BaseUrl"] ?? "http://llm-host.example:1234/v1",
+                ApiKey = _config["MemoryFunctional:LmStudio:ApiKey"] ?? "lm-studio",
+                ModelId = _config["MemoryFunctional:LmStudio:EmbeddingModel"] ?? "text-embedding-3-small",
+            });
+            this._embeddingDim = await TestInfrastructure.DetectEmbeddingDimAsync(probeEmbedder, ct);
+        }
+
         this._dataSource = TestInfrastructure.BuildDataSource(_config);
         await TestInfrastructure.ResetSchemaAsync(
-            this._dataSource, Dim, TestContext.Current.CancellationToken);
+            this._dataSource, this._embeddingDim, ct);
     }
 
     /// <summary>Disposes data source.</summary>
@@ -186,15 +207,26 @@ public sealed class EndToEndRecallTests : IAsyncLifetime
             UserId, SessionId, DistillationTrigger.Inactivity, UpToTurnIndex: 2);
         channelRegistry.GetOrCreateWriter(UserId, SessionId).TryWrite(job);
 
-        // Wait for distillation to complete (up to 60s).
+        // Wait for distillation to complete (up to 60s). Race the failure event so a
+        // dead-lettered job surfaces its real reason instead of being masked as a timeout.
         DistillationCompletedEvent completed;
         try
         {
-            completed = await TestInfrastructure.WaitForEventAsync<DistillationCompletedEvent>(
+            completed = await TestInfrastructure.WaitForDistillationOrFailAsync(
                 eventBus,
+                UserId,
+                SessionId,
                 timeout: TimeSpan.FromSeconds(60),
-                predicate: e => e.UserId == UserId && e.SessionId == SessionId,
                 ct: cts.Token);
+        }
+        catch (DistillationFailedException ex)
+        {
+            // The distiller dead-lettered the job. Surface the actual failure reason
+            // (parse error, transient LLM/embedding failure, etc.) rather than a
+            // misleading "no model loaded" skip.
+            await distillerService.StopAsync(CancellationToken.None);
+            Assert.Fail(ex.Message);
+            return;
         }
         catch (TimeoutException)
         {

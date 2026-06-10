@@ -46,16 +46,23 @@ internal sealed class MemoryMergeTool : ITool
 
     private readonly IMemoryStore _store;
     private readonly string _userId;
+    private readonly Func<string> _idFactory;
 
     /// <summary>
     /// Initialises a new <see cref="MemoryMergeTool"/>.
     /// </summary>
     /// <param name="store">The memory store for atomic merge operations.</param>
     /// <param name="userId">The owning user — ensures the merge only touches that user's records.</param>
-    internal MemoryMergeTool(IMemoryStore store, string userId)
+    /// <param name="idFactory">
+    /// Optional generator for the merged record's id. When <see langword="null"/> a random GUID is
+    /// used (production behaviour). Tests inject a deterministic factory so the id echoed back into
+    /// later agent turns is stable and the request bodies stay replayable from the HTTP cache.
+    /// </param>
+    internal MemoryMergeTool(IMemoryStore store, string userId, Func<string>? idFactory = null)
     {
         this._store = store ?? throw new ArgumentNullException(nameof(store));
         this._userId = userId ?? throw new ArgumentNullException(nameof(userId));
+        this._idFactory = idFactory ?? (() => Guid.NewGuid().ToString());
     }
 
     /// <inheritdoc/>
@@ -105,7 +112,7 @@ internal sealed class MemoryMergeTool : ITool
         }
     }
 
-    private static Record? ParseRecord(JsonElement el, string userId)
+    private Record? ParseRecord(JsonElement el, string userId)
     {
         if (!el.TryGetProperty("contentType", out JsonElement ctEl)
             || !el.TryGetProperty("domain", out JsonElement domainEl)
@@ -149,7 +156,7 @@ internal sealed class MemoryMergeTool : ITool
 
         var now = DateTimeOffset.UtcNow;
         return Record.Create(
-            id: Guid.NewGuid().ToString(),
+            id: this._idFactory(),
             userId: userId,
             sessionId: null,
             contentType: contentType,

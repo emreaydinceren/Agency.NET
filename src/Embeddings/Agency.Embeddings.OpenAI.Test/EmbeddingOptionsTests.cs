@@ -43,7 +43,7 @@ public sealed class EmbeddingOptionsTests
     [Fact]
     public void BaseUrl_IsLoadedFromConfig()
     {
-        Assert.Equal("http://localhost:12345/v1", Sut.BaseUrl);
+        Assert.Equal("http://llm-host.example:12345/v1", Sut.BaseUrl);
     }
 
     /// <summary>

@@ -84,7 +84,8 @@ public sealed class ChatSession : IAsyncDisposable
             userMessage,
             this._toolContext,
             new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
-            user: this._user);
+            user: this._user,
+            timeProvider: this._agent.TimeProvider);
 
         // Abandonment (spec §6.4): if a turn is parked and the user sends a new message,
         // implicitly deny all pending calls with the abandonment reason, complete the batch

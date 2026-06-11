@@ -79,6 +79,7 @@ Keep this file lean. Read the linked doc only when its trigger applies:
 - **Writing or reviewing C# code** → read `Agents/CSharpPrinciples.md` (conventions, design principles, build config & centralized package management).
 - **Understanding or changing the system** → read `Agents/Architecture.md` (project dependency graph, `ILlmClient`, observability pattern, `SQLQueryEmbedder`, infrastructure).
 - **Building, testing, or running infrastructure** → read `Agents/BuildAndTest.md` (dotnet/docker commands, test configuration).
+- **Investigating a CI failure or changing the pipeline** → read `Agents/CIPipeline.md` (Gitea Actions workflows, offline functional-test cache proxy, known failure modes, debugging playbook).
 - **Discussing or updating bugs or tasks** → read `Agents/Trackers.md` (Obsidian boards + task template locations).
 
 ## Git & Auth
@@ -91,3 +92,4 @@ Keep this file lean. Read the linked doc only when its trigger applies:
 
 - When diagnosing bugs, read the actual error and failing code carefully before suggesting fixes. Do NOT guess at the root cause — verify with evidence first.
 - When user says an approach is wrong, pivot immediately rather than doubling down.
+- **After each debugging session, offer to run a reflection** and capture the learnings (root cause, the decisive proof technique, and the fix) into the relevant `Agents/*.md` doc — e.g. CI failures go in `Agents/CIPipeline.md` — so future agents skip the trial-and-error loop.

@@ -52,6 +52,7 @@ public sealed class Agent
     private readonly ILogger<Agent> _logger;
     private readonly AgentHooks _hooks;
     private readonly IPermissionEvaluator? _permissions;
+    private readonly TimeProvider _timeProvider;
 
     /// <param name="llm">The <see cref="IChatClient"/> used for all LLM calls.</param>
     /// <param name="model">The model identifier forwarded to the provider on every call.</param>
@@ -67,6 +68,11 @@ public sealed class Agent
     /// still park the turn (park/resume is agent machinery, not evaluator machinery).
     /// </param>
     /// <param name="logger">Optional structured logger.</param>
+    /// <param name="timeProvider">
+    /// Optional clock used for temporal grounding in the system prompt. Defaults to
+    /// <see cref="TimeProvider.System"/>. Functional tests inject a pinned provider so the
+    /// "Current date/time" line is byte-stable across runs (required for HTTP-cache replay).
+    /// </param>
     public Agent(
         IChatClient llm,
         string model,
@@ -74,7 +80,8 @@ public sealed class Agent
         StopCondition? stopWhen = null,
         AgentHooks? hooks = null,
         IPermissionEvaluator? permissions = null,
-        ILogger<Agent>? logger = null)
+        ILogger<Agent>? logger = null,
+        TimeProvider? timeProvider = null)
     {
         this._llm = llm ?? throw new ArgumentNullException(nameof(llm));
         this._model = model ?? throw new ArgumentNullException(nameof(model));
@@ -83,11 +90,15 @@ public sealed class Agent
         this._hooks = hooks ?? AgentHooks.None;
         this._permissions = permissions;
         this._logger = logger ?? NullLogger<Agent>.Instance;
+        this._timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string Model => this._model;
 
     public string ClientType => this._clientType;
+
+    /// <summary>Gets the clock used for temporal grounding; <see cref="TimeProvider.System"/> unless overridden.</summary>
+    internal TimeProvider TimeProvider => this._timeProvider;
 
     /// <summary>
     /// Fires the <see cref="AgentHooks.OnSessionEnd"/> hook for the given context, if one is set.
@@ -106,15 +117,17 @@ public sealed class Agent
     /// <param name="tools">Optional tool context; defaults to <see cref="ToolContext.Empty"/>.</param>
     /// <param name="environment">Optional environmental context; defaults to <see cref="EnvironmentalContext.Empty"/>.</param>
     /// <param name="user">Optional caller identity; defaults to <see cref="UserSpecificContext.Empty"/>.</param>
+    /// <param name="timeProvider">Optional clock for temporal grounding; defaults to <see cref="TimeProvider.System"/>.</param>
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
         EnvironmentalContext? environment = null,
-        UserSpecificContext? user = null) =>
+        UserSpecificContext? user = null,
+        TimeProvider? timeProvider = null) =>
         new()
         {
             Query = new QueryContext { Prompt = initialPrompt },
-            Temporal = new TemporalContext { CurrentDateUtc = DateTimeOffset.UtcNow },
+            Temporal = new TemporalContext { CurrentDateUtc = (timeProvider ?? TimeProvider.System).GetUtcNow() },
             Tools = tools ?? ToolContext.Empty,
             Environment = environment ?? EnvironmentalContext.Empty,
             User = user ?? UserSpecificContext.Empty,

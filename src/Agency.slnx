@@ -35,9 +35,6 @@
     <Project Path="Mcp/Agency.Mcp.Memory.Test/Agency.Mcp.Memory.Test.csproj" />
     <Project Path="Mcp/Agency.Mcp.Memory/Agency.Mcp.Memory.csproj" Id="01412def-20db-4510-b727-416bfb4f3a5f" />
   </Folder>
-  <Folder Name="/Utils/">
-    <Project Path="Utils\Agency.Utils.HttpCacheProxy\Agency.Utils.HttpCacheProxy.csproj" />
-  </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />

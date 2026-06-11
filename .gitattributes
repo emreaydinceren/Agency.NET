@@ -1,0 +1,9 @@
+# Normalise line endings so source compiles to byte-identical output on every platform.
+#
+# C# sources are checked out with CRLF on all platforms (matching .editorconfig's
+# end_of_line = crlf). This is required for the functional-test HTTP cache: prompts are
+# built from verbatim string literals (e.g. EpisodeExtractionPrompt), so their newlines
+# are baked into the request body at compile time. The cache key is SHA256 of that body,
+# so a CRLF/LF difference between the Windows machine that records cassettes and the Linux
+# CI runner is a permanent cache miss — which forwards to the live LLM and breaks offline CI.
+*.cs text eol=crlf

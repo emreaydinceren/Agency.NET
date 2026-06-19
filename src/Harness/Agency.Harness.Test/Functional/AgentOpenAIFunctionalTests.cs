@@ -150,6 +150,98 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
         _ = toolInvoked; // Informational — not all local models reliably call tools.
     }
 
+    /// <summary>
+    /// End-to-end: a natural-language request to list running processes should drive the model to
+    /// call the PowerShell tool (e.g. <c>tasklist</c> or <c>Get-Process</c>), and that tool call
+    /// must return several processes.
+    /// <para>
+    /// Enumeration stops as soon as the first successful PowerShell result arrives. This is
+    /// deliberate: the live process list is non-deterministic, so feeding it back into a second LLM
+    /// request would make that request body unrepeatable and break offline HTTP-cache replay in CI.
+    /// We only need the initial (deterministic) request plus the tool result to verify the behaviour.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Agent_ListRunningProcesses_InvokesPowershellAndReturnsProcesses()
+    {
+        var tool = new Agency.Harness.Tools.ExecutePowershellTool();
+        // Register the same toolset the console app uses. read_file/write_file both expose a 'path'
+        // parameter; execute_powershell uses 'command'. Including them reproduces the real scenario
+        // where a weak model borrows 'path' for the PowerShell call — an isolated registry hides it.
+        var registry = new Agency.Harness.Tools.ToolRegistry(
+        [
+            tool,
+            new Agency.Harness.Tools.ReadFileTool(),
+            new Agency.Harness.Tools.WriteFileTool(),
+        ]);
+
+        var agent = new Agent(this._fixture.LlmClient, this._fixture.Model);
+        var ctx = new Context
+        {
+            Query = new QueryContext { Prompt = "List the running processes on this machine." },
+            Tools = new ToolContext { Registry = registry },
+        };
+
+        var powershellResults = new List<Agency.Llm.Common.Tools.ToolResult>();
+        await foreach (var evt in agent.RunAsync(ctx, ct: TestContext.Current.CancellationToken))
+        {
+            if (evt is ToolInvokedEvent t && t.ToolName == tool.Definition.Name)
+            {
+                powershellResults.Add(t.Result);
+                if (!t.Result.IsError && CountProcessLines(t.Result.Content) >= 3)
+                {
+                    // Got what we need — stop before a non-deterministic follow-up LLM request.
+                    break;
+                }
+            }
+        }
+
+        // The model reached for the PowerShell tool (e.g. tasklist / Get-Process).
+        Assert.NotEmpty(powershellResults);
+
+        // At least one successful invocation returned a few processes.
+        Agency.Llm.Common.Tools.ToolResult? success = powershellResults
+            .FirstOrDefault(r => !r.IsError && CountProcessLines(r.Content) >= 3);
+
+        Assert.True(
+            success is not null,
+            "Expected a successful PowerShell call returning at least 3 processes. Captured results:\n"
+            + string.Join("\n---\n", powershellResults.Select(r => $"IsError={r.IsError}\n{r.Content}")));
+    }
+
+    /// <summary>
+    /// Counts the content lines a PowerShell result yielded, format-agnostically: <c>Get-Process</c>
+    /// renders a Markdown table while <c>tasklist</c> renders plain text lines. Blank lines and a
+    /// Markdown <c>| --- |</c> separator are excluded. Used to gauge how many processes came back.
+    /// </summary>
+    private static int CountProcessLines(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return 0;
+        }
+
+        int lines = 0;
+        foreach (string raw in content.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            // Skip a Markdown separator row, e.g. "| ---- | :--: |".
+            if (line[0] == '|' && line.All(static c => c is '|' or '-' or ':' or ' '))
+            {
+                continue;
+            }
+
+            lines++;
+        }
+
+        return lines;
+    }
+
     // ── Fixture ───────────────────────────────────────────────────────────────
 
     /// <summary>

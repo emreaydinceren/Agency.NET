@@ -5,8 +5,8 @@ internal static class ToolDescription
     internal const string Text = """
 Use MemoryTool as a scoped memory system with four core concepts:
 •	Scope: ownership boundary for data.
-•	UserId: required logical owner.
-•	SessionId: optional conversation/task partition under that user.
+•	UserId: required logical owner. Always pass the literal placeholder "{userId}"; the host substitutes the real id. Never invent, guess, or ask the user for it.
+•	SessionId: optional conversation/task partition under that user. Omit or pass null for user-wide (global) memory.
 •	Domain: high-level category of memory (e.g., Work, Home, Health).
 •	Key: item identifier within a domain (e.g., Address, ExpensePolicy).
 •	Tags: optional multi-label metadata for retrieval/filtering (e.g., ["taxes","family"]).
@@ -29,7 +29,7 @@ Tool behaviors
 •	Keys
 •	Tags
 Guidance for LLM tool calls
-•	Always provide correct Scope first.
+•	Always provide Scope first, with UserId set to the literal placeholder "{userId}" (the host fills in the real id).
 •	Use stable, meaningful domain names.
 •	Keep keys deterministic and human-readable.
 •	Add tags for cross-domain retrieval.

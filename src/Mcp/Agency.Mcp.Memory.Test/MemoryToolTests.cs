@@ -202,6 +202,84 @@ public sealed class MemoryToolTests
     }
 
     /// <summary>
+    /// A scope whose UserId is null (e.g. an empty <c>{}</c> payload) should return an error string and never
+    /// reach the store, where a null user id would otherwise throw an opaque ArgumentNullException.
+    /// </summary>
+    [Fact]
+    public async Task ListGlobalKeys_NullUserId_ReturnsErrorWithoutCallingStore()
+    {
+        var scope = new MemoryScope(null!, null);
+
+        string result = await this._tool.ListGlobalKeys(scope);
+
+        Assert.Contains("Error", result, StringComparison.OrdinalIgnoreCase);
+        this._kvStoreMock.Verify(s => s.GetMetadataAsync(
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A missing scope argument (the live <c>{}</c> wire payload, which the MCP binder surfaces as a null
+    /// parameter once the parameter is nullable) must return an instructive error naming the required shape,
+    /// rather than letting the binder reject the call with an opaque "An error occurred invoking" result.
+    /// </summary>
+    [Fact]
+    public async Task ListGlobalKeys_NullScope_ReturnsInstructiveErrorWithoutCallingStore()
+    {
+        string result = await this._tool.ListGlobalKeys(null);
+
+        Assert.Contains("scope", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("{\"scope\": {\"userId\": \"{userId}\"}}", result);
+        this._kvStoreMock.Verify(s => s.GetMetadataAsync(
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // ── Null-argument (live {} payload) handling across tools ─────────────────
+
+    /// <summary>
+    /// A missing scope on Recall must return the instructive shape error, not throw or query the store.
+    /// </summary>
+    [Fact]
+    public async Task Recall_NullScope_ReturnsInstructiveErrorWithoutCallingStore()
+    {
+        string result = await this._tool.Recall(null, null, null, null);
+
+        Assert.Contains("{\"scope\": {\"userId\": \"{userId}\"}}", result);
+        this._kvStoreMock.Verify(s => s.SearchAsync<string>(
+            It.IsAny<Query>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A missing scope on Forget must return the instructive shape error, not throw or delete.
+    /// </summary>
+    [Fact]
+    public async Task Forget_NullScope_ReturnsInstructiveErrorWithoutCallingStore()
+    {
+        string result = await this._tool.Forget(null, "notes", "k1");
+
+        Assert.Contains("{\"scope\": {\"userId\": \"{userId}\"}}", result);
+        this._kvStoreMock.Verify(s => s.DeleteAsync(
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A missing record on Memorize must return an instructive error, not throw or write to the store.
+    /// </summary>
+    [Fact]
+    public async Task Memorize_NullRecord_ReturnsInstructiveErrorWithoutCallingStore()
+    {
+        string result = await this._tool.Memorize(null);
+
+        Assert.Contains("record", result, StringComparison.OrdinalIgnoreCase);
+        this._kvStoreMock.Verify(s => s.UpsertAsync(
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
     /// Keys and tags should be grouped per domain, with de-duplication for each domain bucket.
     /// </summary>
     [Fact]

@@ -53,6 +53,7 @@ public sealed class Agent
     private readonly AgentHooks _hooks;
     private readonly IPermissionEvaluator? _permissions;
     private readonly TimeProvider _timeProvider;
+    private readonly bool _logToolPayloads;
 
     /// <param name="llm">The <see cref="IChatClient"/> used for all LLM calls.</param>
     /// <param name="model">The model identifier forwarded to the provider on every call.</param>
@@ -73,6 +74,12 @@ public sealed class Agent
     /// <see cref="TimeProvider.System"/>. Functional tests inject a pinned provider so the
     /// "Current date/time" line is byte-stable across runs (required for HTTP-cache replay).
     /// </param>
+    /// <param name="logToolPayloads">
+    /// When true, tool-call inputs and tool error-result content are written to the log verbatim.
+    /// Verbose and potentially sensitive, so it is opt-in (host wires it from
+    /// <see cref="AgentOptions.LogToolPayloads"/>). When false, payloads are redacted but tool
+    /// calls and failures are still logged by name.
+    /// </param>
     public Agent(
         IChatClient llm,
         string model,
@@ -81,7 +88,8 @@ public sealed class Agent
         AgentHooks? hooks = null,
         IPermissionEvaluator? permissions = null,
         ILogger<Agent>? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        bool logToolPayloads = false)
     {
         this._llm = llm ?? throw new ArgumentNullException(nameof(llm));
         this._model = model ?? throw new ArgumentNullException(nameof(model));
@@ -91,7 +99,24 @@ public sealed class Agent
         this._permissions = permissions;
         this._logger = logger ?? NullLogger<Agent>.Instance;
         this._timeProvider = timeProvider ?? TimeProvider.System;
+        this._logToolPayloads = logToolPayloads;
     }
+
+    private const string RedactedPayload = "(redacted; set Agent:LogToolPayloads=true to log)";
+
+    /// <summary>
+    /// Returns the tool input rendered for logging: the raw JSON when <see cref="AgentOptions.LogToolPayloads"/>
+    /// is enabled, otherwise a redaction marker. Keeps payloads out of logs by default.
+    /// </summary>
+    private string ForLog(JsonElement input) =>
+        this._logToolPayloads ? input.GetRawText() : RedactedPayload;
+
+    /// <summary>
+    /// Returns a tool's error-result content for logging: the content verbatim when payload logging is
+    /// enabled, otherwise a redaction marker. The fact that an error occurred is always logged.
+    /// </summary>
+    private string ForLog(string content) =>
+        this._logToolPayloads ? content : RedactedPayload;
 
     public string Model => this._model;
 
@@ -423,6 +448,9 @@ public sealed class Agent
             {
                 // Execute the tool (OnPreToolUse already ran pre-park — do NOT re-run).
                 ToolResult result;
+                this._logger.LogInformation(
+                    "Invoking tool {Tool} (resume). Input={ToolInput}", pendingCall.ToolName, this.ForLog(pendingCall.Input));
+
                 using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
                 toolActivity?.SetTag("agent.tool.name", pendingCall.ToolName);
                 toolActivity?.SetTag("agent.model", this._model);
@@ -432,10 +460,17 @@ public sealed class Agent
                 {
                     result = await ctx.Tools.Registry.InvokeAsync(pendingCall.ToolName, pendingCall.Input, ct);
                     toolActivity?.SetStatus(result.IsError ? ActivityStatusCode.Error : ActivityStatusCode.Ok, result.IsError ? result.Content : null);
+
+                    if (result.IsError)
+                    {
+                        this._logger.LogWarning(
+                            "Tool {Tool} returned an error result (resume). Input={ToolInput}, Error={ToolError}",
+                            pendingCall.ToolName, this.ForLog(pendingCall.Input), this.ForLog(result.Content));
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    this._logger.LogWarning(ex, "Tool {Tool} failed on resume", pendingCall.ToolName);
+                    this._logger.LogError(ex, "Tool {Tool} threw during invocation (resume). Input={ToolInput}", pendingCall.ToolName, this.ForLog(pendingCall.Input));
                     toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
                 }
@@ -744,6 +779,9 @@ public sealed class Agent
                     }
                 }
 
+                this._logger.LogInformation(
+                    "Invoking tool {Tool}. Input={ToolInput}", call.Name, this.ForLog(input));
+
                 using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
                 toolActivity?.SetTag("agent.tool.name", call.Name);
                 toolActivity?.SetTag("agent.model", this._model);
@@ -753,10 +791,20 @@ public sealed class Agent
                 {
                     result = await ctx.Tools.Registry.InvokeAsync(call.Name, input, ct);
                     toolActivity?.SetStatus(result.IsError ? ActivityStatusCode.Error : ActivityStatusCode.Ok, result.IsError ? result.Content : null);
+
+                    // A tool can fail without throwing: the result simply carries IsError (e.g. an MCP
+                    // server returning "An error occurred invoking 'recall'."). The catch below never
+                    // sees this, so log it here or the failure is invisible in the logs.
+                    if (result.IsError)
+                    {
+                        this._logger.LogWarning(
+                            "Tool {Tool} returned an error result. Input={ToolInput}, Error={ToolError}",
+                            call.Name, this.ForLog(input), this.ForLog(result.Content));
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    this._logger.LogWarning(ex, "Tool {Tool} failed", call.Name);
+                    this._logger.LogError(ex, "Tool {Tool} threw during invocation. Input={ToolInput}", call.Name, this.ForLog(input));
                     toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     toolActivity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
                     {

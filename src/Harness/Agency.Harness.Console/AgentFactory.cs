@@ -42,6 +42,6 @@ internal sealed class AgentFactory : IAgentFactory
             this.options.UserHooks);
 
         var (chatClient, clientType) = this.models.CreateChatClient(clientName);
-        return new Agent(chatClient, modelName, clientType, null, hooks, permissions: this.permissions, logger: this.logger, timeProvider: this.timeProvider);
+        return new Agent(chatClient, modelName, clientType, null, hooks, permissions: this.permissions, logger: this.logger, timeProvider: this.timeProvider, logToolPayloads: this.options.LogToolPayloads);
     }
 }

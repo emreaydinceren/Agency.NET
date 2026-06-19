@@ -32,6 +32,22 @@ public sealed class AgentOptions
     public int? ContextWindowSize { get; set; }
 
     /// <summary>
+    /// When true, tools are advertised to the model with their parameter schemas withheld
+    /// (replaced by a minimal placeholder) plus a <c>tool_help</c> meta-tool that reveals a
+    /// tool's full schema on demand. Reduces context size; tool-call behavior is unchanged.
+    /// Default false.
+    /// </summary>
+    public bool ProgressiveDiscovery { get; set; }
+
+    /// <summary>
+    /// When true, the agent logs each tool call's full input arguments and a tool's error result
+    /// content. This is verbose and may include sensitive data (file contents, commands, user ids),
+    /// so it is opt-in and intended for on-demand debugging. When false (default), tool calls and
+    /// failures are still logged by name, but their payloads are redacted.
+    /// </summary>
+    public bool LogToolPayloads { get; set; }
+
+    /// <summary>
     /// Gets or sets the host-supplied user identity used for memory partitioning.
     /// When set, this value is propagated into <see cref="Contexts.UserSpecificContext.Id"/>
     /// so retrieved and distilled records are scoped to the correct user.

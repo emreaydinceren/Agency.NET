@@ -176,6 +176,12 @@ internal class Program
             : builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
         if (mcpOptions is { Servers.Length: > 0 })
         {
+            // Expand ${RepoRoot}/${Configuration} tokens so committed server paths stay portable
+            // across machines, drives, OSes and build configurations.
+            string repoRoot = McpConfigResolver.FindRepoRoot(AppContext.BaseDirectory) ?? AppContext.BaseDirectory;
+            string configuration = McpConfigResolver.ResolveConfiguration(AppContext.BaseDirectory);
+            McpConfigResolver.Expand(mcpOptions, repoRoot, configuration);
+
             try
             {
                 var pool = await McpClientPool.CreateAsync(mcpOptions);

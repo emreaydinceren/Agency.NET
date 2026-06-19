@@ -35,5 +35,7 @@ internal static class CommandRegistry
         RegisterCommand("/quit", "Exit the current chat session.", (_, _) => CommandContinuation.ExitSession);
         RegisterCommand("/help", "Show help information.", (_, _) => CommandContinuation.Continue);
         RegisterAsyncCommand("/model", "Show model picker.", (_, session) => ModelsCommand.RunSelectModelCommandAsync(session));
+        RegisterCommand("/dump-context", "Print the full context sent to the model (not added to history).",
+            (_, session) => DumpContextCommand.Run(session));
     }
 }

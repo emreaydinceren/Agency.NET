@@ -33,7 +33,7 @@ public class ExecutePowershellTool : ITool
     private static readonly JsonElement InputSchema = JsonDocument.Parse(@"{
         ""type"": ""object"",
         ""properties"": {
-            ""command"": { ""type"": ""string"" }
+            ""command"": { ""type"": ""string"", ""description"": ""The PowerShell command to execute, e.g. 'Get-Process'. This is a command line, not a file path."" }
         },
         ""required"": [""command""]
     }").RootElement.Clone();
@@ -51,11 +51,35 @@ public class ExecutePowershellTool : ITool
         try
         {
             dynamic accessor = new JsonDynamicAccessor(input);
-            var command = accessor.command;
+            string? command = accessor.command;
+
+            // Postel's law: be liberal in what we accept. Weak models frequently put the command
+            // under the wrong key (commonly 'path', borrowed from read_file/write_file) and then
+            // fail to self-correct from an error. Since this tool has exactly one meaningful string
+            // argument, a single string under any key is unambiguous — use it as the command.
+            if (string.IsNullOrEmpty(command) && input.ValueKind == JsonValueKind.Object)
+            {
+                var stringArgs = input.EnumerateObject()
+                    .Where(static p => p.Value.ValueKind == JsonValueKind.String
+                        && !string.IsNullOrEmpty(p.Value.GetString()))
+                    .ToList();
+                if (stringArgs.Count == 1)
+                {
+                    command = stringArgs[0].Value.GetString();
+                }
+            }
 
             if (string.IsNullOrEmpty(command))
             {
-                return Task.FromResult(new ToolResult("Command is required.", IsError: true));
+                // Echo the keys we actually received so the model can self-correct. Reached only
+                // when the input is empty or genuinely ambiguous (multiple string arguments).
+                string received = input.ValueKind == JsonValueKind.Object
+                    ? string.Join(", ", input.EnumerateObject().Select(static p => $"'{p.Name}'"))
+                    : "(none)";
+                return Task.FromResult(new ToolResult(
+                    $"Missing required 'command' parameter. Received: [{received}]. " +
+                    "Pass the PowerShell command to run in the 'command' field.",
+                    IsError: true));
             }
 
             using var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2());

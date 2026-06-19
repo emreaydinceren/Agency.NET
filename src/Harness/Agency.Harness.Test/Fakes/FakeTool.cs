@@ -12,12 +12,14 @@ internal sealed class FakeTool : ITool
 
     /// <param name="name">The tool name registered in the registry.</param>
     /// <param name="handler">Optional custom handler; defaults to returning a plain text result.</param>
-    public FakeTool(string name, Func<JsonElement, ToolResult>? handler = null)
+    /// <param name="description">Optional description; defaults to <c>"Fake tool: {name}"</c>.</param>
+    /// <param name="schema">Optional JSON input schema; defaults to the empty object <c>"{}"</c>.</param>
+    public FakeTool(string name, Func<JsonElement, ToolResult>? handler = null, string? description = null, string? schema = null)
     {
         this.Definition = new ToolDefinition(
             name,
-            $"Fake tool: {name}",
-            JsonDocument.Parse("{}").RootElement);
+            description ?? $"Fake tool: {name}",
+            JsonDocument.Parse(schema ?? "{}").RootElement);
 
         _handler = handler ?? (_ => new ToolResult($"Result from {name}"));
     }

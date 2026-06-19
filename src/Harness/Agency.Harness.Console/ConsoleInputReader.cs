@@ -82,7 +82,7 @@ internal sealed class ConsoleInputReader(IChatOutput output)
             }
 
             ConsoleKeyInfo key = keyInfo.Value;
-            string toClear = new string(' ', System.Console.BufferWidth);
+            string toClear = new string(' ', console.Profile.Width);
 
             int inputRowCount = buffer.ToString().Split('\n').Length;
 
@@ -104,15 +104,16 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                 {
                     this._history.Add(result);
                 }
-                var newlineCount = inputRowCount + 3;
-                AnsiConsole.Cursor.SetPosition(0, initialCursorTop + 1);
-                for (int i = 0; i < newlineCount; i++)
-                {
-                    output.WriteLine(toClear);
-                }
-                AnsiConsole.Cursor.SetPosition(0, initialCursorTop + 1);
-                output.WriteMarkup($"[white on Gray19]{toClear}[/]");
-                AnsiConsole.Cursor.SetPosition(0, initialCursorTop + 1);
+
+                // Collapse the rule/input/rule box into a single highlighted echo line.
+                // Use RELATIVE cursor moves plus an erase-to-end-of-display rather than
+                // absolute SetPosition: absolute row numbers go stale the instant the
+                // terminal scrolls (which happens whenever the prompt is drawn near the
+                // bottom of a populated window), leaving blank gaps and a duplicated
+                // prompt behind. Relative moves are unaffected by scrolling.
+                System.Console.Write('\r');               // column 0 of the current input row
+                AnsiConsole.Cursor.MoveUp(inputRowCount);  // up to the top rule row
+                System.Console.Write("\u001b[0J");         // erase top rule, input rows, bottom rule
                 output.WriteLineMarkup($"[white on Gray19]{Markup.Remove(markup)}{result}[/]");
                 return result;
 

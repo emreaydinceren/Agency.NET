@@ -55,6 +55,19 @@ public sealed class ChatSession : IAsyncDisposable
     public bool IsStarted => this._ctx is not null;
 
     /// <summary>
+    /// Returns the context that would be sent to the model: the live conversation context once
+    /// the first turn has started, or — before then — a freshly built preview reflecting the
+    /// system-prompt inputs, tools, environment, and user for the next turn. Built with the same
+    /// factory <see cref="SendAsync"/> uses; the preview is not stored and does not start the session.
+    /// </summary>
+    internal Context PreviewContext() => this._ctx ?? Agent.CreateContext(
+        string.Empty,
+        this._toolContext,
+        new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
+        user: this._user,
+        timeProvider: this._agent.TimeProvider);
+
+    /// <summary>
     /// Switches the agent used for subsequent turns. Conversation history is preserved;
     /// the new agent will receive the full prior context on its first call.
     /// </summary>

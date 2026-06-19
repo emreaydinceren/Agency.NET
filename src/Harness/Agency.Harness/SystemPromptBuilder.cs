@@ -1,4 +1,5 @@
 using Agency.Harness.Contexts;
+using Agency.Harness.Tools;
 using System.Text;
 
 namespace Agency.Harness;
@@ -24,6 +25,13 @@ public static class SystemPromptBuilder
         // ReAct reasoning instruction (D11) — chain-of-thought before tool use.
         sb.AppendLine("When solving a task, always explain your reasoning before taking actions.");
         sb.AppendLine("Break complex problems into steps: Reason about what to do, Act using tools, then Observe the results before deciding next steps.");
+
+        // Progressive tool discovery: schemas are withheld until requested (D-progressive-discovery).
+        if (ctx.Tools.Registry is IProgressiveDiscovery)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Some tool parameter schemas are withheld to save context: a tool advertised with only a `{\"type\":\"object\"}` schema is a deferred tool. Always call tool_help(name) to retrieve its full parameter schema before invoking it.");
+        }
 
         // KnowledgeContext re-injected every iteration (D3).
         if (ctx.Knowledge.Facts.Count > 0)

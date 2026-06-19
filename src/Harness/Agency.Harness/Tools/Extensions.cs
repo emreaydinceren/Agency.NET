@@ -8,10 +8,59 @@ internal static class Extensions
     private static bool IsDisplayableProperty(PSPropertyInfo property)
         => property.IsGettable && property is not PSScriptProperty;
 
+    /// <summary>
+    /// True when the object is a bare scalar (string or primitive) rather than a structured object.
+    /// Native commands (tasklist, git, ipconfig, …) emit their output as scalar strings; reflecting
+    /// over their properties yields only <c>String.Length</c>, so they must be rendered verbatim.
+    /// </summary>
+    private static bool IsScalar(PSObject? obj)
+    {
+        object? baseObject = obj?.BaseObject;
+        return baseObject is string or decimal || (baseObject is not null && baseObject.GetType().IsPrimitive);
+    }
+
+    /// <summary>
+    /// Returns the property names PowerShell itself would display by default — the
+    /// <c>DefaultDisplayPropertySet</c> from the object's type data (e.g. Id, Handles, CPU, SI, Name
+    /// for a Process). Honoring it produces console-native output and, crucially, avoids ever probing
+    /// throwing getters that PowerShell never shows: Process.ExitTime/ExitCode raise
+    /// GetValueInvocationException while the process is running. Returns null for objects with no
+    /// declared set — notably the PSCustomObjects that <c>Select-Object Foo, Bar</c> projects — so
+    /// callers fall back to enumerating every property.
+    /// </summary>
+    private static IReadOnlyList<string>? DefaultDisplayColumns(PSObject obj)
+    {
+        // PSObject.Members is the real member collection (equivalent to $o.PSObject.Members in script,
+        // not the adapted $o.Members which hides PSStandardMembers). The indexer returns null when a
+        // member is absent rather than throwing.
+        if (obj.Members["PSStandardMembers"]?.Value is not PSMemberSet standardMembers)
+        {
+            return null;
+        }
+
+        if (standardMembers.Members["DefaultDisplayPropertySet"]?.Value is not PSPropertySet displaySet)
+        {
+            return null;
+        }
+
+        return displaySet.ReferencedPropertyNames is { Count: > 0 } names ? names : null;
+    }
+
+    /// <summary>
+    /// The columns to render for an object: its default display set when one exists, otherwise every
+    /// property (the prior behavior, preserved for projected/custom objects).
+    /// </summary>
+    private static IEnumerable<string> ColumnNamesFor(PSObject obj)
+        => DefaultDisplayColumns(obj) ?? obj.Properties.Select(static p => p.Name);
+
     private static bool TryGetDisplayValue(PSPropertyInfo property, out object? value)
     {
         try
         {
+            // Some adapted .NET properties have a getter (IsGettable == true) but throw
+            // when invoked — e.g. Process.ExitCode on a still-running process raises
+            // GetValueInvocationException. There is no way to detect this without invoking,
+            // so we swallow and skip the property.
             value = property.Value;
             return true;
         }
@@ -40,6 +89,14 @@ internal static class Extensions
             return string.Empty;
         }
 
+        // Native-command output (tasklist, git, ipconfig, …) arrives as bare strings. Reflecting over
+        // their .Properties yields only String.Length, producing a useless "| Length |" table — so
+        // when every item is a scalar, emit the text verbatim instead of tabulating.
+        if (list.All(IsScalar))
+        {
+            return string.Join(Environment.NewLine, list.Select(static o => o.BaseObject?.ToString() ?? string.Empty));
+        }
+
         // Preserve column order as they first appear across objects.
         var columns = new List<string>();
         var seen = new HashSet<string>();
@@ -50,11 +107,11 @@ internal static class Extensions
                 continue;
             }
 
-            foreach (var prop in obj.Properties)
+            foreach (var name in ColumnNamesFor(obj))
             {
-                if (seen.Add(prop.Name))
+                if (seen.Add(name))
                 {
-                    columns.Add(prop.Name);
+                    columns.Add(name);
                 }
             }
         }
@@ -74,8 +131,22 @@ internal static class Extensions
 
             for (int i = 0; i < columns.Count; i++)
             {
-                var value = obj?.Properties[columns[i]]?.Value;
-                row[i] = EscapeCell(value?.ToString() ?? string.Empty);
+                string cell = string.Empty;
+
+                try
+                {
+                    var property = obj?.Properties[columns[i]];
+                    if (property is not null && TryGetDisplayValue(property, out object? value))
+                    {
+                        cell = value?.ToString() ?? string.Empty;
+                    }
+                }
+                catch
+                {
+                    cell = string.Empty;
+                }
+
+                row[i] = EscapeCell(cell);
                 if (row[i].Length > widths[i])
                 {
                     widths[i] = row[i].Length;
@@ -132,7 +203,29 @@ internal static class Extensions
 
     internal static string ToMarkdown(this PSObject result)
     {
+        // A scalar (e.g. a single line of native-command output) has no meaningful properties
+        // beyond String.Length — render it verbatim rather than as a "- **Length**: N" bullet.
+        if (IsScalar(result))
+        {
+            return result.BaseObject?.ToString() ?? string.Empty;
+        }
+
         var sb = new StringBuilder();
+
+        // Prefer the default display set (console-native, skips throwing getters like Process.ExitTime);
+        // these names may include script properties (e.g. CPU), so read them directly rather than
+        // filtering through IsDisplayableProperty.
+        if (DefaultDisplayColumns(result) is { } defaults)
+        {
+            foreach (var name in defaults)
+            {
+                if (result.Properties[name] is { } prop && TryGetDisplayValue(prop, out object? value))
+                {
+                    sb.AppendLine($"- **{name}**: {value}");
+                }
+            }
+            return sb.ToString();
+        }
 
         foreach (var prop in result.Properties)
         {

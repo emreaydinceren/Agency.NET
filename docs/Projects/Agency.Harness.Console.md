@@ -40,7 +40,7 @@ using Agency.Harness;
 
 internal interface IAgentFactory
 {
-    Agent CreateAgent(string? clientName, string? modelName, bool stream);
+    Agent CreateAgent(string? clientName, string? modelName);
 }
 ```
 
@@ -76,22 +76,43 @@ builder.Services.AddScoped<IAgentFactory, AgentFactory>();
 builder.Services.AddScoped(sp =>
 {
     var agentFactory = sp.GetRequiredService<IAgentFactory>();
-    var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-    return agentFactory.CreateAgent(null, null, options.Stream);
+    return agentFactory.CreateAgent(null, null);
 });
 
-// ToolContext with pre-registered tools (including recursive AgentTool)
+// MCP servers (opt-in): when an "Mcp" section lists servers, a McpClientPool singleton is
+// registered and its discovered tools are folded into the registry below.
+
+// ToolContext with pre-registered tools (recursive AgentTool, MCP tools, optional progressive disclosure)
 builder.Services.AddScoped(sp =>
 {
     var agentFactory = sp.GetRequiredService<IAgentFactory>();
     var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-    var registry = new ToolRegistry();
-    registry.Register(new ExecutePowershellTool());
-    registry.Register(new ReadFileTool());
-    registry.Register(new WriteFileTool());
-    registry.Register(new AgentTool((clientName, modelName, stream) =>
-        (options, agentFactory.CreateAgent(clientName, modelName, stream), registry)));
-    return new ToolContext { Registry = registry };
+
+    var inner = new ToolRegistry();
+    IToolRegistry outward = null!;                 // captured by the AgentTool closure (assigned after population)
+    inner.Register(new ExecutePowershellTool());
+    inner.Register(new ReadFileTool());
+    inner.Register(new WriteFileTool());
+    inner.Register(new AgentTool((clientName, modelName) =>
+        (options, agentFactory.CreateAgent(clientName, modelName), outward)));
+
+    var mcpToolNames = new HashSet<string>();
+    var mcpPool = sp.GetService<McpClientPool>();   // null when MCP is not configured
+    if (mcpPool is not null)
+    {
+        foreach (ITool tool in mcpPool.Tools)
+        {
+            inner.Register(tool);
+            mcpToolNames.Add(tool.Definition.Name);
+        }
+    }
+
+    // Opt-in progressive disclosure: MCP tools ship name + one-line summary only (schema withheld
+    // behind tool_help); native/internal tools are revealed in full.
+    outward = options.ProgressiveDiscovery
+        ? new ProgressiveDiscoveryToolRegistry(inner, mcpToolNames)
+        : inner;
+    return new ToolContext { Registry = outward };
 });
 
 builder.Services.AddScoped<ConsoleChatSession>();
@@ -109,6 +130,8 @@ await Log.CloseAndFlushAsync();
   "Agent": {
     "DefaultClientName": "LocalVia-OpenAI-API",
     "DefaultModel": "google/gemma-4-e2b",
+    "ProgressiveDiscovery": false,
+    "LogToolPayloads": false,
     "LLmClients": [
       {
         "Name": "LocalVia-OpenAI-API",
@@ -203,6 +226,7 @@ Built-in commands are registered in `CommandRegistry`'s static constructor and s
 | `/quit` | Exits the session (`CommandContinuation.ExitSession`) |
 | `/help` | Returns `CommandContinuation.Continue` (no-op currently) |
 | `/model` | Opens `ConsolePicker` to hot-swap the active `Agent` |
+| `/dump-context` | Prints the exact next-turn context — system prompt, messages, and tools — for inspection. Tools are grouped by origin (Built-in, then each MCP server) and rendered compactly; reflects progressive disclosure when enabled. |
 
 New commands can be added via `CommandRegistry.RegisterCommand` or `RegisterAsyncCommand` without modifying `CommandManager`.
 
@@ -221,7 +245,9 @@ The `ToolContext` registered in DI includes four tools sourced from [[Agency.Har
 | `WriteFileTool` | Writes content to the local file system |
 | `AgentTool` | Spawns a sub-`Agent` with the shared `ToolRegistry`, enabling recursive agent calls |
 
-`AgentTool` receives a factory lambda that captures both `AgentOptions` and the current `ToolRegistry`, so sub-agents share the same tool set as the parent.
+When MCP servers are configured, their tools are folded into the same registry (see [[Agency.Harness]] · *Connecting MCP Servers*). When `Agent:ProgressiveDiscovery` is `true`, the registry is wrapped in a `ProgressiveDiscoveryToolRegistry`, which advertises every tool with a one-line summary + placeholder schema and adds a `tool_help` tool that reveals full detail on demand.
+
+`AgentTool` receives a factory lambda that captures both `AgentOptions` and the **outward-facing** registry (the progressive wrapper when enabled, else the plain `ToolRegistry`), so sub-agents share the same tool set — and the same disclosure mode — as the parent.
 
 ## Observability
 
@@ -272,3 +298,6 @@ All files are written under the directory specified by `FileExport.OutputDirecto
 - **Per-session log files, not daily-rolling** — traces and metrics use `DailyRollingFileWriter` (rolls at UTC midnight), but Serilog logs use a single per-session file stamped with `yyyy-MM-dd-HHmmss` and `RollingInterval.Infinite`. This means each process launch produces a distinct log file, which makes correlating a log file to a specific run trivial without needing to filter by time within a shared daily file.
 - **Independent per-signal enable flags** — setting `Enabled: false` for traces or metrics skips building the corresponding OTel provider entirely (no `TracerProvider`/`MeterProvider` is registered). Setting `Enabled: false` for logs registers `NullLoggerProvider` rather than Serilog, so the `ILogger<T>` injection chain remains valid throughout the application.
 - **Three-source hook fold** — `AgentFactory.CreateAgent` assembles hooks via `AgentHooksExtensions.Fold(BaselineHooks, ConfiguredHooks, UserHooks)`, producing a single merged `AgentHooks?`. The order is intentional: `BaselineHooks` (memory pipeline, registered by `AddAgencyMemory`) forms the foundation; `ConfiguredHooks` (JSON-driven declarative hooks, registered by `AddAgencyConfiguredHooks`) layer on top; `UserHooks` (code-supplied hooks set directly on `AgentOptions`) override both. This lets the memory subsystem always run first, JSON config extend it without code changes, and caller code have the final word.
+- **Progressive-discovery wrap uses a deferred closure capture** — `AgentTool` is registered *during* population of the inner `ToolRegistry`, but its factory must hand sub-agents the *outward* registry (the progressive wrapper, decided only *after* population). The block declares `IToolRegistry outward = null!` up front, the `AgentTool` closure captures the **variable** `outward`, and `outward` is assigned the final (wrapped-or-plain) registry just before `ToolContext` is returned. The closure only runs at sub-agent-creation time — long after assignment — so the captured value is always populated. Without this, sub-agents would either see the unwrapped registry (no progressive disclosure) or force the wrap decision too early.
+- **`MarkdownRenderer` is a line-based translator, not a CommonMark parser** — `Print` walks the text one line at a time, matching each against a fixed set of prefix constructs (code fences, headings, blockquotes, lists, rules) and converting inline spans to Spectre markup. GFM pipe tables are the one *multi-line* construct it handles: `TryParseTable` keys off the delimiter row (`| --- | :--: |`) immediately following a header row — keying on the delimiter, not the presence of a `|`, is what stops ordinary prose containing a pipe from being mis-parsed. `BuildTable` then emits a Spectre `Table`, padding short rows and truncating long ones to the header column count (Spectre throws when a row's cell count ≠ column count). Anything the renderer doesn't recognise falls through to a verbatim paragraph line, so unknown constructs degrade to plain text rather than erroring.
+- **`dump-context` reconstructs tool grouping from the MCP pool** — `ToolDefinition` carries no origin, and the registry is a flat name-keyed map, so the command resolves `McpClientPool` from DI and uses its `ToolNamesByServer` map to bucket tools into *Built-in* vs each *server · MCP* group. It also suppresses the repetitive `{"type":"object"}` placeholder schema and renders single-line descriptions inline as `name: summary`. This is display-only — it changes nothing about what is sent to the model; it reconstructs, for human readability, provenance the wire format discards.

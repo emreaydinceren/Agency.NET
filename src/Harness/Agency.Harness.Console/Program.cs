@@ -3,6 +3,7 @@ global using System.Runtime.CompilerServices;
 using Agency.Embeddings.OpenAI;
 using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Permissions;
 using Agency.Harness.Tools;
@@ -15,6 +16,7 @@ using Agency.Memory.Sql.Postgres;
 using Agency.Memory.Sql.Sqlite;
 using Agency.Llm.OpenAI;
 using Agency.Llm.Common;
+using Agency.Llm.Common.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -56,9 +58,25 @@ internal class Program
         }
 
         // 4. Options Pattern:
+        // Resolve a stable per-installation user id (generated once, persisted to appsettings.json) before
+        // binding so AgentOptions.UserId is populated. The id partitions memory and is substituted for the
+        // {userId} placeholder in tool calls by UserIdPlaceholderHook. Skipped under Test to keep functional
+        // cache-replay deterministic and avoid writing to the test appsettings.
+        if (builder.Environment.IsEnvironment("Test") == false)
+        {
+            string appSettingsPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.json");
+            UserIdConfiguration.EnsureUserId(builder.Configuration, appSettingsPath, static () => Guid.NewGuid().ToString());
+        }
+
         builder.Services.AddOptions<AgentOptions>()
             .BindConfiguration("Agent")
             .ValidateOnStart();
+
+        // Substitute {userId} placeholders in tool arguments with the resolved user id (host-owned identity).
+        builder.Services.PostConfigure<AgentOptions>(options =>
+            options.UserHooks = options.UserHooks is { } existing
+                ? existing.Compose(UserIdPlaceholderHook.Hooks)
+                : UserIdPlaceholderHook.Hooks);
 
         builder.Services.AddAgencyConfiguredHooks(builder.Configuration);
         builder.Services.AddAgencyPermissions(builder.Configuration);
@@ -149,6 +167,34 @@ internal class Program
             builder.Services.AddAgencyHygiene();
         }
 
+        // 5.5 MCP servers — opt-in via the "Mcp" config section.
+        //     Skipped under Test: MCP servers are external processes that are not present in the
+        //     functional-test environment (CI), and their discovered tools would be injected into the
+        //     agent's tool list, changing the LLM request body and breaking offline HTTP-cache replay.
+        McpClientOptions? mcpOptions = builder.Environment.IsEnvironment("Test")
+            ? null
+            : builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
+        if (mcpOptions is { Servers.Length: > 0 })
+        {
+            // Expand ${RepoRoot}/${Configuration} tokens so committed server paths stay portable
+            // across machines, drives, OSes and build configurations.
+            string repoRoot = McpConfigResolver.FindRepoRoot(AppContext.BaseDirectory) ?? AppContext.BaseDirectory;
+            string configuration = McpConfigResolver.ResolveConfiguration(AppContext.BaseDirectory);
+            McpConfigResolver.Expand(mcpOptions, repoRoot, configuration);
+
+            try
+            {
+                var pool = await McpClientPool.CreateAsync(mcpOptions);
+                builder.Services.AddSingleton(pool);
+                System.Console.WriteLine($"[Agency] MCP: connected {mcpOptions.Servers.Length} server(s), {pool.Tools.Count} tool(s).");
+            }
+            catch (Exception ex)
+            {
+                System.Console.Error.WriteLine($"[Agency] MCP servers configured but unreachable: {ex.Message}");
+                throw;
+            }
+        }
+
         // 6. Factory & Agent Registration:
         builder.Services.AddScoped<IAgentFactory, AgentFactory>();
 
@@ -164,15 +210,32 @@ internal class Program
             var agentFactory = sp.GetRequiredService<IAgentFactory>();
             var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
 
-            var registry = new ToolRegistry();
-            registry.Register(new ExecutePowershellTool());
-            registry.Register(new ReadFileTool());
-            registry.Register(new WriteFileTool());
+            var inner = new ToolRegistry();
+            IToolRegistry outward = null!;
+            inner.Register(new ExecutePowershellTool());
+            inner.Register(new ReadFileTool());
+            inner.Register(new WriteFileTool());
 
-            registry.Register(new AgentTool((clientName, modelName) =>
-                (options, agentFactory.CreateAgent(clientName, modelName), registry)));
+            inner.Register(new AgentTool((clientName, modelName) =>
+                (options, agentFactory.CreateAgent(clientName, modelName), outward)));
 
-            return new ToolContext { Registry = registry };
+            var mcpToolNames = new HashSet<string>();
+            var mcpPool = sp.GetService<McpClientPool>();   // null when MCP is not configured
+            if (mcpPool is not null)
+            {
+                foreach (ITool tool in mcpPool.Tools)
+                {
+                    inner.Register(tool);
+                    mcpToolNames.Add(tool.Definition.Name);
+                }
+            }
+
+            // Progressive discovery applies to MCP tools only: their schemas are withheld behind
+            // tool_help. Native/internal tools are revealed in full.
+            outward = options.ProgressiveDiscovery
+                ? new ProgressiveDiscoveryToolRegistry(inner, mcpToolNames)
+                : inner;
+            return new ToolContext { Registry = outward };
         });
 
         builder.Services.AddScoped<ConsoleChatSession>();

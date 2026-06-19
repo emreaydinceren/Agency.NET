@@ -13,10 +13,20 @@ public sealed class McpClientPool : IAsyncDisposable
     /// <summary>Gets all tools discovered from every connected MCP server.</summary>
     public IReadOnlyList<ITool> Tools { get; }
 
-    private McpClientPool(List<McpClient> clients, List<ITool> tools)
+    /// <summary>
+    /// Gets the tool names discovered from each MCP server, keyed by server name in configured order.
+    /// Used to attribute a tool back to its originating server (e.g. for diagnostics/inspection).
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> ToolNamesByServer { get; }
+
+    private McpClientPool(
+        List<McpClient> clients,
+        List<ITool> tools,
+        Dictionary<string, IReadOnlyList<string>> toolNamesByServer)
     {
         this._clients = clients;
         this.Tools = tools;
+        this.ToolNamesByServer = toolNamesByServer;
     }
 
     /// <summary>
@@ -30,6 +40,7 @@ public sealed class McpClientPool : IAsyncDisposable
     {
         List<McpClient> clients = [];
         List<ITool> tools = [];
+        var toolNamesByServer = new Dictionary<string, IReadOnlyList<string>>();
 
         foreach (McpServerConfig server in options.Servers)
         {
@@ -38,13 +49,17 @@ public sealed class McpClientPool : IAsyncDisposable
             clients.Add(client);
 
             IList<McpClientTool> serverTools = await client.ListToolsAsync(cancellationToken: ct);
+            var names = new List<string>(serverTools.Count);
             foreach (McpClientTool tool in serverTools)
             {
                 tools.Add(new McpProxyTool(tool));
+                names.Add(tool.Name);
             }
+
+            toolNamesByServer[server.Name] = names;
         }
 
-        return new McpClientPool(clients, tools);
+        return new McpClientPool(clients, tools, toolNamesByServer);
     }
 
     private static IClientTransport CreateTransport(McpServerConfig server) =>

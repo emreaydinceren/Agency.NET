@@ -82,6 +82,8 @@ internal sealed class ConsoleChatSession
         this._chatSession?.SetAgent(agent);
     }
 
+    internal ChatSession? CurrentSession => this._chatSession;
+
     public async Task RunAsync(string? initialInput = null)
     {
         using var activity = _activitySource.StartActivity("ConsoleChatSession.RunAsync");
@@ -342,7 +344,7 @@ internal sealed class ConsoleChatSession
                 }
                 else
                 {
-                    this.output.WriteMarkdownInBorderedPanel($"Calling {tool.ToolName}", $"[gray]{resultPreview}[/]");
+                    this.output.WriteMarkdownInBorderedPanel($"Calling {tool.ToolName}", FormatGrayPreview(resultPreview));
                 }
                 break;
 
@@ -500,7 +502,7 @@ internal sealed class ConsoleChatSession
                         System.Text.Json.JsonSerializer.Serialize(fcc.Arguments),
                         100,
                         3);
-                    this.output.WriteMarkdownInBorderedPanel($"Calling {fcc.Name}", $"[gray]{argsPreview}[/]");
+                    this.output.WriteMarkdownInBorderedPanel($"Calling {fcc.Name}", FormatGrayPreview(argsPreview));
                     break;
             }
         }
@@ -533,6 +535,14 @@ internal sealed class ConsoleChatSession
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Wraps an arbitrary tool preview (result content or serialized arguments) as gray panel markup,
+    /// escaping it first so that literal brackets in the data — e.g. an empty JSON array <c>[]</c> — are
+    /// not parsed by Spectre as (malformed) markup tags. Without the escape, <c>new Panel("[gray][][/]")</c>
+    /// throws <see cref="InvalidOperationException"/> ("Could not find color or style ''").
+    /// </summary>
+    internal static string FormatGrayPreview(string content) => $"[gray]{Markup.Escape(content)}[/]";
 
     private void WriteHeader()
     {

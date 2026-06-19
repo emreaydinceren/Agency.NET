@@ -343,6 +343,23 @@ public sealed class AgentOptions
     public int?               ContextWindowSize  { get; set; }
 
     /// <summary>
+    /// When true, MCP tools are advertised with their parameter schemas withheld (placeholder) and
+    /// descriptions reduced to one line, plus a tool_help meta-tool that reveals full detail on
+    /// demand; native/internal tools are revealed in full. Reduces context size; tool-call behavior
+    /// is unchanged. Default false (opt-in). The host wraps the ToolContext registry in a
+    /// ProgressiveDiscoveryToolRegistry when set.
+    /// </summary>
+    public bool               ProgressiveDiscovery { get; set; }
+
+    /// <summary>
+    /// When true, the agent logs each tool call's full input arguments and a tool's error-result
+    /// content verbatim. Verbose and potentially sensitive (file contents, commands, ids), so it is
+    /// opt-in and meant for on-demand debugging. When false (default), tool calls and failures are
+    /// still logged by name but their payloads are redacted.
+    /// </summary>
+    public bool               LogToolPayloads    { get; set; }
+
+    /// <summary>
     /// Host-supplied user identity propagated into UserSpecificContext.Id for memory partitioning.
     /// </summary>
     public string?            UserId             { get; set; }
@@ -407,6 +424,11 @@ public static class SystemPromptBuilder
 }
 ```
 
+When `ctx.Tools.Registry` implements `IProgressiveDiscovery` (see below), `Build` appends one instruction
+line telling the model that some tool schemas are withheld — a tool advertised with only a
+`{"type":"object"}` schema is a deferred tool — and to call `tool_help(name)` to retrieve its full
+schema before invoking it. With a plain registry, nothing is appended (current behavior).
+
 ### Tool Registry
 
 ```csharp
@@ -441,6 +463,53 @@ public sealed class ToolRegistry : IToolRegistry
 }
 ```
 
+### Progressive Tool Discovery
+
+An **opt-in** scheme that shrinks the per-iteration tool payload by progressive disclosure keyed on a
+tool's **origin**: **MCP** tools have their description reduced to a one-line summary and their schema
+fully withheld behind the bare `{"type":"object"}` placeholder — the system prompt instructs the model to
+call `tool_help` to fetch the full schema before invoking them — because MCP catalogs are the large,
+numerous, often-verbose tools where the savings matter most. **Native/internal** tools (the harness's own
+`read_file`, `execute_powershell`, etc.) are advertised in **full** — complete schema and description — so
+they invoke without a `tool_help` round-trip. The decorator is told which tools are MCP-originated via the
+set of names passed to its constructor (the Console collects these from `McpClientPool.Tools`). It changes
+only *what detail* is disclosed — **not how tools are called**: every real tool keeps its own name as the
+call name, so permissions, hooks, the `agent.tool.calls` metric, and `ToolInvokedEvent` are all unaffected.
+Implemented as a decorator over `IToolRegistry`, so `Agent` needs no changes (it still calls
+`ListDefinitions()` and `InvokeAsync(name, …)`).
+
+```csharp
+// File: src/Harness/Agency.Harness/Tools/IProgressiveDiscovery.cs
+namespace Agency.Harness.Tools;
+
+/// <summary>Marker: lets callers (e.g. SystemPromptBuilder) detect progressive disclosure is active.</summary>
+public interface IProgressiveDiscovery { }
+
+// File: src/Harness/Agency.Harness/Tools/ProgressiveDiscoveryToolRegistry.cs
+public sealed class ProgressiveDiscoveryToolRegistry : IToolRegistry, IProgressiveDiscovery
+{
+    public ProgressiveDiscoveryToolRegistry(IToolRegistry inner, IReadOnlySet<string> mcpToolNames);
+    // ListDefinitions(): each inner tool is advertised according to its origin:
+    //     • MCP tools (name ∈ mcpToolNames) → Description reduced to a one-line summary and
+    //       InputSchema replaced by the bare {"type":"object"} placeholder (schema withheld
+    //       behind tool_help).
+    //     • native/internal tools → revealed in full (schema and description untouched).
+    //   Then appends `tool_help` (which keeps its real schema). InvokeAsync routes "tool_help";
+    //   everything else → inner. All other IToolRegistry members delegate to inner.
+}
+
+// File: src/Harness/Agency.Harness/Tools/ToolHelpTool.cs (internal)
+//   tool_help(name) → returns the named tool's FULL description + indented schema as text,
+//   read from the UNDECORATED inner registry. The escape hatch for deferred detail.
+```
+
+The summary is the description's first non-empty line, with any leading provenance prefix **preserved**
+(e.g. `"Notion | Update a page…\nError Responses:…"` → `"Notion | Update a page…"`). The prefix is kept
+because MCP tools whose names are operationId-derived (e.g. `API-get-self`) carry no server signal, so
+the `Vendor |` prefix is the model's only inline cue to which server a tool belongs — dropping it lets
+the model pick a wrong-server tool for an ambiguous request. The Console `dump-context` command also
+groups tools under their server.
+
 ### MCP Types
 
 ```csharp
@@ -471,8 +540,15 @@ namespace Agency.Harness.Tools;
 
 public sealed class McpClientPool : IAsyncDisposable
 {
-    /// <summary>Gets all tools discovered from every connected MCP server.</summary>
+    /// <summary>Gets all tools discovered from every connected MCP server (flat across servers).</summary>
     public IReadOnlyList<ITool> Tools { get; }
+
+    /// <summary>
+    /// Gets the tool names discovered from each MCP server, keyed by server name in configured order.
+    /// Retained so a tool can be attributed back to its originating server (the flat `Tools` list and
+    /// `ToolDefinition` itself carry no provenance). Used by the Console `dump-context` grouping.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> ToolNamesByServer { get; }
 
     /// <summary>
     /// Connects to each server in options, lists its tools, and returns an initialized pool.
@@ -935,6 +1011,7 @@ var toolCtx  = new ToolContext { Registry = registry };
 | `ReadFileTool` | `read_file` | Reads and returns the contents of a file at a given path. | `path` (required) |
 | `WriteFileTool` | `write_file` | Writes content to a file at a given path. | `path`, `content` (required) |
 | `McpProxyTool` | *(per-tool name from server)* | Adapts a discovered `McpClientTool` to the `ITool` interface; one instance per tool per MCP server. Name and schema are sourced directly from the MCP server at connection time. | Varies by MCP server |
+| `ToolHelpTool` | `tool_help` | Added only when progressive discovery is active. Returns a named tool's full description + schema as text, read from the undecorated inner registry. | `name` (required) |
 
 ## Observability
 
@@ -979,6 +1056,13 @@ var toolCtx  = new ToolContext { Registry = registry };
 - **Async tool registration** — `ToolRegistry.Register` is synchronous and throws if the tool's `GetDefinitionAsync` does not complete immediately. `RegisterAsync` is the correct path for tools whose schema is fetched asynchronously (e.g. MCP proxy tools resolving remote schemas).
 - **`McpProxyTool` is `internal`** — callers never instantiate `McpProxyTool` directly; `McpClientPool.CreateAsync` wraps each discovered `McpClientTool` and exposes the results through the `Tools` property. This keeps the MCP SDK types contained behind the pool boundary.
 - **`McpClientPool` is `IAsyncDisposable`** — each `McpClient` holds an open connection to its server process or HTTP endpoint. Disposing the pool closes all connections; callers should use `await using` to ensure cleanup even on cancellation.
+- **MCP tools and native tools share one flat namespace** — both register into the same name-keyed `ToolRegistry` dictionary, and once registered the agent loop (`Agent.ListDefinitions` / `InvokeAsync`) cannot tell them apart — dispatch is purely by tool name. The Console host (`Program.cs`) registers native tools (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`) first, then loops over `mcpPool.Tools`. Because `Register` is last-write-wins (`_tools[def.Name] = ...`) with no collision guard, an MCP tool whose server-supplied name matches a native tool (e.g. another `read_file`) **silently overwrites** it. Name MCP servers' tools defensively if collisions are possible.
+- **`McpProxyTool` keeps only text content** — `InvokeAsync` concatenates `result.Content.OfType<TextContentBlock>()` and discards every other block type. MCP results that are images or embedded resources are silently dropped, so the agent sees an empty string for an image-only response. Fine for text-returning servers; a gap to plan around if a server returns non-text content.
+- **MCP wiring is opt-in and fail-fast in the Console host** — the pool is built only when an `"Mcp"` config section lists at least one server (`McpClientOptions` bound from configuration). If a configured server is unreachable, `McpClientPool.CreateAsync` throws and `Program.cs` rethrows, aborting startup rather than degrading silently — tool discovery is a live `ListToolsAsync` round-trip, so an unreachable server means an unknown (not empty) tool set.
+- **Progressive discovery is a registry decorator, not an `Agent` change** — `ProgressiveDiscoveryToolRegistry` wraps the inner `IToolRegistry` and overrides only `ListDefinitions()` (for MCP tools: summarize description + withhold schema → `{"type":"object"}` placeholder; for native tools: reveal in full; then append `tool_help`) and `InvokeAsync` (route `tool_help`, delegate the rest). Because `Agent` only ever calls those two members, the entire feature drops in via DI with **zero** changes to the agent loop. The decisive constraint that shaped the design: the model still calls each real tool by its **own name**, so a generic dispatcher was rejected — a dispatcher would mask the real name behind `invoke_tool` and break permission rules, `OnPreToolUse`/audit hooks, the `agent.tool.calls` metric, and `ToolInvokedEvent`, all of which key off the call name.
+- **`tool_help` reads the *undecorated* inner registry** — `ProgressiveDiscoveryToolRegistry` constructs `ToolHelpTool` with the inner registry, so `tool_help` returns the **full** schema and description even though the decorator's own `ListDefinitions()` advertises stripped/summarized copies. This is what makes deferral lossless: detail is hidden from the catalog but always recoverable on demand. It is also stateless — the revealed text simply lives in conversation history; there is no activation/registry mutation.
+- **Schema withholding is split by origin: MCP tools withheld, native tools revealed in full** — every MCP tool drops to the bare `{"type":"object"}` placeholder (description summarized to one line), so the model *must* `tool_help` before calling it (the system prompt says so); native/internal tools are advertised with their complete schema and description, so they invoke without a round-trip. The split exists because the two populations differ in size and risk: MCP catalogs (e.g. Notion) carry dozens of verbose, operationId-named tools whose schemas dominate the payload — exactly where withholding pays off — whereas the handful of native tools are cheap to keep inline. Crucially, **the full schema (including parameter descriptions) resurfaces via `tool_help`**, so instruction-bearing MCP tools like the memory server — whose `Recall` parameter descriptions carry the must-follow `UserId = "{userId}"` rule — no longer lose that guidance the way the earlier slim-schema scheme did (it stripped parameter descriptions while still advertising the shape, which let the model call without `tool_help` and miss the rule). Because `ToolDefinition` carries no structural provenance, the decorator is told which tools are MCP-originated explicitly: the Console collects `McpClientPool.Tools` names and passes the set to the constructor (`new ProgressiveDiscoveryToolRegistry(inner, mcpToolNames)`) — replacing the earlier `"Vendor | "`-prefix heuristic, which misclassified prefix-less MCP servers (e.g. memory) as native. The self-healing error fold (full schema appended when a call arrives missing required args) backstops a withheld tool the model calls without `tool_help`.
+- **Description summarization keeps the first line *and* its `Vendor |` provenance** — `Summarize` returns the first non-empty line verbatim, so `"Notion | Retrieve a page\nError Responses:…"` → `"Notion | Retrieve a page"`. This still trims the verbose body (multi-line error tables etc., recoverable via `tool_help`) but deliberately **retains** the leading `"X | "` prefix. An earlier version stripped that prefix to "lead with the action"; in practice it caused wrong-server tool selection — with operationId-derived MCP names like `API-get-self` that carry no server signal, the prefix is the model's only inline attribution hint, and without it the model answered "what do you know about me" by calling Notion's `API-get-self` (401) instead of the memory tools. The Console `dump-context` additionally groups tools by server using `McpClientPool.ToolNamesByServer`.
 - **`ChatSession` is `IAsyncDisposable`** — disposing fires `Agent.RaiseSessionEndAsync` exactly once, which invokes the `OnSessionEnd` hook. This is the correct signal for end-of-session side-effects such as memory distillation. Create one instance per user or logical connection; at most one `SendAsync` call should be in flight at a time. Call `Reset()` to clear conversation history and start a fresh session without creating a new instance.
 - **Hooks are interceptors, events are observers** — `IAsyncEnumerable<AgentEvent>` lets callers observe what happened after the fact; `AgentHooks` lets callers block, rewrite, or react *before* the action completes. `OnPreToolUse` is the only hook that can alter agent behaviour (via `Deny`/`Rewrite`); all others are fire-and-forget.
 - **`Compose()` uses most-restrictive-wins for `OnPreToolUse`** — when composing two hooks that both have `OnPreToolUse`, they run concurrently via `Task.WhenAll`; the result priority is Deny > Rewrite > Allow. All other delegate slots run sequentially (first then second) so ordering is deterministic.

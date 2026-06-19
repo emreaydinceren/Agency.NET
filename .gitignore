@@ -495,3 +495,6 @@ $RECYCLE.BIN/
 
 # Auto Claude data directory
 .auto-claude/
+
+# MCP memory runtime database
+agency-mcp-memory.db

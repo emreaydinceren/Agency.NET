@@ -1,5 +1,6 @@
 
 using Agency.Harness.Contexts;
+using Agency.Harness.Tools;
 
 namespace Agency.Harness.Test;
 /// <summary>
@@ -171,5 +172,33 @@ public sealed class SystemPromptBuilderTests
         string second = SystemPromptBuilder.Build(ctx);
 
         Assert.Equal(first, second);
+    }
+
+    // ── Progressive tool discovery ────────────────────────────────────────────
+
+    [Fact]
+    public void Build_IncludesToolHelpInstruction_WhenRegistryIsProgressive()
+    {
+        var ctx = MinimalContext() with
+        {
+            Tools = new ToolContext { Registry = new ProgressiveDiscoveryToolRegistry(new ToolRegistry(), new HashSet<string>()) },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.Contains("tool_help", result);
+    }
+
+    [Fact]
+    public void Build_OmitsToolHelpInstruction_WhenRegistryIsPlain()
+    {
+        var ctx = MinimalContext() with
+        {
+            Tools = new ToolContext { Registry = new ToolRegistry() },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.DoesNotContain("tool_help", result);
     }
 }

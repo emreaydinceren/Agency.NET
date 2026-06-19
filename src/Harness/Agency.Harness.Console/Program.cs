@@ -1,11 +1,13 @@
 global using System.Runtime.CompilerServices;
 
 using Agency.Embeddings.OpenAI;
+using Agency.Harness.Console.Commands;
 using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Permissions;
+using Agency.Harness.Skills;
 using Agency.Harness.Tools;
 using Agency.Memory.Consolidator.DependencyInjection;
 using Agency.Memory.Distiller;
@@ -195,6 +197,37 @@ internal class Program
             }
         }
 
+        // 5.6 Skills — discover skill directories at startup and make the catalog available as a singleton.
+        //     Config key: Skills:Directories (string[]). Defaults to ["./.agency/skills", "~/.agency/skills"]
+        //     in project-first order so project skills override personal skills (first-occurrence wins).
+        //
+        //     A ReloadableSkillCatalog is used so that SkillContext and SkillTool pick up SKILL.md
+        //     changes live (they read through the shared reference). A SkillWatcher drives reloads
+        //     via FileSystemWatcher + debounce whenever SKILL.md files are added, edited, or removed.
+        //
+        //     KNOWN LIMITATION: /skill-name console commands (registered below) are built once at
+        //     startup from the initial catalog snapshot. Newly-added skills will appear in the model's
+        //     system-prompt catalog and be invocable via the `skill` tool immediately after reload,
+        //     but won't appear as /commands in the console until the next restart.
+        string[] configuredSkillDirs = builder.Configuration
+            .GetSection("Skills:Directories")
+            .Get<string[]>() ?? [];
+        IReadOnlyList<string> skillRoots = configuredSkillDirs.Length > 0
+            ? configuredSkillDirs
+            :
+            [
+                Path.Combine(Directory.GetCurrentDirectory(), ".agency", "skills"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agency", "skills"),
+            ];
+        ReloadableSkillCatalog reloadableCatalog = new(skillRoots);
+        builder.Services.AddSingleton<ISkillCatalog>(reloadableCatalog);
+        builder.Services.AddSingleton(new SkillContext { Catalog = reloadableCatalog });
+        // Register the watcher as a singleton so it lives for the application lifetime and is disposed
+        // when the host shuts down. The watcher fires reloadableCatalog.Reload() on SKILL.md changes.
+        builder.Services.AddSingleton(new SkillWatcher(skillRoots, reloadableCatalog.Reload));
+        CommandRegistry.RegisterSkillCommands(reloadableCatalog);
+        System.Console.WriteLine($"[Agency] Skills: loaded {reloadableCatalog.List().Count} skill(s) from {skillRoots.Count} root(s).");
+
         // 6. Factory & Agent Registration:
         builder.Services.AddScoped<IAgentFactory, AgentFactory>();
 
@@ -205,6 +238,8 @@ internal class Program
         });
 
         // 7. Tool & Context Registration:
+        bool disableSkillShell = builder.Configuration.GetValue<bool>("Skills:DisableShellExecution");
+
         builder.Services.AddScoped(sp =>
         {
             var agentFactory = sp.GetRequiredService<IAgentFactory>();
@@ -218,6 +253,25 @@ internal class Program
 
             inner.Register(new AgentTool((clientName, modelName) =>
                 (options, agentFactory.CreateAgent(clientName, modelName), outward)));
+
+            inner.Register(new SkillTool(
+                sp.GetRequiredService<ISkillCatalog>(),
+                shellRunner: new PowerShellSkillShellRunner(),
+                disableShellExecution: disableSkillShell,
+                forkRunner: async (prompt, agentType, ct) =>
+                {
+                    Agent forkAgent = agentFactory.CreateAgent(null, null);
+                    await using ChatSession forkSession = new(forkAgent, options, new ToolContext { Registry = outward });
+                    string forkResult = string.Empty;
+                    await foreach (AgentEvent ev in forkSession.SendAsync(prompt, ct).ConfigureAwait(false))
+                    {
+                        if (ev is AgentResultEvent resultEv)
+                        {
+                            forkResult = resultEv.FinalText ?? string.Empty;
+                        }
+                    }
+                    return forkResult;
+                }));
 
             var mcpToolNames = new HashSet<string>();
             var mcpPool = sp.GetService<McpClientPool>();   // null when MCP is not configured
@@ -264,6 +318,9 @@ internal class Program
                 throw;
             }
         }
+
+        // Resolve the SkillWatcher singleton to start filesystem monitoring for the app lifetime.
+        using SkillWatcher skillWatcher = host.Services.GetRequiredService<SkillWatcher>();
 
         using (var scope = host.Services.CreateScope())
         {

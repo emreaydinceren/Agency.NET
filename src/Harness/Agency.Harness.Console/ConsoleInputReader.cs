@@ -196,7 +196,11 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                 default:
                 if (key.KeyChar == '/' && buffer.Length == 0)
                 {
-                    var commands = CommandRegistry.Commands.Select(cmd => new ConsolePickerRow(cmd.CommandText, cmd.Description)).ToList();
+                    var commands = CommandRegistry.Commands
+                        .Select(cmd => cmd.ArgumentHint is not null
+                            ? new ConsolePickerRow(cmd.CommandText, cmd.ArgumentHint, cmd.Description)
+                            : new ConsolePickerRow(cmd.CommandText, cmd.Description))
+                        .ToList();
                     output.WriteLine();
                     string? picked = ConsolePicker.Show(commands, 0);
                     output.WriteMarkup(markup);

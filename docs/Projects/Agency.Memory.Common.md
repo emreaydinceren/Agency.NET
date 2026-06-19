@@ -1,9 +1,9 @@
 # Agency.Memory.Common
-#memory #common #abstractions
+#memory #common #abstractions #storage
 
 ## What It Is
 
-Agency.Memory.Common is the shared contract and data-model library for the Agency long-term memory system. It defines every type that crosses a subsystem boundary — the `Record` entity, `IMemoryStore`, the event bus, job payloads, ranking primitives, and configuration options — so that the Distiller, Retrieval Engine, Consolidator, and Hygiene Sweeper can all compile against one stable surface without introducing circular dependencies between implementation projects.
+`Agency.Memory.Common` is the shared, zero-dependency contract and data-model library for the Agency long-term memory system. It defines every type that crosses a subsystem boundary — the `Record` entity, `IMemoryStore` and the storage contracts (`IDeadLetterStore`, `IWatermarkStore`, `IMemorySchemaInitializer`), the event bus, job payloads, ranking primitives, and configuration options — so that the Distiller, Retrieval Engine, Consolidator, Hygiene Sweeper, and the SQL backends can all compile against one stable surface without introducing circular dependencies between implementation projects.
 
 **Namespace:** `Agency.Memory.Common`
 
@@ -66,30 +66,7 @@ public sealed record Record
 
 ---
 
-### Storage
-
-```csharp
-// File: src/Memory/Agency.Memory.Common/Storage/SearchQuery.cs
-using Agency.Memory.Common.Records;
-using Agency.Memory.Common.Storage;
-
-/// <summary>Parameters for a vector similarity search against the memory store.</summary>
-public sealed record SearchQuery(
-    string UserId,
-    ReadOnlyMemory<float> QueryEmbedding,
-    int TopK,
-    ContentType? ContentType = null,   // null = no filter
-    string? Domain = null);            // null = no filter
-```
-
-```csharp
-// File: src/Memory/Agency.Memory.Common/Storage/SearchHit.cs
-using Agency.Memory.Common.Records;
-using Agency.Memory.Common.Storage;
-
-/// <summary>A single result from IMemoryStore.SearchAsync.</summary>
-public sealed record SearchHit(Record Record, double Similarity);
-```
+### Interfaces
 
 ```csharp
 // File: src/Memory/Agency.Memory.Common/Storage/IMemoryStore.cs
@@ -149,9 +126,120 @@ public interface IMemoryStore
 }
 ```
 
+```csharp
+// File: src/Memory/Agency.Memory.Common/Events/IAsyncEventBus.cs
+using Agency.Memory.Common.Events;
+using Agency.Harness;
+
+/// <summary>
+/// In-process event bus for publishing AgentEvents from background services.
+/// Dispatch is polymorphic: a subscriber to a base type receives derived published events.
+/// </summary>
+public interface IAsyncEventBus
+{
+    Task PublishAsync<T>(T evt, CancellationToken ct = default)
+        where T : AgentEvent;
+
+    /// <summary>Returns a disposable that removes the subscription when disposed.</summary>
+    IDisposable Subscribe<T>(Func<T, CancellationToken, Task> handler)
+        where T : AgentEvent;
+}
+```
+
 ---
 
-### Ranking
+### Storage Contracts
+
+These three interfaces are the shared persistence contract that the Distiller depends on and the SQL backends (`Agency.Memory.Sql.Postgres`, `Agency.Memory.Sql.Sqlite`) implement. They live here — not in the Distiller — so the live pipeline never references a concrete provider and a host can select one at composition time.
+
+```csharp
+// File: src/Memory/Agency.Memory.Common/Storage/IDeadLetterStore.cs
+using Agency.Memory.Common.Storage;
+
+/// <summary>
+/// Narrow abstraction over dead-letter persistence, implemented by each storage provider.
+/// Failed distillation and consolidation jobs are written here for operational inspection;
+/// the live pipeline never reads from it.
+/// </summary>
+public interface IDeadLetterStore
+{
+    /// <summary>Writes a failed job to the dead-letter store.</summary>
+    Task WriteAsync(
+        string userId,
+        string? sessionId,
+        string jobKind,
+        object payload,
+        Exception error,
+        CancellationToken ct = default);
+}
+```
+
+```csharp
+// File: src/Memory/Agency.Memory.Common/Storage/IWatermarkStore.cs
+using Agency.Memory.Common.Storage;
+
+/// <summary>
+/// Narrow abstraction over distillation-watermark persistence, implemented by each storage provider.
+/// A watermark records the last conversation-turn index successfully distilled for a
+/// (userId, sessionId) pair, enabling idempotent re-runs after process restarts.
+/// </summary>
+public interface IWatermarkStore
+{
+    /// <summary>Gets the current watermark for the given session, or 0 if none has been recorded.</summary>
+    Task<int> GetAsync(string userId, string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Advances the watermark to <paramref name="candidate"/> if it is greater than the stored value.
+    /// Never moves the watermark backwards. Returns the effective (post-update) watermark value.
+    /// </summary>
+    Task<int> AdvanceAsync(string userId, string sessionId, int candidate, CancellationToken ct = default);
+}
+```
+
+```csharp
+// File: src/Memory/Agency.Memory.Common/Storage/IMemorySchemaInitializer.cs
+using Agency.Memory.Common.Storage;
+
+/// <summary>
+/// Provisions the storage schema required by the Agency memory system, implemented by each provider.
+/// </summary>
+public interface IMemorySchemaInitializer
+{
+    /// <summary>
+    /// Provisions all required tables and indexes. Safe to call on every application start.
+    /// Throws <see cref="InvalidOperationException"/> if the schema was previously initialised
+    /// with a different embedding dimension.
+    /// </summary>
+    Task InitializeAsync(int embeddingDim, CancellationToken ct = default);
+}
+```
+
+---
+
+### Value Types
+
+```csharp
+// File: src/Memory/Agency.Memory.Common/Storage/SearchQuery.cs
+using Agency.Memory.Common.Records;
+using Agency.Memory.Common.Storage;
+
+/// <summary>Parameters for a vector similarity search against the memory store.</summary>
+public sealed record SearchQuery(
+    string UserId,
+    ReadOnlyMemory<float> QueryEmbedding,
+    int TopK,
+    ContentType? ContentType = null,   // null = no filter
+    string? Domain = null);            // null = no filter
+```
+
+```csharp
+// File: src/Memory/Agency.Memory.Common/Storage/SearchHit.cs
+using Agency.Memory.Common.Records;
+using Agency.Memory.Common.Storage;
+
+/// <summary>A single result from IMemoryStore.SearchAsync.</summary>
+public sealed record SearchHit(Record Record, double Similarity);
+```
 
 ```csharp
 // File: src/Memory/Agency.Memory.Common/Ranking/RankingWeights.cs
@@ -176,26 +264,6 @@ public sealed record RankingWeights(
 ---
 
 ### Events
-
-```csharp
-// File: src/Memory/Agency.Memory.Common/Events/IAsyncEventBus.cs
-using Agency.Memory.Common.Events;
-using Agency.Harness;
-
-/// <summary>
-/// In-process event bus for publishing AgentEvents from background services.
-/// Dispatch is polymorphic: a subscriber to a base type receives derived published events.
-/// </summary>
-public interface IAsyncEventBus
-{
-    Task PublishAsync<T>(T evt, CancellationToken ct = default)
-        where T : AgentEvent;
-
-    /// <summary>Returns a disposable that removes the subscription when disposed.</summary>
-    IDisposable Subscribe<T>(Func<T, CancellationToken, Task> handler)
-        where T : AgentEvent;
-}
-```
 
 ```csharp
 // File: src/Memory/Agency.Memory.Common/Events/MemoryEvents.cs
@@ -376,13 +444,43 @@ public static class MemoryHookFactory
 
 ## How It Works
 
-The types in this library form the backbone of a capture-store-retrieve-consolidate loop. The flow is:
+`Agency.Memory.Common` is the zero-dependency contract surface that every memory subsystem depends on. It contains only interfaces, records, enums, and options — no infrastructure, no provider-specific code, and no references to the implementation projects. Every type that crosses a subsystem boundary lives here once, so the Distiller, Retrieval Engine, Consolidator, Hygiene Sweeper, and the SQL backends all compile against a single shared surface and never reference one another.
 
-1. **Write path** — When a distillation trigger fires (goal complete / inactivity / session dispose), the harness enqueues a `DistillationJob` into a per-session bounded channel. The job carries a snapshot of `UpToTurnIndex` and the `FocusContext` at trigger time. The `DistillerBackgroundService` (in `Agency.Memory.Distiller`) dequeues it, extracts `Record` instances via an LLM, embeds each one, and calls `IMemoryStore.UpsertAsync`. After a session's final distillation, a `ConsolidationJob` is enqueued so the Consolidator can merge or prune the user's corpus.
+The types form the backbone of a capture-store-retrieve-consolidate loop:
 
-2. **Read path** — On every agent iteration, `MemoryHookFactory`'s baseline `OnPreIteration` hook calls the Retrieval Engine (in `Agency.Memory.Retrieval`). The engine compares `Context.MemoryLastRetrievedAt` against `IMemoryStore.LastWrittenAtAsync` to decide whether to skip (gate hit) or run a full vector search (gate miss). When it runs, the engine over-fetches (`RetrievalTopK × OverFetchFactor`) from the store, then re-ranks the wider pool using `RankingFormula.Score` before trimming to `RetrievalTopK`.
+1. **Write path** — When a distillation trigger fires (goal complete / inactivity / session dispose), the harness enqueues a `DistillationJob` into a per-session bounded channel. The `DistillerBackgroundService` (in `Agency.Memory.Distiller`) dequeues it, reads the prior progress via `IWatermarkStore.GetAsync`, extracts `Record` instances via an LLM, embeds each one, calls `IMemoryStore.UpsertAsync`, and advances `IWatermarkStore.AdvanceAsync`. Failures are persisted via `IDeadLetterStore.WriteAsync`. After a session's final distillation, a `ConsolidationJob` is enqueued so the Consolidator can merge or prune the user's corpus.
 
-3. **Events** — Background services publish `AgentEvent`-derived events via `IAsyncEventBus`. The abstract `DistillationSettledEvent` base lets any consumer observe job completion on either success or failure without subscribing to both concrete subtypes separately. `MemoryMutatedEvent` is emitted once per Consolidator tool call so hosts can surface autonomous memory changes to the user.
+2. **Read path** — On every agent iteration, `MemoryHookFactory`'s baseline hook calls the Retrieval Engine (in `Agency.Memory.Retrieval`). The engine compares `Context.MemoryLastRetrievedAt` against `IMemoryStore.LastWrittenAtAsync` to decide whether to skip (gate hit) or run a full vector search (gate miss). When it runs, it over-fetches (`RetrievalTopK × OverFetchFactor`), re-ranks via `RankingFormula.Score`, then trims to `RetrievalTopK`.
+
+3. **Schema & events** — At startup a host resolves `IMemorySchemaInitializer` and calls `InitializeAsync` to provision the selected provider's tables. Background services publish `AgentEvent`-derived events via `IAsyncEventBus`; the abstract `DistillationSettledEvent` base lets a consumer observe job completion on success or failure without subscribing to both concrete subtypes.
+
+A host wires the contract against a chosen backend without the contract library knowing the backend exists:
+
+```csharp
+using Agency.Memory.Common.Options;
+using Agency.Memory.Common.Records;
+using Agency.Memory.Common.Storage;
+
+async Task RememberAsync(IMemoryStore store, IWatermarkStore watermarks)
+{
+    Record fact = Record.Create(
+        id: Guid.NewGuid().ToString(),
+        userId: "user-42",
+        sessionId: "sess-7",
+        contentType: ContentType.Fact,
+        domain: "preferences",
+        key: "tea",
+        title: "Prefers green tea",
+        value: "The user drinks green tea, not coffee.",
+        tags: ["beverage"],
+        importance: 0.7,
+        createdAt: DateTimeOffset.UtcNow,
+        updatedAt: DateTimeOffset.UtcNow);
+
+    await store.UpsertAsync(fact);
+    await watermarks.AdvanceAsync("user-42", "sess-7", candidate: 12);
+}
+```
 
 ### Ranking Formula (Spec §8.3)
 
@@ -413,13 +511,14 @@ Same record from a different session: `0.40 + 0.225 + 0.12 + 0 = 0.745`.
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Harness]] | Upstream dependency. `Record` events inherit from `AgentEvent`; `MemoryHookFactory` produces `AgentHooks`; `DistillationJob` carries a `FocusContext` from `Agency.Harness.Contexts`. |
+| [[Agency.Harness]] | Upstream dependency. Memory events inherit from `AgentEvent`; `MemoryHookFactory` produces `AgentHooks`; `DistillationJob` carries a `FocusContext` from `Agency.Harness.Contexts`. |
 | [[Agency.Embeddings.Common]] | Upstream dependency. `IMemoryStore.UpsertAsync` generates embeddings via `IEmbeddingGenerator` when `Record.Embedding` is empty. |
-| Agency.Memory.Retrieval | Downstream consumer. Implements the retrieval gate and ranking using `IMemoryStore`, `SearchQuery`, `SearchHit`, `RankingFormula` (internal), and `RankingWeights`. Has `InternalsVisibleTo` access. |
-| Agency.Memory.Distiller | Downstream consumer. Implements `DistillerBackgroundService`; enqueues and processes `DistillationJob`; publishes `DistillationSettledEvent` variants. Has `InternalsVisibleTo` access. Hosts `AddAgencyMemory` DI entry point. |
-| Agency.Memory.Consolidator | Downstream consumer. Implements `ConsolidatorBackgroundService`; dequeues `ConsolidationJob`; calls `IMemoryStore.MergeAsync`, `UpdateRecordAsync`, `DeleteByIdAsync`; publishes `ConsolidationCompletedEvent` and `MemoryMutatedEvent`. |
-| Agency.Memory.Hygiene | Downstream consumer. Implements `HygieneSweeperBackgroundService`; calls `IMemoryStore.DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync`; reads `MemoryOptions` for TTL and importance thresholds. |
-| Agency.Memory.Sql.Postgres | Downstream implementation. Provides the PostgreSQL + pgvector implementation of `IMemoryStore`. |
+| [[Agency.Memory.Retrieval]] | Downstream consumer. Implements the retrieval gate and ranking using `IMemoryStore`, `SearchQuery`, `SearchHit`, `RankingFormula` (internal), and `RankingWeights`. Has `InternalsVisibleTo` access. |
+| [[Agency.Memory.Distiller]] | Downstream consumer. Implements `DistillerBackgroundService`; enqueues and processes `DistillationJob`; depends on `IWatermarkStore` and `IDeadLetterStore`; publishes `DistillationSettledEvent` variants. Hosts the `AddAgencyMemory` DI entry point. |
+| [[Agency.Memory.Consolidator]] | Downstream consumer. Implements `ConsolidatorBackgroundService`; dequeues `ConsolidationJob`; calls `IMemoryStore.MergeAsync`, `UpdateRecordAsync`, `DeleteByIdAsync`; publishes `ConsolidationCompletedEvent` and `MemoryMutatedEvent`. |
+| [[Agency.Memory.Hygiene]] | Downstream consumer. Implements `HygieneSweeperBackgroundService`; calls `IMemoryStore.DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync`; reads `MemoryOptions` for TTL and importance thresholds. |
+| [[Agency.Memory.Sql.Postgres]] | Downstream implementation. Provides the PostgreSQL + pgvector implementation of `IMemoryStore`, `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer`. |
+| [[Agency.Memory.Sql.Sqlite]] | Downstream implementation. Provides the SQLite implementation of `IMemoryStore`, `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer`. |
 | Agency.Memory.Common.Test | Test project. Has `InternalsVisibleTo` access for unit testing internal types. |
 | Agency.Memory.Functional.Test | Functional test project. Has `InternalsVisibleTo` access to instantiate `InMemoryEventBus` directly and access internal infrastructure for crash-recovery tests. |
 
@@ -427,12 +526,16 @@ Same record from a different session: `0.40 + 0.225 + 0.12 + 0 = 0.745`.
 
 ## Design Notes
 
-- **Single `Record` type with a `ContentType` discriminator, not separate classes.** Both `Fact` and `Memory` go to the same vector store, share the same ranking formula, and have identical storage operations. Splitting them into distinct C# types would double the surface area (constructors, mappers, validators, tests) for what is purely a categorisation difference. A discriminator column costs compile-time exhaustiveness checks; the spec accepts that tradeoff because `ContentType` has only two values and is unlikely to grow (Spec §14.2).
+- **The storage contracts (`IDeadLetterStore`, `IWatermarkStore`, `IMemorySchemaInitializer`) live here, not in `Agency.Memory.Distiller`.** They were relocated from the Distiller so the SQL backends (`Agency.Memory.Sql.Postgres`, `Agency.Memory.Sql.Sqlite`) have a stable contract to implement without taking a reference on the Distiller — which would invert the dependency arrow and pull the entire distillation pipeline into every storage assembly. Keeping them alongside `IMemoryStore` lets the Distiller depend only on the abstraction and lets a host pick the concrete provider at composition time.
 
-- **`SessionId` is a ranking signal, not a partition key.** Records tagged with a session remain visible from other sessions; they just receive a lower composite score (wₘ = 0.1 by default). Hard isolation was rejected because cross-session continuity is often desirable — the agent should be able to recall "we hit this same problem last Tuesday" — and soft-signal behaviour is reversible at retrieval time by raising wₘ or adding a post-hoc filter, whereas removing hard isolation requires a schema change (Spec §14.3 / P3).
+- **This project carries zero external dependencies and references no implementation project.** It is the one assembly every other memory project can reference. Adding a NuGet package or a project reference here would force that dependency onto all downstream subsystems and risk a reference cycle, so the contract surface is deliberately kept to interfaces, records, enums, and options only.
 
-- **`MemoryHookFactory` accepts pre-built callbacks instead of depending on implementation projects directly.** `Agency.Memory.Common` cannot reference `Agency.Memory.Retrieval` or `Agency.Memory.Distiller` without creating a circular dependency (both already reference `Common`). `MemoryHookFactory.Build` therefore takes `Func<>` parameters; the `AddAgencyMemory` DI extension in `Agency.Memory.Distiller` supplies the real `RetrievalEngine` and `InactivityTimerService` callbacks at registration time. This keeps the contract library free of implementation references (IQ-1, documented in `MemoryHookFactory.cs` remarks).
+- **Single `Record` type with a `ContentType` discriminator, not separate classes.** Both `Fact` and `Memory` go to the same vector store, share the same ranking formula, and have identical storage operations. Splitting them into distinct C# types would double the surface area (constructors, mappers, validators, tests) for what is purely a categorisation difference (Spec §14.2).
 
-- **`IMemoryStore.DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` take an explicit `now` parameter rather than using the database clock.** The Hygiene Sweeper passes its injected `TimeProvider.GetUtcNow()` so that tests using a `FakeTimeProvider` can drive expiry deterministically without waiting for real wall-clock time. Production always uses `TimeProvider.System`, which equals the DB wall clock in practice (TI-4, Spec §8.5).
+- **`SessionId` is a ranking signal, not a partition key.** Session-tagged records stay visible from other sessions; they just receive a lower composite score (wₘ = 0.1 by default). Hard isolation was rejected because cross-session continuity is often desirable, and soft-signal behaviour is reversible at retrieval time by raising wₘ, whereas removing hard isolation requires a schema change (Spec §14.3 / P3).
 
-- **`DistillationSettledEvent` is an abstract base, not an interface.** Consumers that need to observe any distillation outcome (success or failure) can `Subscribe<DistillationSettledEvent>` on `IAsyncEventBus`; the bus dispatches polymorphically via `Type.IsAssignableFrom`. This avoids the subtle race condition of independently subscribing to `DistillationCompletedEvent` and `DistillationFailedEvent` and guarantees a waiter never hangs when a job fails (TI-8.1).
+- **`MemoryHookFactory` accepts pre-built callbacks instead of depending on implementation projects directly.** `Agency.Memory.Common` cannot reference `Agency.Memory.Retrieval` or `Agency.Memory.Distiller` without creating a circular dependency. `MemoryHookFactory.Build` takes `Func<>` parameters; the `AddAgencyMemory` DI extension in `Agency.Memory.Distiller` supplies the real callbacks at registration time (IQ-1).
+
+- **The hygiene sweep methods take an explicit `now` parameter rather than using the database clock.** The Hygiene Sweeper passes its injected `TimeProvider.GetUtcNow()` so tests using a `FakeTimeProvider` can drive expiry deterministically without waiting for real wall-clock time (TI-4, Spec §8.5).
+
+- **`DistillationSettledEvent` is an abstract base, not an interface.** Consumers can `Subscribe<DistillationSettledEvent>` on `IAsyncEventBus`; the bus dispatches polymorphically. This avoids the race of independently subscribing to `DistillationCompletedEvent` and `DistillationFailedEvent` and guarantees a waiter never hangs when a job fails (TI-8.1).

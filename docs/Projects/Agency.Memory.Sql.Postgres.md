@@ -19,6 +19,8 @@ For local development, Docker Compose in `src/docker-compose.yml` provides a pre
 
 ## API Surface
 
+The three repositories implement provider-neutral storage contracts defined in [[Agency.Memory.Common]] (`Agency.Memory.Common.Storage`): `PostgresMemoryStore` implements `IMemoryStore`, `MemorySchemaInitializer` implements `IMemorySchemaInitializer`, `WatermarkRepository` implements `IWatermarkStore`, and `DeadLetterRepository` implements `IDeadLetterStore`.
+
 ### `PostgresMemoryStore` — `IMemoryStore` implementation
 
 ```csharp
@@ -60,15 +62,16 @@ public sealed class PostgresMemoryStore : IMemoryStore
 }
 ```
 
-### `MemorySchemaInitializer` — startup schema provisioner
+### `MemorySchemaInitializer` — startup schema provisioner (`IMemorySchemaInitializer`)
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Postgres/MemorySchemaInitializer.cs
+using Agency.Memory.Common.Storage;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres;
 
-public sealed class MemorySchemaInitializer
+public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 {
     public MemorySchemaInitializer(NpgsqlDataSource dataSource);
 
@@ -78,15 +81,16 @@ public sealed class MemorySchemaInitializer
 }
 ```
 
-### `WatermarkRepository` — distillation progress tracking
+### `WatermarkRepository` — distillation progress tracking (`IWatermarkStore`)
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Postgres/WatermarkRepository.cs
+using Agency.Memory.Common.Storage;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres;
 
-public sealed class WatermarkRepository
+public sealed class WatermarkRepository : IWatermarkStore
 {
     public WatermarkRepository(NpgsqlDataSource dataSource);
 
@@ -101,15 +105,16 @@ public sealed class WatermarkRepository
 }
 ```
 
-### `DeadLetterRepository` — failed-job persistence
+### `DeadLetterRepository` — failed-job persistence (`IDeadLetterStore`)
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Postgres/DeadLetterRepository.cs
+using Agency.Memory.Common.Storage;
 using Npgsql;
 
 namespace Agency.Memory.Sql.Postgres;
 
-public sealed class DeadLetterRepository
+public sealed class DeadLetterRepository : IDeadLetterStore
 {
     public DeadLetterRepository(NpgsqlDataSource dataSource);
 
@@ -132,10 +137,17 @@ public sealed record DeadLetterEntry(
 
 ## Registration
 
-Call `AddAgencyMemoryPostgres` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers the `NpgsqlDataSource` (with pgvector enabled), `WatermarkRepository`, `DeadLetterRepository`, `MemorySchemaInitializer`, and `IMemoryStore → PostgresMemoryStore`, all as singletons.
+Call `AddAgencyMemoryPostgres` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers everything as singletons. Each concrete repository is registered once, and the provider-neutral storage interfaces from [[Agency.Memory.Common]] are bound back to those same singletons so the Distiller and host can resolve storage without referencing this concrete provider (enabling config-driven provider selection):
+
+- `NpgsqlDataSource` (with pgvector enabled via `UseVector()`)
+- `WatermarkRepository`, and `IWatermarkStore` → `WatermarkRepository`
+- `DeadLetterRepository`, and `IDeadLetterStore` → `DeadLetterRepository`
+- `MemorySchemaInitializer`, and `IMemorySchemaInitializer` → `MemorySchemaInitializer`
+- `IMemoryStore` → `PostgresMemoryStore` (lazy factory)
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Postgres/PostgresMemoryServiceCollectionExtensions.cs
+using Agency.Memory.Common.Storage;
 using Agency.Memory.Sql.Postgres;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -238,7 +250,7 @@ Every write operation (`UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, `MergeAsyn
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Defines `IMemoryStore`, `Record`, `ContentType`, `SearchQuery`, `SearchHit`, and `MemoryOptions` — the entire contract this project implements |
+| [[Agency.Memory.Common]] | Defines the storage contracts this project implements — `Storage.IMemoryStore`, `Storage.IMemorySchemaInitializer`, `Storage.IWatermarkStore`, `Storage.IDeadLetterStore` — plus the `Record`, `ContentType`, `SearchQuery`, `SearchHit`, and `MemoryOptions` types they exchange |
 | [[Agency.Embeddings.Common]] | Provides `IEmbeddingGenerator`; `PostgresMemoryStore` calls it to produce embeddings for records that arrive without a pre-computed vector |
 | [[Agency.Memory.Retrieval]] | Calls `IMemoryStore.SearchAsync` and `LastWrittenAtAsync` on every agent iteration; depends on this project at runtime |
 | [[Agency.Memory.Distiller]] | Calls `IMemoryStore.UpsertAsync` and `WatermarkRepository.AdvanceAsync` to persist extracted episodes and advance the distillation watermark |
@@ -247,6 +259,8 @@ Every write operation (`UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, `MergeAsyn
 | [[Agency.Sql.Postgres]] | Shared Postgres infrastructure (connection string helpers, test fixtures) referenced by this project |
 
 ## Design Notes
+
+- **Why the repositories implement interfaces that live in [[Agency.Memory.Common]] rather than defining their own.** The storage contracts (`IMemoryStore`, `IMemorySchemaInitializer`, `IWatermarkStore`, `IDeadLetterStore`) were relocated into `Agency.Memory.Common.Storage`. Consumers such as the Distiller depend only on those abstractions, so a different backing store could be substituted purely through DI (`AddAgencyMemoryPostgres` binds each interface to its concrete repository). Keeping the contracts in Common — not in this provider — is what makes provider selection a configuration concern rather than a code-reference concern.
 
 - **Why a functional unique index (`COALESCE(session_id, '')`) rather than a table-level `UNIQUE` constraint.** PostgreSQL treats `NULL != NULL` in unique constraint evaluation, so a plain `UNIQUE (user_id, session_id, domain, key)` would allow any number of rows with a `NULL` session, making the upsert conflict detection fail for user-global records. Using `COALESCE(session_id, '')` in a functional unique index maps all global records to the empty-string partition and restores the expected one-row-per-key semantics without requiring a sentinel value in the column itself. The `ON CONFLICT` clause in `UpsertAsync` mirrors the same expression exactly.
 

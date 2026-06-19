@@ -6,6 +6,7 @@ using System.Text.Json;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Harness.Permissions;
+using Agency.Harness.Skills;
 using Agency.Harness.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -143,12 +144,14 @@ public sealed class Agent
     /// <param name="environment">Optional environmental context; defaults to <see cref="EnvironmentalContext.Empty"/>.</param>
     /// <param name="user">Optional caller identity; defaults to <see cref="UserSpecificContext.Empty"/>.</param>
     /// <param name="timeProvider">Optional clock for temporal grounding; defaults to <see cref="TimeProvider.System"/>.</param>
+    /// <param name="skills">Optional skill context; defaults to <see cref="SkillContext.Empty"/>.</param>
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
         EnvironmentalContext? environment = null,
         UserSpecificContext? user = null,
-        TimeProvider? timeProvider = null) =>
+        TimeProvider? timeProvider = null,
+        SkillContext? skills = null) =>
         new()
         {
             Query = new QueryContext { Prompt = initialPrompt },
@@ -156,6 +159,7 @@ public sealed class Agent
             Tools = tools ?? ToolContext.Empty,
             Environment = environment ?? EnvironmentalContext.Empty,
             User = user ?? UserSpecificContext.Empty,
+            Skills = skills ?? SkillContext.Empty,
         };
 
     /// <summary>
@@ -194,6 +198,10 @@ public sealed class Agent
         {
             ctx.Conversation.Append(new ChatMessage(ChatRole.User, userMessage));
         }
+
+        // A new user message clears the active-skill permission window (spec: active-skill state
+        // is bounded to the single turn in which the skill was invoked).
+        ctx.ActiveSkillState.Clear();
 
         // Fire OnUserPromptSubmit every ChatAsync call, before entering the agent loop.
         if (this._hooks.OnUserPromptSubmit is { } onUserPromptSubmit)
@@ -716,11 +724,15 @@ public sealed class Agent
 
                 // ── Permission gate (spec §2.3, §2.4) ────────────────────────────
                 // Evaluates post-Rewrite input. Combined per-call order:
-                //   1. Hook Deny  — handled above (already returned).
-                //   2. Rule Deny  — blocks even a hook-Ask-flagged call (deny always wins).
-                //   3. Hook Ask   — pends (unless killed by deny in step 2).
-                //   4. Rule Allow — executes.
-                //   5. Unresolved — pends (or denies when OnUnresolved=Deny).
+                //   1. Hook Deny       — handled above (already returned).
+                //   2. Rule Deny       — blocks even a hook-Ask-flagged call (deny always wins).
+                //   3. Active-skill pre-approval — if the tool is in the active skill's
+                //      allowed-tools list AND no deny rule fired, pre-approve and execute.
+                //      Hook-Ask is still cleared by this path (the user explicitly loaded a
+                //      skill that declared this tool as safe).
+                //   4. Hook Ask        — pends (unless cleared by step 3).
+                //   5. Rule Allow      — executes.
+                //   6. Unresolved      — pends (or denies when OnUnresolved=Deny).
                 //
                 // Mechanism for hook-Ask + evaluator:
                 //   Call Evaluate regardless of hookAsk. A Deny result (rule deny OR
@@ -729,7 +741,7 @@ public sealed class Agent
                 //   or Ask result does NOT clear a hook Ask — the call still pends with
                 //   Source=Hook. This keeps the evaluator pure and avoids adding surface to
                 //   IPermissionEvaluator.
-                if (hookAsk || this._permissions != null)
+                if (hookAsk || this._permissions != null || ctx.ActiveSkillState.AllowedTools.Count > 0)
                 {
                     if (this._permissions != null)
                     {
@@ -737,13 +749,20 @@ public sealed class Agent
 
                         if (permDecision is PermissionDecision.Deny permDeny)
                         {
-                            // Rule deny beats hook Ask — no park, just block.
+                            // Rule deny beats everything — no park, just block.
                             ToolResult blocked = new($"[Blocked] {permDeny.Reason}", IsError: true);
                             resultMessages[index] = new FunctionResultContent(call.CallId, blocked.Content);
                             return new ToolInvokedEvent(call.Name, input, blocked);
                         }
 
-                        if (hookAsk)
+                        // Active-skill pre-approval: deny rules have been checked above; if the
+                        // tool is in the active skill's allowed-tools list, execute it immediately.
+                        // This clears a hook-Ask too — the skill declaration is the user's grant.
+                        if (ctx.ActiveSkillState.IsAllowed(call.Name))
+                        {
+                            // Fall through to InvokeAsync.
+                        }
+                        else if (hookAsk)
                         {
                             // Allow or Ask from evaluator does NOT clear a hook Ask (spec §2.3 step 3).
                             // Pend with Source=Hook; use evaluator's Ask KeyValue/ProposedRule if it
@@ -755,8 +774,7 @@ public sealed class Agent
                                 input, keyValue, proposedRule, PermissionRequestSource.Hook, hookReason);
                             return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
                         }
-
-                        if (permDecision is PermissionDecision.Ask ruleAsk)
+                        else if (permDecision is PermissionDecision.Ask ruleAsk)
                         {
                             // Unresolved rule — pend with Source=UnresolvedRule.
                             pendingSlots[index] = new PendingToolCall(
@@ -766,16 +784,24 @@ public sealed class Agent
                             return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
                         }
 
-                        // Allow — fall through to InvokeAsync.
+                        // Allow (or active-skill pre-approved) — fall through to InvokeAsync.
                     }
-                    else if (hookAsk)
+                    else
                     {
-                        // No evaluator: hook Ask still pends (spec §3.5 "Without an evaluator").
-                        // KeyValue=null, ProposedRule=bare tool name.
-                        pendingSlots[index] = new PendingToolCall(
-                            Guid.NewGuid(), index, call.CallId, call.Name,
-                            input, null, call.Name, PermissionRequestSource.Hook, hookReason);
-                        return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                        // No evaluator: check active-skill pre-approval first, then hook-Ask.
+                        if (ctx.ActiveSkillState.IsAllowed(call.Name))
+                        {
+                            // Active-skill pre-approval — fall through to InvokeAsync.
+                        }
+                        else if (hookAsk)
+                        {
+                            // No evaluator: hook Ask still pends (spec §3.5 "Without an evaluator").
+                            // KeyValue=null, ProposedRule=bare tool name.
+                            pendingSlots[index] = new PendingToolCall(
+                                Guid.NewGuid(), index, call.CallId, call.Name,
+                                input, null, call.Name, PermissionRequestSource.Hook, hookReason);
+                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                        }
                     }
                 }
 
@@ -821,6 +847,23 @@ public sealed class Agent
                     { "agent.tool.name", call.Name },
                     { "agent.tool.error", result.IsError },
                 });
+
+                // Active-skill state: when the "skill" meta-tool succeeds, record the invoked
+                // skill's allowed-tools so the permission gate pre-approves them for the rest
+                // of this turn. On error, leave any prior active-skill state unchanged so a
+                // failed re-invocation does not accidentally clear a valid prior grant.
+                if (!result.IsError && call.Name == SkillTool.ToolName)
+                {
+                    string? skillName = null;
+                    if (input.TryGetProperty("name", out JsonElement nameEl) &&
+                        nameEl.ValueKind == JsonValueKind.String)
+                    {
+                        skillName = nameEl.GetString();
+                    }
+
+                    Skill? invokedSkill = skillName is not null ? ctx.Skills.Find(skillName) : null;
+                    ctx.ActiveSkillState.Set(invokedSkill?.AllowedTools ?? []);
+                }
 
                 var resultContent = result.IsError
                     ? new FunctionResultContent(call.CallId, $"[Error] {result.Content}")

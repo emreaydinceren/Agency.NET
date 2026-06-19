@@ -33,6 +33,25 @@ public static class SystemPromptBuilder
             sb.AppendLine("Some tool parameter schemas are withheld to save context: a tool advertised with only a `{\"type\":\"object\"}` schema is a deferred tool. Always call tool_help(name) to retrieve its full parameter schema before invoking it.");
         }
 
+        // Skills catalog: only model-invocable skills are listed (DisableModelInvocation == false).
+        IReadOnlyList<Skills.Skill> modelInvocableSkills = ctx.Skills.List()
+            .Where(s => !s.DisableModelInvocation)
+            .ToList();
+
+        if (modelInvocableSkills.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Skills");
+            foreach (Skills.Skill skill in modelInvocableSkills)
+            {
+                string entry = string.IsNullOrEmpty(skill.WhenToUse)
+                    ? $"- **{skill.Name}** — {skill.Description}"
+                    : $"- **{skill.Name}** — {skill.Description} ({skill.WhenToUse})";
+                sb.AppendLine(entry);
+            }
+            sb.AppendLine("To use a skill, call the `skill` tool with its name.");
+        }
+
         // KnowledgeContext re-injected every iteration (D3).
         if (ctx.Knowledge.Facts.Count > 0)
         {

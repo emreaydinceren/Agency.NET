@@ -1,5 +1,6 @@
 
 using Agency.Harness.Contexts;
+using Agency.Harness.Skills;
 using Agency.Harness.Tools;
 
 namespace Agency.Harness.Test;
@@ -200,5 +201,92 @@ public sealed class SystemPromptBuilderTests
         string result = SystemPromptBuilder.Build(ctx);
 
         Assert.DoesNotContain("tool_help", result);
+    }
+
+    // ── SkillContext ───────────────────────────────────────────────────────────
+
+    private static Skill MakeSkill(string name, string description, string? whenToUse = null, bool disableModelInvocation = false) =>
+        new()
+        {
+            Name = name,
+            Description = description,
+            WhenToUse = whenToUse,
+            Body = "# Skill body",
+            SkillDir = $"/skills/{name}",
+            DisableModelInvocation = disableModelInvocation,
+        };
+
+    [Fact]
+    public void Build_IncludesSkillsSection_WhenModelInvocableSkillsPresent()
+    {
+        Skill skill = MakeSkill("my-skill", "Does something useful", whenToUse: "Use it when you need X");
+        var ctx = MinimalContext() with
+        {
+            Skills = new SkillContext { Catalog = new SkillCatalog([skill]) },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.Contains("## Skills", result);
+        Assert.Contains("**my-skill**", result);
+        Assert.Contains("Does something useful", result);
+        Assert.Contains("Use it when you need X", result);
+        Assert.Contains("`skill`", result);
+    }
+
+    [Fact]
+    public void Build_SkillsSection_OmitsWhenToUse_WhenAbsent()
+    {
+        Skill skill = MakeSkill("bare-skill", "A bare description");
+        var ctx = MinimalContext() with
+        {
+            Skills = new SkillContext { Catalog = new SkillCatalog([skill]) },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.Contains("**bare-skill** — A bare description", result);
+        // No trailing parenthetical when WhenToUse is null.
+        Assert.DoesNotContain("bare-skill** — A bare description (", result);
+    }
+
+    [Fact]
+    public void Build_OmitsSkillsSection_WhenCatalogIsEmpty()
+    {
+        string result = SystemPromptBuilder.Build(MinimalContext());
+
+        Assert.DoesNotContain("## Skills", result);
+    }
+
+    [Fact]
+    public void Build_OmitsSkillsSection_WhenAllSkillsAreDisabled()
+    {
+        Skill disabled = MakeSkill("hidden-skill", "Not for the model", disableModelInvocation: true);
+        var ctx = MinimalContext() with
+        {
+            Skills = new SkillContext { Catalog = new SkillCatalog([disabled]) },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.DoesNotContain("## Skills", result);
+        Assert.DoesNotContain("hidden-skill", result);
+    }
+
+    [Fact]
+    public void Build_ExcludesDisabledSkills_WhenMixedCatalog()
+    {
+        Skill enabled = MakeSkill("enabled-skill", "Visible to model");
+        Skill disabled = MakeSkill("disabled-skill", "Hidden from model", disableModelInvocation: true);
+        var ctx = MinimalContext() with
+        {
+            Skills = new SkillContext { Catalog = new SkillCatalog([enabled, disabled]) },
+        };
+
+        string result = SystemPromptBuilder.Build(ctx);
+
+        Assert.Contains("## Skills", result);
+        Assert.Contains("enabled-skill", result);
+        Assert.DoesNotContain("disabled-skill", result);
     }
 }

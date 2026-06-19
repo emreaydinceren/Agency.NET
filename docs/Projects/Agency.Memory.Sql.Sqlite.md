@@ -57,14 +57,15 @@ public sealed class SqliteMemoryStore : IMemoryStore
 }
 ```
 
-### `MemorySchemaInitializer` — startup schema provisioner
+### `MemorySchemaInitializer` — `IMemorySchemaInitializer` implementation
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Sqlite/MemorySchemaInitializer.cs
+using Agency.Memory.Common.Storage;
 
 namespace Agency.Memory.Sql.Sqlite;
 
-public sealed class MemorySchemaInitializer
+public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 {
     public MemorySchemaInitializer(string connectionString);
 
@@ -75,14 +76,15 @@ public sealed class MemorySchemaInitializer
 }
 ```
 
-### `SqliteWatermarkRepository` — distillation progress tracking
+### `SqliteWatermarkRepository` — `IWatermarkStore` implementation
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Sqlite/SqliteWatermarkRepository.cs
+using Agency.Memory.Common.Storage;
 
 namespace Agency.Memory.Sql.Sqlite;
 
-public sealed class SqliteWatermarkRepository
+public sealed class SqliteWatermarkRepository : IWatermarkStore
 {
     public SqliteWatermarkRepository(string connectionString);
 
@@ -97,14 +99,15 @@ public sealed class SqliteWatermarkRepository
 }
 ```
 
-### `SqliteDeadLetterRepository` — failed-job persistence
+### `SqliteDeadLetterRepository` — `IDeadLetterStore` implementation
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Sqlite/SqliteDeadLetterRepository.cs
+using Agency.Memory.Common.Storage;
 
 namespace Agency.Memory.Sql.Sqlite;
 
-public sealed class SqliteDeadLetterRepository
+public sealed class SqliteDeadLetterRepository : IDeadLetterStore
 {
     public SqliteDeadLetterRepository(string connectionString);
 
@@ -251,6 +254,21 @@ Every write operation (`UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, `MergeAsyn
 ### Dead-letter audit
 
 `SqliteDeadLetterRepository.WriteAsync` records failed distillation and consolidation jobs (job kind, JSON payload as TEXT, error message, stack trace) to the `dead_letter` table. The table is write-only for the live pipeline — no retry logic reads from it. `ListSinceAsync` is provided for operational tooling and tests.
+
+## Observability
+
+`SqliteMemoryStore` emits telemetry under a single name shared by both its `ActivitySource` and `Meter`:
+
+- **`ActivitySourceName` / `MeterName`** = `"Agency.Memory.Sql.Sqlite"`
+
+`UpsertAsync` starts a `memory.upsert` activity and `SearchAsync` starts a `memory.search` activity (both `ActivityKind.Client`). The meter publishes:
+
+| Instrument | Type | Unit | Tags | Description |
+|---|---|---|---|---|
+| `memory.upsert.count` | `Counter<long>` | — | `status` (`success`/`error`) | Total upsert operations. |
+| `memory.upsert.duration` | `Histogram<double>` | `ms` | — | Upsert duration in milliseconds. |
+| `memory.search.count` | `Counter<long>` | — | `status` (`success`/`error`) | Total search operations. |
+| `memory.search.duration` | `Histogram<double>` | `ms` | — | Search duration in milliseconds. |
 
 ## How It Relates to Other Projects
 

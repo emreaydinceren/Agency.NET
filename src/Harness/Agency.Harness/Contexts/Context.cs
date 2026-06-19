@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Agency.Harness.Skills;
 
 namespace Agency.Harness.Contexts;
 
@@ -76,6 +77,9 @@ public sealed record Context
     /// <summary>Gets the tool context providing the registry for this session.</summary>
     public ToolContext Tools { get; init; } = ToolContext.Empty;
 
+    /// <summary>Gets the skill context providing the catalog of available skills for this session.</summary>
+    public SkillContext Skills { get; init; } = SkillContext.Empty;
+
     /// <summary>
     /// Gets or sets the current retrieval focus. Set by <c>SetFocusTool</c> to bias retrieval
     /// toward a particular task domain without forcing exact-match filtering (Spec §6.7.1).
@@ -131,4 +135,13 @@ public sealed record Context
     /// state-persistence project (spec §6.6).
     /// </summary>
     internal PendingToolBatch? PendingToolBatch { get; set; }
+
+    // ── Active-skill permission state ─────────────────────────────────────────
+
+    /// <summary>
+    /// Gets the mutable active-skill state that tracks which tools are currently pre-approved
+    /// by the most recently invoked skill. Set by <see cref="Skills.SkillTool"/> on successful
+    /// invocation; cleared by the agent loop at the start of each user turn.
+    /// </summary>
+    internal ActiveSkillState ActiveSkillState { get; } = new();
 }

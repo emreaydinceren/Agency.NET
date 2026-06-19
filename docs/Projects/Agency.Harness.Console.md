@@ -1,18 +1,28 @@
 # Agency.Harness.Console
 
-#console #repl #chat #agentic #interactive #telemetry
+#console #repl #chat #agentic #interactive #telemetry #mcp #skills
 
 ## What It Is
 
-`Agency.Harness.Console` is the terminal entry point that wires [[Agency.Harness]]'s `Agent` and `ChatSession` into an interactive Spectre.Console REPL, handling multi-turn input, slash-command dispatch, inline model switching, streaming Markdown rendering, Ctrl+C interruption, and structured OpenTelemetry file export through the .NET Generic Host.
+`Agency.Harness.Console` is the terminal entry point that wires [[Agency.Harness]]'s `Agent` and `ChatSession` into an interactive Spectre.Console REPL, handling multi-turn input, slash-command dispatch, inline model switching, streaming Markdown rendering (including GFM pipe tables), permission prompts, Ctrl+C interruption, optional memory, MCP-server tool discovery, skill `/commands`, and structured OpenTelemetry file export through the .NET Generic Host.
 
 **Namespace:** `Agency.Harness.Console`
+
+## Prerequisites
+
+- An LLM endpoint must be configured under `Agent:LLmClients` (the shipped defaults target a local LM Studio instance at `http://llm-host.example:1234`). `Agent:DefaultClientName` and `Agent:DefaultModel` must resolve to one of those clients.
+- A stable per-installation **user id** (`Agent:UserId`) partitions memory. When absent it is generated once and persisted back into `appsettings.json` on first run (see `UserIdConfiguration`). The id is substituted for the `{userId}` placeholder in tool calls by `UserIdPlaceholderHook`.
+- **Memory** is opt-in via `Memory:Enabled` (default `false`). When enabled, the configured `Memory:Provider` backend (`postgres` — requires its Docker container — or `sqlite`) and the embeddings endpoint (`Embedding`) must be reachable; schema init fails fast at startup otherwise.
+- **MCP servers** are opt-in via the `Mcp` section. Server paths may use the `${RepoRoot}` and `${Configuration}` portability tokens (see `McpConfigResolver`). MCP startup is skipped entirely under `DOTNET_ENVIRONMENT=Test`.
+- **Skills** are discovered from `Skills:Directories` (defaults to `./.agency/skills` then `~/.agency/skills`, project-first). Skill shell execution can be turned off with `Skills:DisableShellExecution`.
 
 ## API Surface
 
 This is an executable project (`<OutputType>Exe</OutputType>`). All types are `internal`, exposed to the test project via `[assembly: InternalsVisibleTo("Agency.Harness.Console.Test")]`. There are no public APIs for consumption by other libraries.
 
-`IChatOutput` is the primary internal abstraction for all console rendering:
+### Rendering & agent creation
+
+`IChatOutput` is the primary internal abstraction for all console rendering (implemented by `ConsoleOutput` for Spectre.Console and `TextWriterChatOutput` for plain text):
 
 ```csharp
 // File: src/Harness/Agency.Harness.Console/IChatOutput.cs
@@ -32,7 +42,7 @@ internal interface IChatOutput
 }
 ```
 
-`IAgentFactory` is the internal abstraction for creating `Agent` instances by client name and model:
+`IAgentFactory` creates `Agent` instances by client name and model (implemented by `AgentFactory`, which folds baseline/configured/user hooks and injects the `TimeProvider`):
 
 ```csharp
 // File: src/Harness/Agency.Harness.Console/IAgentFactory.cs
@@ -44,150 +54,255 @@ internal interface IAgentFactory
 }
 ```
 
+`MarkdownRenderer` translates Markdown to Spectre markup, including GFM pipe tables:
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/MarkdownRenderer.cs
+internal static class MarkdownRenderer
+{
+    internal static void Print(string text);
+
+    internal sealed record ParsedTable(
+        IReadOnlyList<string> Headers,
+        IReadOnlyList<IReadOnlyList<string>> Rows);
+
+    // Parses a GFM pipe table starting at `start`; `next` is the first line after the table.
+    internal static bool TryParseTable(string[] lines, int start, out ParsedTable? table, out int next);
+    internal static Spectre.Console.Table BuildTable(ParsedTable table);
+}
+```
+
+### Host-owned identity, portability & determinism
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/UserIdConfiguration.cs
+using Microsoft.Extensions.Configuration;
+
+internal static class UserIdConfiguration
+{
+    internal const string ConfigKey = "Agent:UserId";
+
+    // Returns the existing Agent:UserId, or generates one via idFactory, persists it to
+    // appsettings.json, and writes it into the in-memory configuration for this run.
+    internal static string EnsureUserId(IConfiguration configuration, string appSettingsPath, Func<string> idFactory);
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/UserIdPlaceholderHook.cs
+using Agency.Harness.Hooks;
+
+// OnPreToolUse hook: rewrites the literal "{userId}" placeholder in tool arguments to the
+// session's resolved user id. No-op when the placeholder is absent.
+internal static class UserIdPlaceholderHook
+{
+    internal const string Placeholder = "{userId}";
+    internal static AgentHooks Hooks { get; }
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/McpConfigResolver.cs
+using Agency.Harness.Tools;
+
+// Expands ${RepoRoot}/${Configuration} tokens in MCP server config so committed paths stay portable.
+internal static class McpConfigResolver
+{
+    public static void Expand(McpClientOptions options, string repoRoot, string configuration);
+    public static string? FindRepoRoot(string startDirectory);   // nearest ancestor containing .git
+    public static string ResolveConfiguration(string baseDirectory); // Debug/Release from a bin/<cfg>/ path
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/FixedTimeProvider.cs
+// A TimeProvider that always returns a fixed instant; registered only under DOTNET_ENVIRONMENT=Test.
+internal sealed class FixedTimeProvider(DateTimeOffset instant) : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow();
+}
+```
+
+### Commands
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/Commands/Command.cs
+internal class Command(string Name, string Description, string? ArgumentHint = null)
+{
+    public string CommandText { get; }
+    public string Description { get; }
+    public string? ArgumentHint { get; }   // autocomplete hint shown in the "/" picker
+    public required Func<string, ConsoleChatSession, Task<CommandContinuation>> Execute { get; set; }
+}
+
+// File: src/Harness/Agency.Harness.Console/Commands/CommandContinuation.cs
+internal enum CommandContinuation { Continue, Clear, ExitSession }
+```
+
+```csharp
+// File: src/Harness/Agency.Harness.Console/Commands/CommandRegistry.cs
+using Agency.Harness.Skills;
+
+internal static class CommandRegistry
+{
+    internal static IReadOnlyList<Command> Commands { get; }
+    internal static void RegisterCommand(string commandText, string description,
+        Func<string, ConsoleChatSession, CommandContinuation> executeFunc, string? argumentHint = null);
+    internal static void RegisterAsyncCommand(string commandText, string description,
+        Func<string, ConsoleChatSession, Task<CommandContinuation>> executeFunc, string? argumentHint = null);
+    // Registers each UserInvocable skill as a "/skill-name" command.
+    internal static void RegisterSkillCommands(ISkillCatalog catalog);
+}
+```
+
+`CommandManager` matches typed input against the registered commands and dispatches; `DumpContextCommand.Run` and `ModelsCommand.RunSelectModelCommandAsync` implement the `/dump-context` and `/model` commands respectively.
+
 ## Registration
 
-`Program.Main` builds a Generic Host and registers all services before creating a single DI scope to run the session:
+`Program.Main` builds a Generic Host and registers all services before creating a DI scope to run the session. Memory, MCP, and skills are conditionally registered.
 
 ```csharp
 // File: src/Harness/Agency.Harness.Console/Program.cs
-using Agency.Harness;
+using Agency.Harness.Console.Commands;
 using Agency.Harness.Console.Telemetry;
-using Agency.Harness.Contexts;
+using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
+using Agency.Harness.Permissions;
+using Agency.Harness.Skills;
 using Agency.Harness.Tools;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Serilog;
-
-System.Console.OutputEncoding = System.Text.Encoding.UTF8;
-System.Console.InputEncoding = System.Text.Encoding.UTF8;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddTelemetry(builder.Configuration);          // traces, metrics, Serilog
 builder.Services.AddSingleton<IChatOutput, ConsoleOutput>();
 builder.Services.AddTransient<Models>();
+
+// Deterministic clock under Test so agent turns are byte-stable for HTTP-cache replay.
+if (builder.Environment.IsEnvironment("Test"))
+{
+    builder.Services.AddSingleton<TimeProvider>(
+        new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+}
+
+// Resolve/persist Agent:UserId before binding (skipped under Test).
+if (builder.Environment.IsEnvironment("Test") == false)
+{
+    string appSettingsPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.json");
+    UserIdConfiguration.EnsureUserId(builder.Configuration, appSettingsPath, static () => Guid.NewGuid().ToString());
+}
+
 builder.Services.AddOptions<AgentOptions>().BindConfiguration("Agent").ValidateOnStart();
+
+// Compose the {userId}-substitution hook onto any user-supplied hooks.
+builder.Services.PostConfigure<AgentOptions>(options =>
+    options.UserHooks = options.UserHooks is { } existing
+        ? existing.Compose(UserIdPlaceholderHook.Hooks)
+        : UserIdPlaceholderHook.Hooks);
+
 builder.Services.AddAgencyConfiguredHooks(builder.Configuration);
+builder.Services.AddAgencyPermissions(builder.Configuration);
+
+// Memory (opt-in via Memory:Enabled) registers embeddings, the chosen store provider, the
+// consolidator/distiller/hygiene background services, and a baseline AgentHooks singleton.
+
+// MCP (opt-in, skipped under Test): expand ${RepoRoot}/${Configuration} tokens, then connect.
+McpClientOptions? mcpOptions = builder.Environment.IsEnvironment("Test")
+    ? null
+    : builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
+if (mcpOptions is { Servers.Length: > 0 })
+{
+    string repoRoot = McpConfigResolver.FindRepoRoot(AppContext.BaseDirectory) ?? AppContext.BaseDirectory;
+    string configuration = McpConfigResolver.ResolveConfiguration(AppContext.BaseDirectory);
+    McpConfigResolver.Expand(mcpOptions, repoRoot, configuration);
+    var pool = await McpClientPool.CreateAsync(mcpOptions);
+    builder.Services.AddSingleton(pool);
+}
+
+// Skills: discover roots, expose a ReloadableSkillCatalog + SkillContext + SkillWatcher, and
+// register each user-invocable skill as a "/skill-name" command.
+var reloadableCatalog = new ReloadableSkillCatalog(skillRoots);
+builder.Services.AddSingleton<ISkillCatalog>(reloadableCatalog);
+builder.Services.AddSingleton(new SkillContext { Catalog = reloadableCatalog });
+builder.Services.AddSingleton(new SkillWatcher(skillRoots, reloadableCatalog.Reload));
+CommandRegistry.RegisterSkillCommands(reloadableCatalog);
+
 builder.Services.AddScoped<IAgentFactory, AgentFactory>();
+builder.Services.AddScoped(sp => sp.GetRequiredService<IAgentFactory>().CreateAgent(null, null));
 
-// Default Agent resolved from config
-builder.Services.AddScoped(sp =>
-{
-    var agentFactory = sp.GetRequiredService<IAgentFactory>();
-    return agentFactory.CreateAgent(null, null);
-});
-
-// MCP servers (opt-in): when an "Mcp" section lists servers, a McpClientPool singleton is
-// registered and its discovered tools are folded into the registry below.
-
-// ToolContext with pre-registered tools (recursive AgentTool, MCP tools, optional progressive disclosure)
-builder.Services.AddScoped(sp =>
-{
-    var agentFactory = sp.GetRequiredService<IAgentFactory>();
-    var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-
-    var inner = new ToolRegistry();
-    IToolRegistry outward = null!;                 // captured by the AgentTool closure (assigned after population)
-    inner.Register(new ExecutePowershellTool());
-    inner.Register(new ReadFileTool());
-    inner.Register(new WriteFileTool());
-    inner.Register(new AgentTool((clientName, modelName) =>
-        (options, agentFactory.CreateAgent(clientName, modelName), outward)));
-
-    var mcpToolNames = new HashSet<string>();
-    var mcpPool = sp.GetService<McpClientPool>();   // null when MCP is not configured
-    if (mcpPool is not null)
-    {
-        foreach (ITool tool in mcpPool.Tools)
-        {
-            inner.Register(tool);
-            mcpToolNames.Add(tool.Definition.Name);
-        }
-    }
-
-    // Opt-in progressive disclosure: MCP tools ship name + one-line summary only (schema withheld
-    // behind tool_help); native/internal tools are revealed in full.
-    outward = options.ProgressiveDiscovery
-        ? new ProgressiveDiscoveryToolRegistry(inner, mcpToolNames)
-        : inner;
-    return new ToolContext { Registry = outward };
-});
-
+// ToolContext with built-in tools (ExecutePowershell/ReadFile/WriteFile, recursive AgentTool,
+// SkillTool with a fork runner), MCP tools, and optional progressive disclosure.
+builder.Services.AddScoped(sp => /* ... builds ToolRegistry / ProgressiveDiscoveryToolRegistry ... */);
 builder.Services.AddScoped<ConsoleChatSession>();
 
-// After the session finishes, flush Serilog before process exit
-await Log.CloseAndFlushAsync();
+await Log.CloseAndFlushAsync();   // after the session finishes
 ```
+
+- `AddTelemetry(IConfiguration)` — the project's own extension; registers OTel file exporters and Serilog (see Observability).
+- `FixedTimeProvider` / `UserIdConfiguration` / the `{userId}` hook are wired only conditionally (Test vs. production).
+- Memory services (`AddAgencyEmbeddingsOpenAI`, `AddAgencyMemoryPostgres`/`AddAgencyMemorySqlite`, `AddAgencyMemory`, `AddAgencyConsolidator`, `AddAgencyHygiene`, `AddAgencyDistillerLlm`) are registered only when `Memory:Enabled` is `true`.
 
 ### Configuration
 
-`appsettings.json` ships with defaults for a local LM Studio instance. The `OpenTelemetry` section maps to `TelemetryOptions` / `FileExportOptions` and its nested signal options. All sub-keys are optional — omitting them keeps the defaults shown below.
+`appsettings.json` ships defaults for a local LM Studio instance. Key sections: `Agent` (clients, `DefaultClientName`/`DefaultModel`, `ProgressiveDiscovery` — **defaults to `true`** — `LogToolPayloads`, persisted `UserId`), `Memory` (`Enabled`, `Provider`), `Mcp` (`Servers` with `${RepoRoot}`/`${Configuration}` tokens), `ConnectionStrings`, `Embedding`, `Skills` (`Directories`, `DisableShellExecution`), `Permissions`, `Hooks`, and `OpenTelemetry`.
 
 ```json
 {
   "Agent": {
     "DefaultClientName": "LocalVia-OpenAI-API",
     "DefaultModel": "google/gemma-4-e2b",
-    "ProgressiveDiscovery": false,
+    "ProgressiveDiscovery": true,
     "LogToolPayloads": false,
     "LLmClients": [
-      {
-        "Name": "LocalVia-OpenAI-API",
-        "ClientType": "OpenAI",
-        "BaseUrl": "http://llm-host.example:1234/v1",
-        "ApiKey": "lm-studio",
-        "Timeout": "00:10:00"
-      },
-      {
-        "Name": "LocalVia-Claude-API",
-        "ClientType": "Claude",
-        "BaseUrl": "http://llm-host.example:1234",
-        "ApiKey": "lm-studio"
-      }
+      { "Name": "LocalVia-OpenAI-API", "ClientType": "OpenAI", "BaseUrl": "http://llm-host.example:1234/v1", "ApiKey": "lm-studio", "Timeout": "00:10:00", "SuppressThinking": true },
+      { "Name": "LocalVia-Claude-API", "ClientType": "Claude", "BaseUrl": "http://llm-host.example:1234", "ApiKey": "lm-studio" }
     ]
   },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft": "Warning",
-      "System": "Warning"
-    }
-  },
-  "OpenTelemetry": {
-    "ServiceName": "Agency.Harness.Console",
-    "FileExport": {
-      "OutputDirectory": "./logs",
-      "Traces": {
-        "Enabled": true,
-        "FilePrefix": "traces",
-        "SamplingRatio": 1.0
+  "Memory": { "Enabled": false, "Provider": "postgres" },
+  "Mcp": {
+    "Servers": [
+      {
+        "Name": "memory", "Transport": "Stdio", "Command": "dotnet",
+        "Arguments": [ "${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll" ],
+        "EnvironmentVariables": { "Memory__Provider": "sqlite", "Memory__ConnectionString": "Data Source=agency-mcp-memory.db" }
       },
-      "Metrics": {
-        "Enabled": true,
-        "FilePrefix": "metrics",
-        "ExportIntervalMs": 15000
-      },
-      "Logs": {
-        "Enabled": true,
-        "FilePrefix": "app",
-        "MinimumLevel": "Information"
-      }
-    }
+      { "Name": "notion", "Transport": "Stdio", "Command": "npx", "Arguments": [ "-y", "@notionhq/notion-mcp-server" ] }
+    ]
   },
-  "Hooks": {}
+  "ConnectionStrings": {
+    "PostgreSql": "Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password",
+    "Sqlite": "Data Source=agency-memory.db"
+  },
+  "Embedding": { "BaseUrl": "http://llm-host.example:1234/v1", "ApiKey": "lm-studio", "ModelId": "local-embedding-model", "Dimensions": 1024 },
+  "Skills": { "Directories": [], "DisableShellExecution": false },
+  "Permissions": { "Enabled": true, "Allow": [ "ReadFile" ], "Deny": [], "OnUnresolved": "Ask" },
+  "OpenTelemetry": { "ServiceName": "Agency.Harness.Console", "FileExport": { "OutputDirectory": "./logs" } }
 }
 ```
 
+`appsettings.Test.json` overrides values for the functional-test environment, where MCP startup and user-id persistence are skipped and the clock is frozen.
+
 ## How It Works
 
-`Program.Main` resolves `ConsoleChatSession` from the DI scope and calls `RunAsync`. The session enters a REPL until the user exits.
+`Program.Main` resolves `ConsoleChatSession` from the DI scope and calls `RunAsync`. The session prints a header, creates a `ChatSession` (with a `UserSpecificContext` carrying the resolved user id), and enters a REPL until the user exits.
 
+```csharp
+using Agency.Harness.Console;
+using Microsoft.Extensions.DependencyInjection;
+
+using var scope = host.Services.CreateScope();
+var app = scope.ServiceProvider.GetRequiredService<ConsoleChatSession>();
+await app.RunAsync();
 ```
+
+```text
 ❯ [user types a message]
-● response rendered as Markdown here
-  ↳ +230 in, +47 out  [Success]
+● response rendered as Markdown (headings, lists, code fences, GFM tables) here
+  ↳ +230 in, +47 out  12.4 tok/s  [Success]
 
 ❯ /exit
 Session ended  ·  3 turns  ·  1,234 in, 321 out total
@@ -196,58 +311,57 @@ Session ended  ·  3 turns  ·  1,234 in, 321 out total
 ### REPL loop
 
 Each iteration:
-1. `ConsoleInputReader.ReadLineAsync` renders a bordered Spectre.Console prompt and reads input with history navigation and `/`-autocomplete.
-2. Bare `exit` or `quit` text terminates the session immediately.
-3. Input starting with `/` is dispatched to `CommandManager.ExecuteCommandAsync`, which matches a `Command` from `CommandRegistry.Commands` and returns a `CommandContinuation`.
-4. All other input is forwarded to `ChatSession.SendAsync`, which yields `IAsyncEnumerable<AgentEvent>`.
+1. `ConsoleInputReader.ReadLineAsync` renders a bordered prompt and reads input with history navigation, multi-line entry (Ctrl+Enter), and `/`-autocomplete via `ConsolePicker`.
+2. Bare `exit`/`quit` text terminates the session immediately.
+3. Input starting with `/` is dispatched to `CommandManager.ExecuteCommandAsync`, returning a `CommandContinuation`.
+4. All other input is forwarded to `ChatSession.SendAsync`, whose `IAsyncEnumerable<AgentEvent>` is drained by `ProcessStreamAsync`.
 
-### Event handling
+### Event handling and permission parking
 
-| Event | Console behaviour |
-|---|---|
-| `TextDeltaEvent` | Appended to `streamingBuffer` (`StringBuilder`) |
-| `AssistantTurnEvent` (streaming) | Flushes `streamingBuffer` through `MarkdownRenderer.Print`; stops spinner |
-| `AssistantTurnEvent` (batch) | Prints message content directly; stops spinner |
-| `ToolInvokedEvent` | Prints a rounded bordered panel with tool name and truncated result (100 chars, 3 lines); errors printed in red |
-| `AgentResultEvent` | Prints per-turn `↳ +N in, +N out [Status]` delta |
+`ProcessStreamAsync` renders each `AgentEvent`: `AssistantTurnEvent` prints message text as Markdown and tool-call panels; `ToolInvokedEvent` prints a rounded bordered panel with a truncated result; `IterationCompletedEvent` records the LLM duration for the `tok/s` readout; `AgentResultEvent` prints the per-turn `↳ +N in, +N out [Status]` delta. When a turn ends with `AwaitingPermission` the stream parks: `CollectPermissionResponses` renders a permission panel + picker (Allow once/always, Deny once/always — "Allow always" is hidden for hook-sourced asks), then `ResumeWithPermissionsAsync` continues the turn. Cancelling the picker (Escape) abandons the parked turn.
 
 ### Ctrl+C handling
 
-A single `CancellationTokenSource` (`sessionCts`) covers the whole session. `Console.CancelKeyPress` cancels the token but sets `e.Cancel = true` to suppress process termination. The REPL checks `sessionCts.IsCancellationRequested` after each turn and breaks out if set. Once cancelled, the session ends; `sessionCts` is never recreated.
+A per-turn `CancellationTokenSource` is created each loop iteration. `Console.CancelKeyPress` cancels the current turn (sets `e.Cancel = true` to suppress process exit); a second Ctrl+C with no active turn exits the session. An interrupted turn prints `[interrupted]` and is not counted.
 
 ### Slash commands
 
-Built-in commands are registered in `CommandRegistry`'s static constructor and shared across all `CommandManager` instances:
+Built-in commands are registered in `CommandRegistry`'s static constructor; skill commands are registered at startup from the catalog snapshot.
 
 | Command | Behaviour |
 |---|---|
-| `/clear` | Clears the console and resets `ChatSession` history |
-| `/exit` | Exits the session (`CommandContinuation.ExitSession`) |
-| `/quit` | Exits the session (`CommandContinuation.ExitSession`) |
-| `/help` | Returns `CommandContinuation.Continue` (no-op currently) |
-| `/model` | Opens `ConsolePicker` to hot-swap the active `Agent` |
-| `/dump-context` | Prints the exact next-turn context — system prompt, messages, and tools — for inspection. Tools are grouped by origin (Built-in, then each MCP server) and rendered compactly; reflects progressive disclosure when enabled. |
+| `/clear` | Clears the console and resets the `ChatSession` |
+| `/exit`, `/quit` | Exit the session (`CommandContinuation.ExitSession`) |
+| `/help` | No-op (`CommandContinuation.Continue`) |
+| `/model` | Opens `ConsolePicker` (via `ModelsCommand`) to hot-swap the active `Agent` |
+| `/dump-context` | Prints the exact next-turn context — system prompt, messages, and tools — without adding it to history |
+| `/<skill-name>` | Renders a user-invocable skill body and submits it as a user turn |
 
-New commands can be added via `CommandRegistry.RegisterCommand` or `RegisterAsyncCommand` without modifying `CommandManager`.
+### `/dump-context`
+
+`DumpContextCommand.Run` calls `ChatSession.PreviewContext()` and prints the system prompt, conversation messages (text, tool-calls, tool-results), and tools. Tools are grouped by origin — *Built-in* first, then each MCP server in configured order — by reconstructing provenance from `McpClientPool.ToolNamesByServer` (the flat registry and `ToolDefinition` carry none). Single-line descriptions render inline as `name: summary`; the progressive-discovery `{"type":"object"}` placeholder schema is suppressed. Display-only — it changes nothing sent to the model.
+
+### MCP config resolution
+
+When the `Mcp` section lists servers, `McpConfigResolver.Expand` substitutes `${RepoRoot}` (nearest ancestor containing `.git`) and `${Configuration}` (derived from the `bin/<cfg>/` output path) in each server's command, arguments, and environment variables before `McpClientPool.CreateAsync` connects. This keeps committed server paths portable across machines, drives, OSes, and build configurations. MCP is skipped entirely under `DOTNET_ENVIRONMENT=Test`.
 
 ### Model switching
 
-`/model` invokes `ModelsCommand.RunSelectModelCommandAsync`, which calls `Models.GetAllAsync()` to list all configured LLM clients and their models, presents them in a searchable `ConsolePicker` grouped by client, and calls `ConsoleChatSession.SetAgent(newAgent)` to hot-swap the active `Agent` without restarting the session.
+`/model` lists all configured clients/models via `Models.GetAllAsync()`, presents them in a searchable picker grouped by client, and calls `ConsoleChatSession.SetAgent(newAgent)` to hot-swap the active `Agent` (and the live `ChatSession`'s agent) without restarting.
 
 ## Agent Tools
 
-The `ToolContext` registered in DI includes four tools sourced from [[Agency.Harness]]:
+The `ToolContext` registered in DI includes built-in tools sourced from [[Agency.Harness]], plus discovered MCP tools:
 
 | Tool | Purpose |
 |---|---|
 | `ExecutePowershellTool` | Executes PowerShell commands and returns stdout/stderr |
 | `ReadFileTool` | Reads file content from the local file system |
 | `WriteFileTool` | Writes content to the local file system |
-| `AgentTool` | Spawns a sub-`Agent` with the shared `ToolRegistry`, enabling recursive agent calls |
+| `AgentTool` | Spawns a sub-`Agent` sharing the outward `ToolRegistry`, enabling recursive agent calls |
+| `SkillTool` | Lets the model invoke skills; runs skill shell steps (unless disabled) and forks sub-agents for skill turns |
 
-When MCP servers are configured, their tools are folded into the same registry (see [[Agency.Harness]] · *Connecting MCP Servers*). When `Agent:ProgressiveDiscovery` is `true`, the registry is wrapped in a `ProgressiveDiscoveryToolRegistry`, which advertises every tool with a one-line summary + placeholder schema and adds a `tool_help` tool that reveals full detail on demand.
-
-`AgentTool` receives a factory lambda that captures both `AgentOptions` and the **outward-facing** registry (the progressive wrapper when enabled, else the plain `ToolRegistry`), so sub-agents share the same tool set — and the same disclosure mode — as the parent.
+When MCP servers are configured their tools are folded into the same registry. When `Agent:ProgressiveDiscovery` is `true` (the default), the registry is wrapped in a `ProgressiveDiscoveryToolRegistry` that withholds **MCP** tool schemas behind a `tool_help` tool while revealing native/internal tools in full. `AgentTool` captures the *outward* registry so sub-agents share the same tool set and disclosure mode.
 
 ## Observability
 
@@ -272,32 +386,35 @@ When MCP servers are configured, their tools are folded into the same registry (
 
 All instruments carry `agent.client_type` and `agent.model` tags.
 
-`AddTelemetry(IConfiguration)` reads the `OpenTelemetry` config section and wires up to three signal pipelines — each can be independently disabled via its `Enabled` flag:
+`AddTelemetry(IConfiguration)` reads the `OpenTelemetry` section and wires up to three independently-disableable signal pipelines:
 
-- **Traces** — `FileSpanExporter` writes one span per line to a UTC date-stamped file (`traces-yyyy-MM-dd.log`). The file rolls at midnight. Sampling ratio is configurable via `SamplingRatio` (default `1.0` = always on).
-- **Metrics** — `FileMetricExporter` appends timestamped metric blocks to a UTC date-stamped file (`metrics-yyyy-MM-dd.log`) on a periodic cycle (default every 15 seconds, configurable via `ExportIntervalMs`).
-- **Logs** — Serilog writes to a **per-session** stamped file (`app-yyyy-MM-dd-HHmmss.log`) using `RollingInterval.Infinite`. The minimum level is configurable via `MinimumLevel` (default `Information`). When disabled, a `NullLoggerProvider` is registered instead.
+- **Traces** — `FileSpanExporter` (over `DailyRollingFileWriter`) writes one span per line to a UTC date-stamped file (`traces-yyyy-MM-dd.log`), rolling at midnight; `SamplingRatio` is configurable (default `1.0`).
+- **Metrics** — `FileMetricExporter` appends timestamped metric blocks (`metrics-yyyy-MM-dd.log`) on a periodic cycle (default 15 s, via `ExportIntervalMs`).
+- **Logs** — Serilog writes to a **per-session** stamped file (`app-yyyy-MM-dd-HHmmss.log`) with `RollingInterval.Infinite`; `MinimumLevel` default `Information`. When disabled, a `NullLoggerProvider` is registered so the `ILogger<T>` chain stays valid.
 
-All files are written under the directory specified by `FileExport.OutputDirectory` (default `./logs`), which is created automatically at startup. The `host.name` attribute is added to the OTel resource for all signals.
+All files live under `FileExport.OutputDirectory` (default `./logs`, created at startup). The `host.name` attribute is added to the OTel resource for all signals.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Harness]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes, `AgentOptions`, `ToolContext`, `ToolRegistry`, and all built-in tool types (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`) |
-| [[Agency.Llm.Common]] | `Models` (from `Agency.Llm.Common`) enumerates configured LLM clients; `AgentFactory` calls `Models.CreateChatClient` to resolve the concrete `IChatClient` |
-| [[Agency.Llm.OpenAI]] | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"` |
+| [[Agency.Harness]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes, `AgentOptions`, `AgentHooks`, `ToolContext`/`ToolRegistry`/`ProgressiveDiscoveryToolRegistry`, `McpClientPool`/`McpClientOptions`, permission types, and built-in tools (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`, `SkillTool`) |
+| [[Agency.Harness.Skills]] | Loads `ISkillCatalog`/`ReloadableSkillCatalog`, `SkillContext`, `SkillWatcher`, `SkillRenderer`; registers each user-invocable skill as a `/command` |
+| [[Agency.Llm.Common]] | `Models` enumerates configured LLM clients; `AgentFactory` calls `Models.CreateChatClient` to resolve the `IChatClient`; binds `LlmClientOptions` |
+| [[Agency.Llm.OpenAI]] | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"`; also used directly to build consolidator/distiller chat clients when memory is enabled |
 | [[Agency.Llm.Claude]] | Instantiated by `Models.CreateChatClient` when `ClientType = "Claude"` |
+| [[Agency.Embeddings.OpenAI]] | Registered (`AddAgencyEmbeddingsOpenAI`) when memory is enabled |
+| [[Agency.Memory.Sql.Postgres]] / [[Agency.Memory.Sql.Sqlite]] | One is registered as the memory store based on `Memory:Provider` |
+| [[Agency.Memory.Distiller]] / [[Agency.Memory.Consolidator]] / [[Agency.Memory.Hygiene]] | Background memory services registered when memory is enabled |
 
 ## Design Notes
 
-- **`IChatOutput` abstraction** — `ConsoleOutput` (Spectre.Console) and `TextWriterChatOutput` (plain `TextWriter`) both implement `IChatOutput`. `Agency.Harness.Console.Test` injects `TextWriterChatOutput` to assert on rendered output without a real terminal. The `[assembly: InternalsVisibleTo("Agency.Harness.Console.Test")]` attribute in `Program.cs` grants this access.
-- **Streaming buffer instead of live print** — `TextDeltaEvent` tokens are accumulated in a `StringBuilder` (`streamingBuffer`) and flushed only when the `AssistantTurnEvent` arrives. This prevents partial streaming text from interleaving with `ToolInvokedEvent` bordered panels that may fire mid-turn.
-- **`CommandRegistry` uses a static constructor** — commands are registered once at class-load time and the resulting `IReadOnlyList<Command>` is shared across all `CommandManager` instances. Adding a command only requires calling `RegisterCommand` or `RegisterAsyncCommand` in the static constructor; no change to `CommandManager` is needed.
-- **`sessionCts` is never recreated** — once Ctrl+C fires, `sessionCts.Cancel()` is called and `sessionCts.IsCancellationRequested` remains `true`. The REPL detects this after the interrupted turn and exits. The session is not designed to be restartable after cancellation.
-- **Per-session log files, not daily-rolling** — traces and metrics use `DailyRollingFileWriter` (rolls at UTC midnight), but Serilog logs use a single per-session file stamped with `yyyy-MM-dd-HHmmss` and `RollingInterval.Infinite`. This means each process launch produces a distinct log file, which makes correlating a log file to a specific run trivial without needing to filter by time within a shared daily file.
-- **Independent per-signal enable flags** — setting `Enabled: false` for traces or metrics skips building the corresponding OTel provider entirely (no `TracerProvider`/`MeterProvider` is registered). Setting `Enabled: false` for logs registers `NullLoggerProvider` rather than Serilog, so the `ILogger<T>` injection chain remains valid throughout the application.
-- **Three-source hook fold** — `AgentFactory.CreateAgent` assembles hooks via `AgentHooksExtensions.Fold(BaselineHooks, ConfiguredHooks, UserHooks)`, producing a single merged `AgentHooks?`. The order is intentional: `BaselineHooks` (memory pipeline, registered by `AddAgencyMemory`) forms the foundation; `ConfiguredHooks` (JSON-driven declarative hooks, registered by `AddAgencyConfiguredHooks`) layer on top; `UserHooks` (code-supplied hooks set directly on `AgentOptions`) override both. This lets the memory subsystem always run first, JSON config extend it without code changes, and caller code have the final word.
-- **Progressive-discovery wrap uses a deferred closure capture** — `AgentTool` is registered *during* population of the inner `ToolRegistry`, but its factory must hand sub-agents the *outward* registry (the progressive wrapper, decided only *after* population). The block declares `IToolRegistry outward = null!` up front, the `AgentTool` closure captures the **variable** `outward`, and `outward` is assigned the final (wrapped-or-plain) registry just before `ToolContext` is returned. The closure only runs at sub-agent-creation time — long after assignment — so the captured value is always populated. Without this, sub-agents would either see the unwrapped registry (no progressive disclosure) or force the wrap decision too early.
-- **`MarkdownRenderer` is a line-based translator, not a CommonMark parser** — `Print` walks the text one line at a time, matching each against a fixed set of prefix constructs (code fences, headings, blockquotes, lists, rules) and converting inline spans to Spectre markup. GFM pipe tables are the one *multi-line* construct it handles: `TryParseTable` keys off the delimiter row (`| --- | :--: |`) immediately following a header row — keying on the delimiter, not the presence of a `|`, is what stops ordinary prose containing a pipe from being mis-parsed. `BuildTable` then emits a Spectre `Table`, padding short rows and truncating long ones to the header column count (Spectre throws when a row's cell count ≠ column count). Anything the renderer doesn't recognise falls through to a verbatim paragraph line, so unknown constructs degrade to plain text rather than erroring.
-- **`dump-context` reconstructs tool grouping from the MCP pool** — `ToolDefinition` carries no origin, and the registry is a flat name-keyed map, so the command resolves `McpClientPool` from DI and uses its `ToolNamesByServer` map to bucket tools into *Built-in* vs each *server · MCP* group. It also suppresses the repetitive `{"type":"object"}` placeholder schema and renders single-line descriptions inline as `name: summary`. This is display-only — it changes nothing about what is sent to the model; it reconstructs, for human readability, provenance the wire format discards.
+- **`${RepoRoot}`/`${Configuration}` tokens for MCP portability** — committed `appsettings.json` must reference an MCP server binary whose absolute path differs per machine, drive, OS, and build configuration. Storing literal paths would break on every other checkout. `McpConfigResolver` resolves the repo root from the nearest `.git` ancestor and the configuration from the running `bin/<cfg>/` path, so the *same* committed config works everywhere a working tree exists.
+- **MCP startup skipped under Test** — MCP servers are external processes absent from the functional-test/CI environment, and their discovered tools would be injected into the agent's tool list, changing the LLM request body and breaking offline HTTP-cache replay. The Test environment therefore never constructs `McpClientOptions`.
+- **`FixedTimeProvider` for deterministic replay** — the agent's "Current date/time (UTC)" system-prompt line would otherwise vary per run, changing request bodies and the resulting HTTP-cache key. Under `DOTNET_ENVIRONMENT=Test` a frozen clock makes console turns byte-identical between local record and CI replay; production registers no `TimeProvider`, so the live clock is used.
+- **Host-owned user identity via a placeholder hook** — the host, not the model, owns the user id. Tools (e.g. the memory MCP server) advertise a required `UserId`, and the model is instructed to pass the literal `{userId}`; `UserIdPlaceholderHook` rewrites it to the real GUID at `OnPreToolUse`. This makes it impossible for the model to fabricate or leak a wrong id, while remaining a no-op for tools that don't use the placeholder.
+- **`Agent:UserId` is generated once and persisted** — `UserIdConfiguration.EnsureUserId` writes a new id back into `appsettings.json` and into the in-memory config for the current run, so memory partitions are stable across restarts without manual setup. Persistence is skipped under Test to keep the test config untouched and replay deterministic.
+- **`MarkdownRenderer` is a line-based translator, not a CommonMark parser** — `Print` walks one line at a time matching prefix constructs (code fences, headings, blockquotes, lists, rules) and converting inline spans to Spectre markup. GFM pipe tables are the one *multi-line* construct: `TryParseTable` keys off the delimiter row (`| --- | :--: |`) following a header — keying on the delimiter, not the mere presence of `|`, stops ordinary prose containing a pipe from being mis-parsed. `BuildTable` emits a Spectre `Table`, normalising ragged rows to the header column count (Spectre throws when cell count ≠ column count). Unrecognised lines fall through to verbatim text.
+- **`/dump-context` reconstructs tool grouping from the MCP pool** — `ToolDefinition` carries no origin and the registry is a flat name-keyed map, so the command resolves `McpClientPool` and uses `ToolNamesByServer` to bucket tools into *Built-in* vs each *server · MCP* group. It is display-only and reconstructs, for human readability, provenance the wire format discards.
+- **Progressive-discovery wrap uses a deferred closure capture** — `AgentTool` is registered *during* population of the inner `ToolRegistry`, yet must hand sub-agents the *outward* registry (the progressive wrapper, decided only *after* population). The block declares `IToolRegistry outward = null!`, the `AgentTool`/`SkillTool` closures capture the **variable** `outward`, and it is assigned the final registry just before `ToolContext` is returned — long before any closure runs.
+- **Two `IChatOutput` implementations** — `ConsoleOutput` (Spectre.Console, with a background spinner thread) drives the real terminal; `TextWriterChatOutput` writes plain text and is used by `Agency.Harness.Console.Test` to assert on rendered output without a terminal.

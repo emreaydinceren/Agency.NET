@@ -53,6 +53,7 @@ internal sealed class ConsoleChatSession
     private readonly AgentOptions _options;
     private readonly ILogger<ConsoleChatSession> _logger;
     private readonly ToolContext toolContext;
+    private readonly SkillContext _skillContext;
     private Agent _agent;
     private ChatSession? _chatSession;
 
@@ -64,12 +65,14 @@ internal sealed class ConsoleChatSession
         IOptions<AgentOptions> optionsAccessor,
         ToolContext toolContext,
         IChatOutput chatOutput,
+        SkillContext skillContext,
         ILogger<ConsoleChatSession>? logger = null)
     {
         this.ServiceProvider = serviceProvider;
         this._agent = agent;
         this._options = optionsAccessor.Value;
         this.toolContext = toolContext;
+        this._skillContext = skillContext;
         this._logger = logger ?? NullLogger<ConsoleChatSession>.Instance;
         this.output = chatOutput;
         this._inputReader = new ConsoleInputReader(this.output);
@@ -83,6 +86,65 @@ internal sealed class ConsoleChatSession
     }
 
     internal ChatSession? CurrentSession => this._chatSession;
+
+    /// <summary>
+    /// Renders and submits a pre-rendered skill body as a user turn, using the same
+    /// streaming pipeline as a normally typed message. Called by skill <c>/</c> commands
+    /// registered via <see cref="Commands.CommandRegistry.RegisterSkillCommands"/>.
+    /// </summary>
+    /// <param name="renderedBody">The fully rendered skill body to submit as the user message.</param>
+    /// <returns>
+    /// <see cref="CommandContinuation.Continue"/> always — the REPL loop resumes after the turn completes.
+    /// </returns>
+    internal async Task<CommandContinuation> SubmitSkillTurnAsync(string renderedBody)
+    {
+        // Ensure a chat session exists (it is created lazily on the first real turn,
+        // but a user could invoke a /skill command before any LLM turn has started).
+        this._chatSession ??= new(
+            this._agent,
+            this._options,
+            this.toolContext,
+            new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
+            this._skillContext);
+
+        long prevIn = this._chatSession.TotalUsage.InputTokens;
+        long prevOut = this._chatSession.TotalUsage.OutputTokens;
+        TimeSpan lastLlmDuration = TimeSpan.Zero;
+
+        var pendingRequests = new List<PermissionRequestedEvent>();
+
+        using var cts = new CancellationTokenSource();
+
+        this.output.StartSpinner();
+
+        (bool parked, lastLlmDuration) = await this.ProcessStreamAsync(
+            this._chatSession.SendAsync(renderedBody, cts.Token),
+            pendingRequests,
+            prevIn,
+            prevOut,
+            lastLlmDuration,
+            cts.Token);
+
+        while (parked)
+        {
+            IReadOnlyList<PermissionResponse>? responses = this.CollectPermissionResponses(pendingRequests);
+            if (responses is null)
+            {
+                break;
+            }
+
+            pendingRequests.Clear();
+            (parked, lastLlmDuration) = await this.ProcessStreamAsync(
+                this._chatSession.ResumeWithPermissionsAsync(responses, cts.Token),
+                pendingRequests,
+                prevIn,
+                prevOut,
+                lastLlmDuration,
+                cts.Token);
+        }
+
+        return CommandContinuation.Continue;
+    }
 
     public async Task RunAsync(string? initialInput = null)
     {
@@ -111,7 +173,8 @@ internal sealed class ConsoleChatSession
             this.WriteHeader();
 
             this._chatSession = new(this._agent, this._options, this.toolContext,
-                new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName });
+                new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
+                this._skillContext);
 
             bool shouldExitSession = false;
             CancellationTokenSource? turnCts = null;
@@ -182,7 +245,8 @@ internal sealed class ConsoleChatSession
                             this._chatSession = null;
                         }
                         this._chatSession = new(this._agent, this._options, this.toolContext,
-                            new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName });
+                            new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
+                            this._skillContext);
                         continue;
                         case CommandContinuation.Continue:
                         continue;

@@ -21,6 +21,7 @@ public sealed class ChatSession : IAsyncDisposable
     private readonly AgentOptions _options;
     private readonly ToolContext _toolContext;
     private readonly UserSpecificContext? _user;
+    private readonly SkillContext? _skills;
     private Context? _ctx;
     private int _turnCount;
     private bool _disposed;
@@ -34,12 +35,14 @@ public sealed class ChatSession : IAsyncDisposable
     /// Optional tool registry made available to the agent. Defaults to <see cref="ToolContext.Empty"/>.
     /// </param>
     /// <param name="user">Optional caller identity propagated into the context on first send.</param>
-    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null)
+    /// <param name="skills">Optional skill catalog context; defaults to <see cref="SkillContext.Empty"/>.</param>
+    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null, SkillContext? skills = null)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
         this._options = options ?? throw new ArgumentNullException(nameof(options));
         this._toolContext = toolContext ?? ToolContext.Empty;
         this._user = user;
+        this._skills = skills;
     }
 
     /// <summary>Gets the accumulated token usage for this session, or zero if no turns have been sent yet.</summary>
@@ -65,7 +68,8 @@ public sealed class ChatSession : IAsyncDisposable
         this._toolContext,
         new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
         user: this._user,
-        timeProvider: this._agent.TimeProvider);
+        timeProvider: this._agent.TimeProvider,
+        skills: this._skills);
 
     /// <summary>
     /// Switches the agent used for subsequent turns. Conversation history is preserved;
@@ -98,7 +102,8 @@ public sealed class ChatSession : IAsyncDisposable
             this._toolContext,
             new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
             user: this._user,
-            timeProvider: this._agent.TimeProvider);
+            timeProvider: this._agent.TimeProvider,
+            skills: this._skills);
 
         // Abandonment (spec §6.4): if a turn is parked and the user sends a new message,
         // implicitly deny all pending calls with the abandonment reason, complete the batch

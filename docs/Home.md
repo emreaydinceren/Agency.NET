@@ -1,4 +1,4 @@
-<!-- last-wiki-commit: 5951572c67b3cea0a63555b849e1aea6fc35f152 -->
+<!-- last-wiki-commit: 3589cfa94a74a12c72fe49a2b47191dc15732040 -->
 # Agency — Context Map
 
 #agency #index #rag #agentic #dotnet
@@ -107,7 +107,7 @@ Documents
 
 ### Agent
 
-- [[Projects/Agency.Harness]] — Autonomous agent loop: think (LLM call) → act (tool use) → observe (tool result) → repeat until a `StopCondition` fires. Features include lifecycle hooks (`OnPreToolUse` can allow/deny/rewrite tool calls), a structured `Context` (user input, history, tools, memory, grounding data), composable stop conditions (step count, token budget, no-tool-use), built-in tool registry with per-tool enable/disable, MCP client pool for external tools, and a typed `AgentEvent` stream so callers can react to each stage. **TLDR:** The core agent loop—handles multi-turn reasoning, tool use, and lifecycle events.
+- [[Projects/Agency.Harness]] — Autonomous agent loop: think (LLM call) → act (tool use) → observe (tool result) → repeat until a `StopCondition` fires. Features include lifecycle hooks (`OnPreToolUse` can allow/deny/rewrite tool calls) plus config-driven command/HTTP hooks, a permission model with park/resume of tool calls, a structured `Context` (user input, history, tools, memory, grounding data, skills), composable stop conditions (step count, token budget, no-tool-use), built-in tool registry with per-tool enable/disable, progressive tool discovery (`tool_help`), a SKILL.md skills catalog (`skill`), MCP client pool for external tools, and a typed `AgentEvent` stream so callers can react to each stage. **TLDR:** The core agent loop—handles multi-turn reasoning, tool use, permissions, skills, and lifecycle events.
 - [[Projects/Agency.Harness.Console]] — Interactive REPL chat harness for agents. Multi-turn conversations, token/cost tracking, streaming output, and session lifecycle management. **TLDR:** Chat with your agent in a terminal.
 - [[Projects/Agency.Console]] — Stub executable that prints "Hello, World!". **TLDR:** A minimal entry point for testing the solution setup.
 

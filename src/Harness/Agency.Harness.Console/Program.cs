@@ -168,7 +168,12 @@ internal class Program
         }
 
         // 5.5 MCP servers — opt-in via the "Mcp" config section.
-        McpClientOptions? mcpOptions = builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
+        //     Skipped under Test: MCP servers are external processes that are not present in the
+        //     functional-test environment (CI), and their discovered tools would be injected into the
+        //     agent's tool list, changing the LLM request body and breaking offline HTTP-cache replay.
+        McpClientOptions? mcpOptions = builder.Environment.IsEnvironment("Test")
+            ? null
+            : builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
         if (mcpOptions is { Servers.Length: > 0 })
         {
             try

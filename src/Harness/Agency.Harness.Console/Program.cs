@@ -47,7 +47,6 @@ internal class Program
 
         // 3. Simple Registrations:
         builder.Services.AddSingleton<IChatOutput, ConsoleOutput>();
-        builder.Services.AddTransient<Models>();
 
         // Deterministic clock for functional cache-replay: under DOTNET_ENVIRONMENT=Test the
         // agent's "Current date/time (UTC)" line is frozen to a fixed literal so console agent
@@ -229,13 +228,9 @@ internal class Program
         System.Console.WriteLine($"[Agency] Skills: loaded {reloadableCatalog.List().Count} skill(s) from {skillRoots.Count} root(s).");
 
         // 6. Factory & Agent Registration:
-        builder.Services.AddScoped<IAgentFactory, AgentFactory>();
-
-        builder.Services.AddScoped(sp =>
-        {
-            var agentFactory = sp.GetRequiredService<IAgentFactory>();
-            return agentFactory.CreateAgent(null, null);
-        });
+        //    Models + IAgentFactory + the scoped default Agent now live in the Agency.Harness
+        //    library (host-independent agent assembly). The host only owns the wiring call.
+        builder.Services.AddAgencyAgent();
 
         // 7. Tool & Context Registration:
         bool disableSkillShell = builder.Configuration.GetValue<bool>("Skills:DisableShellExecution");

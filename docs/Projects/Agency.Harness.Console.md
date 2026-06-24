@@ -42,17 +42,7 @@ internal interface IChatOutput
 }
 ```
 
-`IAgentFactory` creates `Agent` instances by client name and model (implemented by `AgentFactory`, which folds baseline/configured/user hooks and injects the `TimeProvider`):
-
-```csharp
-// File: src/Harness/Agency.Harness.Console/IAgentFactory.cs
-using Agency.Harness;
-
-internal interface IAgentFactory
-{
-    Agent CreateAgent(string? clientName, string? modelName);
-}
-```
+Agent construction (`IAgentFactory` / `AgentFactory`) lives in [[Agency.Harness]] — the host only calls `AddAgencyAgent()` to register it (see Registration below).
 
 `MarkdownRenderer` translates Markdown to Spectre markup, including GFM pipe tables:
 
@@ -231,8 +221,8 @@ builder.Services.AddSingleton(new SkillContext { Catalog = reloadableCatalog });
 builder.Services.AddSingleton(new SkillWatcher(skillRoots, reloadableCatalog.Reload));
 CommandRegistry.RegisterSkillCommands(reloadableCatalog);
 
-builder.Services.AddScoped<IAgentFactory, AgentFactory>();
-builder.Services.AddScoped(sp => sp.GetRequiredService<IAgentFactory>().CreateAgent(null, null));
+// Models + IAgentFactory + scoped default Agent (all from Agency.Harness):
+builder.Services.AddAgencyAgent();
 
 // ToolContext with built-in tools (ExecutePowershell/ReadFile/WriteFile, recursive AgentTool,
 // SkillTool with a fork runner), MCP tools, and optional progressive disclosure.
@@ -398,9 +388,9 @@ All files live under `FileExport.OutputDirectory` (default `./logs`, created at 
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Harness]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes, `AgentOptions`, `AgentHooks`, `ToolContext`/`ToolRegistry`/`ProgressiveDiscoveryToolRegistry`, `McpClientPool`/`McpClientOptions`, permission types, and built-in tools (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`, `SkillTool`) |
+| [[Agency.Harness]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes, `AgentOptions`, `AgentHooks`, `Models`/`IAgentFactory` (registered via `AddAgencyAgent`), `ToolContext`/`ToolRegistry`/`ProgressiveDiscoveryToolRegistry`, `McpClientPool`/`McpClientOptions`, permission types, and built-in tools (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`, `SkillTool`) |
 | [[Agency.Harness.Skills]] | Loads `ISkillCatalog`/`ReloadableSkillCatalog`, `SkillContext`, `SkillWatcher`, `SkillRenderer`; registers each user-invocable skill as a `/command` |
-| [[Agency.Llm.Common]] | `Models` enumerates configured LLM clients; `AgentFactory` calls `Models.CreateChatClient` to resolve the `IChatClient`; binds `LlmClientOptions` |
+| [[Agency.Llm.Common]] | `Models` enumerates configured LLM clients; the library's `AgentFactory` calls `Models.CreateChatClient` to resolve the `IChatClient`; binds `LlmClientOptions` |
 | [[Agency.Llm.OpenAI]] | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"`; also used directly to build consolidator/distiller chat clients when memory is enabled |
 | [[Agency.Llm.Claude]] | Instantiated by `Models.CreateChatClient` when `ClientType = "Claude"` |
 | [[Agency.Embeddings.OpenAI]] | Registered (`AddAgencyEmbeddingsOpenAI`) when memory is enabled |

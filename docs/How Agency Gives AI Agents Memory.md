@@ -1,5 +1,10 @@
 # How Agency Gives AI Agents Memory
 
+> **Which memory doc is this?** This is the **gentle overview** — a code-free introduction to how
+> Agency's memory system works and why it's designed that way, written for newcomers and non-specialists.
+> Ready for the implementation, with real symbols and `file:line` references? See the companion
+> [How Agency Gives AI Agents Memory: Implementation Deep Dive](How%20Agency%20Gives%20AI%20Agents%20Memory%20-%20Deep%20Dive.md).
+
 ## What Makes Agency Different
 
 Agency is an open-source .NET framework for building AI agents that can do more than answer one prompt at a time.

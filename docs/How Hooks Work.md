@@ -89,8 +89,8 @@ The loop in `Agent.cs` fires hooks at nine points. Together they trace the life 
 
 | Event | When it fires | Can it decide anything? |
 | --- | --- | --- |
-| `OnSessionStarted` | Once, before the first loop iteration | No |
-| `OnUserPromptSubmit` | Every user turn, before the loop starts | No |
+| `OnUserPromptSubmit` | Every turn, first — before the session-start event is even emitted | No |
+| `OnSessionStarted` | Every turn, right after `OnUserPromptSubmit`, before the first iteration of that turn | No |
 | `OnPreIteration` | At the start of every loop iteration, before the system prompt is rebuilt | No |
 | `OnPreToolUse` | Before each tool invocation | **Yes** — allow / deny / rewrite |
 | `OnPostToolUse` | After each tool invocation (success or error) | No |
@@ -103,8 +103,8 @@ A useful mental model for the ordering within one user turn:
 
 ```mermaid
 flowchart TD
-    Start[OnSessionStarted - first turn only] --> Prompt[OnUserPromptSubmit]
-    Prompt --> PreIter[OnPreIteration]
+    Prompt[OnUserPromptSubmit - every turn] --> Start[OnSessionStarted - every turn, id stable]
+    Start --> PreIter[OnPreIteration]
     PreIter --> Model[LLM responds]
     Model --> Turn[OnAssistantTurn]
     Turn --> Decide{Tools requested?}
@@ -117,9 +117,10 @@ flowchart TD
     Stop -.session disposed.-> End[OnSessionEnd]
 ```
 
-Two distinctions trip people up:
+Three distinctions trip people up:
 
-- **`OnStop` vs `OnSessionEnd`.** `OnStop` fires at the end of every *turn*. `OnSessionEnd` fires exactly once, when the `ChatSession` is disposed.
+- **`OnSessionStarted` fires every *turn*, not once per session.** `ChatSession` calls into the loop's `RunAsync` once per turn, and `RunAsync` unconditionally emits `SessionStartedEvent` and fires `OnSessionStarted` at its top. What is genuinely once-per-session is only the *session id*: it is assigned the first time (`if (ctx.Session.Id is null)`) and then stays stable across turns. So the id is constant but the hook recurs — a hook that registers session state here must be idempotent. (Contrast `OnSessionEnd`, below, which really does fire once.)
+- **`OnStop` vs `OnSessionEnd`.** `OnStop` fires at the end of every *turn*. `OnSessionEnd` fires exactly once, when the `ChatSession` is disposed (guarded so repeated disposal is a no-op). This is the asymmetry with `OnSessionStarted`: end is once, "start" is per turn.
 - **`OnPostToolUse` vs `OnPostToolBatch`.** The model can request several tools at once; they run in parallel. `OnPostToolUse` fires per tool; `OnPostToolBatch` fires once after the whole batch settles.
 
 ---
@@ -247,6 +248,27 @@ A pre-built guard that denies shell tool calls containing known-dangerous patter
 ### `AuditHooks.ForLogger`
 
 Logs every tool call before and after execution via `ILogger`, always returning `Allow`. A good template for any observer hook.
+
+### `UserIdPlaceholderHook` — a `Rewrite` in the wild (host code)
+
+The Console host ships the canonical `Rewrite` example. Tools such as the memory MCP server advertise a required `UserId` field, but the *host* owns user identity, not the model. So the model is instructed to pass the literal placeholder `{userId}`, and this `OnPreToolUse` hook rewrites that placeholder to the session's real id before the tool runs:
+
+```csharp
+OnPreToolUse = static (ctx, _) =>
+{
+    string? userId = ctx.AgentContext.User.Id;
+    if (string.IsNullOrEmpty(userId)) { return Task.FromResult(PreToolUseDecision.Allowed); }
+
+    string raw = ctx.Input.GetRawText();
+    if (!raw.Contains("{userId}", StringComparison.Ordinal)) { return Task.FromResult(PreToolUseDecision.Allowed); }
+
+    string rewritten = raw.Replace("{userId}", userId, StringComparison.Ordinal);
+    using var doc = JsonDocument.Parse(rewritten);
+    return Task.FromResult<PreToolUseDecision>(new PreToolUseDecision.Rewrite(doc.RootElement.Clone()));
+};
+```
+
+It is wired in as a **user hook** (the host composes it onto `AgentOptions.UserHooks`), so it goes through the same fold and deny-wins rules as everything else. Two things make it a good `Rewrite` template: it returns `Allowed` (a no-op) whenever the placeholder is absent, so it costs nothing for unrelated tools; and the model can never supply a wrong or fabricated id, because the host substitutes the real one after the model has already chosen the call.
 
 ### Memory — the biggest hook consumer
 

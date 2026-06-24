@@ -252,6 +252,27 @@ public sealed class Models
 }
 ```
 
+#### `IAgentFactory`
+
+Host-independent assembly of an `Agent` from configuration: resolves the `IChatClient` via `Models.CreateChatClient`, defaults the client/model names from `AgentOptions`, and folds `BaselineHooks ▸ ConfiguredHooks ▸ UserHooks` into the agent. Registered (with `Models` and a scoped default `Agent`) via `AddAgencyAgent` — see Registration.
+
+```csharp
+// File: src/Harness/Agency.Harness/Agents/IAgentFactory.cs
+namespace Agency.Harness;
+
+public interface IAgentFactory
+{
+    /// <summary>
+    /// Creates an Agent for the given client and model, falling back to
+    /// AgentOptions.DefaultClientName / DefaultModel when either is null or empty.
+    /// </summary>
+    Agent CreateAgent(string? clientName, string? modelName);
+}
+// AgentFactory : IAgentFactory — ctor(Models, ILogger<Agent>, IOptions<AgentOptions>,
+//   IPermissionEvaluator? = null, TimeProvider? = null). Permission evaluator and clock are
+//   optional so the factory works with or without those subsystems registered.
+```
+
 #### `SystemPromptBuilder`
 
 ```csharp
@@ -717,19 +738,23 @@ internal sealed class HookRegistry
 
 ## Registration
 
-Two public DI extension methods register the optional cross-cutting subsystems. (Permissions, skills, MCP, and progressive-discovery wiring on the `Agent`/`ChatSession` side are done by the host — typically [[Agency.Harness.Console]].)
+Three public DI extension methods register agent construction and the optional cross-cutting subsystems. (Skills, MCP, and progressive-discovery wiring on the `ToolContext` side are done by the host — typically [[Agency.Harness.Console]].)
 
 ```csharp
+// File: src/Harness/Agency.Harness/Agents/AgentServiceCollectionExtensions.cs
 // File: src/Harness/Agency.Harness/Permissions/PermissionServiceCollectionExtensions.cs
 // File: src/Harness/Agency.Harness/Hooks/Configuration/HookServiceCollectionExtensions.cs
+using Agency.Harness;
 using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.DependencyInjection;
 
+builder.Services.AddAgencyAgent();                                  // Models + IAgentFactory + default Agent
 builder.Services.AddAgencyPermissions(builder.Configuration);       // section "Permissions"
 builder.Services.AddAgencyConfiguredHooks(builder.Configuration);   // section "Hooks"
 ```
 
+- `AddAgencyAgent(services)` registers `Models` (transient), `IAgentFactory` → `AgentFactory` (scoped), and a scoped default `Agent` built from `AgentOptions.DefaultClientName` / `DefaultModel`. The caller binds `AgentOptions` and optionally registers `IPermissionEvaluator` / `TimeProvider` for the factory to pick up.
 - `AddAgencyPermissions(services, config, sectionName = "Permissions")` binds `PermissionsOptions` and registers `IPermissionEvaluator` → `PermissionEvaluator` as a **singleton**. Malformed rules fail fast (`InvalidOperationException`) at first resolution via `PermissionsOptionsValidator`.
 - `AddAgencyConfiguredHooks(services, config, sectionName = "Hooks")` binds `HooksOptions`, calls `AddHttpClient()`, registers `IHookHandlerFactory` → `HookHandlerFactory` and a singleton `HookRegistry`, and sets `AgentOptions.ConfiguredHooks` via an `IPostConfigureOptions<AgentOptions>`. Unknown event names fail fast (`HooksOptionsValidator`).
 

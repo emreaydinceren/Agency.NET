@@ -1,4 +1,10 @@
-# How We Give "Brains" to AI Agents
+# How Agency Gives AI Agents Memory: Implementation Deep Dive
+
+> **Which memory doc is this?** This is the **implementation-level deep dive** — the code-anchored
+> companion (real symbols, `file:line` references, design principles P1–P5) for engineers about to
+> read or change the memory subsystem. For a gentle, code-free introduction to the same ideas, start
+> with [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md). The two
+> cover the same system at different depths; this one is a strict superset.
 
 For software engineers entering the world of AI agents, the most important shift in mindset is moving from **stateless inference** to **stateful persistence**. Let's break down how we give "brains" to these systems so they stop acting like "amnesiacs with a tool belt" and start behaving like senior engineers.
 

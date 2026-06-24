@@ -1,9 +1,10 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Anthropic" Version="12.29.0" />
+    <PackageVersion Include="Anthropic" Version="12.31.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
@@ -28,11 +29,14 @@
     <PackageVersion Include="OpenAI" Version="2.11.0" />
     <PackageVersion Include="pgvector" Version="0.3.2" />
     <PackageVersion Include="Spectre.Console" Version="0.56.0" />
+    <!-- Transitively pinned to patch CVE-2025-6965 (NU1903): Microsoft.Data.Sqlite 10.0.9 pulls
+         SQLitePCLRaw 2.1.11 (SQLite < 3.50.2). 3.0.3 bundles SQLite 3.50.3 with no core API changes. -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="OpenTelemetry" Version="1.16.0" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="Microsoft.PowerShell.SDK" Version="7.6.2" />
+    <PackageVersion Include="Microsoft.PowerShell.SDK" Version="7.6.3" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.9" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />

@@ -3,8 +3,10 @@ using Agency.Harness.Permissions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Agency.Harness.Console;
-internal sealed class AgentFactory : IAgentFactory
+namespace Agency.Harness;
+
+/// <inheritdoc />
+public sealed class AgentFactory : IAgentFactory
 {
     private readonly Models models;
     private readonly ILogger<Agent> logger;

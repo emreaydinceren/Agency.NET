@@ -22,7 +22,7 @@ dotnet add package Agency.Harness.Console
 await Host.CreateDefaultBuilder(args)
     .ConfigureServices((ctx, services) =>
     {
-        services.AddScoped<IAgentFactory, AgentFactory>();
+        services.AddAgencyAgent();
         services.AddTelemetry();
         services.AddConsoleServices();
     })

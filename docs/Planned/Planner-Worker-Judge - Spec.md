@@ -4,6 +4,7 @@
 > **Document type:** High-Level Design (HLD) / Product + Engineering Specification
 > **Author role:** Senior Product Manager (spec), grounded in the existing `Agency.Harness` codebase
 > **Source task:** [AAT-26 — Implement a "Planner-Worker-Judge" Hierarchy](https://www.notion.so/36b5b7b651d880f4b306ffcac5f5e069)
+> **Anchors refreshed:** `file:line` references re-verified against the current codebase (post permissions + skills work). For the code-grounded build walkthrough — including the traps this spec glosses over — see [Planner-Worker-Judge - Implementation Guide](Planner-Worker-Judge%20-%20Implementation%20Guide.md).
 
 ---
 
@@ -150,7 +151,10 @@ multi-step success rate while cutting token spend.
 
 The PWJ orchestrator sits **above** the agent loop. Planner and Judge are thin `Agent` wrappers with
 specialized system prompts and structured-output parsing. Workers are full `Agent`/`ChatSession`
-instances spawned through the same factory `AgentTool` uses today.
+instances spawned through the same **injected delegate** `AgentTool` uses today —
+`Func<string?, string?, (AgentOptions, Agent, IToolRegistry)>`. (`AgentFactory`/`IAgentFactory` are now
+**public in `Agency.Harness`** under `Agents/`, so the orchestrator can construct role agents via
+`IAgentFactory.CreateAgent` directly; `AgentTool`'s delegate still bundles the worker's `IToolRegistry`.)
 
 ```
                           ┌─────────────────────────────────────────────────────────┐
@@ -226,8 +230,9 @@ the spec keeps them **separately configurable**:
   3. Extract assistant text → parse JSON → `Plan`.
   4. On revise, re-invoke with the prior plan + judge feedback appended.
 - **Implementation notes:**
-  - Reuse the structured-output parsing approach already present for `AgentLlmResponse`/`AgentJsonContext`
-    (System.Text.Json source-gen) — add a `PlanJsonContext` to stay AOT/trim-safe and warning-free.
+  - There is **no** existing structured-output parser to reuse: `AgentJsonContext` only serializes
+    `Dictionary<string,object?>` and there is no `AgentLlmResponse` type. Build plan/verdict parsing
+    from scratch — add source-gen `PlanJsonContext`/`VerdictJsonContext` to stay AOT/trim-safe and warning-free.
   - `Planner` is `sealed`; expose `IPlanner` for substitution in tests/hosts.
 - **Constraints:** No tool execution. Single responsibility = produce/repair a plan. Max plan size is
   capped (`MaxSteps`, default 12) to keep token cost and fan-out bounded.
@@ -244,13 +249,14 @@ the spec keeps them **separately configurable**:
   - Collapse the worker's `AgentEvent` stream into a single `StepResult { StepId, Output, Status, Usage }`.
 - **Inputs:** `PlanStep`, worker (clientName, model), scoped `ToolContext`.
 - **Outputs:** `StepResult`.
-- **Internal flow:** This is *literally* the body of `AgentTool.InvokeAsync` (lines 41–87 of
-  `Tools/AgentTool.cs`) generalized: build `ChatSession`, `await foreach` the events, capture
+- **Internal flow:** This is *literally* the body of `AgentTool.InvokeAsync` (`Tools/AgentTool.cs:45-120`,
+  which now also contains a permission auto-deny/resume loop the extraction must preserve) generalized:
+  build `ChatSession`, `await foreach` the events, capture
   `FinalText` + terminal `AgentResultStatus`. V1 extracts that into a reusable `WorkerRunner` so both
   `AgentTool` and the orchestrator share one code path.
 - **Implementation notes:**
   - Independent steps within the same parallel group run via `Task.WhenAll` — mirrors how `Agent`
-    already executes tool calls in parallel (`Agent.cs` lines 354–424). Concurrency must respect the
+    already executes tool calls in parallel (`Agent.cs:689` per-call lambda … `:876` `Task.WhenAll`). Concurrency must respect the
     **LM Studio 2-slot limit** (see §11) via a `SemaphoreSlim` gate when the worker client is local.
   - Each worker gets a **fresh `Context`** — workers do not share conversation history (isolation =
     smaller prompts + no cross-contamination).
@@ -490,14 +496,14 @@ is the recommended mode for long plans where re-running everything on one bad st
 ## 10. Background Workers / Async Components
 
 - **Parallel step dispatch:** Steps sharing a `ParallelGroup` execute via `Task.WhenAll`, exactly
-  mirroring how `Agent.cs` runs tool calls concurrently (lines 354–424). The orchestrator never blocks
+  mirroring how `Agent.cs` runs tool calls concurrently (`Agent.cs:689`–`:876`). The orchestrator never blocks
   a thread — it is fully `async`/`IAsyncEnumerable`.
 - **Concurrency cap:** A `SemaphoreSlim(maxConcurrency)` gates worker spawning. Default
   `maxConcurrency = 2` when the worker client is the local LM Studio endpoint (hard requirement — the
   AMD 8060S iGPU crashes above 2 concurrent inference slots); higher for hosted APIs.
 - **Cancellation:** The orchestrator threads `CancellationToken` into every planner/worker/judge call.
   A per-run timeout reuses the `AgentOptions.TurnTimeoutSeconds` pattern (`CreateLinkedTokenSource` +
-  `CancelAfter`) already implemented in `Agent.ChatAsync` (lines 137–143).
+  `CancelAfter`) already implemented in `Agent.ChatAsync` (`Agent.cs:172`+).
 - **Event streaming:** Events are yielded as they happen, so a host renders plan/dispatch/verdict
   progress live — no buffering of the whole run.
 - **No daemon/hosted-service component** in V1. The orchestrator is invoked per request; it is not a
@@ -588,12 +594,14 @@ Worked example for §2.1 ("rename `Generate` → `GenerateAsync`"):
 
 - **Why reuse `AgentTool`'s factory instead of a new worker type?** `AgentTool.InvokeAsync`
   (`Tools/AgentTool.cs`) already does exactly what a worker does: spawn a `ChatSession` from a
-  `(clientName, model)` factory, stream events, collapse to a final result. V1 extracts that into a
+  `(clientName, model)` factory, stream events, collapse to a final result. That factory seam is now
+  `IAgentFactory` (public in `Agency.Harness`, `Agents/`); `AgentTool` additionally bundles the worker's
+  `IToolRegistry` via its own delegate. V1 extracts that into a
   shared `WorkerRunner` so there is *one* delegation code path, and `subagent_tool` becomes a thin
   caller of it. This avoids two divergent implementations of "run a child agent."
 
 - **Why `OnPreToolUse` for the gate judge?** The hook already supports `Deny`/`Rewrite` and runs
-  *before* a tool commits (`Agent.cs` lines 362–378). Mapping `Verdict → PreToolUseDecision` means the
+  *before* a tool commits (`Agent.cs:699`–`:806`). Mapping `Verdict → PreToolUseDecision` means the
   gate judge requires **zero changes to the agent loop** — it is pure composition. This is the same
   pattern `BlockListHooks.Dangerous` uses today.
 
@@ -675,7 +683,8 @@ Activities: `Hierarchy.RunAsync` (root span) with child spans `hierarchy.plan`, 
 ## 17. Implementation Plan (TDD, Test-First)
 
 Per the project's TDD discipline (red → green → refactor), **every implementation task is preceded by
-its test task**. All unit tests drive `FakeChatClient` (FIFO queued `ChatResponse`s) — no live LLM.
+its test task**. All unit tests drive `FakeChatClient` (the class in `Test/Fakes/FakeLlmClient.cs`;
+FIFO via `EnqueueResponse(ChatResponse)`) — no live LLM.
 Functional E2E tests are tagged `Category=Functional` and target LM Studio (`http://llm-host.example:1234`).
 
 ### Phase 0 — Domain model & contracts

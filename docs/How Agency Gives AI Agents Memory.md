@@ -1,152 +1,115 @@
 # How Agency Gives AI Agents Memory
 
-> **Which memory doc is this?** This is the **gentle overview** — a code-free introduction to how
-> Agency's memory system works and why it's designed that way, written for newcomers and non-specialists.
-> Ready for the implementation, with real symbols and `file:line` references? See the companion
-> [How Agency Gives AI Agents Memory: Implementation Deep Dive](How%20Agency%20Gives%20AI%20Agents%20Memory%20-%20Deep%20Dive.md).
+For software engineers entering the world of AI agents, the most important shift in mindset is moving from **stateless inference** to **stateful persistence**. This document explains how Agency gives "brains" to these systems so they stop acting like *amnesiacs with a tool belt* and start behaving like senior engineers.
+
+It is written to be read in two passes. **Part I** is a code-free introduction to the ideas and why they're designed the way they are — read it and you'll have a complete mental model. **Part II** is the implementation: the same system traced through real C# symbols, `file:line` references, and the design principles that hold it together. Stop after Part I for the concepts; continue into Part II when you're about to read or change the code.
+
+---
 
 ## What Makes Agency Different
 
-Agency is an open-source .NET framework for building AI agents that can do more than answer one prompt at a time.
-
-The short version is this: it gives an agent a memory system without stuffing memory logic directly into the main agent loop.
+**Agency** is an open-source .NET framework that turns AI agents from *"amnesiacs with a tool belt"* into stateful, senior-level collaborators. It moves agents from **stateless inference to stateful persistence** by implementing the **CoALA** four-pillar memory model — Working, Semantic, Procedural, and Episodic — over a production-grade agent harness.
 
 If you only remember four ideas from this document, remember these:
 
 ### 1. Memory is attached, not baked in
 
-The main loop of the agent does not "know" about memory.
-
-Instead, memory plugs in through hooks (small callback points where extra behavior can run).
+The core agent loop (`Agent.RunAsync`) is completely unaware that memory exists. Memory plugs in through **hooks** — small callback points where extra behavior can run — as an opt-in set of background services.
 
 Why that matters:
 
-- If memory is off, the loop stays lean.
-- If memory is on, the agent gets recall and learning without rewriting the whole harness.
-- The harness stays reusable for other agent scenarios.
+- If memory is off, the loop stays lean — **zero hot-path overhead**.
+- If memory is on, the agent gets recall and learning without rewriting the harness.
+- The harness stays reusable for any agentic scenario.
 
-### 2. The fast path stays fast
+### 2. The hot path is sacred; the cold path does the heavy lifting
 
-The hot path (the code running while the user is waiting) does as little memory work as possible.
+The **hot path** (the code running while the user is waiting) does as little memory work as possible. All the expensive work — turn extraction, episode synthesis, consolidation — is pushed to the **cold path**, background services that run after the user already has a response.
 
-The expensive work happens later in the cold path (background work that can run after the user already has a response).
-
-That means:
-
-- Recall is quick and selective.
-- Writing new memories happens in the background.
-- The user does not sit around waiting for memory cleanup jobs.
+That means recall is quick and selective, new memories are written in the background, and the user never sits around waiting for memory cleanup jobs.
 
 ### 3. The agent only re-reads memory when something changed
 
-Before running a meaningful search, Agency checks a simple timestamp called `LastWrittenAt`.
+Before paying for a vector search, Agency checks a simple local timestamp called `LastWrittenAt` — plain English: *"Did anything new get saved since the last time I looked?"* If the answer is no, retrieval is skipped.
 
-Plain-English meaning: "Did anything new get saved since the last time I looked?"
+The agent only pays the "retrieval tax" when new memory has actually been written. This avoids wasted compute and helps prevent **"context rot"** (when prompts get bloated with repeated or stale context).
 
-If the answer is no, the agent skips the retrieval work.
+### 4. Memory hygiene is a first-class job
 
-This avoids wasted compute and helps prevent "context rot" (when prompts get bloated with repeated or stale context).
+Agency has a dedicated cleanup layer called the **Consolidator** — itself a sub-agent. It reasons over long-term storage in natural language, reconciling contradictions and duplicates through **Merge, Update, and Delete** operations (and signals completion with **Done**).
 
-### 4. Memory cleanup is treated as a real job
+Important detail: by design it has *no create tool*. It can tidy the brain but never invent new "facts" into it.
 
-Agency has a dedicated cleanup layer called the Consolidator.
+### Why these choices matter in a real system
 
-Its job is to tidy memory by merging duplicates, updating stale facts, and deleting records that no longer make sense.
+- **Token economics via deterministic extraction.** Background distillation (e.g. episode extraction) is deterministic JSON authoring, so Agency suppresses chain-of-thought — through both a dedicated client policy and a `/no_think` prompt directive — cutting cost and latency without losing fidelity.
+- **Security via user-partitioned memory.** The hard boundary is the **`UserId`**: every record is partitioned by user and retrieval filters on it, so one user's store is structurally invisible to another. Sessions are deliberately *not* hard-isolated — a `SessionId` is a **soft ranking signal** that lets the agent recall its own earlier work. Cross-session reach is a feature; cross-user reach is impossible.
+- **Crash-safe idempotency via watermarking.** The distiller persists a `LastDistilledTurnIndex` watermark and checks it *before* spending any LLM tokens. An interrupted job re-derives the exact turn window on restart and resumes without duplicating records or skipping turns.
+- **Retrieval is more than cosine similarity.** A two-stage **over-fetch + re-rank** pipeline fetches candidates by similarity, then scores them on a weighted blend of **similarity, recency, importance, and session match** — so a high-importance fact from last month can correctly outrank a fresh-but-trivial one.
+- **Auditable by design.** Every time the Consolidator reorganizes memory it emits a `MemoryMutatedEvent`, giving developers and users a clear audit trail of how the agent's model of the world evolves.
 
-Important detail: it can clean memory, but it cannot invent new memories out of thin air.
-
----
-
-## Why These Design Choices Matter in a Real System
-
-- They save tokens and time. The system avoids repeatedly searching or rewriting what it already knows.
-- They reduce risk. Memory is scoped by user, so one user's memories are not visible to another.
-- They recover cleanly from failures. Background jobs can restart without duplicating work.
-- They keep retrieval useful. Search is not just "most similar text"; it also considers freshness, importance, and session relevance.
-- They stay auditable. When memory is reorganized, the system can emit events so developers know what changed.
-
-> Note: In a toy demo, you can get away with stuffing chat history into the prompt. In a real product, that becomes slow, expensive, and messy. Agency is designed for the real-product version.
+> In a toy demo, you can get away with stuffing chat history into the prompt. In a real product, that becomes slow, expensive, and messy. Agency is designed for the real-product version.
 
 ---
+
+# Part I — The Ideas
 
 ## 1. The Core Problem: Why Do Agents Need Memory?
 
-Most LLMs are stateless (they do not remember earlier interactions unless you pass that context back in).
-
-So without a memory system, an agent is like a capable engineer who loses their notebook after every meeting.
+Standard Large Language Models are **stateless**. They have no prior recollection beyond what you provide in the current request. So without a memory system in the surrounding **harness** (the code that manages the LLM), an agent is like a capable engineer who loses their notebook after every meeting — it "starts at zero" every time it wakes up, spending expensive tokens rediscovering facts it should already know.
 
 That causes predictable problems:
 
 - The agent keeps rediscovering the same facts.
 - The user has to repeat preferences, goals, and background.
-- The system wastes tokens rebuilding context it already had before.
+- The system wastes tokens rebuilding context it already had.
 - The agent cannot really "learn" from experience.
 
-Memory changes that.
-
-Instead of saying, "Please remember that I prefer Python," every time, the user can say it once and the agent can bring it back when it matters.
-
----
+Memory changes that. Instead of saying *"Please remember that I prefer Python"* every time, the user can say it once and the agent can bring it back when it matters.
 
 ## 2. The Four Pillars of Agent Memory
 
-Agency borrows the CoALA memory model. That name sounds academic, but the ideas are straightforward.
-
-Think of the four pillars like this:
+Agency borrows the **CoALA (Cognitive Architectures for Language Agents)** memory model. The name sounds academic, but the ideas are straightforward.
 
 ### Working Memory: the scratch pad
 
-This is the current context window.
-
-It holds what the agent is actively thinking about right now.
-
-It is fast, but temporary.
-
-(Like RAM in a computer, or notes on a whiteboard during a meeting.)
+This is the agent's **context window** — what it's actively thinking about right now. Fast, immediate, but volatile: once the session ends, it's gone. (Like RAM in a computer, or notes on a whiteboard during a meeting.)
 
 ### Semantic Memory: the fact book
 
-This is long-term factual knowledge.
-
-Examples:
+This is long-term, persistent **factual knowledge** — general facts, rules, and world knowledge:
 
 - "The user prefers Python."
 - "This project uses PostgreSQL."
 - "This deployment job must run after migrations."
 
-(Think of it as the agent's textbook or wiki.)
+In production this is often a **vector database** or even simple **Markdown files** like `claude.md`. (Think of it as the agent's textbook or wiki.)
 
 ### Procedural Memory: the how-to guide
 
-This is knowledge about how to do something.
-
-Examples:
+This is the "how-to" knowledge — instructions for specific tasks:
 
 - how to run a code review
 - how to reset a password
 - how to set up a dev environment
 
-(Think of this as a playbook or skills library.)
+We often implement this with a **skills library** where the agent only "loads" the full instructions when it needs them. (Think of it as a playbook.)
 
 ### Episodic Memory: the story of what happened
 
-This is memory about past experiences.
+This is the most advanced type — memory about **past experiences and what was learned**:
 
-Examples:
-
-- "Last time we used tool X here, it timed out."
+- "Last time we used tool X here, it timed out; I should try tool Y instead."
 - "This bug was caused by stale cache state."
 - "The last successful fix involved restarting the background worker before rerunning the job."
 
-(This is the closest thing to lived experience.)
+This is the closest thing to lived experience.
 
-> Simple summary:
-> Working memory is what the agent is holding.
-> Semantic memory is what the agent knows.
-> Procedural memory is what the agent knows how to do.
-> Episodic memory is what the agent remembers happening.
-
----
+> **In one line each:**
+> Working memory is what the agent is *holding*.
+> Semantic memory is what the agent *knows*.
+> Procedural memory is what the agent *knows how to do*.
+> Episodic memory is what the agent *remembers happening*.
 
 ## 3. The "Bootup Ritual" and the Distillation Pipeline
 
@@ -155,581 +118,499 @@ There are really two memory jobs in a good agent system:
 1. Bring the right memories back at the right time.
 2. Turn raw interactions into cleaner long-term memory.
 
-Agency handles those jobs in two phases.
+Agency handles those in two phases.
 
 ### The Bootup Ritual
 
-Before the agent acts, it tries to reground itself.
-
-("Reground" here just means "get its bearings again before doing work.")
-
-It searches memory for facts and past experiences that seem relevant to the current task, then places those into the agent's context.
-
-That way, the model starts the turn already informed.
+Before the agent is allowed to act, the harness runs a "regrounding" step. ("Reground" just means "get its bearings again before doing work.") It performs a **semantic search** against its memory stores to retrieve relevant facts and past episodes, then injects them into the system prompt — so the model starts the turn already informed.
 
 ### The Distillation Pipeline
 
-Agency does not treat raw chat logs as memory.
+Memory shouldn't be a dump of raw chat logs — that causes **"context rot,"** where performance degrades as the prompt gets cluttered. Instead, Agency uses an **asynchronous background process** to "distill" raw data:
 
-That would be noisy and expensive.
+1. **Turn extraction** — analyzing a single exchange to capture the **Observation-Action-Outcome (OAO)** pattern: what was seen, what the agent did, and whether it worked.
+2. **Episode extraction** — once a goal is met, synthesizing those turns into a coherent "meeting summary" of the journey (not the whole transcript, just the useful summary).
+3. **Consolidation** — comparing new insights to old ones to **Merge, Update, or Delete** information, keeping memory fresh and non-redundant.
 
-Instead, it distills them in the background into more useful records.
-
-The rough flow looks like this:
-
-1. Turn extraction
-   The system looks at a single exchange and identifies what happened.
-   (Observation-Action-Outcome means: what was seen, what the agent did, and what happened next.)
-
-2. Episode extraction
-   The system groups related work into a higher-level summary.
-   (Think: not every line of the meeting transcript, but the useful meeting summary.)
-
-3. Consolidation
-   The system compares new memory with old memory and decides whether to merge, update, or delete records.
-
-> Note: This is why the memory system does not slowly turn into a giant trash heap of chat transcripts.
-
----
+> This is why the memory system does not slowly turn into a giant trash heap of chat transcripts.
 
 ## 4. Engineering Challenges: Scope and Hygiene
 
-When you build memory for production software, two concerns show up quickly.
+Building memory for production software surfaces two concerns quickly.
 
-### Memory scoping
+### Memory Scoping (Security)
 
-You must stop cross-user memory bleed.
+You must prevent **cross-user bleed** — Alice must never see Bob's memories. The hard boundary is the **user id**: every record is partitioned by `UserId`, and retrieval filters on it at the SQL level, so one user's store is structurally invisible to another.
 
-In simple terms: Alice must never see Bob's memories.
+*Sessions* are deliberately **not** hard-isolated. A `SessionId` is only a **soft ranking signal** — records from the same session rank slightly higher — so the agent can reach back across its own earlier sessions.
 
-Agency enforces a hard boundary with `UserId`.
+> Cross-session reach is useful.
+> Cross-user reach is unacceptable.
 
-That means:
+### Memory Hygiene (Garbage Collection)
 
-- records are stored per user
-- searches filter by user
-- one user's memory is structurally invisible to another's
+Not everything is worth keeping. Agency uses:
 
-Sessions are different.
+- **importance scoring** (how useful is this memory?)
+- **TTL / time-based decay** (when should this expire?)
+- **cleanup passes** for stale or low-value records
 
-`SessionId` is not a hard wall. It is a soft ranking signal (a gentle preference in search results).
-
-That means memories from the current session may rank a little higher, but older sessions are still reachable.
-
-That is intentional.
-
-Cross-session reach is useful.
-Cross-user reach is unacceptable.
-
-### Memory hygiene
-
-Not every memory deserves to live forever.
-
-Agency uses ideas like:
-
-- importance scoring (how useful is this memory?)
-- TTL, or time-to-live (when should this expire?)
-- cleanup passes for stale or low-value records
-
-That keeps the memory store focused instead of bloated.
-
----
+That keeps the store focused instead of bloated.
 
 ## 5. Why Bother? The Business Case
 
-Without memory, many agents are just polished chatbots.
+Without memory, many agents are just polished chatbots. With memory, they start acting like **senior collaborators**.
 
-With memory, they start acting more like collaborators.
+In **IT incident response**, for example, an agent with episodic memory can resolve a system spike with ~40% fewer tool calls because it remembers the root cause from a similar incident last month. More broadly, memory-augmented agents:
 
-Why that matters:
+- repeat less work,
+- make fewer unnecessary tool calls,
+- carry lessons from one session into the next,
+- get better over time instead of resetting every day.
 
-- They repeat less work.
-- They make fewer unnecessary tool calls.
-- They carry lessons from one session into the next.
-- They get better over time instead of resetting every day.
-
-In practical terms, this can mean faster incident response, more personalized help, and lower operating cost.
-
-The more useful work the agent does, the more useful memory it can build.
-
-That creates a flywheel: work creates memory, memory improves future work, better work creates better memory.
+This creates a **flywheel**: work creates memory, memory improves future work, and better work creates better memory.
 
 ---
 
-## 6. How Agency Implements It
+# Part II — How Agency Implements It
 
-Everything so far was the idea.
+Everything above is the *theory*. This part is the *practice*: a tour of how the abstract pillars become C# classes, how they plug into `Agency.Harness` without ever editing the agent loop, and how a sentence the user typed in March is recalled in June.
 
-This section is the implementation story.
+If you only remember one thing from this part, make it this:
 
-Here is the one sentence worth remembering:
+> **The memory system is a set of background services and `Context` mutations that attach to the agent loop through *hooks*. The loop itself — `Agent.RunAsync` — has no idea memory exists.**
 
-> In Agency, memory is attached to the agent loop through hooks and context updates. The loop itself does not contain memory logic.
+That single design choice (decoupling via hooks) is what lets memory be an *opt-in* package you can switch off with one config flag, rather than a fork of the harness.
 
-That design choice is what keeps memory optional and keeps the core harness clean.
+### The five design principles (referenced throughout as P1–P5)
+
+The implementation keeps coming back to five rules. Worth holding them in mind:
+
+- **P1 — The hot path is sacred.** Anything the user waits on does the minimum; everything expensive moves to the cold path.
+- **P2 — Capture is system-owned.** The agent never has a "save this memory" tool. It can only signal *timing*; what to remember is decided afterward by the distiller.
+- **P3 — Soft signals over hard isolation.** The only hard partition is `user_id`. Session relevance is a ranking nudge, not a wall.
+- **P4 — Some decisions are language-shaped.** Reconciling duplicates and contradictions is given to an LLM (the Consolidator) — but never on the hot path.
+- **P5 — One source of truth.** One `Record` type, one store, one conversation manager that owns the turns. No data is copied where it could drift.
+
+### 6.0 The map: which project does what
+
+The memory feature is split across one harness project and several `Agency.Memory.*` projects. The split is not arbitrary — it follows the dependency arrows so the shared contract (`Agency.Memory.Common`) sits at the bottom and depends on nothing.
+
+| Project | Role in the four-pillar model | Path / detail |
+|---|---|---|
+| `Agency.Harness` | The host. Owns the loop, the hooks, and the `Context` blackboard. | `src/Harness/Agency.Harness` |
+| `Agency.Memory.Common` | The contract. `Record`, `ContentType`, `IMemoryStore`, ranking, options, events, `MemoryHookFactory`. Zero dependencies on the other memory projects. | `src/Memory/Agency.Memory.Common` |
+| `Agency.Memory.Sql.Postgres` | Semantic + episodic store (durable substrate). pgvector + HNSW. | `…/Agency.Memory.Sql.Postgres` |
+| `Agency.Memory.Retrieval` | **Read path.** Gate + over-fetch + composite re-rank → `Context`. | `…/Agency.Memory.Retrieval` |
+| `Agency.Memory.Distiller` | **Write path** + the DI wiring (`AddAgencyMemory`) that ties memory to the harness. | `…/Agency.Memory.Distiller` |
+| `Agency.Memory.Consolidator` | Maintenance — the "is this the same thing said twice?" sub-agent. | `…/Agency.Memory.Consolidator` |
+| `Agency.Memory.Hygiene` | Maintenance — TTL + low-importance garbage collection. | `…/Agency.Memory.Hygiene` |
+
+**Why this matters to you as a reader:** when you go looking for "where does retrieval happen," you will not find it in `Agent.cs`. You will find a *callback* registered into the loop. The rest of this part is the trail of breadcrumbs that connects the two.
 
 ---
 
-## 6.0 The Map: Which Project Does What?
+### 6.1 The spine: the core agentic loop
 
-The memory feature is split across several projects. That may sound complicated, but the split is deliberate.
-
-Each project has a focused job.
-
-| Project | Main job | Plain-English description |
-| --- | --- | --- |
-| `Agency.Harness` | Hosts the loop | The engine that runs the agent |
-| `Agency.Memory.Common` | Shared contracts | The common types, options, interfaces, and ranking rules |
-| `Agency.Memory.Sql.Postgres` | Durable storage | The PostgreSQL-backed memory store |
-| `Agency.Memory.Retrieval` | Read path | Finds useful memories and injects them into context |
-| `Agency.Memory.Distiller` | Write path | Turns conversation history into stored memory |
-| `Agency.Memory.Consolidator` | Cleanup reasoning | Merges or updates overlapping memory |
-| `Agency.Memory.Hygiene` | Scheduled cleanup | Removes stale or low-value memory |
-
-> Teaching note: if you are looking for retrieval code, do not start in `Agent.cs` and expect to find it there. The main loop is intentionally memory-agnostic.
-
----
-
-## 6.1 The Spine: The Core Agent Loop
-
-The loop is the heart of the harness.
-
-In simplified form, it behaves like this:
+Memory plugs into a loop that already existed. Let's start with that loop, because every memory touch-point is defined relative to it. The loop lives in `Agent.RunAsync` (`src/Harness/Agency.Harness/Agent.cs:244`). Stripped to its skeleton, it is the classic **think → act → observe** cycle:
 
 ```csharp
-while (conversationIsStillGoing)
+while (true)                                  // until a StopCondition fires
 {
-    maybeLoadRelevantMemory();
-    buildPromptFromContext();
-    askTheModelWhatToDo();
-    runAnyRequestedTools();
-    appendToolResultsToConversation();
+    ctx.IterationCount++;
+
+    //  ┌─ OnPreIteration hook  ◄────────────── RETRIEVAL injects here
+    string systemPrompt = SystemPromptBuilder.Build(ctx);   // reads ctx.Knowledge / ctx.Memory
+    var response = await _llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);  // THINK
+    ctx.Conversation.Append(lastAssistant);
+
+    //  └─ OnAssistantTurn hook ◄────────────── TIMER RESTART fires here
+    if (_stop(ctx, lastAssistant)) { yield return result; yield break; }
+
+    var toolCalls = lastAssistant.Contents.OfType<FunctionCallContent>().ToList();  // ACT
+    var toolEvents = await Task.WhenAll(toolTasks);          // tools run in parallel
+
+    //  └─ OnPostToolBatch hook ◄────────────── batch audit fires here
+    foreach (var r in resultMessages) ctx.Conversation.Append(new ChatMessage(ChatRole.Tool, [r]));  // OBSERVE
 }
 ```
 
-Memory touches this loop through hooks.
+Notice what is *not* here: there is no `if (memoryEnabled)`, no call to a store, no embedding. The loop only calls hook delegates **if they are non-null**. When memory is disabled, those delegates are null and the branches are skipped — true zero-overhead (**P1**).
 
-That means the loop stays generic, and memory can be switched on or off.
+A second entry point, `Agent.ChatAsync` (`Agent.cs:120`), wraps `RunAsync` per user turn. It is where `OnUserPromptSubmit` fires (`Agent.cs:151`) and where per-turn telemetry and timeouts are applied. And `ChatSession.DisposeAsync` (`ChatSession.cs:113`) calls `Agent.RaiseSessionEndAsync` (`Agent.cs:86`), which fires `OnSessionEnd`. These three methods — `RunAsync`, `ChatAsync`, `DisposeAsync` — are the only surfaces memory ever attaches to.
 
-Three surfaces matter most:
+### 6.1.1 The loop at a glance: where memory attaches
 
-- `RunAsync` drives the think-act-observe loop.
-- `ChatAsync` wraps a user turn.
-- `ChatSession.DisposeAsync` signals that a session is ending.
+Before we dissect the individual hooks, here is the whole picture in one view. The agent loop runs on the **hot path** (synchronous, latency-critical, user is waiting). Memory attaches to it at six labelled points — but only *two* of those points do real work on the hot path (retrieval reads; the timer restarts), and even retrieval is gated to run at most once per turn. Everything expensive is pushed *across the channel boundary* onto the **cold path**, where the user is not waiting.
 
-Those are the main places where memory-related hooks can attach.
-
-### 6.1.1 The Big Picture at a Glance
-
-The easiest way to understand the design is to separate the user-facing work from the background work.
-
-- Hot path: the user is waiting, so keep it quick.
-- Cold path: the user already has an answer, so background services can do heavier work.
+**Diagram A — one user turn (the hot path), with every memory touch-point marked:**
 
 ```mermaid
 flowchart TD
-    User[User sends message] --> Loop[Agent loop]
-    Loop --> Recall[Quick memory recall if needed]
-    Recall --> Prompt[Build prompt with facts and memories]
-    Prompt --> Model[LLM responds]
-    Model --> Tools[Run tools if needed]
-    Tools --> User
+    Start(["ChatSession.SendAsync(userMessage)"]) --> ChatAsync
+    ChatAsync["Agent.ChatAsync — Agent.cs:120"] --> H0
+    H0["⓪ OnUserPromptSubmit (baseline: no-op) — Agent.cs:151"] --> RunAsync
+    RunAsync["Agent.RunAsync — Agent.cs:244"] --> H1
+    H1["① OnSessionStarted — first iteration only — Agent.cs:255<br/>register live conversation log + SetFocus / MarkGoalComplete tools<br/>(so the cold-path distiller can read turns)"] --> H2
 
-    Model -. restart timer .-> Background[Background memory work]
-    Tools -. may signal completion .-> Background
-    Loop -. session ends .-> Background
+    subgraph LOOP["LOOP ITERATION — hot path (think → act → observe)"]
+        direction TB
+        H2["② OnPreIteration → ⟦ RETRIEVAL: read path ⟧ — Agent.cs:274"] --> Gate
+        Gate{"gate: LastWrittenAt cache<br/>O(1), no I/O — changed since last look?"}
+        Gate -- "unchanged" --> Skip["SKIP retrieval (P1)"]
+        Gate -- "changed" --> Search["embed → search → rank →<br/>inject into ctx.Knowledge / ctx.Memory"]
+        Skip --> H3
+        Search --> H3
+        H3["③ SystemPromptBuilder.Build(ctx) — Agent.cs:280<br/>renders ## Facts / ## Memories from ctx"] --> H4
+        H4["④ LLM call ......... THINK ......... — Agent.cs:299"] --> H5
+        H5["⑤ OnAssistantTurn → ⟦ TIMER RESTART only ⟧ (P1) — Agent.cs:314<br/>InactivityTimerService.Restart(...)"] --> Stop
+        Stop{"⑥ stop? — Agent.cs:354"}
+        Stop -- "no" --> H7["⑦ tool calls run in parallel ... ACT ... — Agent.cs:384"]
+        H7 --> H8["⑧ OnPostToolBatch (baseline: reserved)"]
+        H8 --> H9["⑨ append tool results ... OBSERVE ... — Agent.cs:466"]
+        H9 -. "loop ↺" .-> H2
+    end
 
-    Background --> Distill[Extract useful facts and episodes]
-    Distill --> Store[(Memory store)]
-    Store --> Recall
+    Stop -- "yes" --> StopEnd["OnStop → AgentResultEvent → break"]
+    StopEnd --> Dispose
+    Dispose["ChatSession.DisposeAsync → OnSessionEnd →<br/>⟦ enqueue FINAL job ⟧ — Agent.cs:86"]
+
+    %% The only three places work crosses onto the cold path:
+    H5 -. "arms the idle trigger" .-> Boundary
+    H7 -. "enqueue job / set ctx.Focus" .-> Boundary
+    Dispose -. "enqueue FINAL job" .-> Boundary
+    Boundary(["═══ channel boundary → cold path (Diagram B) ═══"])
 ```
 
-The dashed arrows are important.
+The three dashed arrows leaving the box (from ⑤, ⑦, and `OnSessionEnd`) are the **only** ways work crosses onto the cold path. They correspond one-to-one with the three distillation triggers from §6.6 — `Inactivity`, `GoalCompletion`, `SessionDisposed`. Each drops a `DistillationJob` into a per-session `Channel<DistillationJob>` and returns *immediately*. The user-facing turn never blocks on memory being written.
 
-They show that most memory writing happens later, outside the main interaction loop.
+**Diagram B — what happens behind the channel (the cold path):**
 
-That is the performance story in one diagram.
+```mermaid
+flowchart TD
+    Channel(["per-session Channel&lt;DistillationJob&gt;<br/>3 triggers: Inactivity | GoalCompletion | SessionDisposed"]) --> Distiller
+    Distiller["DistillerBackgroundService<br/>(event-driven wake — drains, then suspends on a semaphore)<br/>• read turns (watermark, UpToTurnIndex] ← from the log registered at ①<br/>• LLM episode / fact extraction (own client, thinking suppressed)<br/>• embed → IMemoryStore.UpsertAsync → advance watermark → bump LastWrittenAt"]
+    Distiller -- "emit DistillationCompletedEvent" --> Consolidator
+    Consolidator["ConsolidatorBackgroundService (per user, on session end)<br/>• load ALL user records → spin up a SUB-AGENT (built on Agency.Harness!)<br/>• tools: Memory_Merge / Update / Delete / Done → mutate store"] --> Hygiene
+    Hygiene["HygieneSweeperBackgroundService (jittered ~24h)<br/>• bulk DELETE: TTL pass + low-importance-stale pass"]
 
----
+    Distiller --> Storage
+    Consolidator --> Storage
+    Hygiene --> Storage
+    Storage[("STORAGE — PostgreSQL + pgvector — single records table<br/>records · watermarks · dead_letter · user_state")]
 
-## 6.2 The Integration Seam: `AgentHooks`
+    Storage -. "the read path (②) searches here" .-> Retrieval
+    Retrieval(["retrieval — Diagram A, step ②"])
+    Distiller == "LastWrittenAt bump re-arms the gate at ②" ==> Retrieval
+```
 
-Agency uses hooks to connect memory behavior to the loop.
+Read the two diagrams together and the **feedback loop** becomes visible: the cold path *writes* to storage (Diagram B) and bumps `LastWrittenAt`; that bump is exactly what the hot-path *gate* checks at step ② (Diagram A) to decide whether to re-read. Storage is the shared medium; `LastWrittenAt` is the doorbell that tells the read path "something changed, look again." Nothing on the hot path ever calls the cold path directly, and nothing on the cold path ever touches the live `Context` — they communicate only through the store.
 
-A hook is just a callback that fires at a known point.
+| Pillar (from §2) | Where it lives in the diagrams |
+|---|---|
+| **Working memory** (RAM / context window) | the live `Context` + `ctx.Conversation` inside the loop box (Diagram A) |
+| **Semantic memory** (facts) | `ContentType.Fact` records → injected at ② into `ctx.Knowledge` → rendered as `## Facts` |
+| **Episodic memory** (lived experience) | `ContentType.Memory` records → injected at ② into `ctx.Memory` → rendered as `## Memories` |
+| **Procedural memory** (skills) | *out of scope for v1* — the only agent tools at ⑦ are `MarkGoalComplete` (a timing signal) and `SetFocus` (biases retrieval); neither stores a skill |
 
-Important memory-related hooks include:
+`★ How to read these diagrams:` the boxed `⟦ … ⟧` markers are the *only* places memory does anything; everything else is the pre-existing agent loop. Of those markers, just two sit on the hot path (② retrieval, ⑤ timer) — and ② is gated to near-zero cost on repeat iterations. That visual sparseness on the hot path *is* the design goal **P1 (hot path is sacred)**, drawn out.
 
-| Hook | When it runs | Why memory cares |
-| --- | --- | --- |
-| `OnSessionStarted` | At the start of a session | Registers session state and tools |
-| `OnPreIteration` | Before each loop iteration | Retrieves memory when needed |
-| `OnAssistantTurn` | After the model responds | Restarts the inactivity timer |
-| `OnSessionEnd` | When the session ends | Queues the final distillation job |
+### 6.2 The integration seam: `AgentHooks`
 
-Some other hooks exist too, but those are the key ones for memory.
+A **hook** here is just a nullable delegate field on a record. The full set lives in `AgentHooks` (`src/Harness/Agency.Harness/Hooks/AgentHooks.cs`):
 
-Two design details matter here:
+| Hook delegate | Fires at | Memory uses it for |
+|---|---|---|
+| `OnSessionStarted` | first iteration of a session (`Agent.cs:255`) | register the conversation log + the two agent tools |
+| `OnUserPromptSubmit` | every `ChatAsync` (`Agent.cs:151`) | (reserved; baseline leaves it null) |
+| `OnPreIteration` | top of every loop iteration (`Agent.cs:274`) | **retrieval** (read path) |
+| `OnPreToolUse` | before each tool call (`Agent.cs:391`) | (not used by memory) |
+| `OnPostToolUse` | after each tool call (`Agent.cs:432`) | (not used by memory) |
+| `OnPostToolBatch` | after `Task.WhenAll` of tools (`Agent.cs:460`) | (reserved) |
+| `OnAssistantTurn` | after the LLM responds (`Agent.cs:314`) | **restart the inactivity timer** (write-path trigger) |
+| `OnStop` | just before the turn ends (`Agent.cs:345/359/375`) | (not used by memory) |
+| `OnSessionEnd` | once, on `ChatSession` dispose (`Agent.cs:86`) | **enqueue the final distillation job** |
 
-### Hooks compose
+Two design properties make this seam robust:
 
-Memory hooks do not replace host hooks.
+1. **Composition over inheritance.** Two `AgentHooks` instances combine via `AgentHooksExtensions.Compose` (`Hooks/AgentHooksExtensions.cs:11`): for each delegate slot it builds `async (ctx, ct) => { await a(...); await b(...); }`. So memory's hooks and a host's own hooks both run, in a defined order. `OnPreToolUse` is special-cased — the *most restrictive* decision wins (Deny > Rewrite > Allow), because you never want a permissive hook to silently override a security veto.
 
-They compose together.
+2. **Baseline-first ordering, with an escape hatch.** Memory's hooks are the *baseline*; user hooks compose *after*. So by the time a host's `OnPreIteration` runs, retrieval has already enriched the `Context`. A host that genuinely needs the *un-enriched* view calls `ComposeBefore` (`AgentHooksExtensions.cs:33`) — an explicit opt-out, not a default foot-gun.
 
-That means a host application can still add its own behavior without losing the built-in memory behavior.
+> **Why drop `OnPostToolUseFailure`?** An earlier design had a failure-specific hook. But the loop already converts every non-cancellation tool exception into a `ToolResult(IsError: true)` (`Agent.cs:419-429`), so a "tool threw" hook would be dead code. It was removed; consumers check `result.IsError` in `OnPostToolUse` instead.
 
-### Baseline hooks run first
+### 6.3 The blackboard: the `Context` object
 
-Memory is treated as baseline behavior.
+Hooks need somewhere to *put* what they retrieve. That place is `Context` (`src/Harness/Agency.Harness/Contexts/Context.cs`) — a single record passed by reference through the whole loop. Most of it is `init`-only (immutable after construction), but a handful of properties are deliberately **settable** so hooks can mutate them mid-session:
 
-So by the time later hooks run, the context may already contain retrieved facts and memories.
+```csharp
+public KnowledgeContext Knowledge { get; set; }   // ← retrieval writes Facts here
+public MemoryContext    Memory    { get; set; }   // ← retrieval writes episodic Memories here
+public FocusContext     Focus     { get; set; }   // ← SetFocus tool writes here
+public SessionContext   Session   { get; set; }   // ← loop stamps a stable session id
+public DateTimeOffset?  MemoryLastRetrievedAt { get; set; }  // ← the retrieval gate's bookmark
+```
 
-That makes the system more predictable.
+This is the **blackboard pattern**: the retrieval engine and `SystemPromptBuilder` never call each other. Retrieval writes `ctx.Knowledge`; on the next iteration `SystemPromptBuilder.Build(ctx)` reads it. The `Context` is the only thing they share. `MemoryLastRetrievedAt` is the one piece of bookkeeping that makes the read path cheap — we'll see it power the *gate* in §6.5.
 
----
-
-## 6.3 The Blackboard: `Context`
-
-Hooks need somewhere to read from and write to.
-
-That shared space is the `Context` object.
-
-This is a classic blackboard pattern (many parts of the system writing useful state into one shared place).
-
-Some important fields are:
-
-- `Knowledge`
-  Holds factual records the agent should know.
-
-- `Memory`
-  Holds episodic records the agent should remember.
-
-- `Focus`
-  Holds the current task focus so retrieval can be biased toward what matters now.
-
-- `Session`
-  Holds stable session identity.
-
-- `MemoryLastRetrievedAt`
-  Records when memory was last fetched, so the system can decide whether it needs to look again.
-
-The key design point is this:
-
-Retrieval writes into `Context`, and later prompt-building reads from `Context`.
-
-Those systems do not need to call each other directly.
+`★ The two "knowledge" shapes — a subtlety worth flagging.` `KnowledgeContext` carries *two* collections: a legacy `Facts` (list of strings) **and** a newer `Records` (list of `MemoryRecord`). Long-term retrieval populates `Records`; `SystemPromptBuilder` renders them under a `## Facts` heading with a humanised "Updated 3 weeks ago" suffix (`SystemPromptBuilder.cs:51`). Episodic memories land in `Memory.Records` and render under `## Memories`. When both are empty the builder writes the literal line `"No relevant memories yet."` — so the model is never left guessing whether retrieval ran.
 
 ---
 
-## 6.4 Wiring It Together: `AddAgencyMemory`
+### 6.4 Wiring it together: `AddAgencyMemory` and the callback dance
 
-Now the practical question:
+If memory lives in separate projects, how does it get connected to the harness? And here's the puzzle the wiring has to solve. `Agency.Memory.Common` defines `MemoryHookFactory`, but **it cannot reference `Agency.Memory.Retrieval`** — Retrieval already depends on Common, and the reverse reference would be a dependency cycle (the compiler rejects it). So how does a factory in *Common* wire up a retrieval engine that lives *above* it?
 
-If memory lives in separate projects, how does it get connected to the harness?
+The answer (documented as constraint **IQ-1** in the code) is **dependency inversion via callbacks**. `MemoryHookFactory.Build` (`Agency.Memory.Common/Hooks/MemoryHookFactory.cs:56`) does not take a `RetrievalEngine`. It takes *functions*:
 
-Answer: through dependency injection and callbacks.
+```csharp
+public static AgentHooks Build(
+    Func<Context, CancellationToken, Task> retrievalCallback,   // "run retrieval"
+    Func<AssistantTurnHookContext, CancellationToken, Task> timerRestartCallback,
+    Func<SessionStartedHookContext, CancellationToken, Task>? sessionStartedCallback = null,
+    Func<SessionEndedHookContext,  CancellationToken, Task>? sessionEndCallback = null)
+    => new AgentHooks
+    {
+        OnSessionStarted = sessionStartedCallback,
+        OnPreIteration   = retrievalCallback,        // ← read path
+        OnAssistantTurn  = timerRestartCallback,     // ← write-path trigger
+        OnSessionEnd     = sessionEndCallback,        // ← write-path trigger
+    };
+```
 
-`MemoryHookFactory` does not directly construct the retrieval engine itself.
+The *real* callbacks are supplied one layer up, in `Agency.Memory.Distiller` — which is allowed to reference both Common and Retrieval. That's `AddAgencyMemory` (`Agency.Memory.Distiller/DependencyInjection/MemoryServiceCollectionExtensions.cs:47`). It registers the event bus, the per-session channel registry, the conversation registry, the inactivity timer, and the distiller background service — and then performs the critical step: it uses `IPostConfigureOptions<AgentOptions>` to **inject the baseline hooks after the host has finished configuring the agent**:
 
-Instead, it accepts callback functions such as:
+```csharp
+services.AddSingleton<IPostConfigureOptions<AgentOptions>>(sp =>
+  new PostConfigureOptions<AgentOptions>(name: null, action: agentOpts =>
+  {
+      var engine = new RetrievalEngine(store, embedder, memoryOptions);
 
-- "run retrieval now"
-- "restart the inactivity timer now"
-- "do session-start work"
-- "do session-end work"
+      // OnPreIteration: gate, then (maybe) search + inject into Context.
+      Func<Context, CancellationToken, Task> retrievalCallback = async (ctx, ct) =>
+      {
+          if (await RetrievalGate.ShouldRetrieveAsync(ctx, store, ct))
+              await engine.RetrieveAsync(ctx, ct);
+      };
 
-That may sound indirect, but the indirection solves an important problem.
+      // OnAssistantTurn: ONLY restart the timer. Nothing else. (Spec §14.9)
+      Func<AssistantTurnHookContext, CancellationToken, Task> timerCallback = (hookCtx, _) =>
+      {
+          timerService.Restart(userId, sessionId, turnIndex, hookCtx.AgentContext.Focus);
+          return Task.CompletedTask;
+      };
 
-It keeps lower-level shared projects from depending on higher-level feature projects, which avoids dependency cycles.
+      // OnSessionStarted: register the live conversation log + the two agent tools.
+      // OnSessionEnd:     enqueue a terminal SessionDisposed distillation job.
+      agentOpts.BaselineHooks = MemoryHookFactory.Build(
+          retrievalCallback, timerCallback, sessionStartedCallback, sessionEndCallback);
+  }));
+```
 
-(Plain-English version: the architecture stays layered and does not tie itself in knots.)
+Why `PostConfigure` and not plain `Configure`? Ordering. The host binds its own `AgentOptions` (including any `UserHooks`) via `Configure`. `PostConfigure` always runs *after* all `Configure` callbacks, so memory can set `BaselineHooks` without clobbering the host's `UserHooks`. The two are merged later, at agent-construction time.
 
-`AddAgencyMemory` supplies the real callbacks and registers the background services, timers, event bus, and related infrastructure.
+That merge happens in `AgentFactory.CreateAgent` (`src/Harness/Agency.Harness.Console/AgentFactory.cs:41`):
 
-Then `AgentFactory` combines:
+```csharp
+AgentHooks? hooks = (options.BaselineHooks, options.UserHooks) switch
+{
+    (AgentHooks baseline, AgentHooks user) => baseline.Compose(user),  // baseline FIRST
+    (AgentHooks baseline, null)            => baseline,
+    (null, AgentHooks user)                => user,
+    _                                      => null,                     // memory off → no hooks
+};
+```
 
-- baseline hooks from memory
-- user hooks from the host
+That four-arm switch is the *entire* integration contract between memory and the harness. Memory off? `BaselineHooks` is null, the last arm hits, the agent runs hook-free.
 
-If memory is disabled, those baseline hooks are simply absent.
-
-That is why memory can truly be optional.
-
----
-
-## 6.5 The Read Path: How Recall Works
-
-The read path is how the agent remembers something useful at the right time.
-
-It happens in two stages.
-
-### Stage 1: The gate
-
-Before doing an embedding search, Agency asks a cheap question:
-
-"Has memory changed since the last time I checked?"
-
-It answers that using `LastWrittenAt` and `MemoryLastRetrievedAt`.
-
-If nothing changed, retrieval is skipped.
-
-That is a small detail with a big payoff.
-
-It means later loop iterations do not keep paying for the same retrieval work.
-
-> Important invariant: every write path must update `LastWrittenAt`. If a write forgets to do that, retrieval can go stale without obvious errors.
-
-### Stage 2: Search, rerank, inject
-
-When the gate says retrieval should happen, the engine does roughly this:
-
-1. Build a query from the latest user message and current focus.
-2. Generate an embedding.
-3. Search the memory store.
-4. Rerank the results.
-5. Split the results by type.
-6. Put facts into `ctx.Knowledge` and experiences into `ctx.Memory`.
-7. Record the retrieval timestamp so the gate can work next time.
-
-The reranking step matters.
-
-Agency does not rank only by similarity.
-
-It also considers:
-
-- recency
-- importance
-- session match
-
-That way, a very important older fact can still outrank a newer but trivial one.
-
-Once these records are in `Context`, `SystemPromptBuilder` can render them into the prompt in a readable form.
-
-From the model's point of view, they simply appear as useful context.
+`★ Insight — the indirection is a feature, not friction.` Because `MemoryHookFactory` speaks in `Func<…>` rather than concrete services, the `Agency.Harness` project never has to reference any `Agency.Memory.*` project. The harness ships standalone; memory is a *consumer* of the harness's extension points, never the other way around. That is what keeps the harness reusable for agents that don't want long-term memory at all.
 
 ---
 
-## 6.6 The Write Path: How Learning Works
+### 6.5 The read path, end to end (recall)
 
-This is where new memory gets created.
+This is the **Bootup Ritual / regrounding** from §3, made concrete. It runs inside `OnPreIteration`, once per iteration, and it has two stages: a cheap *gate* and an expensive *search*.
 
-A key design choice in Agency is that the agent does not directly write memory records itself.
+**Stage 1 — the gate (`RetrievalGate.ShouldRetrieveAsync`).** A vector search is wasteful if nothing in the store changed since we last looked. The gate (`Agency.Memory.Retrieval/RetrievalGate.cs`) is O(1):
 
-Instead, it can signal that the timing is right, and the system handles the actual capture.
+```csharp
+DateTimeOffset? lastWritten = await store.LastWrittenAtAsync(userId, ct);  // in-memory cache hit
+if (lastWritten is null)                 return true;   // store empty → search (returns [] fast)
+if (ctx.MemoryLastRetrievedAt is null)   return true;   // first retrieval this session
+return lastWritten > ctx.MemoryLastRetrievedAt;          // changed since last look?
+```
 
-That keeps memory creation system-owned rather than model-owned.
+`LastWrittenAtAsync` reads a per-user timestamp held in a `ConcurrentDictionary` on the store — no SQL round-trip. Within a single multi-iteration user turn the async distiller almost never writes, so the gate skips the search on **every iteration after the first**. That is how the system honours **P1 (hot path is sacred)**: the only iteration that pays for retrieval is the one where it could actually surface something new.
 
-Three events can queue a distillation job:
+> **The load-bearing invariant.** *Every* write path must bump `LastWrittenAt`: `UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, and every Consolidator mutation. Forget to bump it and retrieval goes stale silently — the nastiest kind of bug. The store tests assert the bump on each path precisely because the failure is invisible at runtime.
 
-1. The agent calls `MarkGoalComplete`.
-2. The session goes idle long enough for the inactivity timer to fire.
-3. The session ends.
+**Stage 2 — search and rank (`RetrievalEngine.RetrieveAsync`).** When the gate passes (`Agency.Memory.Retrieval/RetrievalEngine.cs:47`):
 
-Those events create a `DistillationJob` and place it onto a per-session channel.
+```
+1. query   = lastUserMessage + Focus.Title + Focus.Domain + Focus.Tags      (BuildQueryText)
+2. qVec    = embedder.GenerateEmbeddingAsync(query)
+3. hits    = store.SearchAsync(userId, qVec, topK = RetrievalTopK × OverFetchFactor)
+4. scored  = hits.Select(h => RankingFormula.Score(...)).OrderByDescending(...).Take(RetrievalTopK)
+5. partition scored by ContentType:  Fact → ctx.Knowledge.Records ;  Memory → ctx.Memory.Records
+6. ctx.MemoryLastRetrievedAt = now                                          (arm the gate)
+```
 
-(A channel here is just a safe queue for background work.)
+Two implementation details deserve a callout:
 
-### What the timer does
+- **Over-fetch lives in the engine, not the store.** `SearchAsync` honours its `topK` *verbatim* — pure cosine similarity, no re-ranking (`Spec §6.1`). The engine asks for `TopK × OverFetchFactor` (default 3×) candidates, then re-scores the wider pool with the composite formula and trims to `TopK`. The reason: similarity alone is *not* the final ranking signal. A 3-week-old high-importance fact should be able to beat a fresh trivial one. If the store cut to TopK by similarity first, the engine would never see the contenders. Over-fetch and re-rank are a pair; neither makes sense alone.
 
-The timer's job is intentionally small.
+- **The partition switch fails fast on an unknown `ContentType`** (`RetrievalEngine.cs`). `ContentType` is matched with explicit `Fact`/`Memory` arms plus a throwing discard arm (`_ => throw new InvalidOperationException(...)`). So if someone adds a third `ContentType` later, a record carrying it raises a clear exception at *runtime* rather than being silently routed into the wrong bucket. (The throw is a deliberate fail-fast guard, not a compile-time check — because the discard arm makes the switch exhaustive, the C# CS8509 exhaustiveness warning does not fire.)
 
-After each assistant turn, it is restarted.
+**The ranking formula** (`Agency.Memory.Common/Ranking/RankingFormula.cs`, spec §8.3) is a weighted sum — this is where the four pillars literally turn into numbers:
 
-It does not do heavy memory work right there on the hot path.
+```
+score = wₛ·similarity + wᵣ·recency + wᵢ·importance + wₘ·sessionMatch
+      = 0.5·sim       + 0.3·e^(−ageDays/7) + 0.2·imp + 0.1·(sameSession ? 1 : 0)
+```
 
-It only sets up a future background trigger.
+`sessionMatch` is the concrete expression of **P3 (soft signals over hard isolation)**: a record from *this* session gets a +0.1 nudge, but a record from another session is still fully visible — it just ranks slightly lower. There is no SQL-level session filter; the only hard partition is `user_id`.
 
-### What the distiller does
+**Stage 3 — rendering.** Next iteration, `SystemPromptBuilder.Build` (`src/Harness/Agency.Harness/SystemPromptBuilder.cs`) walks `ctx.Knowledge.Records` and `ctx.Memory.Records` and emits Markdown:
 
-The background distiller consumes jobs from those channels.
+```
+## Facts
+- **Python preference** (Updated 3 weeks ago)
+  User prefers Python.
+```
 
-For each job, it roughly does this:
-
-1. Find the conversation turns that have not been distilled yet.
-2. If there are no new turns, do nothing.
-3. Ask its own LLM client to extract facts or episodes.
-4. Embed those extracted records.
-5. Save them to the store.
-6. Advance the watermark.
-
-The watermark is a saved "last processed turn" value.
-
-That gives the system idempotency (safe reprocessing without duplicate writes).
-
-In plain language, if the process crashes halfway through, it can restart and continue cleanly without double-saving the same memory.
-
-### Why the distiller uses its own client settings
-
-The distiller is not doing open-ended reasoning.
-
-It is doing structured extraction.
-
-So Agency suppresses extra thinking here to save cost and time.
-
-That is a practical production choice: use rich reasoning where it helps, and turn it down where it does not.
+The model never sees a similarity score, a UUID, or a raw timestamp — only a human sentence and a humanised recency string (`Humanize`, `SystemPromptBuilder.cs:123`). From the agent's point of view, "the user prefers Python" is simply a fact that was always true. The entire retrieval machinery is invisible to it.
 
 ---
 
-## 6.7 The Two Agent-Facing Memory Tools
+### 6.6 The write path, end to end (learning)
 
-Agency gives the agent exactly two tools related to memory.
+This is the **Distillation Pipeline** from §3. Its defining property comes straight from **P2 (capture is system-owned)**: the agent has *no* "save this" tool. It can only signal *timing*. Everything else — what's worth remembering, how to phrase it, how important it is — is decided after the fact by the Distiller, off the hot path.
 
-That is deliberate.
+**The three triggers.** Exactly three events enqueue a `DistillationJob`. Nothing else:
 
-The tools are:
+| # | Trigger | Source in code | `DistillationTrigger` |
+|---|---|---|---|
+| 1 | Agent calls `MarkGoalComplete` | `MarkGoalCompleteTool.InvokeAsync` (`Tools/MarkGoalCompleteTool.cs:72`) | `GoalCompletion` |
+| 2 | Session idle past timeout | `InactivityTimerService.OnTimerExpired` (`Services/InactivityTimerService.cs:109`) | `Inactivity` |
+| 3 | `ChatSession` disposed | `SessionEndHook.Create` (`Services/SessionEndHook.cs`) via `OnSessionEnd` | `SessionDisposed` |
 
-### `MarkGoalComplete(summary?)`
+All three write a `DistillationJob` into a **per-session bounded `Channel`** obtained from `ChannelSessionRegistry.GetOrCreateWriter(userId, sessionId)`. The job carries only *intent* — `UserId, SessionId, Trigger, UpToTurnIndex, Focus` — never the transcript itself (**P5**: the conversation manager is the single source of truth for turns; copying them into the channel would be redundant data motion that could drift out of sync).
 
-This tells the system, "A useful chunk of work may have just finished."
+**The timer's single job.** Look closely at the `OnAssistantTurn` callback in §6.4: it calls `timerService.Restart(...)` and returns. That's *all* it does — no enqueue, no read, no LLM call. This is **§14.9** enforced in code: per-turn work on the hot path is forbidden (**P1**). `Restart` disposes any existing per-session timer and starts a fresh one via `TimeProvider.CreateTimer` (`InactivityTimerService.cs:77`). Using `TimeProvider` rather than a raw `System.Threading.Timer` is what lets tests drive expiry deterministically with a `FakeTimeProvider` instead of really sleeping for five minutes.
 
-It queues a distillation job.
+**The background service.** `DistillerBackgroundService` (an `IHostedService`, so it participates in host startup/shutdown) is the single consumer. It drains every per-session channel in a sweep, then suspends on a semaphore that any enqueue releases — an *event-driven wake*, not a polling loop, so a freshly queued job is picked up on the next scheduler tick with no latency floor. For each job it:
 
-It does not end the loop by itself.
+```
+1. turns = conversationRegistry.Get(sessionId).MessagesBetween(watermark, job.UpToTurnIndex)
+2. if empty → no-op (watermark already passed this window — idempotent)
+3. payload = llm.SendAsync(EpisodeExtractionPrompt(turns, focus, knownDomains, recentFacts))
+4. records = ParseExtraction(payload)            // 0..N records — "nothing memorable" is valid
+5. foreach r: r.Embedding = embedder.Generate(r.Title + "\n\n" + r.Value); store.UpsertAsync(r)
+6. advance watermark to job.UpToTurnIndex
+7. emit DistillationCompletedEvent (or, on permanent failure, dead-letter + DistillationFailedEvent)
+```
 
-That means the agent can keep helping after signaling goal completion.
+Step 2 is the **idempotency guarantee**. The watermark (`LastDistilledTurnIndex`, persisted in the `watermarks` table) makes re-running a job a no-op. So a process crash mid-distill is harmless: the watermark wasn't advanced, the next run re-derives the same window and re-processes it. This is why the distiller is "incremental" while the consolidator is "full-scan" (spec §9) — different consistency needs, different strategies.
 
-### `SetFocus(title?, domain?, tags?)`
+**Where do the turns come from?** The distiller runs *outside* the agent's object graph, so it can't reach into the live `Context`. The bridge is `OnSessionStarted`: the baseline hook calls `ConversationRegistrationHook` (`Services/ConversationRegistrationHook.cs`), which registers the session's *live* `IConversationManager` into a shared `IConversationManagerRegistry` keyed by session id. The distiller later looks it up by id. Registration is idempotent because both the session id and the manager instance are stable for the session's lifetime.
 
-This updates the agent's current focus.
-
-That focus is then used to bias retrieval toward the current task.
-
-In plain language, it helps the agent search memory with a better sense of what it is working on right now.
-
-This tool also encourages vocabulary reuse by showing known domains from the user's existing records.
-
-That reduces fragmentation.
-
-(For example, it nudges the model toward reusing "Debugging" instead of inventing a near-duplicate label like "BugFixing".)
-
----
-
-## 6.8 Maintenance: Consolidator and Hygiene Sweeper
-
-Long-term memory needs maintenance.
-
-Agency has two background services for that.
-
-### The Consolidator
-
-The Consolidator is itself a sub-agent.
-
-That is one of the more interesting design choices in the whole system.
-
-It reads a user's records and decides whether some should be merged, updated, or deleted.
-
-Its tool set is intentionally narrow:
-
-- merge memory
-- update memory
-- delete memory
-- mark completion
-
-It does not get a "create memory" tool.
-
-That prevents it from inventing new facts while trying to tidy existing ones.
-
-It is basically a cleanup specialist, not a note-taker.
-
-### The Hygiene Sweeper
-
-The Hygiene Sweeper is simpler and more mechanical.
-
-It runs on a schedule and deletes:
-
-- expired records
-- low-importance records that have gone stale
-
-This part is intentionally LLM-free.
-
-The database handles the bulk delete work efficiently.
-
-That gives you a nice balance:
-
-- the Consolidator handles language-shaped cleanup decisions
-- the Hygiene Sweeper handles predictable routine cleanup
+`★ Insight — "suppress thinking" on the cold path.` The distiller is given its *own* `IChatClient` built with `SuppressThinking = true` (`Program.cs:102`), and its prompt opens with a `/no_think` directive. Episode extraction is deterministic JSON authoring — there's nothing to reason about — so chain-of-thought tokens would be pure latency tax on an already-large prompt. The user-facing agent keeps thinking on; the background scribe turns it off. Same model, two clients, two policies.
 
 ---
 
-## 6.9 The Durable Substrate: PostgreSQL and pgvector
+### 6.7 The two agent-facing tools
 
-Under all of this is a storage layer backed by PostgreSQL and pgvector.
+Per **P2**, the agent gets *exactly two* memory tools — and neither writes a memory directly. They are registered per-session by `MemorySessionTools.RegisterInto` (`Services/MemorySessionTools.cs`), called from the same `OnSessionStarted` hook that registers the conversation log:
 
-Agency stores different memory types in one `records` table, distinguished by `content_type`.
+- **`MarkGoalComplete(summary?)`** — enqueues a `GoalCompletion` distillation job and returns immediately. Crucially, it **does not stop the loop** (`MarkGoalCompleteTool.cs`): the agent can keep helping; the watermark prevents the eventual second distillation from reprocessing. It's a *timing signal*, not a commit.
 
-That single-table design keeps the storage model simpler.
+- **`SetFocus(title?, domain?, tags?)`** — sets `ctx.Focus`, which the retrieval engine appends to its query (§6.5, step 1) to bias recall toward the current task. Its tool *description is generated dynamically* (`SetFocusTool.GetDefinitionAsync:68`): it queries the store for the user's existing `Domain` values and lists them, so the model reuses established vocabulary ("Debugging") instead of coining a synonym ("BugFixing") that would fragment retrieval. Setting the same focus twice is a no-op that returns the prior values.
 
-Other important pieces include:
-
-- a unique upsert key so records can be updated safely
-- a vector index for similarity search
-- a `watermarks` table for distillation progress
-- a `dead_letter` table for failed background jobs
-- a `user_state` table for persisted gate state like `LastWrittenAt`
-
-One subtle but important detail is how global-scope records handle `NULL` session values in uniqueness checks.
-
-That is the kind of database detail that sounds small but prevents duplicate records from quietly piling up.
+Both tools are baked per-session with `userId`/`sessionId` captured at registration, so there is never ambiguity about *which* session is being marked complete or focused.
 
 ---
 
-## 6.10 Turning It On
+### 6.8 Maintenance: Consolidator and Hygiene
 
-The entire memory stack is opt-in.
+Two background services keep the store from rotting — they are the **Memory Hygiene** of §4.
 
-If `Memory:Enabled` is false, the harness runs without these services.
+**The Consolidator** (`Agency.Memory.Consolidator`) is the most conceptually interesting piece, because *it is itself an agent built on `Agency.Harness`*. In its default `OnSessionEnd` mode it subscribes to the distiller's `DistillationCompletedEvent` and runs automatically after a session's distillation completes; an alternative `Manual` mode is also available, where nothing auto-fires and the host triggers a pass by calling `IConsolidationTrigger.RequestAsync`. When it runs, it loads **all** of that user's records, spins up a sub-agent (via `ConsolidatorSubAgentFactory`) whose tool registry contains only four tools — `Memory_Merge`, `Memory_Update`, `Memory_Delete`, `Memory_Done` — and lets it run until it calls `Memory_Done` (or hits an iteration / cost ceiling). The sub-agent reasons in natural language about duplication and contradiction ("these two records both say the user prefers Postgres; merge them") — the **P4** bet that some decisions are intrinsically language-shaped and belong to an LLM, just never on the hot path. Each successful mutation emits a user-facing `MemoryMutatedEvent`, an intentional transparency feature: the user can be told when the agent has silently reorganised its own memory.
 
-If it is true, the host wires up:
+> The fact that the consolidator reuses the *same* harness primitives (Context, tool registry, stop conditions, hooks) as a user-facing agent — just with a different tool set and prompt — is a nice demonstration that `Agency.Harness` is a general agent runtime, not a chat-specific one.
 
-- embeddings
-- memory storage
-- the distiller client
-- memory hooks and services
-- the consolidator
-- hygiene services
+**The Hygiene Sweeper** (`Agency.Memory.Hygiene`) is the dumb, reliable counterpart. On a jittered ~24h schedule it runs two bulk SQL deletes: a **TTL pass** (per content type) and an **importance-pruning pass** (low-importance records not accessed in a long time). It is LLM-free and set-based — Postgres does the heavy lifting in one `DELETE` per pass. The staleness clock is the service's injected `TimeProvider`, passed explicitly into `IMemoryStore.DeleteWhere…Async`, so a `FakeTimeProvider` can fast-forward expiry in tests. Note that retrieval *resets* a record's `LastAccessedAt` — so actively used memories keep dodging the sweeper, and only the genuinely-forgotten get collected.
 
-That is a strong design choice.
+That gives a nice balance: the Consolidator handles language-shaped cleanup decisions; the Hygiene Sweeper handles predictable, routine cleanup.
 
-It means memory is not tangled into the core runtime as a permanent assumption.
+### 6.9 The durable substrate
 
-It is a feature you can enable intentionally.
+Underneath all of it is `Agency.Memory.Sql.Postgres` — PostgreSQL 18 + pgvector, the **Semantic + Episodic** stores from §2 unified into one table. The whole system uses a **single `records` table** with a `content_type` discriminator (**P5**: one `Record` type, one collection, one `IMemoryStore`). Highlights:
+
+- **One upsert key**, `UNIQUE (user_id, COALESCE(session_id, ''), domain, key)`. The `COALESCE` is a real gotcha worth understanding: in Postgres `NULL != NULL`, so a plain unique constraint would treat every global-scope (`session_id IS NULL`) record as distinct and allow unbounded duplicates. Mapping `NULL → ''` in a *functional* unique index collapses them to one row per key.
+- **HNSW index** (`vector_cosine_ops`) for approximate-nearest-neighbour search — cosine, because all our distances are cosine-derived.
+- Side tables: `watermarks` (distiller idempotency), `dead_letter` (failed jobs, for operators — never read by the live system), and `user_state` (the persisted backup of the `LastWrittenAt` gate cache, hydrated lazily on restart).
+
+The `IMemoryStore` interface (`Agency.Memory.Common/Storage/IMemoryStore.cs`) is backend-neutral, so a future SQLite or in-memory implementation can drop in without touching retrieval, distillation, or consolidation.
 
 ---
 
-## 6.11 One Example From Start to Finish
+### 6.10 Turning it on
 
-Here is the simplest way to picture the whole system.
+All of this is **opt-in**. In the console host (`Agency.Harness.Console/Program.cs:56`) the entire stack is gated behind one flag:
 
-### Session 1
+```csharp
+bool memoryEnabled = builder.Configuration.GetValue<bool>("Memory:Enabled");
+if (memoryEnabled)
+{
+    builder.Services.AddAgencyEmbeddingsOpenAI(...);    // embeddings
+    builder.Services.AddAgencyMemoryPostgres(connectionString);  // store + schema init
+    builder.Services.AddAgencyDistillerLlm(distillerClient, model);  // scribe LLM (no-think)
+    builder.Services.AddAgencyMemory();                 // hooks + distiller + timer + channels
+    builder.Services.AddAgencyConsolidator(o => o.Model = model);
+    builder.Services.AddAgencyHygiene();
+}
+```
 
-The user says:
+When the flag is `false`, **none** of these services are registered, `BaselineHooks` stays null, the `AgentFactory` switch returns null hooks, and the console behaves byte-for-byte as if memory never existed. When it's `true`, schema init runs at startup and *fails fast* with a human-readable message if Postgres or the embedding endpoint is unreachable — better a clear crash at boot than silent amnesia at runtime.
 
-"I prefer Python."
+---
 
-At that moment, the agent may respond normally, but the real memory work happens later.
+### 6.11 The whole story in one trace
 
-After the session goes idle, the distiller turns that conversation into a stored fact such as:
+To tie Part II back to the four pillars, here is one fact's life cycle through the actual code:
 
-- Domain: Preferences
-- Key: Language
-- Value: User prefers Python
+```mermaid
+flowchart TD
+    subgraph SN["SESSION N"]
+        direction TB
+        A1["User: 'I prefer Python.'"]
+        A2["ChatAsync → OnUserPromptSubmit (no-op) → loop"]
+        A3["OnPreIteration → gate: store empty → search → [ ]<br/>ctx tagged 'No relevant memories yet.'"]
+        A4["LLM replies → OnAssistantTurn →<br/>InactivityTimerService.Restart(...) — timer only"]
+        A5["…5 min idle… → timer fires →<br/>DistillationJob{Trigger=Inactivity} into per-session Channel"]
+        A6["DistillerBackgroundService: extract →<br/>Fact{Domain=Preferences, Key=Language, 'Python', imp=0.7}<br/>→ embed → store.Upsert → watermark=1 → LastWrittenAt bumped"]
+        A7["ChatSession.DisposeAsync → OnSessionEnd →<br/>DistillationJob{SessionDisposed} → no-op (watermark)"]
+        A8["Consolidator: loads 1 record → sub-agent →<br/>nothing to merge → Memory_Done"]
+        A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8
+    end
 
-That record gets embedded and stored.
+    subgraph SN1["SESSION N+1 (three weeks later)"]
+        direction TB
+        B1["User: 'Write me a script to deduplicate this list.'"]
+        B2["OnPreIteration → gate: LastWrittenAt (3wk ago)<br/>and first retrieval → SEARCH"]
+        B3["qVec ≈ 'deduplicate / script / list' →<br/>store returns the Python Fact (sim≈0.62)"]
+        B4["RankingFormula → score 0.46 → partition →<br/>ctx.Knowledge.Records = [Python preference]"]
+        B5["SystemPromptBuilder renders:<br/>## Facts — Python preference (Updated 3 weeks ago)"]
+        B6["LLM writes a Python script, unprompted."]
+        B7["iteration 2 → OnPreIteration →<br/>gate: store unchanged → SKIP search (P1 in action)"]
+        B1 --> B2 --> B3 --> B4 --> B5 --> B6 --> B7
+    end
 
-### Session 2, weeks later
+    A6 -. "LastWrittenAt persisted in store — the doorbell" .-> B2
+    A8 --> B1
+```
 
-Now the user says:
-
-"Write me a script to deduplicate this list."
-
-The retrieval path checks memory, finds the earlier Python preference, and places it into the prompt as a fact.
-
-So the model may produce Python without the user having to restate the preference.
-
-That is the whole point of the system.
-
-The agent looks smarter not because the model changed, but because the harness helped it remember.
+The user never re-stated the preference. The agent never called a "remember" tool. The recall happened because a background scribe distilled a fact in March, and a gated search re-grounded the agent in June — exactly the stateless-to-stateful shift this document opened with.
 
 ---
 
@@ -737,15 +618,15 @@ The agent looks smarter not because the model changed, but because the harness h
 
 If you want the shortest possible summary, it is this:
 
-Agency gives AI agents memory without polluting the main agent loop.
+> **Agency gives AI agents memory without polluting the main agent loop.**
 
 It does that by:
 
-- recalling useful memory through hooks before a turn
-- writing new memory in the background after a turn
-- using ranking, cleanup, and scoping rules to keep memory useful
-- keeping the whole feature optional and modular
+- recalling useful memory through hooks before a turn (the read path, gated so it only pays when something changed),
+- writing new memory in the background after a turn (the write path, system-owned and crash-safe),
+- ranking on more than similarity, and cleaning up with a language-aware Consolidator and a mechanical Hygiene Sweeper,
+- and keeping the whole feature optional and modular — one flag turns it off and the harness behaves as if memory never existed.
 
 Or, in one sentence:
 
-Agency turns an AI agent from "smart but forgetful" into "smart, useful, and able to learn from experience."
+**Agency turns an AI agent from "smart but forgetful" into "smart, useful, and able to learn from experience."**

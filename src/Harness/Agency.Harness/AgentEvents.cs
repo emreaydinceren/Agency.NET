@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Agency.Harness.Loop;
 using Agency.Harness.Permissions;
 
 namespace Agency.Harness;
@@ -86,3 +87,24 @@ public sealed record LlmTokenUsage(long InputTokens, long OutputTokens)
     /// <summary>Gets the total token count.</summary>
     public long TotalTokens => this.InputTokens + this.OutputTokens;
 }
+
+// ── Loop Kit event subtypes (§7.2) ────────────────────────────────────────────
+
+/// <summary>Emitted the first time a <see cref="GoalSpec"/> is observed by the <c>LoopRunner</c>.</summary>
+public sealed record GoalSetEvent(GoalSpec Goal) : AgentEvent;
+
+/// <summary>Emitted at the start of each loop turn, before <c>ChatSession.SendAsync</c> is called.</summary>
+public sealed record TurnStartedEvent(int TurnIndex, string Directive) : AgentEvent;
+
+/// <summary>Emitted after the Goalkeeper evaluates a completed turn.</summary>
+public sealed record VerdictEvent(int TurnIndex, Verdict Verdict) : AgentEvent;
+
+/// <summary>
+/// Terminal event for a loop run — always the last event emitted by <c>LoopRunner.RunAsync</c>.
+/// Analogous to <see cref="AgentResultEvent"/> for the outer loop.
+/// </summary>
+public sealed record LoopResultEvent(
+    LoopOutcome Outcome,
+    string? FinalText,
+    LlmTokenUsage TotalUsage,
+    decimal TotalCostUsd) : AgentEvent;

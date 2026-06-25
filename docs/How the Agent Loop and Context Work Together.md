@@ -2,8 +2,7 @@
 
 > **Where this fits.** This is the grounding document for `Context` — the single object the
 > Agency agent loop carries through every turn. The other deep-dives lean on it constantly:
-> [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md) (and its
-> [Implementation Deep Dive](How%20Agency%20Gives%20AI%20Agents%20Memory%20-%20Deep%20Dive.md))
+> [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md)
 > talks about "retrieval writes `ctx.Knowledge`"; [How Agency's Skills Model Works](How%20Agency's%20Skills%20Model%20Works.md)
 > talks about the active-skill window; [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)
 > talks about the parked tool batch. All three of those live *inside* `Context`. This document

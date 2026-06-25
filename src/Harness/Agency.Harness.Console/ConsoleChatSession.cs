@@ -1,5 +1,6 @@
 using Agency.Harness.Console.Commands;
 using Agency.Harness.Contexts;
+using Agency.Harness.Loop;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -448,6 +449,13 @@ internal sealed class ConsoleChatSession
                 }
                 break;
 
+                case GoalSetEvent:
+                case TurnStartedEvent:
+                case VerdictEvent:
+                case LoopResultEvent:
+                RenderLoopEvent(this.output, evt);
+                break;
+
                 // SessionStartedEvent: intentionally suppressed.
             }
         }
@@ -607,6 +615,55 @@ internal sealed class ConsoleChatSession
     /// throws <see cref="InvalidOperationException"/> ("Could not find color or style ''").
     /// </summary>
     internal static string FormatGrayPreview(string content) => $"[gray]{Markup.Escape(content)}[/]";
+
+    /// <summary>
+    /// Renders a Loop Kit <see cref="AgentEvent"/> subtype to <paramref name="output"/>.
+    /// Handles <see cref="GoalSetEvent"/>, <see cref="TurnStartedEvent"/>,
+    /// <see cref="VerdictEvent"/>, and <see cref="LoopResultEvent"/>.
+    /// All other event types are silently ignored.
+    /// </summary>
+    internal static void RenderLoopEvent(IChatOutput output, AgentEvent evt)
+    {
+        switch (evt)
+        {
+            case GoalSetEvent g:
+            output.WriteLine("cyan", "┌─ Goal " + new string('─', 36) + "┐");
+            output.WriteLine("cyan", $"│  {g.Goal.Condition}");
+            string caps = $"│  MaxTurns={g.Goal.MaxTurns}" +
+                (g.Goal.Budget is { } b ? $"  Budget=${b:F4}" : string.Empty) +
+                (g.Goal.TokenBudget is { } tb ? $"  Tokens={tb:N0}" : string.Empty);
+            output.WriteLine("cyan", caps);
+            output.WriteLine("cyan", "└" + new string('─', 43) + "┘");
+            break;
+
+            case TurnStartedEvent t:
+            output.WriteLine("yellow", $"  ↺ Turn {t.TurnIndex + 1}  {t.Directive}");
+            break;
+
+            case VerdictEvent v:
+            if (v.Verdict is Verdict.Done doneVerdict)
+            {
+                output.WriteLine("green", $"  ✓ Done  (turn {v.TurnIndex}): {doneVerdict.Reason}");
+            }
+            else if (v.Verdict is Verdict.Continue continueVerdict)
+            {
+                output.WriteLine("yellow", $"  ↻ Continue  (turn {v.TurnIndex}): {continueVerdict.Reason}");
+            }
+            break;
+
+            case LoopResultEvent lr:
+            string costPart = lr.TotalCostUsd > 0
+                ? $"  ${lr.TotalCostUsd:F4}"
+                : string.Empty;
+            output.WriteLine("gray",
+                $"  ↳ Loop {lr.Outcome}  ·  {lr.TotalUsage.InputTokens:N0} in, {lr.TotalUsage.OutputTokens:N0} out{costPart}");
+            if (lr.FinalText is { } finalText)
+            {
+                output.WriteLine("gray", $"    {finalText}");
+            }
+            break;
+        }
+    }
 
     private void WriteHeader()
     {

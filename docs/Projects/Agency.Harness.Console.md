@@ -4,7 +4,7 @@
 
 ## What It Is
 
-`Agency.Harness.Console` is the terminal entry point that wires [[Agency.Harness]]'s `Agent` and `ChatSession` into an interactive Spectre.Console REPL, handling multi-turn input, slash-command dispatch, inline model switching, streaming Markdown rendering (including GFM pipe tables), permission prompts, Ctrl+C interruption, optional memory, MCP-server tool discovery, skill `/commands`, and structured OpenTelemetry file export through the .NET Generic Host.
+`Agency.Harness.Console` is the terminal entry point that wires [[Agency.Harness]]'s `Agent` and `ChatSession` into an interactive Spectre.Console REPL, handling multi-turn input, slash-command dispatch, inline model switching, streaming Markdown rendering (including GFM pipe tables), permission prompts, Loop Kit progress rendering, Ctrl+C interruption, optional memory, MCP-server tool discovery, skill `/commands`, and structured OpenTelemetry file export through the .NET Generic Host.
 
 **Namespace:** `Agency.Harness.Console`
 
@@ -310,6 +310,17 @@ Each iteration:
 
 `ProcessStreamAsync` renders each `AgentEvent`: `AssistantTurnEvent` prints message text as Markdown and tool-call panels; `ToolInvokedEvent` prints a rounded bordered panel with a truncated result; `IterationCompletedEvent` records the LLM duration for the `tok/s` readout; `AgentResultEvent` prints the per-turn `↳ +N in, +N out [Status]` delta. When a turn ends with `AwaitingPermission` the stream parks: `CollectPermissionResponses` renders a permission panel + picker (Allow once/always, Deny once/always — "Allow always" is hidden for hook-sourced asks), then `ResumeWithPermissionsAsync` continues the turn. Cancelling the picker (Escape) abandons the parked turn.
 
+### Loop Kit event rendering
+
+`ProcessStreamAsync` also recognizes the four Loop Kit `AgentEvent` subtypes ([[Agency.Harness]] `GoalSetEvent`, `TurnStartedEvent`, `VerdictEvent`, `LoopResultEvent`) and routes them to `ConsoleChatSession.RenderLoopEvent` — a static, `IChatOutput`-only renderer (so it is unit-testable via `TextWriterChatOutput`):
+
+- `GoalSetEvent` → a cyan bordered banner showing the goal condition and the caps (`MaxTurns`, optional `Budget`/`Tokens`).
+- `TurnStartedEvent` → a yellow `↺ Turn N  <directive>` line.
+- `VerdictEvent` → green `✓ Done` or yellow `↻ Continue`, with the Goalkeeper's reason.
+- `LoopResultEvent` → a gray `↳ Loop <Outcome> · N in, N out [$cost]` summary plus any final text.
+
+> **Scope note (V1):** the host *renders* these events but does not yet *drive* a `LoopRunner` — `Program.cs` does not call `AddAgencyLoop`, register the `enable_goalkeeper`/`disable_goalkeeper` tools, or wrap `ChatSession` in a loop driver. The rendering path is in place ahead of that host wiring; today these events only appear if a caller drives the loop. See the Loop Kit section in [[Agency.Harness]].
+
 ### Ctrl+C handling
 
 A per-turn `CancellationTokenSource` is created each loop iteration. `Console.CancelKeyPress` cancels the current turn (sets `e.Cancel = true` to suppress process exit); a second Ctrl+C with no active turn exits the session. An interrupted turn prints `[interrupted]` and is not counted.
@@ -388,7 +399,7 @@ All files live under `FileExport.OutputDirectory` (default `./logs`, created at 
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Harness]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes, `AgentOptions`, `AgentHooks`, `Models`/`IAgentFactory` (registered via `AddAgencyAgent`), `ToolContext`/`ToolRegistry`/`ProgressiveDiscoveryToolRegistry`, `McpClientPool`/`McpClientOptions`, permission types, and built-in tools (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`, `SkillTool`) |
+| [[Agency.Harness]] | Consumes `Agent`, `ChatSession`, `AgentEvent` subtypes (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent` and the `GoalSpec`/`Verdict`/`LoopOutcome` model they carry), `AgentOptions`, `AgentHooks`, `Models`/`IAgentFactory` (registered via `AddAgencyAgent`), `ToolContext`/`ToolRegistry`/`ProgressiveDiscoveryToolRegistry`, `McpClientPool`/`McpClientOptions`, permission types, and built-in tools (`ExecutePowershellTool`, `ReadFileTool`, `WriteFileTool`, `AgentTool`, `SkillTool`) |
 | [[Agency.Harness.Skills]] | Loads `ISkillCatalog`/`ReloadableSkillCatalog`, `SkillContext`, `SkillWatcher`, `SkillRenderer`; registers each user-invocable skill as a `/command` |
 | [[Agency.Llm.Common]] | `Models` enumerates configured LLM clients; the library's `AgentFactory` calls `Models.CreateChatClient` to resolve the `IChatClient`; binds `LlmClientOptions` |
 | [[Agency.Llm.OpenAI]] | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"`; also used directly to build consolidator/distiller chat clients when memory is enabled |

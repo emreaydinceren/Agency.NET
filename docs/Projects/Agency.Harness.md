@@ -1,10 +1,10 @@
 # Agency.Harness
 
-#agent #loop #tools #events #orchestration #mcp #skills #permissions #hooks #observability
+#agent #loop #tools #events #orchestration #mcp #skills #permissions #hooks #observability #goalkeeper
 
 ## What It Is
 
-`Agency.Harness` is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, skills, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling. On top of the bare loop it layers four cross-cutting subsystems: an MCP tool pool (`McpClientPool`) that exposes Model Context Protocol server tools as `ITool` instances, a **progressive tool-discovery** decorator that withholds verbose schemas until requested, a **permission model** that parks tool calls for user approval (park/resume), a **skills** subsystem implementing SKILL.md progressive disclosure, and a **config-driven hooks** pipeline that runs operator-defined command/HTTP handlers at lifecycle points.
+`Agency.Harness` is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, skills, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling. On top of the bare loop it layers several cross-cutting subsystems: an MCP tool pool (`McpClientPool`) that exposes Model Context Protocol server tools as `ITool` instances, a **progressive tool-discovery** decorator that withholds verbose schemas until requested, a **permission model** that parks tool calls for user approval (park/resume), a **skills** subsystem implementing SKILL.md progressive disclosure, a **config-driven hooks** pipeline that runs operator-defined command/HTTP handlers at lifecycle points, and a **Loop Kit** (`Agency.Harness.Loop`) that drives the session across turns toward a verifiable goal with an unskippable, independent done-check (the *Goalkeeper*) and a hard turn/budget cap.
 
 **Namespace:** `Agency.Harness`
 
@@ -69,7 +69,7 @@ public sealed class Agent
 
 #### `ChatSession`
 
-Higher-level stateful wrapper — the preferred surface for REPL hosts and HTTP endpoints. Implements `IAsyncDisposable`; dispose fires the `OnSessionEnd` hook once. It also drives the permission park/resume protocol.
+Higher-level stateful wrapper — the preferred surface for REPL hosts and HTTP endpoints. Implements `IAsyncDisposable`; dispose fires the `OnSessionEnd` hook once. It also drives the permission park/resume protocol. The Loop Kit `LoopRunner` reads three internal members of the session — `WorkerModel`, `WorkerClientType` (for the `role`-tagged token metrics and the self-preference warning), and `PreviewContext()` (the transcript handed to the Goalkeeper).
 
 ```csharp
 // File: src/Harness/Agency.Harness/ChatSession.cs
@@ -124,6 +124,7 @@ public sealed class ChatSession : IAsyncDisposable
 // File: src/Harness/Agency.Harness/AgentEvents.cs
 using System.Text.Json;
 using Agency.Harness.Permissions;
+using Agency.Harness.Loop;
 
 namespace Agency.Harness;
 
@@ -166,6 +167,23 @@ public sealed record LlmTokenUsage(long InputTokens, long OutputTokens)
 {
     public long TotalTokens => InputTokens + OutputTokens;
 }
+
+// ── Loop Kit event subtypes (emitted only by LoopRunner; see Loop Kit) ──
+/// <summary>Emitted once, the first time the LoopRunner observes an armed goal.</summary>
+public sealed record GoalSetEvent(GoalSpec Goal) : AgentEvent;
+
+/// <summary>Emitted at the start of each loop turn, before SendAsync is called.</summary>
+public sealed record TurnStartedEvent(int TurnIndex, string Directive) : AgentEvent;
+
+/// <summary>Emitted after the Goalkeeper evaluates a completed turn.</summary>
+public sealed record VerdictEvent(int TurnIndex, Verdict Verdict) : AgentEvent;
+
+/// <summary>Terminal event for a loop run — always the last event from LoopRunner.RunAsync.</summary>
+public sealed record LoopResultEvent(
+    LoopOutcome   Outcome,
+    string?       FinalText,
+    LlmTokenUsage TotalUsage,
+    decimal       TotalCostUsd) : AgentEvent;
 ```
 
 #### Stop Conditions
@@ -452,6 +470,75 @@ public enum PermissionResponseKind { AllowOnce, AllowAlways, DenyOnce, DenyAlway
 ```
 
 Internal supporting types: `PermissionEvaluator` (the `IPermissionEvaluator` impl), `PermissionRule` (parses `Tool` / `Tool(glob*)` rule strings into anchored case-insensitive regexes, `\`→`/` normalized, 250 ms match timeout), `PermissionsOptions` (bound from the `Permissions` config section: `Enabled`, `Allow[]`, `Deny[]`, `OnUnresolved` ∈ {`Ask`, `Deny`}, `ToolInputKeys`, `LocalRulesPath`), `PermissionsOptionsValidator` (fail-fast rule parse at startup), and `PermissionsFileStore` (tolerant load + retry/backoff append of `permissions.local.json`).
+
+### Loop Kit
+
+The `Agency.Harness.Loop` subsystem drives a `ChatSession` across multiple turns toward a verifiable end state ("goal"), running an **independent, deterministic done-check** (the *Goalkeeper*) after every turn and enforcing a hard turn/budget cap the model cannot talk past. The driver (`LoopRunner`) sits *above* `ChatSession` — the agent loop is untouched. When no goal is armed, the runner executes exactly one pass-through turn (behaviour identical to a plain `ChatSession`); the goal merely toggles whether it loops. Public types are the goal/verdict/outcome model below plus the four loop `AgentEvent` subtypes (see Agent Events); the runtime machinery (`LoopRunner`, `Goalkeeper`, `GoalState`, the two tools) is `internal`.
+
+```csharp
+// File: src/Harness/Agency.Harness/Loop/GoalSpec.cs
+namespace Agency.Harness.Loop;
+
+/// <summary>What "done" means for a loop run, plus the hard structural ceilings.</summary>
+public sealed record GoalSpec
+{
+    public required string Condition { get; init; }   // verifiable end state, plain language (≤ 4000 chars)
+    public int     MaxTurns         { get; init; } = 12;  // hard ceiling — enforced in code, not prompt-skippable
+    public decimal? Budget          { get; init; }        // USD; null = off
+    public long?    TokenBudget     { get; init; }        // total tokens; null = off
+    public int?     WallClockSeconds { get; init; }       // per-loop timeout; null = off
+}
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Loop/Verdict.cs
+namespace Agency.Harness.Loop;
+
+/// <summary>The Goalkeeper's decision after evaluating a turn. [JsonDerivedType] "continue"/"done".</summary>
+public abstract record Verdict
+{
+    public sealed record Continue(string Reason) : Verdict;  // not done — Reason becomes the next directive
+    public sealed record Done(string Reason)     : Verdict;  // condition satisfied — stop (Achieved)
+}
+
+// File: src/Harness/Agency.Harness/Loop/LoopOutcome.cs
+public enum LoopOutcome { Achieved, CapReached, BudgetExceeded, Error, Cancelled }
+```
+
+```csharp
+// File: src/Harness/Agency.Harness/Loop/IGoalkeeper.cs
+namespace Agency.Harness.Loop;
+
+/// <summary>Deterministic, transcript-only done-check. Never calls tools.</summary>
+internal interface IGoalkeeper
+{
+    Task<Verdict> EvaluateAsync(string condition, IReadOnlyList<ChatMessage> transcript, CancellationToken ct);
+}
+```
+
+| Internal type | Role |
+|---|---|
+| `LoopRunner` | The driver. `RunAsync(objective, ct)` issues turns against the `ChatSession`, reads `GoalState` *after* each turn, calls the Goalkeeper when a goal is armed, feeds `Continue.Reason` back as the next directive, enforces `MaxTurns`/`Budget`/`TokenBudget`/`WallClock`, emits the loop events, aggregates `role`-tagged token metrics, and auto-clears the goal on every terminal outcome (a park preserves it). `ClearGoal()` is the host-side `/goal clear`. Single in-flight run (mirrors `ChatSession`). |
+| `Goalkeeper : IGoalkeeper` | Calls a **cheap, separate** `IChatClient` with an explicit `ChatOptions.ModelId` and **no tools**; parses a two-line `VERDICT:`/`REASON:` reply (case-insensitive). Unparseable → `Continue("verdict unparseable")` (fail toward continue). Emits `role=goalkeeper` token counters. |
+| `GoalState` | Session-scoped holder for the active `GoalSpec`. `Arm`/`Clear`/`IsArmed`/`Active`. Shared by the runner and the two tools; `null` Active = no goal = plain single-turn behaviour. |
+| `GoalkeeperPromptBuilder` | Pure static prompt construction — a strict default rubric (+ optional `GoalkeeperRubric`) and a flattened `[ROLE] text` transcript block. |
+| `EnableGoalkeeperTool` (`enable_goalkeeper`) / `DisableGoalkeeperTool` (`disable_goalkeeper`) | Model-facing arm/disarm tools that mutate the shared `GoalState`. `enable_goalkeeper` requires `condition` (blank → `IsError`); idempotent replace (newest wins). |
+| `LoopInstrumentation` | Static `ActivitySource`/`Meter` (`Agency.Harness.Loop`) + the counters/histograms (see Observability). |
+| `LoopJsonContext` | Source-gen `JsonSerializerContext` for the loop records (AOT/trim-safe round-trip; the seam the planned state-persistence work will use). |
+
+**`LoopOptions`** (`Loop/LoopOptions.cs`, bound from the `Loop` config section via `AddAgencyLoop`; an armed `GoalSpec` overrides the per-cap defaults for its run):
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `GoalkeeperClientName` | `string?` | `null` | Client for the Goalkeeper; should differ from the worker (warned if identical). |
+| `GoalkeeperModel` | `string?` | `null` | Model id passed via `ChatOptions.ModelId` (`Models.CreateChatClient` returns the client, not the id). |
+| `MaxTurns` | `int` | `12` | Default hard ceiling; the armed goal always wins. |
+| `Budget` | `decimal?` | `null` | Default USD spend ceiling. |
+| `TokenBudget` | `long?` | `null` | Default total-token ceiling. |
+| `WallClockSeconds` | `int?` | `null` | Default per-loop timeout (linked-CTS, like `AgentOptions.TurnTimeoutSeconds`). |
+| `GoalkeeperRubric` | `string?` | `null` | Extra strictness text appended to the Goalkeeper system prompt. |
+
+> **V1 wiring note:** `AddAgencyLoop` binds `LoopOptions` only — it does **not** register `LoopRunner`/`Goalkeeper`/`GoalState`/the tools as DI services. A host that wants goal-driven loops constructs those itself and registers `enable_goalkeeper`/`disable_goalkeeper` on its `ToolContext`. The full Loop Kit lives in the library; the Console host currently renders the loop events but does not yet drive a `LoopRunner` (see [[Agency.Harness.Console]]).
 
 ### Skills
 
@@ -744,19 +831,23 @@ Three public DI extension methods register agent construction and the optional c
 // File: src/Harness/Agency.Harness/Agents/AgentServiceCollectionExtensions.cs
 // File: src/Harness/Agency.Harness/Permissions/PermissionServiceCollectionExtensions.cs
 // File: src/Harness/Agency.Harness/Hooks/Configuration/HookServiceCollectionExtensions.cs
+// File: src/Harness/Agency.Harness/Loop/LoopServiceCollectionExtensions.cs
 using Agency.Harness;
 using Agency.Harness.Hooks.Configuration;
+using Agency.Harness.Loop;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.DependencyInjection;
 
 builder.Services.AddAgencyAgent();                                  // Models + IAgentFactory + default Agent
 builder.Services.AddAgencyPermissions(builder.Configuration);       // section "Permissions"
 builder.Services.AddAgencyConfiguredHooks(builder.Configuration);   // section "Hooks"
+builder.Services.AddAgencyLoop(builder.Configuration);              // section "Loop" (binds LoopOptions only)
 ```
 
 - `AddAgencyAgent(services)` registers `Models` (transient), `IAgentFactory` → `AgentFactory` (scoped), and a scoped default `Agent` built from `AgentOptions.DefaultClientName` / `DefaultModel`. The caller binds `AgentOptions` and optionally registers `IPermissionEvaluator` / `TimeProvider` for the factory to pick up.
 - `AddAgencyPermissions(services, config, sectionName = "Permissions")` binds `PermissionsOptions` and registers `IPermissionEvaluator` → `PermissionEvaluator` as a **singleton**. Malformed rules fail fast (`InvalidOperationException`) at first resolution via `PermissionsOptionsValidator`.
 - `AddAgencyConfiguredHooks(services, config, sectionName = "Hooks")` binds `HooksOptions`, calls `AddHttpClient()`, registers `IHookHandlerFactory` → `HookHandlerFactory` and a singleton `HookRegistry`, and sets `AgentOptions.ConfiguredHooks` via an `IPostConfigureOptions<AgentOptions>`. Unknown event names fail fast (`HooksOptionsValidator`).
+- `AddAgencyLoop(services, config, sectionName = "Loop")` binds `LoopOptions` from the `Loop` section — **and nothing else**. The `LoopRunner`, `Goalkeeper`, `GoalState`, and the `enable_goalkeeper`/`disable_goalkeeper` tools are not auto-registered; a host that wants goal-driven loops constructs them itself (the Goalkeeper resolves its cheap client via `Models.CreateChatClient`).
 
 **Matching `appsettings.json` shape (hooks):**
 
@@ -890,6 +981,8 @@ var toolCtx = new ToolContext { Registry = progressive };
 | `write_file` (`WriteFileTool`) | Writes content to a file at a given path. | `path`, `content` (required) |
 | `skill` (`SkillTool`, internal) | Invokes a skill by name; loads its rendered instructions into the conversation. On success records the skill's `allowed-tools` into `ActiveSkillState`; `context: fork` skills delegate to a subagent runner when wired. Refuses skills with `disable-model-invocation`. | `name` (required), `arguments` |
 | `tool_help` (`ToolHelpTool`, internal) | Added only when progressive discovery is active. Reveals a named tool's full description + schema, read from the undecorated inner registry. | `name` (required) |
+| `enable_goalkeeper` (`EnableGoalkeeperTool`, internal) | Loop Kit. Arms the session `GoalState` with a verifiable done-condition; the `LoopRunner` then runs the Goalkeeper after every turn. Idempotent (newest goal wins). Registered only by a host that drives a loop. | `condition` (required), `maxTurns`, `tokenBudget` |
+| `disable_goalkeeper` (`DisableGoalkeeperTool`, internal) | Loop Kit. Disarms the `GoalState`, stopping goal-driven looping after the current turn. No-op when nothing is armed. | *(none)* |
 | *(per-tool name from server)* (`McpProxyTool`, internal) | Adapts a discovered `McpClientTool` to `ITool`; one instance per tool per MCP server. Name and schema come from the server at connection time. | Varies by MCP server |
 
 ## Observability
@@ -917,6 +1010,19 @@ var toolCtx = new ToolContext { Registry = progressive };
 | Counter | `models.returned` | same |
 | Histogram | `models.duration` (ms) | same |
 
+### Loop Kit
+
+`LoopInstrumentation` (`ActivitySource`/`Meter` both `Agency.Harness.Loop`). Spans: `Loop.RunAsync` (root, tag `loop.outcome`) with child `loop.turn` and `loop.goalkeeper`; the verdict + reason are attached as span events on both the goalkeeper span and the inner turn span.
+
+| Signal | Name | Tags |
+|---|---|---|
+| Counter | `loop.runs` | `outcome` |
+| Counter | `loop.turns` | — |
+| Counter | `loop.verdicts` | `verdict` (`continue`/`done`) |
+| Counter | `loop.tokens` | `role` (`worker`/`goalkeeper`), `model`, `client_type`, `token.type` |
+| Histogram | `loop.run.duration` (ms) | `outcome` |
+| Histogram | `loop.turn.duration` (ms) | — |
+
 ## How It Relates to Other Projects
 
 | Project | Relationship |
@@ -924,7 +1030,7 @@ var toolCtx = new ToolContext { Registry = progressive };
 | [[Agency.Llm.Common]] | `Agent` depends on `IToolRegistry`, `ITool`, `ToolDefinition`, `ToolResult`, `Model`, `IModelProvider`, and `LlmClientOptions` from this project |
 | [[Agency.Llm.Claude]] | Concrete `IChatClient`/`IModelProvider` adapter for the Anthropic API; resolved by `Models.CreateChatClient` |
 | [[Agency.Llm.OpenAI]] | Concrete `IChatClient`/`IModelProvider` adapter for the OpenAI-compatible API |
-| [[Agency.Harness.Console]] | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, renders `AgentEvent` streams, and answers `PermissionRequestedEvent`s |
+| [[Agency.Harness.Console]] | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, renders `AgentEvent` streams (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent`), and answers `PermissionRequestedEvent`s |
 
 ## Design Notes
 
@@ -934,6 +1040,9 @@ var toolCtx = new ToolContext { Registry = progressive };
 - **Schema withholding is split by origin, and self-heals** — only MCP tools (large, numerous, operationId-named) drop to the bare `{"type":"object"}` placeholder + one-line summary; native tools stay inline so they need no `tool_help` round-trip. The summary keeps the leading `Vendor |` prefix because for prefix-less server names it is the model's only inline attribution cue. `tool_help` reads the *undecorated* inner registry, so detail is hidden from the catalog but always recoverable; and when a withheld tool is called with missing required arguments, `InvokeAsync` folds the full schema into the error so the retry self-heals without a separate round-trip.
 - **Skills use a reloadable catalog + file watcher** — `ReloadableSkillCatalog` swaps its inner catalog atomically (volatile reference) and `SkillWatcher` debounces `FileSystemWatcher` bursts into a single `Reload()`. Because `SkillContext` holds the *live* catalog reference, edits to `SKILL.md` files are picked up on the next iteration without rebuilding `Context` — the system prompt's `## Skills` listing and the `skill` tool always reflect the current set. A failed re-scan keeps the prior catalog intact rather than corrupting state.
 - **Active-skill pre-approval is bounded to one turn** — invoking the `skill` tool records the skill's `allowed-tools` into `ActiveSkillState`, which the permission gate treats as a user grant (clearing even a hook-`Ask`) — but only deny rules still win. The window is cleared at the start of the next user turn, so "load skill X, which is allowed to run these tools" never silently persists pre-approval across turns.
+- **Loop Kit is a driver above the loop, not a fork of it** — `LoopRunner` calls `ChatSession.SendAsync` in a `while` loop and decides whether to call it again; `Agent.cs` has no Loop-Kit branch. The done-check is *hard* (the Goalkeeper call and the `turn >= MaxTurns` cap run in driver code the model never reaches), while planning/working stay *soft* (Skills + the worker's own tools). The hard cap is the one place Loop Kit is deliberately stricter than a prompt-judged turn limit: it holds even if the Goalkeeper is wrong, so the loop provably terminates.
+- **The goal is session state that survives a park but not a terminal outcome** — `GoalState` is shared by the runner and the `enable_goalkeeper`/`disable_goalkeeper` tools, and is read *after* each turn so a goal armed mid-turn is visible immediately. A turn ending in `AwaitingPermission` returns control to the host **without** running the Goalkeeper and **without** clearing the goal (it must survive the park so re-entry after `ResumeWithPermissionsAsync` continues toward it); every other exit auto-clears in a `finally`, so a cancelled or errored run can't leave a "zombie goal" that makes the next plain `SendAsync` silently start looping.
+- **The judge is cheap because the worker produced the evidence** — the Goalkeeper reads the transcript only (never calls tools) and runs on a *different, cheaper* `IChatClient` than the worker, a structural mitigation for self-preference bias (`LoopRunner` logs a warning when the two models/clients match). Generating proof (running the build/tests) is expensive and stays in the worker turn; *reading* "0 errors" out of the transcript is light, which is what lets the gate run after every single turn.
 - **Skill rendering separates substitution from shell execution** — `SkillRenderer.Render` is a pure string transform (placeholder substitution only), unit-testable with no I/O; `ExpandShellAsync` is a separate, single-pass step that runs `` !`cmd` `` / fenced ```` ```! ```` directives via an injected `ISkillShellRunner` and never re-scans command output (preventing injection escalation). Shell expansion is suppressed entirely when no runner is wired or `DisableShellExecution` is set, leaving directives visible but inert.
 - **Config-driven hooks fail open** — a `CommandHookHandler`/`HttpHookHandler` that exits non-zero for any reason other than `2` (e.g. `1` non-blocking error, `-1` timeout) is treated as `Allow`. Only exit code `2` or `{ "hookSpecificOutput": { "permissionDecision": "deny" } }` blocks. Transient script/network failures and timeouts therefore never silently block tool execution; operators must be explicit to deny.
 - **Compile-once `HookRegistry` singleton** — `HookRegistry` resolves all `HookMatcher`s and creates all `IHookHandler`s in its constructor, so per-invocation work is just `IsMatch(toolName)` calls; `ToAgentHooks()` projects it to a standard `AgentHooks` once at startup. `HooksOptions` subclasses `Dictionary<HookEventName, …>` because `IConfiguration.Bind` cannot populate a class property of dictionary type from a flat JSON object with dynamic keys.

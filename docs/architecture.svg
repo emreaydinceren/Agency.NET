@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 660" xmlns="http://www.w3.org/2000/svg" width="960" height="660" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <!-- backdrop (keeps text readable on any page theme) -->
+  <rect x="0" y="0" width="960" height="660" rx="16" fill="#1b1530"/>
+  <text x="480" y="48" text-anchor="middle" fill="#e9e4ff" font-size="26" font-weight="600" letter-spacing="2">AGENT = LLM + HARNESS</text>
+  <text x="480" y="74" text-anchor="middle" fill="#9d8bd6" font-size="13" letter-spacing="1">Agency.Harness</text>
+
+  <!-- ================= centre: the LLM loop ================= -->
+  <rect x="370" y="120" width="220" height="340" rx="14" fill="#241d3d" stroke="#a78bfa" stroke-width="2"/>
+  <text x="480" y="146" text-anchor="middle" fill="#c9bdf2" font-size="13" font-weight="600">THE LLM</text>
+  <text x="480" y="164" text-anchor="middle" fill="#7e6fb0" font-size="11" font-family="monospace">Agent.cs</text>
+
+  <!-- loop steps -->
+  <g font-size="13" fill="#e9e4ff" text-anchor="middle">
+    <rect x="405" y="186" width="150" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="208">CONTEXT</text>
+    <rect x="405" y="246" width="150" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="268">OBSERVE</text>
+    <rect x="405" y="306" width="150" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="328">REASON</text>
+    <rect x="405" y="366" width="150" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="388">ACT</text>
+  </g>
+  <!-- internal flow arrows -->
+  <g stroke="#a78bfa" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+    <path d="M480,220 L480,244"/>
+    <path d="M480,280 L480,304"/>
+    <path d="M480,340 L480,364"/>
+  </g>
+  <!-- back-edge: ACT loops round to OBSERVE -->
+  <path d="M555,383 C575,383 575,203 555,203" stroke="#a78bfa" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <text x="600" y="296" text-anchor="middle" fill="#7e6fb0" font-size="10" transform="rotate(90 600 296)">repeat until "done"</text>
+
+  <!-- ================= harness satellites ================= -->
+  <g font-size="14" font-weight="600" text-anchor="middle">
+    <!-- Prompt -->
+    <rect x="60" y="156" width="210" height="76" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+    <text x="165" y="190" fill="#e9e4ff">PROMPT</text>
+    <text x="165" y="212" fill="#8fb6d6" font-size="11" font-weight="400" font-family="monospace">SystemPromptBuilder.cs</text>
+    <!-- Orchestration -->
+    <rect x="60" y="356" width="210" height="92" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+    <text x="165" y="388" fill="#e9e4ff">ORCHESTRATION</text>
+    <text x="165" y="409" fill="#8fb6d6" font-size="11" font-weight="400" font-family="monospace">ChatSession · StopConditions</text>
+    <text x="165" y="427" fill="#8fb6d6" font-size="11" font-weight="400" font-family="monospace">Loop/LoopRunner  ⟲</text>
+    <!-- Tools & Skills -->
+    <rect x="690" y="156" width="210" height="76" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.6"/>
+    <text x="795" y="190" fill="#e9e4ff">TOOLS &amp; SKILLS</text>
+    <text x="795" y="212" fill="#e0b985" font-size="11" font-weight="400" font-family="monospace">Tools/ · Skills/</text>
+    <!-- Security & Governance -->
+    <rect x="690" y="356" width="210" height="92" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.6"/>
+    <text x="795" y="388" fill="#e9e4ff">SECURITY &amp; GOVERNANCE</text>
+    <text x="795" y="409" fill="#e0b985" font-size="11" font-weight="400" font-family="monospace">Permissions/ · Hooks/</text>
+    <text x="795" y="427" fill="#e0b985" font-size="11" font-weight="400" font-family="monospace">(PreToolUse veto)</text>
+    <!-- Memory -->
+    <rect x="375" y="540" width="210" height="76" rx="12" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+    <text x="480" y="574" fill="#e9e4ff">MEMORY</text>
+    <text x="480" y="596" fill="#9be3bd" font-size="11" font-weight="400" font-family="monospace">Contexts/MemoryContext.cs</text>
+  </g>
+
+  <!-- ================= connectors ================= -->
+  <g stroke="#a78bfa" stroke-width="1.8" fill="none">
+    <!-- prompt -> llm -->
+    <path d="M270,194 L368,200" marker-end="url(#arrow)"/>
+    <!-- orchestration <-> llm (bidirectional) -->
+    <path d="M270,402 L368,402" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- tools & skills -> llm -->
+    <path d="M690,194 L592,200" marker-end="url(#arrow)"/>
+    <!-- security <-> llm (bidirectional) -->
+    <path d="M690,402 L592,402" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- llm -> memory -->
+    <path d="M480,460 L480,538" marker-end="url(#arrow)"/>
+  </g>
+  <text x="318" y="392" text-anchor="middle" fill="#7e6fb0" font-size="10">goal ⟲ verdict</text>
+</svg>

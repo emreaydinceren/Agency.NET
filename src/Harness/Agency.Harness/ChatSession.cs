@@ -45,6 +45,12 @@ public sealed class ChatSession : IAsyncDisposable
         this._skills = skills;
     }
 
+    /// <summary>Gets the model identifier of the agent driving this session.</summary>
+    internal string WorkerModel => this._agent.Model;
+
+    /// <summary>Gets the client-type display name of the agent driving this session (e.g. "Claude").</summary>
+    internal string WorkerClientType => this._agent.ClientType;
+
     /// <summary>Gets the accumulated token usage for this session, or zero if no turns have been sent yet.</summary>
     public LlmTokenUsage TotalUsage => this._ctx?.TotalUsage ?? new LlmTokenUsage(0, 0);
 

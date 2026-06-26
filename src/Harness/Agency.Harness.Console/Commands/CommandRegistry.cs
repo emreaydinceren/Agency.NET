@@ -77,5 +77,10 @@ internal static class CommandRegistry
         RegisterAsyncCommand("/model", "Show model picker.", (_, session) => ModelsCommand.RunSelectModelCommandAsync(session));
         RegisterCommand("/dump-context", "Print the full context sent to the model (not added to history).",
             (_, session) => DumpContextCommand.Run(session));
+        RegisterAsyncCommand("/add-file", "Ingest a file into the vector store.", AddFileCommand.RunAsync, argumentHint: "<path>");
+        RegisterAsyncCommand("/add-folder", "Ingest all files in a folder into the vector store.", AddFolderCommand.RunAsync, argumentHint: "<path>");
+        RegisterAsyncCommand("/projects-load", "Load a project into the session context.", ProjectsCommand.LoadAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/projects-unload", "Unload a project from the session context.", ProjectsCommand.UnloadAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/projects-list", "List all projects in the vector store.", (_, session) => ProjectsCommand.ListAsync(session));
     }
 }

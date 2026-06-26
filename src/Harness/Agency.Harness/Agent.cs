@@ -145,13 +145,15 @@ public sealed class Agent
     /// <param name="user">Optional caller identity; defaults to <see cref="UserSpecificContext.Empty"/>.</param>
     /// <param name="timeProvider">Optional clock for temporal grounding; defaults to <see cref="TimeProvider.System"/>.</param>
     /// <param name="skills">Optional skill context; defaults to <see cref="SkillContext.Empty"/>.</param>
+    /// <param name="session">Optional pre-seeded session context; defaults to <see cref="SessionContext.Empty"/>.</param>
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
         EnvironmentalContext? environment = null,
         UserSpecificContext? user = null,
         TimeProvider? timeProvider = null,
-        SkillContext? skills = null) =>
+        SkillContext? skills = null,
+        SessionContext? session = null) =>
         new()
         {
             Query = new QueryContext { Prompt = initialPrompt },
@@ -160,6 +162,7 @@ public sealed class Agent
             Environment = environment ?? EnvironmentalContext.Empty,
             User = user ?? UserSpecificContext.Empty,
             Skills = skills ?? SkillContext.Empty,
+            Session = session ?? SessionContext.Empty,
         };
 
     /// <summary>

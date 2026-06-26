@@ -152,7 +152,8 @@ public class PostgresKVStore : IVectorStore
             FROM semantic_kv_store
             WHERE user_id = @uid
               AND (
-                  (session_id = '*' AND project_id = '*')
+                  @allSessions
+                  OR (session_id = '*' AND project_id = '*')
                   OR (session_id = @sid AND project_id = '*')
                   OR (@hasProjects AND session_id = '*' AND project_id = ANY(@pids))
               )
@@ -161,12 +162,14 @@ public class PostgresKVStore : IVectorStore
             ORDER BY distance ASC
             LIMIT @l;";
 
+            bool allSessions = query.SessionId == null;
             var parameters = new Dictionary<string, object?>
             {
                 ["l"] = query.Limit ?? 10
             };
 
             parameters["uid"] = query.UserId;
+            parameters["allSessions"] = allSessions;
             parameters["sid"] = query.SessionId ?? GlobalSession;
 
             bool hasProjects = (query.ProjectIds?.Count ?? 0) > 0;

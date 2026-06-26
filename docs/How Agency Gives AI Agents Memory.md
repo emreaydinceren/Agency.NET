@@ -245,64 +245,13 @@ Before we dissect the individual hooks, here is the whole picture in one view. T
 
 **Diagram A — one user turn (the hot path), with every memory touch-point marked:**
 
-```mermaid
-flowchart TD
-    Start(["ChatSession.SendAsync(userMessage)"]) --> ChatAsync
-    ChatAsync["Agent.ChatAsync — Agent.cs:120"] --> H0
-    H0["⓪ OnUserPromptSubmit (baseline: no-op) — Agent.cs:151"] --> RunAsync
-    RunAsync["Agent.RunAsync — Agent.cs:244"] --> H1
-    H1["① OnSessionStarted — first iteration only — Agent.cs:255<br/>register live conversation log + SetFocus / MarkGoalComplete tools<br/>(so the cold-path distiller can read turns)"] --> H2
-
-    subgraph LOOP["LOOP ITERATION — hot path (think → act → observe)"]
-        direction TB
-        H2["② OnPreIteration → ⟦ RETRIEVAL: read path ⟧ — Agent.cs:274"] --> Gate
-        Gate{"gate: LastWrittenAt cache<br/>O(1), no I/O — changed since last look?"}
-        Gate -- "unchanged" --> Skip["SKIP retrieval (P1)"]
-        Gate -- "changed" --> Search["embed → search → rank →<br/>inject into ctx.Knowledge / ctx.Memory"]
-        Skip --> H3
-        Search --> H3
-        H3["③ SystemPromptBuilder.Build(ctx) — Agent.cs:280<br/>renders ## Facts / ## Memories from ctx"] --> H4
-        H4["④ LLM call ......... THINK ......... — Agent.cs:299"] --> H5
-        H5["⑤ OnAssistantTurn → ⟦ TIMER RESTART only ⟧ (P1) — Agent.cs:314<br/>InactivityTimerService.Restart(...)"] --> Stop
-        Stop{"⑥ stop? — Agent.cs:354"}
-        Stop -- "no" --> H7["⑦ tool calls run in parallel ... ACT ... — Agent.cs:384"]
-        H7 --> H8["⑧ OnPostToolBatch (baseline: reserved)"]
-        H8 --> H9["⑨ append tool results ... OBSERVE ... — Agent.cs:466"]
-        H9 -. "loop ↺" .-> H2
-    end
-
-    Stop -- "yes" --> StopEnd["OnStop → AgentResultEvent → break"]
-    StopEnd --> Dispose
-    Dispose["ChatSession.DisposeAsync → OnSessionEnd →<br/>⟦ enqueue FINAL job ⟧ — Agent.cs:86"]
-
-    %% The only three places work crosses onto the cold path:
-    H5 -. "arms the idle trigger" .-> Boundary
-    H7 -. "enqueue job / set ctx.Focus" .-> Boundary
-    Dispose -. "enqueue FINAL job" .-> Boundary
-    Boundary(["═══ channel boundary → cold path (Diagram B) ═══"])
-```
+![Memory — hot path hook points](attachments/memory-hot-path.svg)
 
 The three dashed arrows leaving the box (from ⑤, ⑦, and `OnSessionEnd`) are the **only** ways work crosses onto the cold path. They correspond one-to-one with the three distillation triggers from §6.6 — `Inactivity`, `GoalCompletion`, `SessionDisposed`. Each drops a `DistillationJob` into a per-session `Channel<DistillationJob>` and returns *immediately*. The user-facing turn never blocks on memory being written.
 
 **Diagram B — what happens behind the channel (the cold path):**
 
-```mermaid
-flowchart TD
-    Channel(["per-session Channel&lt;DistillationJob&gt;<br/>3 triggers: Inactivity | GoalCompletion | SessionDisposed"]) --> Distiller
-    Distiller["DistillerBackgroundService<br/>(event-driven wake — drains, then suspends on a semaphore)<br/>• read turns (watermark, UpToTurnIndex] ← from the log registered at ①<br/>• LLM episode / fact extraction (own client, thinking suppressed)<br/>• embed → IMemoryStore.UpsertAsync → advance watermark → bump LastWrittenAt"]
-    Distiller -- "emit DistillationCompletedEvent" --> Consolidator
-    Consolidator["ConsolidatorBackgroundService (per user, on session end)<br/>• load ALL user records → spin up a SUB-AGENT (built on Agency.Harness!)<br/>• tools: Memory_Merge / Update / Delete / Done → mutate store"] --> Hygiene
-    Hygiene["HygieneSweeperBackgroundService (jittered ~24h)<br/>• bulk DELETE: TTL pass + low-importance-stale pass"]
-
-    Distiller --> Storage
-    Consolidator --> Storage
-    Hygiene --> Storage
-    Storage[("STORAGE — PostgreSQL + pgvector — single records table<br/>records · watermarks · dead_letter · user_state")]
-
-    Storage -. "the read path (②) searches here" .-> Retrieval
-    Retrieval(["retrieval — Diagram A, step ②"])
-    Distiller == "LastWrittenAt bump re-arms the gate at ②" ==> Retrieval
-```
+![Memory — cold path](attachments/memory-cold-path.svg)
 
 Read the two diagrams together and the **feedback loop** becomes visible: the cold path *writes* to storage (Diagram B) and bumps `LastWrittenAt`; that bump is exactly what the hot-path *gate* checks at step ② (Diagram A) to decide whether to re-read. Storage is the shared medium; `LastWrittenAt` is the doorbell that tells the read path "something changed, look again." Nothing on the hot path ever calls the cold path directly, and nothing on the cold path ever touches the live `Context` — they communicate only through the store.
 
@@ -579,36 +528,7 @@ When the flag is `false`, **none** of these services are registered, `BaselineHo
 
 To tie Part II back to the four pillars, here is one fact's life cycle through the actual code:
 
-```mermaid
-flowchart TD
-    subgraph SN["SESSION N"]
-        direction TB
-        A1["User: 'I prefer Python.'"]
-        A2["ChatAsync → OnUserPromptSubmit (no-op) → loop"]
-        A3["OnPreIteration → gate: store empty → search → [ ]<br/>ctx tagged 'No relevant memories yet.'"]
-        A4["LLM replies → OnAssistantTurn →<br/>InactivityTimerService.Restart(...) — timer only"]
-        A5["…5 min idle… → timer fires →<br/>DistillationJob{Trigger=Inactivity} into per-session Channel"]
-        A6["DistillerBackgroundService: extract →<br/>Fact{Domain=Preferences, Key=Language, 'Python', imp=0.7}<br/>→ embed → store.Upsert → watermark=1 → LastWrittenAt bumped"]
-        A7["ChatSession.DisposeAsync → OnSessionEnd →<br/>DistillationJob{SessionDisposed} → no-op (watermark)"]
-        A8["Consolidator: loads 1 record → sub-agent →<br/>nothing to merge → Memory_Done"]
-        A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8
-    end
-
-    subgraph SN1["SESSION N+1 (three weeks later)"]
-        direction TB
-        B1["User: 'Write me a script to deduplicate this list.'"]
-        B2["OnPreIteration → gate: LastWrittenAt (3wk ago)<br/>and first retrieval → SEARCH"]
-        B3["qVec ≈ 'deduplicate / script / list' →<br/>store returns the Python Fact (sim≈0.62)"]
-        B4["RankingFormula → score 0.46 → partition →<br/>ctx.Knowledge.Records = [Python preference]"]
-        B5["SystemPromptBuilder renders:<br/>## Facts — Python preference (Updated 3 weeks ago)"]
-        B6["LLM writes a Python script, unprompted."]
-        B7["iteration 2 → OnPreIteration →<br/>gate: store unchanged → SKIP search (P1 in action)"]
-        B1 --> B2 --> B3 --> B4 --> B5 --> B6 --> B7
-    end
-
-    A6 -. "LastWrittenAt persisted in store — the doorbell" .-> B2
-    A8 --> B1
-```
+![Memory — one fact's life cycle](attachments/memory-trace.svg)
 
 The user never re-stated the preference. The agent never called a "remember" tool. The recall happened because a background scribe distilled a fact in March, and a gated search re-grounded the agent in June — exactly the stateless-to-stateful shift this document opened with.
 

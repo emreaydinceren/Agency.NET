@@ -139,29 +139,7 @@ hooks (`OnPreIteration`, `OnAssistantTurn`) are the seams where *other* subsyste
 the blackboard. The loop itself owns only a few fields — the iteration counter and the usage
 totals.
 
-```mermaid
-flowchart TD
-    Start(["ChatSession.SendAsync(userMessage)"]) --> Chat["Agent.ChatAsync — Agent.cs:172<br/>append user msg (:199) · ActiveSkillState.Clear() (:204)<br/>OnUserPromptSubmit (:207)"]
-    Chat --> Run["Agent.RunAsync — Agent.cs:300<br/>stamp Session.Id once (:304) · seed prompt (:317)<br/>OnSessionStarted (:311)"]
-    Run --> Loop
-
-    subgraph Loop["RunIterationsAsync — while(true) — Agent.cs:568"]
-        direction TB
-        I0["ctx.IterationCount++  (:571)"] --> I1
-        I1["OnPreIteration hook  (:574)<br/>↳ retrieval WRITES ctx.Knowledge / ctx.Memory"] --> I2
-        I2["SystemPromptBuilder.Build(ctx)  (:580)<br/>READS the whole blackboard"] --> I3
-        I3["LLM call — THINK  (:599)<br/>READS ctx.Conversation.Messages"] --> I4
-        I4["ctx.TotalUsage += turnUsage  (:607)<br/>ctx.Conversation.Append(assistant)  (:611)"] --> I5
-        I5["OnAssistantTurn hook  (:614)<br/>↳ memory restarts inactivity timer"] --> I6
-        I6{"stop?  (:654)"}
-        I6 -- "no" --> I7["tool calls run in parallel — ACT  (:668)<br/>READS ctx.Tools.Registry · maybe ctx.ActiveSkillState.Set (:865)"]
-        I7 --> I8["append tool results — OBSERVE<br/>OR park: ctx.PendingToolBatch = … (:929)"]
-        I8 -. "loop ↺" .-> I0
-    end
-
-    I6 -- "yes" --> Stop["OnStop → AgentResultEvent → yield break"]
-    Stop --> Dispose["ChatSession.DisposeAsync → RaiseSessionEndAsync (:133)<br/>fires OnSessionEnd once"]
-```
+![The Core Agent Loop — Spine](attachments/agent-loop-spine.svg)
 
 The two boundaries of this spine both belong to `ChatSession` (covered in §7): it **creates**
 the `ctx` before the first turn and **disposes** it at session end. In between, the *same* `ctx`
@@ -174,36 +152,7 @@ Everything that follows — the read path (§8), the write seams (§9), the park
 `Context` is a `sealed record` (`Contexts/Context.cs:54`). Its members fall into three tiers,
 and the tier tells you *who* is allowed to change a field and *when*.
 
-```mermaid
-flowchart TB
-    subgraph T1["Tier 1 — init-only fixed state (set at construction, never reassigned)"]
-        direction LR
-        A1["Query (required)"]
-        A2["Tools"]
-        A3["Skills"]
-        A4["User"]
-        A5["Temporal"]
-        A6["Environment"]
-        A7["Conversation"]
-    end
-    subgraph T2["Tier 2 — publicly settable swap slots (hooks / tools replace them mid-session)"]
-        direction LR
-        B1["Knowledge — get; set;"]
-        B2["Memory — get; set;"]
-        B3["Focus — get; set;"]
-        B4["Session — get; set;"]
-        B5["MemoryLastRetrievedAt — get; set;"]
-    end
-    subgraph T3["Tier 3 — loop-owned mutable state (internal; only the harness writes)"]
-        direction LR
-        C1["IterationCount — internal set"]
-        C2["TotalUsage — internal set"]
-        C3["TotalCostUsd — internal set"]
-        C4["PendingToolBatch — internal"]
-        C5["ActiveSkillState — internal, mutated in place"]
-    end
-    T1 --> T2 --> T3
-```
+![Anatomy of Context — Three Tiers of Mutability](attachments/context-tiers.svg)
 
 **Tier 1 — `init`-only fixed state.** Set once at construction, never reassigned:
 `Query` (`:57`), `Tools` (`:78`), `Skills` (`:81`), `User` (`:97`), `Temporal` (`:100`),
@@ -349,27 +298,7 @@ reused on subsequent calls so conversation history is preserved." On every turn 
 *same* `_ctx` into `ChatAsync` (`:126`); `Reset()` (`:167`) drops it to `null` so the next send
 starts fresh; `DisposeAsync()` (`:177`) fires `OnSessionEnd` once.
 
-```mermaid
-sequenceDiagram
-    participant Host as ChatSession
-    participant Agent
-    participant Ctx as Context
-
-    Note over Host: turn 1 — "I prefer Python."
-    Host->>Agent: SendAsync → _ctx ??= CreateContext()
-    activate Ctx
-    Agent->>Ctx: stamp Session.Id (once, :304)
-    Agent->>Ctx: seed Conversation with Query.Prompt (:317)
-    Agent->>Ctx: loop: IterationCount++, TotalUsage +=, append msgs
-    Note over Host: turn 2 (same session) — "write a dedup script"
-    Host->>Agent: SendAsync → reuses the SAME _ctx
-    Agent->>Ctx: Session.Id already set → guard skips re-stamp (:304)
-    Agent->>Ctx: Conversation already non-empty → append user msg (:197)
-    Agent->>Ctx: loop continues, totals keep accumulating
-    Note over Host: dispose
-    Host->>Agent: DisposeAsync → RaiseSessionEndAsync (:133)
-    deactivate Ctx
-```
+![Lifecycle — One Context Per Session](attachments/context-lifecycle.svg)
 
 Two details make "one per session" airtight:
 
@@ -405,23 +334,7 @@ It walks the context in a fixed order and emits Markdown:
 | `ctx.Environment.ContextWindowSize` + `ctx.TotalUsage.InputTokens` | `Context window: …` | `:122-133` |
 | `ctx.User.Name` | `User: …` | `:136-139` |
 
-```mermaid
-flowchart LR
-    subgraph CTX["Context (blackboard)"]
-        K["Knowledge.Records"]
-        M["Memory.Records"]
-        S["Skills.List()"]
-        T["Temporal / Environment / User"]
-        U["TotalUsage.InputTokens"]
-    end
-    CTX --> B["SystemPromptBuilder.Build(ctx)<br/>pure · read-only · :17"]
-    K --> FF["## Facts"]
-    M --> MM["## Memories"]
-    S --> SS["## Skills"]
-    T --> GG["date / OS / user lines"]
-    U --> WW["Context window: est. remaining"]
-    B --> P["system prompt string → ChatOptions.Instructions :586"]
-```
+![The Read Path — Context Into Prompt](attachments/context-read-path.svg)
 
 Two things worth calling out. First, the `## Facts` vs `## Memories` split is *purely* a function
 of which property a `MemoryRecord` sits on — `Knowledge.Records` → `## Facts`,

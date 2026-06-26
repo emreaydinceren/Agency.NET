@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 430" xmlns="http://www.w3.org/2000/svg" width="960" height="430"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="430" rx="16" fill="#1b1530"/>
+  <text x="480" y="38" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">Anatomy of Context — Three Tiers of Mutability</text>
+  <text x="480" y="56" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Context.cs  ·  AgentContext passed to every hook and tool  ·  one instance per ChatSession</text>
+
+  <!-- ── Tier 1 — init-only ── -->
+  <rect x="20" y="68" width="920" height="102" rx="12" fill="#1a1335" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="84" text-anchor="middle" fill="#c9bdf2" font-size="11" font-weight="600">Tier 1 — init-only fixed state  ·  set at construction, never reassigned</text>
+  <!-- 7 chips: width=(920-40)/7≈125, gap=4, start x=30 -->
+  <rect x="30"  y="92" width="121" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="90"  y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Query</text>
+  <text x="90"  y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">required</text>
+  <rect x="155" y="92" width="121" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="215" y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Tools</text>
+  <text x="215" y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">init; only</text>
+  <rect x="280" y="92" width="121" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="340" y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Skills</text>
+  <text x="340" y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">catalog</text>
+  <rect x="405" y="92" width="121" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="465" y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">User</text>
+  <text x="465" y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">identity</text>
+  <rect x="530" y="92" width="121" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="590" y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Temporal</text>
+  <text x="590" y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">clock · tz</text>
+  <rect x="655" y="92" width="121" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="715" y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Environment</text>
+  <text x="715" y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">OS · cwd</text>
+  <rect x="780" y="92" width="120" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="840" y="108" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Conversation</text>
+  <text x="840" y="122" text-anchor="middle" fill="#9d8bd6" font-size="9">messages</text>
+
+  <line x1="480" y1="172" x2="480" y2="188" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ── Tier 2 — settable swap slots ── -->
+  <rect x="20" y="190" width="920" height="88" rx="12" fill="#1a1335" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="480" y="206" text-anchor="middle" fill="#8fb6d6" font-size="11" font-weight="600">Tier 2 — publicly settable swap slots  ·  hooks / tools replace them mid-session</text>
+  <!-- 5 chips: width=(920-40)/5=176, start x=30 -->
+  <rect x="30"  y="212" width="168" height="38" rx="8" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.2"/>
+  <text x="114" y="228" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Knowledge</text>
+  <text x="114" y="242" text-anchor="middle" fill="#8fb6d6" font-size="9">get; set;</text>
+  <rect x="202" y="212" width="168" height="38" rx="8" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.2"/>
+  <text x="286" y="228" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Memory</text>
+  <text x="286" y="242" text-anchor="middle" fill="#8fb6d6" font-size="9">get; set;</text>
+  <rect x="374" y="212" width="168" height="38" rx="8" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.2"/>
+  <text x="458" y="228" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Focus</text>
+  <text x="458" y="242" text-anchor="middle" fill="#8fb6d6" font-size="9">get; set;</text>
+  <rect x="546" y="212" width="168" height="38" rx="8" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.2"/>
+  <text x="630" y="228" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Session</text>
+  <text x="630" y="242" text-anchor="middle" fill="#8fb6d6" font-size="9">get; set;</text>
+  <rect x="718" y="212" width="202" height="38" rx="8" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.2"/>
+  <text x="819" y="228" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">MemoryLastRetrievedAt</text>
+  <text x="819" y="242" text-anchor="middle" fill="#8fb6d6" font-size="9">get; set;</text>
+
+  <line x1="480" y1="280" x2="480" y2="296" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ── Tier 3 — loop-owned mutable ── -->
+  <rect x="20" y="298" width="920" height="88" rx="12" fill="#1a1335" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="480" y="314" text-anchor="middle" fill="#e0b985" font-size="11" font-weight="600">Tier 3 — loop-owned mutable state  ·  internal; only the harness writes</text>
+  <!-- 5 chips: same as T2 -->
+  <rect x="30"  y="320" width="168" height="38" rx="8" fill="#241d3d" stroke="#ffb454" stroke-width="1.2"/>
+  <text x="114" y="336" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">IterationCount</text>
+  <text x="114" y="350" text-anchor="middle" fill="#e0b985" font-size="9">internal set</text>
+  <rect x="202" y="320" width="168" height="38" rx="8" fill="#241d3d" stroke="#ffb454" stroke-width="1.2"/>
+  <text x="286" y="336" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">TotalUsage</text>
+  <text x="286" y="350" text-anchor="middle" fill="#e0b985" font-size="9">internal set</text>
+  <rect x="374" y="320" width="168" height="38" rx="8" fill="#241d3d" stroke="#ffb454" stroke-width="1.2"/>
+  <text x="458" y="336" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">TotalCostUsd</text>
+  <text x="458" y="350" text-anchor="middle" fill="#e0b985" font-size="9">internal set</text>
+  <rect x="546" y="320" width="168" height="38" rx="8" fill="#241d3d" stroke="#ffb454" stroke-width="1.2"/>
+  <text x="630" y="336" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">PendingToolBatch</text>
+  <text x="630" y="350" text-anchor="middle" fill="#e0b985" font-size="9">internal</text>
+  <rect x="718" y="320" width="202" height="38" rx="8" fill="#241d3d" stroke="#ffb454" stroke-width="1.2"/>
+  <text x="819" y="336" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">ActiveSkillState</text>
+  <text x="819" y="350" text-anchor="middle" fill="#e0b985" font-size="9">internal, mutated</text>
+
+  <text x="480" y="408" text-anchor="middle" fill="#7e6fb0" font-size="11">Tier 1 lives forever  ·  Tier 2 slots can be swapped by any hook or tool  ·  Tier 3 is the engine's own scratchpad</text>
+</svg>

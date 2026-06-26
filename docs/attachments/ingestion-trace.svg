@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 570" xmlns="http://www.w3.org/2000/svg" width="960" height="570"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+    <marker id="arrow-blu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5cc8ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="570" rx="16" fill="#1b1530"/>
+  <text x="480" y="38" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">The Whole Story in One Trace</text>
+  <text x="480" y="56" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">ingestion pipeline  ·  semantic retrieval  ·  human-driven ingest, model-driven retrieval</text>
+
+  <!-- ══ INGEST subgraph (left) ══ -->
+  <rect x="16" y="68" width="452" height="462" rx="12" fill="#1a1335" stroke="#ffb454" stroke-width="1.6"/>
+  <text x="242" y="86" text-anchor="middle" fill="#e0b985" font-size="11" font-weight="600">INGESTION — human-driven</text>
+
+  <!-- I1 -->
+  <rect x="28" y="96" width="428" height="46" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.5"/>
+  <text x="242" y="116" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">User: /add-folder ./handbook</text>
+  <text x="242" y="133" text-anchor="middle" fill="#8fb6d6" font-size="10">REPL command · host input</text>
+  <line x1="242" y1="144" x2="242" y2="154" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I2 -->
+  <rect x="28" y="156" width="428" height="46" rx="10" fill="#241d3d" stroke="#ffb454" stroke-width="1.5"/>
+  <text x="242" y="176" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">AddFolderCommand: count files, confirm if &gt;50</text>
+  <text x="242" y="193" text-anchor="middle" fill="#e0b985" font-size="10">ScopeResolutionHelper.Resolve → project:handbook</text>
+  <line x1="242" y1="204" x2="242" y2="214" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I3 -->
+  <rect x="28" y="216" width="428" height="46" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="242" y="236" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">IngestionCommandService → DefaultIngestionPipeline</text>
+  <text x="242" y="253" text-anchor="middle" fill="#9d8bd6" font-size="10">ExecuteAsync  ·  per-file pipeline begins</text>
+  <line x1="242" y1="264" x2="242" y2="274" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I4 -->
+  <rect x="28" y="276" width="428" height="46" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="242" y="296" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">per file: TextSplitter.Split</text>
+  <text x="242" y="313" text-anchor="middle" fill="#9d8bd6" font-size="10">~512-token chunks  ·  64-token overlap</text>
+  <line x1="242" y1="324" x2="242" y2="334" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I5 -->
+  <rect x="28" y="336" width="428" height="56" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="242" y="356" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">per chunk: embed → SqliteKVStore.UpsertAsync</text>
+  <text x="242" y="373" text-anchor="middle" fill="#9d8bd6" font-size="10">row tagged session_id='*'  ·  project_id='handbook'</text>
+  <text x="242" y="387" text-anchor="middle" fill="#9d8bd6" font-size="10">metadata.source_file='onboarding.md'</text>
+  <line x1="242" y1="394" x2="242" y2="404" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I6 -->
+  <rect x="28" y="406" width="428" height="46" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.5"/>
+  <text x="242" y="426" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">DocumentContextHydrationService.MarkDirty()</text>
+  <text x="242" y="443" text-anchor="middle" fill="#9be3bd" font-size="10">signals that the context hydration cache is stale</text>
+
+  <!-- ══ USE subgraph (right) ══ -->
+  <rect x="492" y="68" width="452" height="462" rx="12" fill="#1a1335" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="718" y="86" text-anchor="middle" fill="#8fb6d6" font-size="11" font-weight="600">RETRIEVAL — model-driven, scope-locked</text>
+
+  <!-- U0 -->
+  <rect x="504" y="96" width="428" height="46" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.5"/>
+  <text x="718" y="116" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">/projects-load handbook → LoadProject + MarkDirty()</text>
+  <text x="718" y="133" text-anchor="middle" fill="#8fb6d6" font-size="10">loads project scope into session state</text>
+  <line x1="718" y1="144" x2="718" y2="154" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- U1 -->
+  <rect x="504" y="156" width="428" height="46" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="718" y="176" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">turn begins → RefreshIfDirtyAsync</text>
+  <text x="718" y="193" text-anchor="middle" fill="#9d8bd6" font-size="10">inject ## Facts: '- [project:handbook] onboarding.md'</text>
+  <line x1="718" y1="204" x2="718" y2="214" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- U2 -->
+  <rect x="504" y="216" width="428" height="46" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.5"/>
+  <text x="718" y="236" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">User: 'How many vacation days for new hires?'</text>
+  <text x="718" y="253" text-anchor="middle" fill="#8fb6d6" font-size="10">host delivers user message</text>
+  <line x1="718" y1="264" x2="718" y2="274" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- U3 -->
+  <rect x="504" y="276" width="428" height="46" rx="10" fill="#241d3d" stroke="#ffb454" stroke-width="1.5"/>
+  <text x="718" y="296" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Model sees inventory → calls semantic_search</text>
+  <text x="718" y="313" text-anchor="middle" fill="#e0b985" font-size="10">LLM picks the tool from the ## Facts inventory in system prompt</text>
+  <line x1="718" y1="324" x2="718" y2="334" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- U4 -->
+  <rect x="504" y="336" width="428" height="46" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="718" y="356" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">SemanticSearchTool builds Query from sessionState</text>
+  <text x="718" y="373" text-anchor="middle" fill="#9d8bd6" font-size="10">UserId · SessionId · LoadedProjects=[handbook] · TopK</text>
+  <line x1="718" y1="384" x2="718" y2="394" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- U5 -->
+  <rect x="504" y="396" width="428" height="46" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="718" y="416" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">SearchAsync: three-scope union · embed query</text>
+  <text x="718" y="433" text-anchor="middle" fill="#9d8bd6" font-size="10">ORDER BY cosine distance  ·  LIMIT TopK</text>
+  <line x1="718" y1="444" x2="718" y2="454" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- U6 -->
+  <rect x="504" y="456" width="428" height="46" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.5"/>
+  <text x="718" y="476" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Markdown table of nearest chunks → model answers</text>
+  <text x="718" y="493" text-anchor="middle" fill="#9be3bd" font-size="10">grounded in retrieved document chunks</text>
+
+  <!-- ── dotted bridge: I6 → U0 ── -->
+  <path d="M 242,452 L 242,540 L 718,540 L 718,144" fill="none" stroke="#9d8bd6" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <rect x="350" y="526" width="260" height="22" rx="6" fill="#1b1530"/>
+  <text x="480" y="541" text-anchor="middle" fill="#7e6fb0" font-size="10" font-weight="600">documents now searchable</text>
+</svg>

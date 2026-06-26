@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" width="960" height="560"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="560" rx="16" fill="#1b1530"/>
+  <text x="480" y="42" text-anchor="middle" fill="#e9e4ff" font-size="25" font-weight="600" letter-spacing="1">Three Scopes, One Search</text>
+  <text x="480" y="64" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Every chunk belongs to exactly one scope — a search always returns the union of all three</text>
+
+  <!-- Global -->
+  <rect x="40" y="110" width="270" height="150" rx="14" fill="#241d3d" stroke="#f0a868" stroke-width="2"/>
+  <text x="175" y="142" text-anchor="middle" fill="#f5c89a" font-size="16" font-weight="600">Global</text>
+  <text x="175" y="168" text-anchor="middle" fill="#e9e4ff" font-size="12">shared by everything</text>
+  <text x="175" y="190" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">session_id = "*"</text>
+  <text x="175" y="208" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">project_id = "*"</text>
+  <text x="175" y="236" text-anchor="middle" fill="#7e6fb0" font-size="10.5">e.g. company-wide policies</text>
+
+  <!-- Session -->
+  <rect x="345" y="110" width="270" height="150" rx="14" fill="#241d3d" stroke="#5cc8ff" stroke-width="2"/>
+  <text x="480" y="142" text-anchor="middle" fill="#bfe6ff" font-size="16" font-weight="600">Session</text>
+  <text x="480" y="168" text-anchor="middle" fill="#e9e4ff" font-size="12">just this conversation</text>
+  <text x="480" y="190" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">session_id = &lt;this guid&gt;</text>
+  <text x="480" y="208" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">project_id = "*"</text>
+  <text x="480" y="236" text-anchor="middle" fill="#7e6fb0" font-size="10.5">e.g. a file you just dropped in</text>
+
+  <!-- Project -->
+  <rect x="650" y="110" width="270" height="150" rx="14" fill="#241d3d" stroke="#a78bfa" stroke-width="2"/>
+  <text x="785" y="142" text-anchor="middle" fill="#c9bdf2" font-size="16" font-weight="600">Project</text>
+  <text x="785" y="168" text-anchor="middle" fill="#e9e4ff" font-size="12">a named, loadable set</text>
+  <text x="785" y="190" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">session_id = "*"</text>
+  <text x="785" y="208" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">project_id = "handbook"</text>
+  <text x="785" y="236" text-anchor="middle" fill="#7e6fb0" font-size="10.5">loaded on demand per session</text>
+
+  <line x1="175" y1="262" x2="430" y2="338" stroke="#6ee7a8" stroke-width="1.6" marker-end="url(#a3)"/>
+  <line x1="480" y1="262" x2="480" y2="338" stroke="#6ee7a8" stroke-width="1.6" marker-end="url(#a3)"/>
+  <line x1="785" y1="262" x2="530" y2="338" stroke="#6ee7a8" stroke-width="1.6" marker-end="url(#a3)"/>
+
+  <!-- union box -->
+  <rect x="240" y="342" width="480" height="92" rx="12" fill="#15241c" stroke="#6ee7a8" stroke-width="2"/>
+  <text x="480" y="368" text-anchor="middle" fill="#a8f0c8" font-size="14" font-weight="600">UNION — the one WHERE clause search runs</text>
+  <text x="480" y="392" text-anchor="middle" fill="#cdeede" font-size="11" font-family="monospace">WHERE user_id = @uid AND (  global  OR  this session  OR  loaded projects  )</text>
+  <text x="480" y="416" text-anchor="middle" fill="#7e9e88" font-size="10.5">Only loaded projects join the union. Unloaded projects are invisible until you /projects-load them.</text>
+
+  <!-- security note -->
+  <rect x="120" y="466" width="720" height="62" rx="12" fill="#2a1620" stroke="#e87a90" stroke-width="1.8"/>
+  <text x="480" y="492" text-anchor="middle" fill="#f5b8c4" font-size="13" font-weight="600">user_id is the hard wall</text>
+  <text x="480" y="513" text-anchor="middle" fill="#e9c4cc" font-size="11">Every scope is filtered by user_id first — one person's documents are structurally invisible to another.</text>
+</svg>

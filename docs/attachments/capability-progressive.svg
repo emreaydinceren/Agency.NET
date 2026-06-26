@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 420" xmlns="http://www.w3.org/2000/svg" width="960" height="420"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-blu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5cc8ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="420" rx="16" fill="#1b1530"/>
+  <text x="480" y="38" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">Progressive Disclosure — Schema on Demand</text>
+  <text x="480" y="57" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">ProgressiveDiscoveryToolRegistry  ·  decorator — the loop is untouched</text>
+
+  <!-- Column headers -->
+  <rect x="30" y="66" width="390" height="24" rx="6" fill="#312856" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="225" y="82" text-anchor="middle" fill="#c9bdf2" font-size="12" font-weight="600">MODEL</text>
+  <rect x="540" y="66" width="390" height="24" rx="6" fill="#312856" stroke="#5cc8ff" stroke-width="1.2"/>
+  <text x="735" y="82" text-anchor="middle" fill="#8fb6d6" font-size="12" font-weight="600">ProgressiveDiscoveryToolRegistry  ·  tool_help  ·  inner</text>
+
+  <!-- Divider -->
+  <line x1="480" y1="96" x2="480" y2="334" stroke="#312856" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <!-- ① DISCOVER header -->
+  <rect x="30" y="100" width="900" height="20" rx="4" fill="#1a1335"/>
+  <text x="480" y="114" text-anchor="middle" fill="#9d8bd6" font-size="11" font-weight="600">①  DISCOVER  —  model asks for the real schema</text>
+
+  <!-- Left: model sees stub -->
+  <rect x="30" y="126" width="390" height="54" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="225" y="146" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">prompt: tool stub visible</text>
+  <text x="225" y="162" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">name + summary + {&quot;type&quot;:&quot;object&quot;}</text>
+  <text x="225" y="175" text-anchor="middle" fill="#9d8bd6" font-size="11">'call tool_help first'</text>
+
+  <!-- Right: tool_help → inner → schema -->
+  <rect x="540" y="126" width="390" height="54" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="735" y="146" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">tool_help → inner.ListDefinitions()</text>
+  <text x="735" y="162" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">exact-name match → real schema</text>
+  <text x="735" y="175" text-anchor="middle" fill="#8fb6d6" font-size="11">ToolHelpTool.cs:47 reads undecorated inner</text>
+
+  <!-- arrows between cols (discover) -->
+  <line x1="422" y1="142" x2="538" y2="142" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="480" y="138" text-anchor="middle" fill="#7e6fb0" font-size="10">tool_help(name)</text>
+  <line x1="538" y1="163" x2="422" y2="163" stroke="#5cc8ff" stroke-width="1.4" marker-end="url(#arrow-blu)"/>
+  <text x="480" y="175" text-anchor="middle" fill="#7e6fb0" font-size="10">full description + JSON schema</text>
+
+  <!-- ② CALL header -->
+  <rect x="30" y="192" width="900" height="20" rx="4" fill="#1a1335"/>
+  <text x="480" y="206" text-anchor="middle" fill="#9d8bd6" font-size="11" font-weight="600">②  CALL  —  model now has the schema and calls for real</text>
+
+  <!-- Left: real call -->
+  <rect x="30" y="216" width="390" height="44" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="225" y="236" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">call tool with real arguments</text>
+  <text x="225" y="252" text-anchor="middle" fill="#9d8bd6" font-size="11">arguments match the schema received at ①</text>
+
+  <!-- Right: dispatch -->
+  <rect x="540" y="216" width="390" height="44" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="735" y="236" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Decorator → inner.InvokeAsync(name, input)</text>
+  <text x="735" y="252" text-anchor="middle" fill="#8fb6d6" font-size="11">same dispatch path as any native tool</text>
+
+  <!-- arrows between cols (call) -->
+  <line x1="422" y1="230" x2="538" y2="230" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="480" y="226" text-anchor="middle" fill="#7e6fb0" font-size="10">InvokeAsync(name, input)</text>
+  <line x1="538" y1="248" x2="422" y2="248" stroke="#5cc8ff" stroke-width="1.4" marker-end="url(#arrow-blu)"/>
+  <text x="480" y="260" text-anchor="middle" fill="#7e6fb0" font-size="10">ToolResult</text>
+
+  <!-- ③ SELF-HEAL header -->
+  <rect x="30" y="272" width="900" height="20" rx="4" fill="#1a1335"/>
+  <text x="480" y="286" text-anchor="middle" fill="#9d8bd6" font-size="11" font-weight="600">③  SELF-HEAL  —  if the model skipped ① and called with missing arguments</text>
+
+  <!-- Full-width self-heal box -->
+  <rect x="30" y="296" width="900" height="54" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="480" y="316" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">MissingRequiredArguments check  →  fold real schema into error result</text>
+  <text x="480" y="332" text-anchor="middle" fill="#8fb6d6" font-size="11">model's next retry has what it needs without another tool_help round-trip</text>
+  <text x="480" y="346" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">ProgressiveDiscoveryToolRegistry.cs:113  ·  genuine errors left untouched</text>
+
+  <!-- bottom label -->
+  <text x="480" y="390" text-anchor="middle" fill="#7e6fb0" font-size="11">both MCP tools and native tools share one registry  ·  MCP tools withheld  ·  native tools revealed in full</text>
+</svg>

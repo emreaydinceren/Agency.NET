@@ -1,10 +1,10 @@
 # Agency.Harness
 
-#agent #loop #tools #events #orchestration #mcp #skills #permissions #hooks #observability #goalkeeper
+#agent #loop #tools #events #orchestration #mcp #skills #permissions #hooks #observability #goalkeeper #semantic-search
 
 ## What It Is
 
-`Agency.Harness` is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, skills, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling. On top of the bare loop it layers several cross-cutting subsystems: an MCP tool pool (`McpClientPool`) that exposes Model Context Protocol server tools as `ITool` instances, a **progressive tool-discovery** decorator that withholds verbose schemas until requested, a **permission model** that parks tool calls for user approval (park/resume), a **skills** subsystem implementing SKILL.md progressive disclosure, a **config-driven hooks** pipeline that runs operator-defined command/HTTP handlers at lifecycle points, and a **Loop Kit** (`Agency.Harness.Loop`) that drives the session across turns toward a verifiable goal with an unskippable, independent done-check (the *Goalkeeper*) and a hard turn/budget cap.
+`Agency.Harness` is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, skills, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling. On top of the bare loop it layers several cross-cutting subsystems: an MCP tool pool (`McpClientPool`) that exposes Model Context Protocol server tools as `ITool` instances, a **progressive tool-discovery** decorator that withholds verbose schemas until requested, a **permission model** that parks tool calls for user approval (park/resume), a **skills** subsystem implementing SKILL.md progressive disclosure, a **config-driven hooks** pipeline that runs operator-defined command/HTTP handlers at lifecycle points, a **Loop Kit** (`Agency.Harness.Loop`) that drives the session across turns toward a verifiable goal with an unskippable, independent done-check (the *Goalkeeper*) and a hard turn/budget cap, and a **semantic-search** tool that lets the model query ingested documents across the global, session, and loaded-project scopes tracked by `IProjectSessionState`.
 
 **Namespace:** `Agency.Harness`
 
@@ -53,7 +53,8 @@ public sealed class Agent
         EnvironmentalContext? environment = null,
         UserSpecificContext? user = null,
         TimeProvider? timeProvider = null,
-        SkillContext? skills = null);
+        SkillContext? skills = null,
+        SessionContext? session = null);
 
     /// <summary>
     /// Executes one user turn. Fires OnUserPromptSubmit before entering the loop, clears active-skill
@@ -85,7 +86,8 @@ public sealed class ChatSession : IAsyncDisposable
         AgentOptions options,
         ToolContext? toolContext = null,
         UserSpecificContext? user = null,
-        SkillContext? skills = null);
+        SkillContext? skills = null,
+        SessionContext? session = null);   // optional pre-seeded session context forwarded on first send
 
     public LlmTokenUsage TotalUsage   { get; }
     public decimal       TotalCostUsd { get; }
@@ -94,6 +96,12 @@ public sealed class ChatSession : IAsyncDisposable
 
     /// <summary>Switches the agent used for subsequent turns. Conversation history is preserved.</summary>
     public void SetAgent(Agent agent);
+
+    /// <summary>
+    /// Injects runtime knowledge into the session. Applied immediately if the context already exists;
+    /// otherwise queued and applied on the first SendAsync.
+    /// </summary>
+    public void SetKnowledge(KnowledgeContext knowledge);
 
     /// <summary>
     /// Sends a message and streams back AgentEvents. Context is created lazily on the first call.
@@ -658,6 +666,43 @@ public sealed class ToolRegistry : IToolRegistry
 }
 ```
 
+### Semantic Search
+
+`IProjectSessionState` is the per-session view of who is searching (`UserId`/`SessionId`) and which projects are currently loaded, plus the mutators a host wires to its REPL `/project load|unload` commands.
+
+```csharp
+// File: src/Harness/Agency.Harness/IProjectSessionState.cs
+namespace Agency.Harness;
+
+public interface IProjectSessionState
+{
+    string UserId { get; }
+    string SessionId { get; }
+    IReadOnlyList<string> LoadedProjects { get; }
+    void LoadProject(string projectName);
+    void UnloadProject(string projectName);
+}
+```
+
+`SemanticSearchTool` is the model-facing `ITool` (name `semantic_search`) that turns a `search_text` string into a [[Agency.VectorStore.Common]] `Query` scoped by the session state and renders the hits as a Markdown table via [[Agency.RagFormatter]].
+
+```csharp
+// File: src/Harness/Agency.Harness/Tools/SemanticSearchTool.cs
+namespace Agency.Harness.Tools;
+
+/// <summary>
+/// ITool exposing semantic similarity search over ingested documents. Builds a Query from
+/// IProjectSessionState (UserId, SessionId, LoadedProjects) plus the caller's search_text and
+/// topK limit, searches the IVectorStore, and returns a Markdown table of hits — or
+/// "No matching documents found." when there are none. Empty search_text yields an IsError result.
+/// </summary>
+public class SemanticSearchTool(IVectorStore vectorStore, IProjectSessionState sessionState, int topK = 5) : ITool
+{
+    public ToolDefinition Definition { get; }   // name "semantic_search"; single required search_text string
+    public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct);
+}
+```
+
 ### MCP Types
 
 ```csharp
@@ -977,6 +1022,7 @@ var toolCtx = new ToolContext { Registry = progressive };
 |---|---|---|
 | `subagent_tool` (`AgentTool`) | Delegates a focused task to a specialized subagent with its own `ToolRegistry`. Sub-agents auto-deny any permission requests (cannot prompt). | `prompt` (required), `clientName`, `model` |
 | `execute_powershell` (`ExecutePowershellTool`) | Executes a PowerShell command in a fresh runspace; formats multi-object output as Markdown tables. Description carries OS/cwd/path-separator (override-able for cache replay); accepts a single string under any key (Postel's law). | `command` (required) |
+| `semantic_search` (`SemanticSearchTool`) | Searches ingested documents using semantic similarity. Searches across all accessible scopes: global, current session, and all loaded projects. | `search_text: string` (required) |
 | `read_file` (`ReadFileTool`) | Reads and returns the contents of a file at a given path. | `path` (required) |
 | `write_file` (`WriteFileTool`) | Writes content to a file at a given path. | `path`, `content` (required) |
 | `skill` (`SkillTool`, internal) | Invokes a skill by name; loads its rendered instructions into the conversation. On success records the skill's `allowed-tools` into `ActiveSkillState`; `context: fork` skills delegate to a subagent runner when wired. Refuses skills with `disable-model-invocation`. | `name` (required), `arguments` |
@@ -1030,6 +1076,8 @@ var toolCtx = new ToolContext { Registry = progressive };
 | [[Agency.Llm.Common]] | `Agent` depends on `IToolRegistry`, `ITool`, `ToolDefinition`, `ToolResult`, `Model`, `IModelProvider`, and `LlmClientOptions` from this project |
 | [[Agency.Llm.Claude]] | Concrete `IChatClient`/`IModelProvider` adapter for the Anthropic API; resolved by `Models.CreateChatClient` |
 | [[Agency.Llm.OpenAI]] | Concrete `IChatClient`/`IModelProvider` adapter for the OpenAI-compatible API |
+| [[Agency.VectorStore.Common]] | `SemanticSearchTool` depends on `IVectorStore`, `Query`, and `SearchHit<T>` to run scoped semantic search |
+| [[Agency.RagFormatter]] | `SemanticSearchTool` renders hits with `ToDataset()` / `ToMarkdownTable()` from this project |
 | [[Agency.Harness.Console]] | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, renders `AgentEvent` streams (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent`), and answers `PermissionRequestedEvent`s |
 
 ## Design Notes
@@ -1050,4 +1098,6 @@ var toolCtx = new ToolContext { Registry = progressive };
 - **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only `internal set` counters. `Knowledge`/`Memory`/`Focus`/`Session` are `set` so lifecycle hooks (and the loop's first-turn `Session.Id` assignment) can mutate them mid-session; everything else is `init`-only, keeping session state predictable and snapshot-friendly.
 - **`SystemPromptBuilder` is a pure function** — rebuilt from `Context` every iteration so knowledge facts, retrieved records, the skills catalog, and the context-window budget are always fresh; being a static pure function makes it unit-testable in isolation from the loop.
 - **MCP tools and native tools share one flat namespace** — both register into the same name-keyed `ToolRegistry`; once registered the loop dispatches purely by tool name. `Register` is last-write-wins with no collision guard, so a server-supplied name that collides with a native tool (e.g. another `read_file`) silently overwrites it — name MCP servers' tools defensively. `McpProxyTool` keeps only text content blocks, dropping images/embedded resources. `McpClientPool` is `IAsyncDisposable`; use `await using` to close all server connections even on cancellation.
+- **Semantic search is scoped by session state, not baked into the tool** — `SemanticSearchTool` holds no identity of its own; it reads `UserId`, `SessionId`, and `LoadedProjects` from the injected `IProjectSessionState` on every call and folds them into the `Query`, so a host's `/project load|unload` commands immediately widen or narrow what the next search sees (global + current session + loaded projects) without rebuilding the tool. Formatting (`ToDataset().ToMarkdownTable()`) is delegated to [[Agency.RagFormatter]], keeping the tool a thin adapter between the model and [[Agency.VectorStore.Common]].
+- **Knowledge can be injected before the first turn** — `ChatSession.SetKnowledge` queues a `KnowledgeContext` into `_pendingKnowledge` when the context has not been created yet and applies it lazily on the first `SendAsync`; once the context exists it writes straight through to `Context.Knowledge`. This lets a host hydrate document context (e.g. from ingestion) ahead of the opening prompt without forcing an empty warm-up turn.
 - **Tool-payload logging is opt-in** — by default tool calls and failures are logged by name with payloads redacted; `AgentOptions.LogToolPayloads` (wired to `Agent`'s `logToolPayloads`) logs full inputs and error-result content verbatim. It is off by default because payloads may contain file contents, commands, and ids.

@@ -251,20 +251,7 @@ returns structured requests and stops; the harness executes them and continues. 
 harness never calls into the host** — it yields structured permission requests and parks; the host
 answers them and resumes:
 
-```text
-LLM ↔ Harness (existing):
-  LLM:     assistant message = [ text, tool_use(WriteFile), tool_use(ReadFile) ]
-  Harness: executes tools → sends back [ tool_result, tool_result ]
-  LLM:     continues.
-
-Host ↔ Harness (this design):
-  Harness: event stream = [ ToolInvokedEvent(ReadFile),                 ← allowed sibling ran
-                            PermissionRequestedEvent(id, WriteFile, …),
-                            AgentResultEvent(AwaitingPermission) ]       ← turn parks
-  Host:    renders request(s) → user answers
-           → ResumeWithPermissionsAsync([ (id, AllowAlways) ])
-  Harness: executes WriteFile, completes the batch, loop continues.
-```
+![Protocol Symmetry](attachments/permission-protocol.svg)
 
 > If you remember one sentence from this document, make it this:
 >
@@ -284,36 +271,7 @@ results, a resume entry point) — more work than inserting one `await`. §6 is 
 Here is the whole pipeline for one tool call. The two gates fold into a single verdict; the verdict
 decides whether the call runs now, is blocked, or pends the turn.
 
-```text
-LLM emits a tool-call batch
-        │  (per call, in parallel)
-        ▼
-┌─────────────────────────────┐
-│ 1. OnPreToolUse hooks        │  Allow / Deny / Rewrite / Ask
-│    (operator policy)         │  Rewrite replaces input; Ask flags for confirmation
-└──────────────┬───────────────┘
-               ▼
-┌─────────────────────────────┐
-│ 2. PermissionEvaluator       │  pure decision — never blocks, never renders, never I/O
-│    a. deny rules   → Deny    │  config ∪ persisted grants
-│    b. allow rules  → Allow   │
-│    c. unresolved   → Ask     │  (or Deny when OnUnresolved=Deny — headless)
-└──────────────┬───────────────┘
-               ▼
-   Allow → 3. ToolRegistry.InvokeAsync
-   Deny  →    "[Blocked] {reason}" result, IsError: true
-   Ask   →    call is PENDED — not executed, no result yet
-        │
-        ▼  after the batch settles (Task.WhenAll)
-   any pended calls?
-     no  → append results, continue loop (unchanged behavior)
-     yes → yield PermissionRequestedEvent per pended call
-           yield AgentResultEvent(AwaitingPermission)
-           park: completed sibling results + pended calls held on Context
-           … host answers …
-           ResumeWithPermissionsAsync → execute/deny pended calls,
-           append the FULL batch, continue loop
-```
+![Decision Pipeline](attachments/permission-pipeline.svg)
 
 **The combined per-call order** (as implemented in `Agent.cs:725-806`). This is the authoritative
 precedence list — note steps 2 and 3, which are *stronger* than the original design doc because the
@@ -959,22 +917,7 @@ promises, not merely a test that happens to exist.
 
 To tie it all together, here is one tool call's life through the actual code:
 
-```mermaid
-flowchart TD
-    A1["LLM emits batch: [ ReadFile(README), WriteFile(E:/app/config.json) ]"]
-    A2["Per-call gate runs in parallel — Agent.cs:689"]
-    A3["ReadFile: allow rule 'ReadFile' matches → Evaluate returns Allow → InvokeAsync runs"]
-    A4["WriteFile: no rule matches → Evaluate returns Ask(KeyValue='E:/app/config.json',<br/>ProposedRule='WriteFile(E:/app/config.json)') → PENDED"]
-    A5["Batch settles (Task.WhenAll) — one slot pended — Agent.cs:889"]
-    A6["yield ToolInvokedEvent(ReadFile)  ·  yield PermissionRequestedEvent(WriteFile)<br/>store PendingToolBatch on Context  ·  yield AgentResultEvent(AwaitingPermission)"]
-    A7["Console: spinner already stopped → render 'Permission required' panel →<br/>ConsolePicker shows 4 rows (rule-sourced)"]
-    A8["User picks 'Allow always' → PermissionResponse(id, AllowAlways)"]
-    A9["ResumeWithPermissionsAsync → RecordAlwaysAsync('WriteFile(E:/app/config.json)', deny:false)<br/>→ session grant + append to permissions.local.json"]
-    A10["WriteFile executes (post-Rewrite input) → OnPostToolUse fires →<br/>merge full batch → OnPostToolBatch → append all results in order → clear PendingToolBatch"]
-    A11["Loop continues from the next iteration — LLM sees both tool_results"]
-    A12["Next turn: WriteFile(E:/app/config.json) → grant matches → Allow → no park"]
-    A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8 --> A9 --> A10 --> A11 --> A12
-```
+![The Whole Story in One Trace](attachments/permission-trace.svg)
 
 The user was asked exactly once. The model never saw the machinery — only a `tool_result`. The next
 identical write sails through because the grant the user gave is now a rule. That is the entire point:

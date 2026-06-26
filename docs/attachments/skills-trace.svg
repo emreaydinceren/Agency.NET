@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 800" xmlns="http://www.w3.org/2000/svg" width="960" height="800"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="800" rx="16" fill="#1b1530"/>
+  <text x="480" y="40" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">The Whole Story in One Trace</text>
+  <text x="480" y="58" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">skills model · catalog on startup → one-line in context → model invokes → full body loads</text>
+
+  <!-- boxes: x=80 w=800 h=52 gap=12 (slot=64) center=480 -->
+
+  <!-- A1 startup -->
+  <rect x="80" y="72" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="93" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Startup: SkillLoader scans skill directories</text>
+  <text x="480" y="111" text-anchor="middle" fill="#9d8bd6" font-size="10.5">./.agency/skills  ·  ~/.agency/skills  ·  ReloadableSkillCatalog  ·  project-first, first-occurrence wins</text>
+  <line x1="480" y1="126" x2="480" y2="134" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A2 SkillContext -->
+  <rect x="80" y="136" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="157" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">SkillContext wraps live catalog → Context.Skills</text>
+  <text x="480" y="175" text-anchor="middle" fill="#9d8bd6" font-size="10.5">SkillWatcher arms FileSystemWatcher  ·  /skill commands built from startup snapshot</text>
+  <line x1="480" y1="190" x2="480" y2="198" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A3 each iteration -->
+  <rect x="80" y="200" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="221" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">each iteration: SystemPromptBuilder renders catalog</text>
+  <text x="480" y="239" text-anchor="middle" fill="#9d8bd6" font-size="10.5">## Skills — **triage** — Diagnose a failing test…  ·  one catalog line per skill in context</text>
+  <line x1="480" y1="254" x2="480" y2="262" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A4 user input -->
+  <rect x="80" y="264" width="800" height="52" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="480" y="285" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">User: 'this test is red, what's going on?'</text>
+  <text x="480" y="303" text-anchor="middle" fill="#8fb6d6" font-size="10.5">host delivers user message · model turn begins · full catalog visible in system prompt</text>
+  <line x1="480" y1="318" x2="480" y2="326" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A5 model calls skill -->
+  <rect x="80" y="328" width="800" height="52" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="480" y="349" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Model reads catalog → calls skill(name='triage', arguments='MyTest')</text>
+  <text x="480" y="367" text-anchor="middle" fill="#e0b985" font-size="10.5">LLM picks the skill from the one-line catalog entry in the system prompt</text>
+  <line x1="480" y1="382" x2="480" y2="390" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A6 SkillTool.InvokeAsync -->
+  <rect x="80" y="392" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="413" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">SkillTool.InvokeAsync: catalog.Find → SkillRenderer.Render</text>
+  <text x="480" y="431" text-anchor="middle" fill="#9d8bd6" font-size="10.5">$test_name → 'MyTest'  ·  ${CLAUDE_SKILL_DIR} → path  ·  variable substitutions applied</text>
+  <line x1="480" y1="446" x2="480" y2="454" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A7 ExpandShellAsync -->
+  <rect x="80" y="456" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="477" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">ExpandShellAsync: !`cmd` blocks run via PowerShellSkillShellRunner</text>
+  <text x="480" y="495" text-anchor="middle" fill="#9d8bd6" font-size="10.5">skipped if DisableShellExecution  ·  runs once at render time  ·  output embedded in body</text>
+  <line x1="480" y1="510" x2="480" y2="518" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A8 allowed-tools -->
+  <rect x="80" y="520" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="541" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">allowed-tools recorded into ActiveSkillState</text>
+  <text x="480" y="559" text-anchor="middle" fill="#9d8bd6" font-size="10.5">read_file, execute_powershell  ·  pre-approved for this turn only  ·  gates permission checks</text>
+  <line x1="480" y1="574" x2="480" y2="582" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A9 ToolResult appended -->
+  <rect x="80" y="584" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="605" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">ToolResult(body) appended as Tool message</text>
+  <text x="480" y="623" text-anchor="middle" fill="#9d8bd6" font-size="10.5">skill instructions are now live in the conversation context  ·  model sees the full body</text>
+  <line x1="480" y1="638" x2="480" y2="646" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A10 agent follows steps -->
+  <rect x="80" y="648" width="800" height="52" rx="12" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.8"/>
+  <text x="480" y="669" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Agent follows skill steps  ·  read_file pre-approved</text>
+  <text x="480" y="687" text-anchor="middle" fill="#9be3bd" font-size="10.5">no permission prompt this turn  ·  ActiveSkillState gates each tool call check</text>
+  <line x1="480" y1="702" x2="480" y2="710" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- A11 next turn clears -->
+  <rect x="80" y="712" width="800" height="52" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="733" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Next user turn → ActiveSkillState cleared</text>
+  <text x="480" y="751" text-anchor="middle" fill="#9d8bd6" font-size="10.5">pre-approval gone  ·  skill state resets each turn  ·  Agent.cs:204  ChatAsync clears ActiveSkillState</text>
+</svg>

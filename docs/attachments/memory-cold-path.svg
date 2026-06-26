@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 508" xmlns="http://www.w3.org/2000/svg" width="960" height="508"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="508" rx="16" fill="#1b1530"/>
+  <text x="480" y="43" text-anchor="middle" fill="#e9e4ff" font-size="26" font-weight="600" letter-spacing="2">Memory — Cold Path</text>
+  <text x="480" y="63" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">behind the channel boundary  ·  distil → consolidate → sweep → store</text>
+
+  <!-- CHANNEL: 3 triggers -->
+  <rect x="220" y="76" width="520" height="58" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="480" y="100" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">per-session Channel&lt;DistillationJob&gt;</text>
+  <text x="480" y="118" text-anchor="middle" fill="#e0b985" font-size="11" font-family="monospace">3 triggers: Inactivity  ·  GoalCompletion  ·  SessionDisposed</text>
+  <line x1="480" y1="136" x2="480" y2="152" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- DISTILLER -->
+  <rect x="220" y="154" width="520" height="82" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="480" y="176" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">DistillerBackgroundService</text>
+  <text x="480" y="194" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">event-driven wake · reads turns from watermark forward</text>
+  <text x="480" y="211" text-anchor="middle" fill="#8fb6d6" font-size="11">LLM: extract facts  (thinking suppressed)  →  embed  →  UpsertAsync</text>
+  <text x="480" y="228" text-anchor="middle" fill="#9be3bd" font-size="11" font-family="monospace">advance watermark  →  bump LastWrittenAt  ✓  →  emit event</text>
+
+  <!-- dashed: re-arms gate -->
+  <line x1="742" y1="194" x2="778" y2="194" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+  <text x="784" y="190" fill="#9be3bd" font-size="10">re-arms gate ③</text>
+  <text x="784" y="202" fill="#9be3bd" font-size="10">(hot path)</text>
+
+  <!-- DistillationCompletedEvent label -->
+  <line x1="480" y1="238" x2="480" y2="254" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="508" y="249" fill="#9d8bd6" font-size="10">DistillationCompletedEvent</text>
+
+  <!-- CONSOLIDATOR -->
+  <rect x="220" y="256" width="520" height="68" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="480" y="278" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">ConsolidatorBackgroundService</text>
+  <text x="480" y="296" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">per user on session end  ·  load all records  ·  sub-agent call</text>
+  <text x="480" y="313" text-anchor="middle" fill="#8fb6d6" font-size="11">Memory_Merge  /  Memory_Update  /  Memory_Delete  /  Memory_Done</text>
+  <line x1="480" y1="326" x2="480" y2="340" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- HYGIENE -->
+  <rect x="220" y="342" width="520" height="52" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="480" y="364" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">HygieneSweeperBackgroundService</text>
+  <text x="480" y="381" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">jittered ~24 h  ·  TTL pass  +  low-importance-stale pass  →  bulk DELETE</text>
+  <line x1="480" y1="396" x2="480" y2="412" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STORAGE -->
+  <rect x="160" y="414" width="640" height="58" rx="12" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.8"/>
+  <text x="480" y="438" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">STORAGE — PostgreSQL 18 + pgvector</text>
+  <text x="480" y="456" text-anchor="middle" fill="#9be3bd" font-size="11" font-family="monospace">records · watermarks · dead_letter · user_state  ·  HNSW index (cosine)</text>
+
+  <!-- dashed: read path back to hot path -->
+  <line x1="802" y1="443" x2="838" y2="443" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+  <text x="844" y="439" fill="#9be3bd" font-size="10">read path</text>
+  <text x="844" y="451" fill="#9be3bd" font-size="10">(hot path ③)</text>
+</svg>

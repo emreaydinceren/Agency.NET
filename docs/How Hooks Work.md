@@ -101,21 +101,7 @@ The loop in `Agent.cs` fires hooks at nine points. Together they trace the life 
 
 A useful mental model for the ordering within one user turn:
 
-```mermaid
-flowchart TD
-    Prompt[OnUserPromptSubmit - every turn] --> Start[OnSessionStarted - every turn, id stable]
-    Start --> PreIter[OnPreIteration]
-    PreIter --> Model[LLM responds]
-    Model --> Turn[OnAssistantTurn]
-    Turn --> Decide{Tools requested?}
-    Decide -- yes --> PreTool[OnPreToolUse - per tool]
-    PreTool --> Tool[Tool runs - or is blocked]
-    Tool --> PostTool[OnPostToolUse - per tool]
-    PostTool --> Batch[OnPostToolBatch]
-    Batch --> PreIter
-    Decide -- no --> Stop[OnStop]
-    Stop -.session disposed.-> End[OnSessionEnd]
-```
+![Nine Lifecycle Events](attachments/hooks-lifecycle.svg)
 
 Three distinctions trip people up:
 

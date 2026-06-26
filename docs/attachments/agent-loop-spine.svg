@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 860" xmlns="http://www.w3.org/2000/svg" width="960" height="860"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+    <marker id="arrow-blu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5cc8ff"/>
+    </marker>
+    <marker id="arrow-amb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ffb454"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="860" rx="16" fill="#1b1530"/>
+  <text x="480" y="40" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">The Spine — Core Agent Loop</text>
+  <text x="480" y="58" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Agent.cs  ·  ChatSession.SendAsync → Agent.ChatAsync → RunAsync → RunIterationsAsync (while-true)</text>
+
+  <!-- ── entry boxes ── -->
+  <rect x="290" y="70" width="380" height="38" rx="18" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="480" y="85" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">ChatSession.SendAsync(userMessage)</text>
+  <text x="480" y="100" text-anchor="middle" fill="#8fb6d6" font-size="10">ChatSession.cs:78  ·  host calls this once per user turn</text>
+  <line x1="480" y1="110" x2="480" y2="126" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="120" y="128" width="720" height="50" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="149" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Agent.ChatAsync — Agent.cs:172</text>
+  <text x="480" y="166" text-anchor="middle" fill="#9d8bd6" font-size="10.5">append user msg (:199)  ·  ActiveSkillState.Clear() (:204)  ·  OnUserPromptSubmit (:207)</text>
+  <line x1="480" y1="180" x2="480" y2="196" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="120" y="198" width="720" height="50" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="219" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Agent.RunAsync — Agent.cs:300</text>
+  <text x="480" y="236" text-anchor="middle" fill="#9d8bd6" font-size="10.5">stamp Session.Id once (:304)  ·  seed prompt (:317)  ·  OnSessionStarted (:311)</text>
+  <line x1="480" y1="250" x2="480" y2="266" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ── RunIterationsAsync loop subgraph ── -->
+  <rect x="36" y="268" width="770" height="538" rx="12" fill="#1a1335" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="421" y="287" text-anchor="middle" fill="#c9bdf2" font-size="11" font-weight="600">RunIterationsAsync — while(true) — Agent.cs:568</text>
+
+  <!-- I0 -->
+  <rect x="56" y="298" width="730" height="40" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="421" y="314" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">ctx.IterationCount++  (:571)</text>
+  <text x="421" y="329" text-anchor="middle" fill="#9d8bd6" font-size="10">loop counter increments before any hook fires</text>
+  <line x1="421" y1="340" x2="421" y2="352" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I1 -->
+  <rect x="56" y="354" width="730" height="40" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.5"/>
+  <text x="421" y="370" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">OnPreIteration hook  (:574)</text>
+  <text x="421" y="385" text-anchor="middle" fill="#8fb6d6" font-size="10">retrieval WRITES ctx.Knowledge / ctx.Memory  ·  later hooks get enriched context</text>
+  <line x1="421" y1="396" x2="421" y2="408" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I2 -->
+  <rect x="56" y="410" width="730" height="40" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="421" y="426" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">SystemPromptBuilder.Build(ctx)  (:580)</text>
+  <text x="421" y="441" text-anchor="middle" fill="#9d8bd6" font-size="10">READS the whole blackboard — pure, read-only  ·  ChatOptions.Instructions set here</text>
+  <line x1="421" y1="452" x2="421" y2="464" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I3 LLM -->
+  <rect x="56" y="466" width="730" height="40" rx="10" fill="#241d3d" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="421" y="482" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">LLM call — THINK  (:599)</text>
+  <text x="421" y="497" text-anchor="middle" fill="#e0b985" font-size="10">READS ctx.Conversation.Messages  ·  streams response  ·  blocking until complete</text>
+  <line x1="421" y1="508" x2="421" y2="520" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I4 -->
+  <rect x="56" y="522" width="730" height="40" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="421" y="538" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">ctx.TotalUsage += turnUsage  (:607)  ·  ctx.Conversation.Append(assistant)  (:611)</text>
+  <text x="421" y="553" text-anchor="middle" fill="#9d8bd6" font-size="10">usage accumulates across all turns  ·  assistant message recorded</text>
+  <line x1="421" y1="564" x2="421" y2="576" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I5 -->
+  <rect x="56" y="578" width="730" height="40" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="421" y="594" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">OnAssistantTurn hook  (:614)</text>
+  <text x="421" y="609" text-anchor="middle" fill="#9d8bd6" font-size="10">memory restarts inactivity timer  ·  hooks read the new assistant message</text>
+  <line x1="421" y1="620" x2="421" y2="632" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I6 stop? -->
+  <rect x="56" y="634" width="730" height="40" rx="10" fill="#312856" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="421" y="658" text-anchor="middle" fill="#c9bdf2" font-size="12" font-weight="600">stop?  (:654)</text>
+
+  <!-- "no" → I7 -->
+  <line x1="421" y1="676" x2="421" y2="690" stroke="#6ee7a8" stroke-width="1.4" marker-end="url(#arrow-grn)"/>
+  <text x="437" y="686" fill="#9be3bd" font-size="10">no</text>
+
+  <!-- "yes" → Stop (outside loop) -->
+  <line x1="788" y1="654" x2="826" y2="654" stroke="#ffb454" stroke-width="1.4" marker-end="url(#arrow-amb)"/>
+  <text x="807" y="649" text-anchor="middle" fill="#e0b985" font-size="10">yes</text>
+
+  <!-- I7 tool calls -->
+  <rect x="56" y="692" width="730" height="48" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="421" y="712" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">tool calls run in parallel — ACT  (:668)</text>
+  <text x="421" y="727" text-anchor="middle" fill="#8fb6d6" font-size="10">READS ctx.Tools.Registry  ·  permission gate  ·  InvokeAsync  ·  maybe ActiveSkillState.Set (:865)</text>
+  <text x="421" y="741" text-anchor="middle" fill="#8fb6d6" font-size="10">Task.WhenAll settles batch  ·  results in call order</text>
+  <line x1="421" y1="742" x2="421" y2="754" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- I8 append/park -->
+  <rect x="56" y="756" width="730" height="40" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="421" y="772" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">append tool results — OBSERVE  (:876)</text>
+  <text x="421" y="787" text-anchor="middle" fill="#9d8bd6" font-size="10">OR park: ctx.PendingToolBatch = … (:929)  ·  AgentResultEvent(AwaitingPermission) yielded</text>
+
+  <!-- ── back edge: I8 left → I0 left ── -->
+  <path d="M 56,776 L 32,776 L 32,318 L 54,318" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+  <text x="28" y="548" fill="#7e6fb0" font-size="9" text-anchor="middle">↺</text>
+
+  <!-- ── yes branch: OnStop + Dispose ── -->
+  <rect x="828" y="634" width="116" height="40" rx="10" fill="#241d3d" stroke="#ffb454" stroke-width="1.6"/>
+  <text x="886" y="649" text-anchor="middle" fill="#e9e4ff" font-size="10" font-weight="600">OnStop</text>
+  <text x="886" y="665" text-anchor="middle" fill="#e0b985" font-size="9">AgentResultEvent</text>
+  <line x1="886" y1="676" x2="886" y2="692" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <rect x="828" y="694" width="116" height="40" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="886" y="709" text-anchor="middle" fill="#e9e4ff" font-size="10" font-weight="600">DisposeAsync</text>
+  <text x="886" y="725" text-anchor="middle" fill="#9be3bd" font-size="9">OnSessionEnd (:133)</text>
+
+  <text x="480" y="830" text-anchor="middle" fill="#7e6fb0" font-size="11">each turn is a fresh call to SendAsync · the same Context lives across all turns · IterationCount accumulates within one RunAsync call</text>
+</svg>

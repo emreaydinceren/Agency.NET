@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 510" xmlns="http://www.w3.org/2000/svg" width="960" height="510"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-amb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ffb454"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="510" rx="16" fill="#1b1530"/>
+  <text x="480" y="43" text-anchor="middle" fill="#e9e4ff" font-size="26" font-weight="600" letter-spacing="2">Tool Dispatch — per Call</text>
+  <text x="480" y="63" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Agent.cs  ·  parallel across all function calls in one batch  ·  single registry dispatch point</text>
+
+  <!-- 1: LLM output -->
+  <rect x="250" y="76" width="440" height="44" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="470" y="96" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">LLM CALL → FunctionCallContent(name, args)</text>
+  <text x="470" y="112" text-anchor="middle" fill="#e0b985" font-size="11" font-family="monospace">Agent.cs:668  ·  one goroutine per call — in parallel</text>
+  <line x1="470" y1="122" x2="470" y2="134" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- 2: permission gate -->
+  <rect x="250" y="136" width="440" height="44" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="470" y="156" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">OnPreToolUse hook  →  permission gate</text>
+  <text x="470" y="172" text-anchor="middle" fill="#e0b985" font-size="11">see Hooks &amp; Permission Model docs</text>
+  <!-- denied dashed -->
+  <line x1="692" y1="158" x2="726" y2="158" stroke="#ffb454" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-amb)"/>
+  <text x="732" y="154" fill="#e0b985" font-size="10">denied →</text>
+  <text x="732" y="166" fill="#e0b985" font-size="10">ToolResult(IsError)</text>
+  <line x1="470" y1="182" x2="470" y2="196" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="484" y="193" fill="#7e6fb0" font-size="10">allowed</text>
+
+  <!-- 3: InvokeAsync -->
+  <rect x="250" y="198" width="440" height="44" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="470" y="218" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">ctx.Tools.Registry.InvokeAsync(name, input)</text>
+  <text x="470" y="234" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">Agent.cs:818  ·  the single dispatch point by name</text>
+  <line x1="470" y1="244" x2="470" y2="256" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- 4: ToolResult -->
+  <rect x="250" y="258" width="440" height="54" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="470" y="278" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">ToolResult(Content, IsError)</text>
+  <text x="470" y="294" text-anchor="middle" fill="#8fb6d6" font-size="11">exception caught → ToolResult('Tool error: …', IsError: true)</text>
+  <text x="470" y="308" text-anchor="middle" fill="#8fb6d6" font-size="11">soft IsError logged + passed through  ·  both reach model as error</text>
+  <line x1="470" y1="314" x2="470" y2="326" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- 5: FunctionResultContent -->
+  <rect x="250" y="328" width="440" height="44" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="470" y="348" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">FunctionResultContent</text>
+  <text x="470" y="364" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">[Error] prefix prepended if IsError — Agent.cs:868</text>
+  <line x1="470" y1="374" x2="470" y2="386" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- 6: WhenAll -->
+  <rect x="250" y="388" width="440" height="36" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="470" y="411" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">Task.WhenAll — all-or-nothing batch settle — Agent.cs:876</text>
+  <line x1="470" y1="426" x2="470" y2="440" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#arrow-grn)"/>
+
+  <!-- 7: append -->
+  <rect x="250" y="442" width="440" height="44" rx="12" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.8"/>
+  <text x="470" y="462" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">append ALL results in batch order</text>
+  <text x="470" y="478" text-anchor="middle" fill="#9be3bd" font-size="11">results written in call-order regardless of completion order → next iteration</text>
+</svg>

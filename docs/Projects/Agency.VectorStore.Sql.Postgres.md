@@ -4,7 +4,7 @@
 
 ## What It Is
 
-Agency.VectorStore.Sql.Postgres is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional exact key matching and JSONB metadata filtering.
+`Agency.VectorStore.Sql.Postgres` is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional exact key matching and JSONB metadata filtering. Entries are scoped along three axes — user, session, and project — so a single query can fold together user-global, session-specific, and loaded-project results.
 
 **Namespace:** `Agency.VectorStore.Sql.Postgres`
 
@@ -15,15 +15,10 @@ Agency.VectorStore.Sql.Postgres is the PostgreSQL-backed vector store implementa
 
 ## API Surface
 
-`PostgresKVStore` implements `IVectorStore` (defined in [[Agency.VectorStore.Common]]) and adds one schema-setup method.
+`PostgresKVStore` implements `IVectorStore` (defined in [[Agency.VectorStore.Common]]) and adds one schema-setup method. The store is constructed directly via its public constructor; this project ships no DI registration.
 
 ```csharp
 // File: src/VectorStore/Agency.VectorStore.Sql.Postgres/PostgresKVStore.cs
-using Agency.VectorStore.Common;
-using Agency.Embeddings.Common;
-using Agency.Sql.Postgres;
-using Microsoft.Extensions.Logging;
-
 public class PostgresKVStore : IVectorStore
 {
     // Telemetry names
@@ -46,6 +41,7 @@ public class PostgresKVStore : IVectorStore
         string key,
         TValue value,
         IDictionary<string, object>? metadata = null,
+        string? projectId = null,
         CancellationToken cancellationToken = default);
 
     public Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(
@@ -56,8 +52,26 @@ public class PostgresKVStore : IVectorStore
         string userId,
         string? sessionId,
         string key,
+        string? projectId = null,
+        CancellationToken cancellationToken = default);
+
+    public Task<IReadOnlyList<string>> ListProjectsAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
+    public Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
+        string userId,
+        string? sessionId,
+        IReadOnlyList<string>? projectIds,
         CancellationToken cancellationToken = default);
 }
+```
+
+`ListDocumentsAsync` returns `DocumentInfo` records (defined in [[Agency.VectorStore.Common]]):
+
+```csharp
+// File: src/VectorStore/Agency.VectorStore.Common/DocumentInfo.cs
+public record DocumentInfo(string SourceFile, string SessionId, string ProjectId);
 ```
 
 ## How It Works
@@ -67,8 +81,8 @@ public class PostgresKVStore : IVectorStore
 `InitializeSchemaAsync(dimensions)` runs a single SQL batch that:
 
 1. Creates the `vector` extension if it does not exist.
-2. Drops the legacy `semantic_kv_store` table when it exists without a `user_id` column (migration guard).
-3. Creates `semantic_kv_store` with columns `user_id`, `session_id`, `key`, `value` (JSONB), `embedding` (vector), `metadata` (JSONB), and `updated_on`.
+2. Drops any existing `semantic_kv_store` table (`DROP TABLE IF EXISTS … CASCADE`) so the schema is rebuilt cleanly.
+3. Creates `semantic_kv_store` with columns `user_id`, `session_id`, `project_id` (`NOT NULL DEFAULT '*'`), `key`, `value` (JSONB), `embedding` (vector), `metadata` (JSONB), and `updated_on`, with a compound primary key `(user_id, session_id, project_id, key)`.
 4. Creates an HNSW index on `embedding` using cosine ops (`vector_cosine_ops`).
 5. Creates a GIN index on `metadata` for JSONB containment queries.
 
@@ -83,6 +97,7 @@ await store.UpsertAsync(
     key:       "article:42",
     value:     new Article { Title = "pgvector basics", Content = "..." },
     metadata:  new Dictionary<string, object> { ["tags"] = new[] { "database", "vector" } },
+    projectId: "docs-site",
     cancellationToken: cancellationToken);
 ```
 
@@ -91,10 +106,10 @@ Steps performed internally:
 1. Serializes `value` to JSON via `System.Text.Json`.
 2. Generates an embedding for that JSON string via `IEmbeddingGenerator`.
 3. Formats the embedding as a `[f1,f2,…]` string literal and casts it with `::vector` in the SQL.
-4. Executes `INSERT … ON CONFLICT (user_id, session_id, key) DO UPDATE SET value, embedding, metadata` to atomically upsert.
-5. A `null` `sessionId` is stored as the sentinel value `"*"` so it participates in the primary key without nullable columns.
+4. Executes `INSERT … ON CONFLICT (user_id, session_id, project_id, key) DO UPDATE SET value, embedding, metadata` to atomically upsert.
+5. A `null` `sessionId` resolves to the sentinel `"*"` and a `null` `projectId` resolves to the sentinel `"*"`, so both columns participate in the primary key without nullable columns.
 
-### Search
+### Search — three-scope union
 
 ```csharp
 using Agency.VectorStore.Common;
@@ -105,42 +120,58 @@ var query = new Query(
     Key:            null,
     Value:          "how does pgvector work?",
     MetadataFilter: new Dictionary<string, object> { ["tags"] = new[] { "vector" } },
-    Limit:          5);
+    Limit:          5,
+    ProjectIds:     new[] { "docs-site", "design-notes" });
 
 IReadOnlyList<SearchHit<Article>> hits = await store.SearchAsync<Article>(query, cancellationToken);
 ```
 
-The SQL uses boolean flag parameters (`@hasSessionId`, `@hasKey`, `@hasFilter`) to conditionally activate each filter clause within a single query shape:
+A single query shape unions three scopes for the user via a disjunction in the `WHERE` clause:
 
-- Uses `<=>` (cosine distance) when `query.Value` is non-empty; passes `NULL` otherwise so all rows return distance `0.0` and key-only or metadata-only lookups still work.
+- **Global** — when `@allSessions` is true (`query.SessionId == null`), every row for the user is in scope (global-only effectively, since no session/project filter is applied).
+- **Session** — rows where `session_id = @sid AND project_id = '*'`.
+- **Loaded projects** — when `@hasProjects` is true, rows where `session_id = '*' AND project_id = ANY(@pids)`.
+
+The project clause matches with `project_id = ANY(@pids)`, where `@pids` is a typed `NpgsqlDbType.Array | NpgsqlDbType.Text` parameter carrying `query.ProjectIds` (empty array when none). Other behavior:
+
+- Uses `<=>` (cosine distance) when `query.Value` is non-empty; passes `NULL` (cast `@qVector::vector`) otherwise so all rows return distance `0.0` and key-only or metadata-only lookups still work.
 - Uses `@>` for JSONB metadata containment when `query.MetadataFilter` is set.
-- Filters by `session_id` only when `query.SessionId` is non-null, allowing cross-session searches.
-- Filters by `key` only when `query.Key` is non-null, allowing exact key lookups.
+- Uses boolean flag parameters (`@allSessions`, `@hasProjects`, `@hasKey`, `@hasFilter`) to activate each clause within one compiled query plan.
+- A row whose stored `session_id` equals the `"*"` sentinel is hydrated back to a `null` `SessionId` on the returned `SearchHit<TValue>`. A `null` `SessionId` on the incoming query resolves to global-only.
 
 ### Delete
 
-Returns `true` when a row was deleted, `false` when no matching row existed. Uses the `"*"` sentinel to resolve a `null` `sessionId` before executing the `DELETE`.
+Returns `true` when a row was deleted, `false` when no matching row existed. Resolves `null` `sessionId` and `null` `projectId` to the `"*"` sentinel before executing the `DELETE`, so the delete targets the exact primary-key tuple.
+
+### Listing projects and documents
+
+- `ListProjectsAsync(userId)` returns the distinct, ordered `project_id` values for the user, excluding the `"*"` global sentinel.
+- `ListDocumentsAsync(userId, sessionId, projectIds)` returns distinct `DocumentInfo` rows (`source_file`, `session_id`, `project_id`) sourced from the `metadata->>'source_file'` field, scoped with the same three-way union (global / session / loaded projects via `project_id = ANY(@pids)`) and skipping rows without a `source_file`.
 
 ## Observability
 
 - **Activity source / meter name:** `Agency.VectorStore.Sql.Postgres`
 - **Activities:** `vectorstore.initialize`, `vectorstore.upsert`, `vectorstore.search`, `vectorstore.delete`
-- **Counter:** `vectorstore.operations` — tagged with `operation` and `status` (`success` / `error`)
-- **Histogram:** `vectorstore.duration` (milliseconds) — tagged with `operation`
 
-Every activity records an `exception` event with `exception.type`, `exception.message`, and `exception.stacktrace` tags on failure.
+| Instrument | Name | Unit | Tags |
+|---|---|---|---|
+| Counter | `vectorstore.operations` | `{operation}` | `operation`, `status` (`success` / `error`) |
+| Histogram | `vectorstore.duration` | `ms` | `operation` |
+
+Every activity records an `exception` event with `exception.type`, `exception.message`, and `exception.stacktrace` tags on failure. `ListProjectsAsync` and `ListDocumentsAsync` do not emit telemetry.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.VectorStore.Common]] | Implements `IVectorStore`; consumes `Query`, `SearchHit<TValue>`, and `JsonMetadataHelpers`. |
+| [[Agency.VectorStore.Common]] | Implements `IVectorStore`; consumes `Query`, `SearchHit<TValue>`, `DocumentInfo`, and `JsonMetadataHelpers`. |
 | [[Agency.Embeddings.Common]] | Injects `IEmbeddingGenerator` to produce embeddings for upsert and semantic search. |
 | [[Agency.Sql.Postgres]] | Injects `PostgreSqlRunner` for parameterized SQL execution and result hydration. |
 
 ## Design Notes
 
-- The `sessionId = null` → `"*"` sentinel keeps `session_id` NOT NULL in the primary key, avoiding nullable primary-key columns in PostgreSQL while still supporting user-global entries that span all sessions.
-- The upsert path builds a plain `[f1,f2,…]` vector literal and casts it with `::vector` rather than passing a `Pgvector.Vector` parameter, because Npgsql's pgvector type mapping requires the extension to be loaded in the connection session — the literal cast is more portable across connection pool configurations. The search path passes a `Pgvector.Vector` object directly because the read path opens a fresh connection where the extension is already registered.
-- Schema migration is intentionally destructive for the legacy table shape (no `user_id` column): the table is dropped and recreated rather than altered, since the legacy shape had no production data at the time this migration was introduced.
-- The search SQL uses boolean flag parameters (`@hasSessionId`, `@hasKey`, `@hasFilter`) instead of dynamic SQL string construction, keeping a single compiled query plan while allowing optional filter activation at the parameter level.
+- **Project scope folded into the primary key.** Adding `project_id` to the compound key `(user_id, session_id, project_id, key)` lets the same store hold user-global, session-scoped, and project-scoped entries side by side without separate tables, and lets the search/list queries union all three scopes in one statement.
+- **`= ANY(@array)` instead of an `IN (…)` list.** The loaded-project clause binds a single typed text-array parameter (`NpgsqlDbType.Array | NpgsqlDbType.Text`) and matches with `project_id = ANY(@pids)`. This keeps one stable, compiled query plan regardless of how many projects are loaded, avoids building a variable-length `IN` list with N placeholders, and degrades safely to an empty array (matching nothing) when no projects are loaded.
+- **`"*"` sentinel instead of NULL.** A `null` `sessionId` or `projectId` resolves to the `"*"` sentinel so both columns stay `NOT NULL` and participate cleanly in the primary key — PostgreSQL treats `NULL` as distinct in uniqueness/equality, which would break `ON CONFLICT` upserts and equality-based scope matching. The sentinel is translated back to `null` when hydrating `SearchHit<TValue>`.
+- **Boolean flag parameters over dynamic SQL.** Optional filters (sessions, projects, key, metadata) are toggled by boolean parameters rather than string-concatenated SQL, preserving a single compiled query plan while still supporting key-only, metadata-only, and cross-session lookups.
+- **Vector literal on write, NULL-safe cast on read.** Upsert builds a plain `[f1,f2,…]` literal cast with `::vector`; search casts `@qVector::vector` so a missing query embedding becomes `NULL` and yields a `0.0` placeholder distance instead of failing, letting non-semantic (key/metadata) queries reuse the same SQL.

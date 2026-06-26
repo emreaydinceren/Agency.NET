@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" width="960" height="560"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <!-- backdrop -->
+  <rect x="0" y="0" width="960" height="560" rx="16" fill="#1b1530"/>
+
+  <!-- title -->
+  <text x="480" y="44" text-anchor="middle" fill="#e9e4ff" font-size="26" font-weight="600" letter-spacing="2">Loop Kit — Worker · Goalkeeper · Driver</text>
+  <text x="480" y="66" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Agency.Harness.Loop  ·  soft where it reasons  ·  hard where it gates</text>
+
+  <!-- ══════════════════════════════════════════
+       LOOPRUNNER  (the driver)
+       ══════════════════════════════════════════ -->
+  <rect x="220" y="78" width="520" height="58" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="480" y="104" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">LOOPRUNNER</text>
+  <text x="480" y="124" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">LoopRunner.cs  ·  drives turn after turn  ·  hard cap: MaxTurns / budget  →  LoopResultEvent</text>
+
+  <!-- LoopRunner → Worker -->
+  <line x1="480" y1="138" x2="480" y2="154" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="492" y="150" fill="#7e6fb0" font-size="10">directive</text>
+
+  <!-- ══════════════════════════════════════════
+       WORKER  (one turn = inner Reason→Act→Observe)
+       ══════════════════════════════════════════ -->
+  <rect x="200" y="156" width="560" height="210" rx="14" fill="#241d3d" stroke="#a78bfa" stroke-width="2"/>
+  <text x="480" y="181" text-anchor="middle" fill="#c9bdf2" font-size="13" font-weight="600">THE WORKER  —  one turn</text>
+  <text x="480" y="199" text-anchor="middle" fill="#7e6fb0" font-size="11" font-family="monospace">ChatSession · Agent.cs</text>
+
+  <!-- inner loop steps -->
+  <g font-size="13" fill="#e9e4ff" text-anchor="middle">
+    <rect x="260" y="214" width="440" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="235">REASON  —  model thinks about what to do next</text>
+    <rect x="260" y="268" width="440" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="289">ACT  —  calls a tool  (run tests, edit file…)</text>
+    <rect x="260" y="322" width="440" height="34" rx="8" fill="#312856" stroke="#8b7bd8"/>
+    <text x="480" y="343">OBSERVE  —  tool result fed back to model</text>
+  </g>
+
+  <!-- inner arrows between steps -->
+  <g stroke="#a78bfa" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <path d="M480,248 L480,266"/>
+    <path d="M480,302 L480,320"/>
+  </g>
+
+  <!-- inner back-edge: OBSERVE → REASON (right-side curve, inside Worker box) -->
+  <path d="M700,339 C730,339 730,231 700,231" stroke="#a78bfa" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="750" y="285" text-anchor="middle" fill="#7e6fb0" font-size="10" transform="rotate(90 750 285)">×N per turn</text>
+
+  <!-- Worker → Goalkeeper -->
+  <line x1="480" y1="368" x2="480" y2="384" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="492" y="380" fill="#7e6fb0" font-size="10">turn result + transcript</text>
+
+  <!-- ══════════════════════════════════════════
+       GOALKEEPER  (independent judge)
+       ══════════════════════════════════════════ -->
+  <rect x="200" y="386" width="560" height="78" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.8"/>
+  <text x="480" y="411" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">GOALKEEPER  (independent judge)</text>
+  <text x="480" y="430" text-anchor="middle" fill="#e0b985" font-size="11" font-family="monospace">Goalkeeper.cs  ·  reads transcript  ·  no tools  ·  separate cheap model</text>
+  <text x="480" y="450" text-anchor="middle" fill="#e0b985" font-size="11">DONE / CONTINUE + reason  ·  unparseable → Continue  (fail-safe default)</text>
+
+  <!-- fork from Goalkeeper -->
+  <line x1="480" y1="466" x2="480" y2="472" stroke="#a78bfa" stroke-width="1.5"/>
+  <line x1="310" y1="472" x2="710" y2="472" stroke="#a78bfa" stroke-width="1.5"/>
+  <line x1="320" y1="472" x2="320" y2="486" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#arrow-grn)"/>
+  <line x1="700" y1="472" x2="700" y2="486" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#arrow-grn)"/>
+
+  <!-- ══ CONTINUE branch ══ -->
+  <rect x="120" y="488" width="400" height="56" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="320" y="514" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">CONTINUE</text>
+  <text x="320" y="533" text-anchor="middle" fill="#9be3bd" font-size="11">reason → next directive  ↺  back to LoopRunner</text>
+
+  <!-- ══ DONE branch ══ -->
+  <rect x="560" y="488" width="280" height="56" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="700" y="514" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">DONE</text>
+  <text x="700" y="533" text-anchor="middle" fill="#9be3bd" font-size="11">LoopResultEvent(Achieved)</text>
+
+  <!-- Continue back-edge: left margin, returns to LoopRunner -->
+  <path d="M120,516 L76,516 L76,107 L218,107" stroke="#a78bfa" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+</svg>

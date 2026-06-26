@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 530" xmlns="http://www.w3.org/2000/svg" width="960" height="530"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+    <marker id="arrow-blu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5cc8ff"/>
+    </marker>
+    <marker id="arrow-amb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ffb454"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="530" rx="16" fill="#1b1530"/>
+  <text x="480" y="38" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">Project Dependency Graph</text>
+  <text x="480" y="56" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">compile-time dependencies  ·  arrow = A depends on B  ·  packages grouped by subsystem</text>
+
+  <!-- ══ Row 1: Foundation ══ -->
+  <rect x="350" y="70" width="260" height="54" rx="12" fill="#241d3d" stroke="#7e6fb0" stroke-width="1.6"/>
+  <text x="480" y="91" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Foundation</text>
+  <text x="480" y="109" text-anchor="middle" fill="#9d8bd6" font-size="10.5" font-family="monospace">Agency.Common</text>
+
+  <!-- ══ Row 2: SQL infrastructure + LLM/Embeddings clients ══ -->
+  <rect x="20" y="156" width="300" height="60" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="170" y="176" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">SQL Infrastructure</text>
+  <text x="170" y="193" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.Sql.Common</text>
+  <text x="170" y="207" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.Sql.Postgres  ·  Agency.Sql.Sqlite</text>
+
+  <rect x="340" y="156" width="290" height="60" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.6"/>
+  <text x="485" y="176" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">LLM Clients</text>
+  <text x="485" y="193" text-anchor="middle" fill="#e0b985" font-size="10" font-family="monospace">Agency.Llm.Common  ·  Agency.Llm.Claude</text>
+  <text x="485" y="207" text-anchor="middle" fill="#e0b985" font-size="10" font-family="monospace">Agency.Llm.OpenAI</text>
+
+  <rect x="650" y="156" width="290" height="60" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="795" y="176" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Embeddings</text>
+  <text x="795" y="193" text-anchor="middle" fill="#8fb6d6" font-size="10" font-family="monospace">Agency.Embeddings.Common</text>
+  <text x="795" y="207" text-anchor="middle" fill="#8fb6d6" font-size="10" font-family="monospace">Agency.Embeddings.OpenAI</text>
+
+  <!-- Row 1 → Row 2 arrows -->
+  <line x1="450" y1="126" x2="260" y2="154" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="480" y1="126" x2="485" y2="154" stroke="#ffb454" stroke-width="1.3" marker-end="url(#arrow-amb)"/>
+  <line x1="510" y1="126" x2="720" y2="154" stroke="#5cc8ff" stroke-width="1.3" marker-end="url(#arrow-blu)"/>
+
+  <!-- ══ Row 3: Key-Value + Vector Store + Ingestion+RAG ══ -->
+  <rect x="20" y="250" width="290" height="60" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="165" y="270" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Key-Value Store</text>
+  <text x="165" y="287" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.KeyValueStore.Common</text>
+  <text x="165" y="301" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.KeyValueStore.Sql.Postgres  ·  .Sqlite</text>
+
+  <rect x="330" y="250" width="290" height="60" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="475" y="270" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Vector Store</text>
+  <text x="475" y="287" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.VectorStore.Common</text>
+  <text x="475" y="301" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.VectorStore.Sql.Postgres  ·  .Sqlite</text>
+
+  <rect x="640" y="250" width="300" height="60" rx="12" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="790" y="270" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Ingestion  &amp;  RAG</text>
+  <text x="790" y="287" text-anchor="middle" fill="#9be3bd" font-size="10" font-family="monospace">Agency.Ingestion  ·  .FileSystem  ·  .SemanticKernel</text>
+  <text x="790" y="301" text-anchor="middle" fill="#9be3bd" font-size="10" font-family="monospace">Agency.RagFormatter</text>
+
+  <!-- Row 2 → Row 3 arrows -->
+  <line x1="170" y1="218" x2="165" y2="248" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="230" y1="218" x2="400" y2="248" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="795" y1="218" x2="715" y2="248" stroke="#5cc8ff" stroke-width="1.3" marker-end="url(#arrow-blu)"/>
+  <line x1="475" y1="218" x2="700" y2="248" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+  <!-- ══ Row 4: Harness (engine) ══ -->
+  <rect x="280" y="346" width="400" height="60" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="2"/>
+  <text x="480" y="366" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">Agency.Harness</text>
+  <text x="480" y="383" text-anchor="middle" fill="#9d8bd6" font-size="10">the agent loop · ChatSession · Context · ToolRegistry · hooks</text>
+  <text x="480" y="397" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agency.Harness  ·  Agency.Harness.Skills</text>
+
+  <!-- Row 3 → Row 4 arrows -->
+  <line x1="475" y1="312" x2="440" y2="344" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="790" y1="312" x2="560" y2="344" stroke="#6ee7a8" stroke-width="1.3" marker-end="url(#arrow-grn)"/>
+  <line x1="485" y1="218" x2="430" y2="344" stroke="#ffb454" stroke-width="1.3" marker-end="url(#arrow-amb)"/>
+
+  <!-- ══ Row 5: Memory + Console ══ -->
+  <rect x="20" y="442" width="540" height="60" rx="12" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="290" y="462" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Memory  &amp;  MCP</text>
+  <text x="290" y="479" text-anchor="middle" fill="#9be3bd" font-size="10" font-family="monospace">Agency.Memory.Common  ·  .Retrieval  ·  .Distiller  ·  .Consolidator</text>
+  <text x="290" y="493" text-anchor="middle" fill="#9be3bd" font-size="10" font-family="monospace">Agency.Memory.Hygiene  ·  .Sql.Postgres  ·  .Sql.Sqlite  ·  Agency.Mcp.Memory</text>
+
+  <rect x="580" y="442" width="360" height="60" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="760" y="462" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Agency.Harness.Console</text>
+  <text x="760" y="479" text-anchor="middle" fill="#8fb6d6" font-size="10">top-level host · aggregates all subsystems</text>
+  <text x="760" y="493" text-anchor="middle" fill="#8fb6d6" font-size="10">REPL · permission UI · telemetry setup</text>
+
+  <!-- Row 4 → Row 5 arrows -->
+  <line x1="400" y1="408" x2="290" y2="440" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="480" y1="408" x2="700" y2="440" stroke="#5cc8ff" stroke-width="1.3" marker-end="url(#arrow-blu)"/>
+  <!-- SQL → Memory -->
+  <line x1="170" y1="312" x2="200" y2="440" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <!-- Ingestion → Console -->
+  <line x1="790" y1="312" x2="790" y2="440" stroke="#6ee7a8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+
+  <text x="480" y="518" text-anchor="middle" fill="#7e6fb0" font-size="11">solid arrows = primary dependency direction  ·  dashed = cross-layer short-circuits</text>
+</svg>

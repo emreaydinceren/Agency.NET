@@ -59,6 +59,7 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
         IVectorStore store,
         string userId,
         string? sessionId,
+        string? projectId = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(loader);
@@ -91,7 +92,7 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
 
                     try
                     {
-                        await store.UpsertAsync<TValue>(userId, sessionId, key, this._chunkConverter(chunks[i]), metadata, token);
+                        await store.UpsertAsync<TValue>(userId, sessionId, key, this._chunkConverter(chunks[i]), metadata, projectId, token);
                         Interlocked.Increment(ref succeeded);
                         _documentsCounter.Add(1, new TagList { { "status", "success" } });
                     }

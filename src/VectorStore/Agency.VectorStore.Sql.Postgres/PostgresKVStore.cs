@@ -1,4 +1,4 @@
-﻿
+
 using Agency.Embeddings.Common;
 using Agency.Sql.Postgres;
 using Agency.VectorStore.Common;
@@ -42,8 +42,10 @@ public class PostgresKVStore : IVectorStore
     private readonly PostgreSqlRunner _postgreSqlRunner;
 
     private const string GlobalSession = "*";
+    private const string GlobalProject = "*";
 
     private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
+    private static string ResolveProjectId(string? projectId) => projectId ?? GlobalProject;
 
     public PostgresKVStore(
         IEmbeddingGenerator embeddingGenerator,
@@ -72,30 +74,25 @@ public class PostgresKVStore : IVectorStore
             string sql = $@"
             CREATE EXTENSION IF NOT EXISTS vector;
 
-            DO $$
-            BEGIN
-                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'semantic_kv_store')
-                   AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'semantic_kv_store' AND column_name = 'user_id') THEN
-                    DROP TABLE semantic_kv_store CASCADE;
-                END IF;
-            END $$;
+            DROP TABLE IF EXISTS semantic_kv_store CASCADE;
 
             CREATE TABLE IF NOT EXISTS semantic_kv_store (
-                user_id    TEXT NOT NULL,
-                session_id TEXT NOT NULL,
-                key        TEXT NOT NULL,
-                value      JSONB NOT NULL,
-                embedding  vector({dimensions}) NOT NULL,
+                user_id    TEXT        NOT NULL,
+                session_id TEXT        NOT NULL,
+                project_id TEXT        NOT NULL DEFAULT '*',
+                key        TEXT        NOT NULL,
+                value      JSONB,
+                embedding  vector({dimensions}),
                 metadata   JSONB,
-                updated_on TIMESTAMPTZ DEFAULT NOW(),
-                PRIMARY KEY (user_id, session_id, key)
+                updated_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (user_id, session_id, project_id, key)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_vector_search
-            ON semantic_kv_store USING hnsw (embedding vector_cosine_ops);
+            CREATE INDEX IF NOT EXISTS semantic_kv_store_embedding_idx
+                ON semantic_kv_store USING hnsw (embedding vector_cosine_ops);
 
-            CREATE INDEX IF NOT EXISTS idx_metadata_filter
-            ON semantic_kv_store USING GIN (metadata);
+            CREATE INDEX IF NOT EXISTS semantic_kv_store_metadata_idx
+                ON semantic_kv_store USING gin (metadata);
         ";
 
             await this._postgreSqlRunner.ExecuteAsync(sql, null, cancellationToken);
@@ -154,7 +151,11 @@ public class PostgresKVStore : IVectorStore
                    updated_on
             FROM semantic_kv_store
             WHERE user_id = @uid
-              AND (@hasSessionId = FALSE OR session_id = @sid)
+              AND (
+                  (session_id = '*' AND project_id = '*')
+                  OR (session_id = @sid AND project_id = '*')
+                  OR (@hasProjects AND session_id = '*' AND project_id = ANY(@pids))
+              )
               AND (@hasKey       = FALSE OR key = @k)
               AND (@hasFilter    = FALSE OR metadata @> @mFilter)
             ORDER BY distance ASC
@@ -166,17 +167,14 @@ public class PostgresKVStore : IVectorStore
             };
 
             parameters["uid"] = query.UserId;
+            parameters["sid"] = query.SessionId ?? GlobalSession;
 
-            if (query.SessionId != null)
+            bool hasProjects = (query.ProjectIds?.Count ?? 0) > 0;
+            parameters["hasProjects"] = hasProjects;
+            parameters["pids"] = new NpgsqlParameter("pids", NpgsqlDbType.Array | NpgsqlDbType.Text)
             {
-                parameters["sid"] = query.SessionId;
-                parameters["hasSessionId"] = true;
-            }
-            else
-            {
-                parameters["sid"] = DBNull.Value;
-                parameters["hasSessionId"] = false;
-            }
+                Value = query.ProjectIds?.ToArray() ?? Array.Empty<string>()
+            };
 
             // Vector search on query.Value
             if (string.IsNullOrWhiteSpace(query.Value) == false)
@@ -247,7 +245,7 @@ public class PostgresKVStore : IVectorStore
         }
     }
 
-    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
+    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, string? projectId = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.upsert", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "upsert");
@@ -267,9 +265,9 @@ public class PostgresKVStore : IVectorStore
 
             // Use EXCLUDED to update existing records on compound key conflict
             const string query = @"
-            INSERT INTO semantic_kv_store (user_id, session_id, key, value, embedding, metadata)
-            VALUES (@uid, @sid, @k, @v, @e::vector, @m)
-            ON CONFLICT (user_id, session_id, key) DO UPDATE
+            INSERT INTO semantic_kv_store (user_id, session_id, project_id, key, value, embedding, metadata)
+            VALUES (@uid, @sid, @pid, @k, @v, @e::vector, @m)
+            ON CONFLICT (user_id, session_id, project_id, key) DO UPDATE
             SET value     = EXCLUDED.value,
                 embedding = EXCLUDED.embedding,
                 metadata  = EXCLUDED.metadata;";
@@ -280,6 +278,7 @@ public class PostgresKVStore : IVectorStore
                 {
                     ["uid"] = userId,
                     ["sid"] = ResolveSessionId(sessionId),
+                    ["pid"] = ResolveProjectId(projectId),
                     ["k"] = key,
                     ["v"] = new NpgsqlParameter("v", NpgsqlDbType.Jsonb) { Value = contentToEmbed },
                     ["e"] = vectorLiteral,
@@ -314,7 +313,7 @@ public class PostgresKVStore : IVectorStore
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, string? projectId = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "delete");
@@ -328,8 +327,8 @@ public class PostgresKVStore : IVectorStore
         try
         {
             int rowsAffected = await this._postgreSqlRunner.ExecuteAsync(
-                "DELETE FROM semantic_kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
-                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
+                "DELETE FROM semantic_kv_store WHERE user_id = @uid AND session_id = @sid AND project_id = @pid AND key = @k;",
+                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["pid"] = ResolveProjectId(projectId), ["k"] = key },
                 cancellationToken);
 
             stopwatch.Stop();
@@ -358,6 +357,68 @@ public class PostgresKVStore : IVectorStore
             this._logger.LogError(ex, "Error deleting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId ?? "global", key);
             throw;
         }
+    }
+
+    public async Task<IReadOnlyList<string>> ListProjectsAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT DISTINCT project_id
+            FROM semantic_kv_store
+            WHERE user_id = @uid AND project_id != '*'
+            ORDER BY project_id
+            """;
+
+        return await this._postgreSqlRunner.QueryAsync<string>(
+            sql,
+            reader => Task.FromResult(reader.GetString(0)),
+            new Dictionary<string, object?> { ["uid"] = userId },
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
+        string userId,
+        string? sessionId,
+        IReadOnlyList<string>? projectIds,
+        CancellationToken cancellationToken = default)
+    {
+        string sid = sessionId ?? GlobalSession;
+        bool hasProjects = (projectIds?.Count ?? 0) > 0;
+
+        const string sql = """
+            SELECT DISTINCT
+                metadata->>'source_file' AS source_file,
+                session_id,
+                project_id
+            FROM semantic_kv_store
+            WHERE user_id = @uid
+            AND metadata->>'source_file' IS NOT NULL
+            AND (
+                (session_id = '*' AND project_id = '*')
+                OR (session_id = @sid AND project_id = '*')
+                OR (@hasProjects AND session_id = '*' AND project_id = ANY(@pids))
+            )
+            ORDER BY source_file
+            """;
+
+        var parameters = new Dictionary<string, object?>
+        {
+            ["uid"] = userId,
+            ["sid"] = sid,
+            ["hasProjects"] = hasProjects,
+            ["pids"] = new NpgsqlParameter("pids", NpgsqlDbType.Array | NpgsqlDbType.Text)
+            {
+                Value = projectIds?.ToArray() ?? Array.Empty<string>()
+            }
+        };
+
+        return await this._postgreSqlRunner.QueryAsync<DocumentInfo>(
+            sql,
+            reader => Task.FromResult(new DocumentInfo(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2))),
+            parameters,
+            cancellationToken);
     }
 
     private static async Task<SearchHit<TValue>> HydrateSearchHitAsync<TValue>(DbDataReader reader)

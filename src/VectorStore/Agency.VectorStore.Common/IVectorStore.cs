@@ -1,4 +1,4 @@
-﻿namespace Agency.VectorStore.Common;
+namespace Agency.VectorStore.Common;
 
 /// <summary>
 /// Defines the contract for a key-value store that supports asynchronous upsert and search operations.
@@ -21,7 +21,15 @@ public interface IVectorStore
     /// <param name="metadata">
     /// An optional collection of metadata to associate with the value. May be null if no metadata is required.
     /// </param>
-    Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default);
+    /// <param name="projectId">The project scope for this entry, or <see langword="null"/> for the global project (stored as <c>"*"</c>).</param>
+    Task UpsertAsync<TValue>(
+        string userId,
+        string? sessionId,
+        string key,
+        TValue value,
+        IDictionary<string, object>? metadata = null,
+        string? projectId = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Executes an asynchronous search operation using the specified query and returns the matching results.
@@ -40,10 +48,26 @@ public interface IVectorStore
     /// <param name="userId">The user this entry belongs to. Cannot be null.</param>
     /// <param name="sessionId">The session this entry belongs to, or <see langword="null"/> for user-global entries (stored as <c>"*"</c>).</param>
     /// <param name="key">The key that identifies the entry to delete. Cannot be null.</param>
+    /// <param name="projectId">The project scope for this entry, or <see langword="null"/> for the global project (stored as <c>"*"</c>).</param>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result is <see langword="true"/> if an entry
     /// was removed, or <see langword="false"/> if no entry existed for that key.
     /// </returns>
-    Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(
+        string userId,
+        string? sessionId,
+        string key,
+        string? projectId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<string>> ListProjectsAsync(
+        string userId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
+        string userId,
+        string? sessionId,
+        IReadOnlyList<string>? projectIds,
+        CancellationToken cancellationToken = default);
 }

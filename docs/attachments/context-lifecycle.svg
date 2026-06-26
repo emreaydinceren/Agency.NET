@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 530" xmlns="http://www.w3.org/2000/svg" width="960" height="530"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-blu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5cc8ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="530" rx="16" fill="#1b1530"/>
+  <text x="480" y="38" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">Lifecycle — One Context Per Session</text>
+  <text x="480" y="56" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Context is created on the first turn, reused on every subsequent turn of the same ChatSession</text>
+
+  <!-- ── participant boxes ── -->
+  <rect x="60"  y="68" width="180" height="44" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.8"/>
+  <text x="150" y="88" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">ChatSession</text>
+  <text x="150" y="104" text-anchor="middle" fill="#8fb6d6" font-size="10">host</text>
+
+  <rect x="380" y="68" width="200" height="44" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="88" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">Agent</text>
+  <text x="480" y="104" text-anchor="middle" fill="#9d8bd6" font-size="10">Agent.cs · RunAsync</text>
+
+  <rect x="720" y="68" width="180" height="44" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.8"/>
+  <text x="810" y="88" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">Context</text>
+  <text x="810" y="104" text-anchor="middle" fill="#9be3bd" font-size="10">blackboard  ·  long-lived</text>
+
+  <!-- lifelines -->
+  <line x1="150" y1="114" x2="150" y2="498" stroke="#5cc8ff" stroke-width="1.2" stroke-dasharray="5,4" opacity="0.5"/>
+  <line x1="480" y1="114" x2="480" y2="498" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="5,4" opacity="0.5"/>
+  <line x1="810" y1="114" x2="810" y2="498" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="5,4" opacity="0.5"/>
+
+  <!-- ── turn 1 note ── -->
+  <rect x="30" y="122" width="900" height="22" rx="4" fill="#1a1335"/>
+  <text x="480" y="137" text-anchor="middle" fill="#7e6fb0" font-size="11" font-weight="600">turn 1 — "I prefer Python."</text>
+
+  <!-- Host → Agent: SendAsync -->
+  <line x1="152" y1="158" x2="478" y2="158" stroke="#5cc8ff" stroke-width="1.5" marker-end="url(#arrow-blu)"/>
+  <text x="315" y="153" text-anchor="middle" fill="#8fb6d6" font-size="10.5">SendAsync → _ctx ??= CreateContext()</text>
+
+  <!-- Agent → Ctx: stamp Session.Id -->
+  <line x1="482" y1="182" x2="808" y2="182" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="645" y="177" text-anchor="middle" fill="#9d8bd6" font-size="10.5">stamp Session.Id  (once, :304)</text>
+
+  <!-- Agent → Ctx: seed Conversation -->
+  <line x1="482" y1="208" x2="808" y2="208" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="645" y="203" text-anchor="middle" fill="#9d8bd6" font-size="10.5">seed Conversation with Query.Prompt  (:317)</text>
+
+  <!-- Agent → Ctx: loop -->
+  <line x1="482" y1="234" x2="808" y2="234" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="645" y="229" text-anchor="middle" fill="#9d8bd6" font-size="10.5">loop: IterationCount++  ·  TotalUsage +=  ·  append msgs</text>
+
+  <!-- ── turn 2 note ── -->
+  <rect x="30" y="254" width="900" height="22" rx="4" fill="#1a1335"/>
+  <text x="480" y="269" text-anchor="middle" fill="#7e6fb0" font-size="11" font-weight="600">turn 2  (same session) — "write a dedup script"</text>
+
+  <!-- Host → Agent: SendAsync turn 2 -->
+  <line x1="152" y1="290" x2="478" y2="290" stroke="#5cc8ff" stroke-width="1.5" marker-end="url(#arrow-blu)"/>
+  <text x="315" y="285" text-anchor="middle" fill="#8fb6d6" font-size="10.5">SendAsync → reuses the SAME _ctx</text>
+
+  <!-- Agent → Ctx: guard skips re-stamp -->
+  <line x1="482" y1="314" x2="808" y2="314" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="645" y="309" text-anchor="middle" fill="#9d8bd6" font-size="10.5">Session.Id already set → guard skips re-stamp  (:304)</text>
+
+  <!-- Agent → Ctx: append user msg -->
+  <line x1="482" y1="340" x2="808" y2="340" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="645" y="335" text-anchor="middle" fill="#9d8bd6" font-size="10.5">Conversation already non-empty → append user msg  (:197)</text>
+
+  <!-- Agent → Ctx: loop continues -->
+  <line x1="482" y1="366" x2="808" y2="366" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="645" y="361" text-anchor="middle" fill="#9d8bd6" font-size="10.5">loop continues  ·  totals keep accumulating across turns</text>
+
+  <!-- ── dispose note ── -->
+  <rect x="30" y="386" width="900" height="22" rx="4" fill="#1a1335"/>
+  <text x="480" y="401" text-anchor="middle" fill="#7e6fb0" font-size="11" font-weight="600">dispose</text>
+
+  <!-- Host → Agent: DisposeAsync -->
+  <line x1="152" y1="422" x2="478" y2="422" stroke="#5cc8ff" stroke-width="1.5" marker-end="url(#arrow-blu)"/>
+  <text x="315" y="417" text-anchor="middle" fill="#8fb6d6" font-size="10.5">DisposeAsync → RaiseSessionEndAsync  (:133)</text>
+
+  <!-- Context deactivation markers -->
+  <line x1="796" y1="436" x2="824" y2="464" stroke="#6ee7a8" stroke-width="1.5" opacity="0.6"/>
+  <line x1="824" y1="436" x2="796" y2="464" stroke="#6ee7a8" stroke-width="1.5" opacity="0.6"/>
+  <text x="810" y="478" text-anchor="middle" fill="#6ee7a8" font-size="10">context released</text>
+
+  <text x="480" y="512" text-anchor="middle" fill="#7e6fb0" font-size="11">_ctx is null-checked on every SendAsync  ·  created once on turn 1  ·  DisposeAsync is idempotent (guarded)</text>
+</svg>

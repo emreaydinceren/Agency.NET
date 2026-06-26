@@ -227,16 +227,7 @@ Two failure channels converge here: a tool that *throws* is caught and turned in
 `IsError` without throwing is logged but passed through (`:824-829`). Both reach the model as an error
 result, so it can replan rather than crash.
 
-```mermaid
-flowchart TD
-    A["LLM assistant message<br/>contains FunctionCallContent(name, args)"] --> B["per call, in parallel — Agent.cs:689"]
-    B --> C["OnPreToolUse hook + permission gate<br/>(see Hooks &amp; Permission Model docs)"]
-    C -->|allowed| D["ctx.Tools.Registry.InvokeAsync(name, input) — Agent.cs:818"]
-    D --> E["ToolResult(Content, IsError)"]
-    E --> F["FunctionResultContent — [Error] prefix if IsError — :868"]
-    F --> G["Task.WhenAll settles batch — :876"]
-    G --> H["append ALL results in batch order → next iteration"]
-```
+![Tool dispatch — per call](attachments/capability-dispatch.svg)
 
 ## 4. The Built-in Tools
 
@@ -448,23 +439,7 @@ present and non-empty. When the shape is wrong, the full schema is folded straig
 result, so the model's next retry has what it needs **without a separate `tool_help` round-trip**. A
 genuine runtime error on a well-formed call (file-not-found, say) is left untouched.
 
-```mermaid
-sequenceDiagram
-    participant M as Model
-    participant D as ProgressiveDiscoveryToolRegistry
-    participant H as tool_help
-    participant I as inner registry (real schema)
-
-    Note over M,D: prompt advertises MCP tool as name + summary + {"type":"object"}
-    M->>D: tool_help(name)
-    D->>H: InvokeAsync
-    H->>I: ListDefinitions() → find by exact name
-    I-->>M: full description + JSON schema
-    M->>D: call the tool with real arguments
-    D->>I: InvokeAsync(name, input)
-    I-->>M: ToolResult
-    Note over D,I: if args were missing → fold schema into the error (self-heal)
-```
+![Progressive disclosure — schema on demand](attachments/capability-progressive.svg)
 
 `★ Insight — a decorator, not an Agent change.` `ProgressiveDiscoveryToolRegistry` overrides only the
 two members the loop actually touches — `ListDefinitions()` and `InvokeAsync` — and delegates the

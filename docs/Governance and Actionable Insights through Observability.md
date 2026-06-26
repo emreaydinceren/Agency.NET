@@ -260,24 +260,7 @@ while emitting nothing — the same pattern the harness uses elsewhere (`NullLog
 fallback in store constructors, e.g. `SqliteMemoryStore.cs:78`). Disabling a signal must never break
 construction.
 
-```mermaid
-flowchart TD
-    subgraph Components["Instrumented components (no OTel dependency)"]
-        A["Agency.Harness.Agent<br/>ActivitySource + Meter"]
-        M["Agency.Memory.Sql.Sqlite<br/>ActivitySource + Meter"]
-        E["Agency.Embeddings.OpenAI<br/>ActivitySource + Meter"]
-        L["Agency.Harness.Loop<br/>LoopInstrumentation"]
-    end
-    A & M & E & L -->|named Agency.*| W{{"AddSource/AddMeter('Agency.*')<br/>TelemetryServiceCollectionExtensions.cs:72,92"}}
-    W --> TP["TracerProvider<br/>+ Sampler"]
-    W --> MP["MeterProvider<br/>+ PeriodicReader (15s)"]
-    ILogger["ILogger&lt;T&gt; (everywhere)"] --> SL["Serilog provider<br/>(or NullLoggerProvider when off)"]
-    TP --> FSE["FileSpanExporter"]
-    MP --> FME["FileMetricExporter"]
-    FSE --> TF["traces-yyyy-MM-dd.log"]
-    FME --> MF["metrics-yyyy-MM-dd.log"]
-    SL --> AF["app-yyyy-MM-dd-HHmmss.log"]
-```
+![Three Independently-Disableable Pipelines](attachments/telemetry-pipelines.svg)
 
 ## 4. The Tag Conventions — Where "Actionable" Lives
 
@@ -488,11 +471,8 @@ here means *reproducibility*, not just cost.
 A few precise points worth stating so the reference is honest:
 
 - **The LLM clients carry no `ActivitySource` of their own.** `OpenAIClient` and `ClaudeClient` are
-  *not* directly instrumented in the current source, despite an older note in `Agents/Architecture.md`
-  ("every client … with full OpenTelemetry instrumentation") implying otherwise. Token and latency
-  attribution for model calls happens one layer up, in the `Agent` (`agent.tokens`,
-  `agent.turn.duration`, span tags `agent.usage.*`). Treat the Architecture.md line as aspirational /
-  stale; this document reflects what ships.
+  *not* directly instrumented. Token and latency attribution for model calls happens one layer up, in
+  the `Agent` (`agent.tokens`, `agent.turn.duration`, span tags `agent.usage.*`).
 - **Logs are Serilog, not the OTel logging signal.** Agency wires Serilog behind
   `Microsoft.Extensions.Logging` and exports to its own file. It is *not* the OpenTelemetry logs
   pipeline (`OpenTelemetry.Logs`). The three signals share the `AddTelemetry` entry point and the

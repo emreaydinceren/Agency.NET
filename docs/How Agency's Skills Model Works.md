@@ -622,21 +622,7 @@ Console `/`-command list, threading a real session id into skill rendering, rich
 
 ## 16. The Whole Story in One Trace
 
-```mermaid
-flowchart TD
-    A1["Startup: SkillLoader scans ./.agency/skills + ~/.agency/skills<br/>→ ReloadableSkillCatalog (project-first, first-occurrence wins)"]
-    A2["SkillContext wraps the live catalog → Context.Skills;<br/>SkillWatcher arms FileSystemWatcher; /skill commands built from snapshot"]
-    A3["Each iteration: SystemPromptBuilder renders<br/>## Skills — **triage** — Diagnose a failing test…"]
-    A4["User: 'this test is red, what's going on?'"]
-    A5["Model reads the catalog line → calls skill(name='triage', arguments='MyTest')"]
-    A6["SkillTool.InvokeAsync: catalog.Find('triage') → SkillRenderer.Render<br/>($test_name → 'MyTest', ${CLAUDE_SKILL_DIR} → path)"]
-    A7["ExpandShellAsync: any !`cmd` run once via PowerShellSkillShellRunner<br/>(skipped if DisableShellExecution)"]
-    A8["allowed-tools (read_file, execute_powershell) recorded into ActiveSkillState"]
-    A9["ToolResult(body) appended as a Tool message → instructions now in conversation"]
-    A10["Agent follows the steps; read_file is pre-approved (no permission prompt) this turn"]
-    A11["Next user turn → ActiveSkillState cleared → pre-approval gone"]
-    A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8 --> A9 --> A10 --> A11
-```
+![The Whole Story in One Trace](attachments/skills-trace.svg)
 
 The playbook was written once, on disk. It cost one catalog line until the model reached for it — then
 its full instructions, with the user's argument substituted and its required tools pre-approved, dropped

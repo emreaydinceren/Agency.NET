@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 438" xmlns="http://www.w3.org/2000/svg" width="960" height="438"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-blu" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5cc8ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="438" rx="16" fill="#1b1530"/>
+  <text x="480" y="40" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">Protocol Symmetry — The Load-Bearing Idea</text>
+  <text x="480" y="59" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">the harness is to the host what the LLM is to the harness — a producer of structured requests, never a caller of host code</text>
+
+  <!-- ══════════════════════════════════════════
+       ROW 1 — Existing: LLM ↔ Harness
+       ══════════════════════════════════════════ -->
+  <rect x="30" y="68" width="900" height="18" rx="4" fill="#1a1335"/>
+  <text x="480" y="81" text-anchor="middle" fill="#9d8bd6" font-size="11" font-weight="600">Existing — LLM ↔ Harness</text>
+
+  <!-- LLM box -->
+  <rect x="30" y="90" width="160" height="72" rx="12" fill="#241d3d" stroke="#ffb454" stroke-width="1.6"/>
+  <text x="110" y="122" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">LLM</text>
+  <text x="110" y="142" text-anchor="middle" fill="#e0b985" font-size="10" font-family="monospace">the thinker</text>
+
+  <!-- Harness box (right) -->
+  <rect x="770" y="90" width="160" height="72" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="850" y="122" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">HARNESS</text>
+  <text x="850" y="142" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agent.cs</text>
+
+  <!-- forward arrow LLM → Harness -->
+  <line x1="192" y1="112" x2="768" y2="112" stroke="#ffb454" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="480" y="108" text-anchor="middle" fill="#e0b985" font-size="10">assistant message = [ text, tool_use(WriteFile), tool_use(ReadFile) ]</text>
+
+  <!-- return arrow Harness → LLM -->
+  <line x1="768" y1="148" x2="192" y2="148" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="480" y="163" text-anchor="middle" fill="#9d8bd6" font-size="10">[ tool_result, tool_result ]  ·  LLM continues</text>
+
+  <!-- ── symmetry bridge ── -->
+  <line x1="30" y1="190" x2="930" y2="190" stroke="#312856" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="480" y="204" text-anchor="middle" fill="#7e6fb0" font-size="11" font-weight="600">same pattern — one layer up</text>
+
+  <!-- ══════════════════════════════════════════
+       ROW 2 — This Design: Host ↔ Harness
+       ══════════════════════════════════════════ -->
+  <rect x="30" y="214" width="900" height="18" rx="4" fill="#1a1335"/>
+  <text x="480" y="227" text-anchor="middle" fill="#9d8bd6" font-size="11" font-weight="600">This Design — Host ↔ Harness</text>
+
+  <!-- Harness box (left this time) -->
+  <rect x="30" y="236" width="160" height="80" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="110" y="268" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">HARNESS</text>
+  <text x="110" y="286" text-anchor="middle" fill="#9d8bd6" font-size="10" font-family="monospace">Agent.cs</text>
+  <text x="110" y="303" text-anchor="middle" fill="#7e6fb0" font-size="10">parks the turn</text>
+
+  <!-- Host box -->
+  <rect x="770" y="236" width="160" height="80" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="850" y="268" text-anchor="middle" fill="#e9e4ff" font-size="14" font-weight="600">HOST</text>
+  <text x="850" y="286" text-anchor="middle" fill="#8fb6d6" font-size="10" font-family="monospace">console · web</text>
+  <text x="850" y="303" text-anchor="middle" fill="#7e6fb0" font-size="10">renders &amp; answers</text>
+
+  <!-- forward arrow Harness → Host -->
+  <line x1="192" y1="257" x2="768" y2="257" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="480" y="253" text-anchor="middle" fill="#9d8bd6" font-size="10">event stream = [ ToolInvokedEvent, PermissionRequestedEvent, AgentResultEvent(AwaitingPermission) ]</text>
+
+  <!-- return arrow Host → Harness -->
+  <line x1="768" y1="298" x2="192" y2="298" stroke="#5cc8ff" stroke-width="1.4" marker-end="url(#arrow-blu)"/>
+  <text x="480" y="314" text-anchor="middle" fill="#8fb6d6" font-size="10">ResumeWithPermissionsAsync( [ (id, AllowAlways) ] )  ·  loop continues</text>
+
+  <!-- bottom note -->
+  <text x="480" y="396" text-anchor="middle" fill="#7e6fb0" font-size="11">no interface to implement  ·  no callback to inject  ·  no spinner gymnastics  ·  a parked turn is plain data, not a suspended thread</text>
+</svg>

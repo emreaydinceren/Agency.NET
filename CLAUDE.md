@@ -71,13 +71,17 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Credentials: `dev_user` / `dev_password`, database: `dev_db`, port `5432`
 - Functional LLM tests target LM Studio at `http://llm-host.example:1234`
 
+## Codebase Exploration
+
+**Always start at `docs/Home.md` before exploring the codebase.** It is the documentation portal — it maps subsystems, layers, and per-project reference pages so you can navigate directly to the right place without reading every file.
+
 ## Reference Docs — Load When Relevant
 
 Keep this file lean. Read the linked doc only when its trigger applies:
 
 - **Editor configuration** → read `@.editorconfig` (coding style and formatting rules) (look at parent folder for `.editorconfig` files).
 - **Writing or reviewing C# code** → read `Agents/CSharpPrinciples.md` (conventions, design principles, build config & centralized package management).
-- **Understanding or changing the system** → read `Agents/Architecture.md` (project dependency graph, `ILlmClient`, observability pattern, `SQLQueryEmbedder`, infrastructure).
+- **Understanding or changing the system** → start at `docs/Home.md` (the documentation portal: subsystem layers, per-project reference pages under `docs/Projects/`, and links to the narrative deep-dives).
 - **Building, testing, or running infrastructure** → read `Agents/BuildAndTest.md` (dotnet/docker commands, test configuration).
 - **Investigating a CI failure or changing the pipeline** → read `Agents/CIPipeline.md` (Gitea Actions workflows, offline functional-test cache proxy, known failure modes, debugging playbook).
 - **Discussing or updating bugs or tasks** → read `Agents/Trackers.md` (Obsidian boards + task template locations).

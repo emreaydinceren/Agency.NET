@@ -36,16 +36,7 @@ A plain call to a language model is **one-shot**: you send text, you get text ba
 wraps that one-shot model in a loop and hands it **tools** — functions it can ask to run, like "read
 this file," "run the tests," "search the web." One lap around the loop looks like this:
 
-```
-   ┌─────────────────────────────────────────────────────┐
-   │  REASON  → the model thinks about what to do next    │
-   │  ACT     → it asks to run a tool ("run the tests")   │
-   │  OBSERVE → the tool's result is fed back to the model│
-   └───────────────────────┬─────────────────────────────┘
-                           │ repeat until "done"
-                           ▼
-                      final answer
-```
+![Loop Kit — Worker · Goalkeeper · Driver](attachments/loop-kit.svg)
 
 That **Reason → Act → Observe** cycle is "the agent loop," and Agency already has one. Two words you'll
 see throughout:

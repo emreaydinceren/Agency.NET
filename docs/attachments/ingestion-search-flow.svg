@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" width="960" height="600"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="a4g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="600" rx="16" fill="#1b1530"/>
+  <text x="480" y="40" text-anchor="middle" fill="#e9e4ff" font-size="25" font-weight="600" letter-spacing="1">Two Ways Ingested Knowledge Reaches the Model</text>
+  <text x="480" y="62" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">A passive inventory pushed before each turn (left) · an active search the model pulls when it needs detail (right)</text>
+
+  <!-- LEFT COLUMN: hydration / push -->
+  <rect x="30" y="90" width="430" height="480" rx="14" fill="#15102a" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="245" y="116" text-anchor="middle" fill="#bfe6ff" font-size="14" font-weight="600">PUSH — "what's on the shelf"</text>
+  <text x="245" y="136" text-anchor="middle" fill="#7e9ec0" font-size="11">runs automatically, before every turn</text>
+
+  <rect x="60" y="156" width="370" height="58" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.4"/>
+  <text x="245" y="180" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Turn begins</text>
+  <text x="245" y="200" text-anchor="middle" fill="#9d8bd6" font-size="10.5" font-family="monospace">ConsoleChatSession: RefreshIfDirtyAsync()</text>
+  <line x1="245" y1="216" x2="245" y2="234" stroke="#5cc8ff" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <rect x="60" y="236" width="370" height="74" rx="10" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.4"/>
+  <text x="245" y="260" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Dirty? → ListDocumentsAsync</text>
+  <text x="245" y="280" text-anchor="middle" fill="#9d8bd6" font-size="10.5">list distinct source files in scope</text>
+  <text x="245" y="298" text-anchor="middle" fill="#7e6fb0" font-size="10">cached until ingest / load changes it</text>
+  <line x1="245" y1="312" x2="245" y2="330" stroke="#5cc8ff" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <rect x="60" y="332" width="370" height="86" rx="10" fill="#1d2436" stroke="#5cc8ff" stroke-width="1.4"/>
+  <text x="245" y="356" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Inject a "Fact" into the system prompt</text>
+  <text x="245" y="377" text-anchor="middle" fill="#bfe6ff" font-size="10.5" font-family="monospace">The following documents are available:</text>
+  <text x="245" y="393" text-anchor="middle" fill="#bfe6ff" font-size="10.5" font-family="monospace">- [project:handbook] onboarding.md</text>
+  <text x="245" y="409" text-anchor="middle" fill="#bfe6ff" font-size="10.5" font-family="monospace">- [session] notes.md</text>
+  <line x1="245" y1="420" x2="245" y2="438" stroke="#5cc8ff" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <rect x="60" y="440" width="370" height="64" rx="10" fill="#241d3d" stroke="#8b7bd8" stroke-width="1.4"/>
+  <text x="245" y="466" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Model now KNOWS what exists</text>
+  <text x="245" y="486" text-anchor="middle" fill="#9d8bd6" font-size="10.5">…so it knows when searching is worthwhile</text>
+
+  <text x="245" y="534" text-anchor="middle" fill="#7e9ec0" font-size="10.5">It sees the titles on the shelf —</text>
+  <text x="245" y="550" text-anchor="middle" fill="#7e9ec0" font-size="10.5">not the contents of the books.</text>
+
+  <!-- RIGHT COLUMN: search / pull -->
+  <rect x="500" y="90" width="430" height="480" rx="14" fill="#15241c" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="715" y="116" text-anchor="middle" fill="#a8f0c8" font-size="14" font-weight="600">PULL — "open the right book"</text>
+  <text x="715" y="136" text-anchor="middle" fill="#7e9e88" font-size="11">runs only when the model calls the tool</text>
+
+  <rect x="530" y="156" width="370" height="58" rx="10" fill="#1b3528" stroke="#6ee7a8" stroke-width="1.4"/>
+  <text x="715" y="180" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Model calls semantic_search</text>
+  <text x="715" y="200" text-anchor="middle" fill="#a8f0c8" font-size="10.5" font-family="monospace">{ "search_text": "how to reset password" }</text>
+  <line x1="715" y1="216" x2="715" y2="234" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#a4g)"/>
+
+  <rect x="530" y="236" width="370" height="74" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.4"/>
+  <text x="715" y="260" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Build a Query from session state</text>
+  <text x="715" y="280" text-anchor="middle" fill="#9d8bd6" font-size="10.5" font-family="monospace">UserId · SessionId · LoadedProjects · TopK</text>
+  <text x="715" y="298" text-anchor="middle" fill="#7e6fb0" font-size="10">the model never picks the scope — the host does</text>
+  <line x1="715" y1="312" x2="715" y2="330" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#a4g)"/>
+
+  <rect x="530" y="332" width="370" height="74" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.4"/>
+  <text x="715" y="356" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">SearchAsync — three-scope union</text>
+  <text x="715" y="376" text-anchor="middle" fill="#9d8bd6" font-size="10.5">embed query → rank by cosine distance</text>
+  <text x="715" y="394" text-anchor="middle" fill="#7e6fb0" font-size="10">keep the closest TopK chunks</text>
+  <line x1="715" y1="408" x2="715" y2="426" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#a4g)"/>
+
+  <rect x="530" y="428" width="370" height="76" rx="10" fill="#1b3528" stroke="#6ee7a8" stroke-width="1.4"/>
+  <text x="715" y="452" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">Return a Markdown table</text>
+  <text x="715" y="473" text-anchor="middle" fill="#a8f0c8" font-size="10.5">the actual chunk text, ready to quote</text>
+  <text x="715" y="491" text-anchor="middle" fill="#7e9e88" font-size="10">(or "No matching documents found.")</text>
+
+  <text x="715" y="538" text-anchor="middle" fill="#7e9e88" font-size="10.5">Now it has the words on the page —</text>
+  <text x="715" y="554" text-anchor="middle" fill="#7e9e88" font-size="10.5">grounded, quotable, in-scope.</text>
+</svg>

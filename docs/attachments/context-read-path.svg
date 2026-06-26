@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 440" xmlns="http://www.w3.org/2000/svg" width="960" height="440"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="440" rx="16" fill="#1b1530"/>
+  <text x="480" y="38" text-anchor="middle" fill="#e9e4ff" font-size="24" font-weight="600" letter-spacing="2">The Read Path — Context Into Prompt</text>
+  <text x="480" y="56" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">SystemPromptBuilder.Build(ctx)  ·  pure · read-only · Agent.cs:580  ·  runs every iteration</text>
+
+  <!-- ── CTX subgraph (left): x=14 y=68 w=268 h=308 ── -->
+  <rect x="14" y="68" width="268" height="310" rx="12" fill="#1a1335" stroke="#a78bfa" stroke-width="1.6"/>
+  <text x="148" y="86" text-anchor="middle" fill="#c9bdf2" font-size="11" font-weight="600">Context  (blackboard)</text>
+
+  <rect x="24"  y="96" width="248" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="148" y="111" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">K — Knowledge.Records</text>
+  <text x="148" y="125" text-anchor="middle" fill="#9d8bd6" font-size="9" font-family="monospace">ctx.Knowledge</text>
+
+  <rect x="24"  y="150" width="248" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="148" y="165" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">M — Memory.Records</text>
+  <text x="148" y="179" text-anchor="middle" fill="#9d8bd6" font-size="9" font-family="monospace">ctx.Memory</text>
+
+  <rect x="24"  y="204" width="248" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="148" y="219" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">S — Skills.List()</text>
+  <text x="148" y="233" text-anchor="middle" fill="#9d8bd6" font-size="9" font-family="monospace">ctx.Skills</text>
+
+  <rect x="24"  y="258" width="248" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="148" y="273" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">T — Temporal / Environment / User</text>
+  <text x="148" y="287" text-anchor="middle" fill="#9d8bd6" font-size="9" font-family="monospace">date · OS · user</text>
+
+  <rect x="24"  y="312" width="248" height="38" rx="8" fill="#241d3d" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="148" y="327" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">U — TotalUsage.InputTokens</text>
+  <text x="148" y="341" text-anchor="middle" fill="#9d8bd6" font-size="9" font-family="monospace">ctx.TotalUsage</text>
+
+  <!-- ── fan-in bus: lines from each item right to x=310 ── -->
+  <line x1="274" y1="115" x2="310" y2="115" stroke="#a78bfa" stroke-width="1.2"/>
+  <line x1="274" y1="169" x2="310" y2="169" stroke="#a78bfa" stroke-width="1.2"/>
+  <line x1="274" y1="223" x2="310" y2="223" stroke="#a78bfa" stroke-width="1.2"/>
+  <line x1="274" y1="277" x2="310" y2="277" stroke="#a78bfa" stroke-width="1.2"/>
+  <line x1="274" y1="331" x2="310" y2="331" stroke="#a78bfa" stroke-width="1.2"/>
+  <line x1="310" y1="115" x2="310" y2="331" stroke="#a78bfa" stroke-width="1.2"/>
+  <line x1="310" y1="223" x2="348" y2="223" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ── SystemPromptBuilder (center): x=350 y=176 w=260 h=96 ── -->
+  <rect x="350" y="176" width="260" height="96" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="2"/>
+  <text x="480" y="200" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">SystemPromptBuilder</text>
+  <text x="480" y="218" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">.Build(ctx)</text>
+  <text x="480" y="238" text-anchor="middle" fill="#9d8bd6" font-size="10">pure · read-only · :17</text>
+  <text x="480" y="256" text-anchor="middle" fill="#9d8bd6" font-size="10">reads the whole blackboard</text>
+
+  <!-- ── fan-out bus: lines from builder right to x=650 ── -->
+  <line x1="612" y1="191" x2="648" y2="115" stroke="#6ee7a8" stroke-width="1.2"/>
+  <line x1="612" y1="203" x2="648" y2="169" stroke="#6ee7a8" stroke-width="1.2"/>
+  <line x1="612" y1="223" x2="648" y2="223" stroke="#6ee7a8" stroke-width="1.2"/>
+  <line x1="612" y1="243" x2="648" y2="277" stroke="#6ee7a8" stroke-width="1.2"/>
+  <line x1="612" y1="257" x2="648" y2="331" stroke="#6ee7a8" stroke-width="1.2"/>
+
+  <!-- ── output sections (right): x=650 w=296 ── -->
+  <rect x="650" y="96" width="296" height="38" rx="8" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.2"/>
+  <text x="798" y="111" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">## Facts</text>
+  <text x="798" y="125" text-anchor="middle" fill="#9be3bd" font-size="9">from Knowledge.Records</text>
+
+  <rect x="650" y="150" width="296" height="38" rx="8" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.2"/>
+  <text x="798" y="165" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">## Memories</text>
+  <text x="798" y="179" text-anchor="middle" fill="#9be3bd" font-size="9">from Memory.Records</text>
+
+  <rect x="650" y="204" width="296" height="38" rx="8" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.2"/>
+  <text x="798" y="219" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">## Skills</text>
+  <text x="798" y="233" text-anchor="middle" fill="#9be3bd" font-size="9">catalog lines from Skills.List()</text>
+
+  <rect x="650" y="258" width="296" height="38" rx="8" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.2"/>
+  <text x="798" y="273" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">date / OS / user lines</text>
+  <text x="798" y="287" text-anchor="middle" fill="#9be3bd" font-size="9">from Temporal · Environment · User</text>
+
+  <rect x="650" y="312" width="296" height="38" rx="8" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.2"/>
+  <text x="798" y="327" text-anchor="middle" fill="#e9e4ff" font-size="11" font-weight="600">Context window: est. remaining</text>
+  <text x="798" y="341" text-anchor="middle" fill="#9be3bd" font-size="9">from TotalUsage.InputTokens</text>
+
+  <!-- ── builder → P (system prompt) ── -->
+  <line x1="480" y1="274" x2="480" y2="388" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <rect x="280" y="390" width="400" height="38" rx="10" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="480" y="406" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">system prompt string → ChatOptions.Instructions</text>
+  <text x="480" y="421" text-anchor="middle" fill="#9d8bd6" font-size="10">Agent.cs:586  ·  passed to the LLM on every iteration</text>
+</svg>

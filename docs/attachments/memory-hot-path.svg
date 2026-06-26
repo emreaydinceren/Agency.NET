@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg" width="960" height="700"
+     font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ee7a8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="700" rx="16" fill="#1b1530"/>
+  <text x="480" y="43" text-anchor="middle" fill="#e9e4ff" font-size="26" font-weight="600" letter-spacing="2">Memory — Hot Path Hook Points</text>
+  <text x="480" y="63" text-anchor="middle" fill="#9d8bd6" font-size="12" letter-spacing="1">Agent.cs  ·  ①–⑦ mark where memory attaches  ·  dashed = cold-path handoff</text>
+
+  <!-- ── Entry: ChatAsync + ① OnUserPromptSubmit ── -->
+  <rect x="215" y="76" width="440" height="54" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="435" y="101" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">ChatSession.SendAsync  →  Agent.ChatAsync</text>
+  <text x="435" y="119" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">①  OnUserPromptSubmit  (baseline: no-op)</text>
+  <line x1="435" y1="132" x2="435" y2="146" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ── ② OnSessionStarted ── -->
+  <rect x="215" y="148" width="440" height="44" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="435" y="168" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">Agent.RunAsync  →  ②  OnSessionStarted</text>
+  <text x="435" y="184" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">first iter: register conversation log + goal tools</text>
+  <line x1="435" y1="194" x2="435" y2="208" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ── LOOP BOX ── -->
+  <rect x="185" y="210" width="490" height="290" rx="14" fill="#241d3d" stroke="#a78bfa" stroke-width="2"/>
+  <text x="430" y="228" text-anchor="middle" fill="#c9bdf2" font-size="12" font-weight="600">LOOP ITERATION  —  hot path  (think → act → observe)</text>
+
+  <!-- ③ OnPreIteration + gate -->
+  <rect x="213" y="236" width="434" height="46" rx="8" fill="#1b1530" stroke="#5cc8ff" stroke-width="1.4"/>
+  <text x="430" y="256" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">③  OnPreIteration  →  gate: LastWrittenAt  (O(1), no I/O)</text>
+  <text x="430" y="273" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">changed → embed → search → inject ctx  ·  unchanged → skip (P1)</text>
+  <line x1="430" y1="284" x2="430" y2="292" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- SystemPromptBuilder + LLM THINK -->
+  <rect x="213" y="294" width="200" height="36" rx="8" fill="#312856" stroke="#8b7bd8"/>
+  <text x="313" y="317" text-anchor="middle" fill="#e9e4ff" font-size="12">SystemPromptBuilder</text>
+  <rect x="423" y="294" width="224" height="36" rx="8" fill="#312856" stroke="#8b7bd8"/>
+  <text x="535" y="317" text-anchor="middle" fill="#e9e4ff" font-size="12">LLM call  —  THINK</text>
+  <line x1="430" y1="332" x2="430" y2="340" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- ④ OnAssistantTurn -->
+  <rect x="213" y="342" width="434" height="46" rx="8" fill="#1b1530" stroke="#5cc8ff" stroke-width="1.4"/>
+  <text x="430" y="362" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">④  OnAssistantTurn  →  timer restart only  (P1)</text>
+  <text x="430" y="379" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">InactivityTimerService.Restart(...)  ·  arms idle trigger</text>
+  <line x1="430" y1="390" x2="430" y2="398" stroke="#a78bfa" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- ⑤ tool calls → ⑥ OnPostToolBatch → OBSERVE -->
+  <rect x="213" y="400" width="434" height="44" rx="8" fill="#312856" stroke="#8b7bd8"/>
+  <text x="430" y="419" text-anchor="middle" fill="#e9e4ff" font-size="12" font-weight="600">⑤  tool calls  ACT  →  ⑥  OnPostToolBatch  →  OBSERVE</text>
+  <text x="430" y="435" text-anchor="middle" fill="#9d8bd6" font-size="11">enqueue DistillationJob / setFocus if triggered</text>
+
+  <!-- loop footer -->
+  <text x="430" y="468" text-anchor="middle" fill="#7e6fb0" font-size="11">stop condition fires → break ↓  ·  else ↺ iterate from ③</text>
+
+  <!-- loop back: left side -->
+  <path d="M213,422 L185,422 L185,259 L213,259" stroke="#a78bfa" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="168" y="340" text-anchor="middle" fill="#7e6fb0" font-size="10" transform="rotate(-90 168 340)">↺ iterate</text>
+
+  <!-- cold-path dashed: ③ → LastWrittenAt gate -->
+  <line x1="649" y1="259" x2="684" y2="259" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+  <text x="690" y="255" fill="#9be3bd" font-size="10">LastWrittenAt gate</text>
+
+  <!-- cold-path dashed: ④ → idle trigger -->
+  <line x1="649" y1="365" x2="684" y2="365" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+  <text x="690" y="361" fill="#9be3bd" font-size="10">arms idle trigger</text>
+
+  <!-- cold-path dashed: ⑤ → enqueue job -->
+  <line x1="649" y1="422" x2="684" y2="422" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+  <text x="690" y="418" fill="#9be3bd" font-size="10">enqueue job</text>
+
+  <!-- exit from loop -->
+  <line x1="435" y1="502" x2="435" y2="516" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- OnStop -->
+  <rect x="215" y="518" width="440" height="44" rx="12" fill="#241d3d" stroke="#a78bfa" stroke-width="1.8"/>
+  <text x="435" y="538" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">OnStop  →  AgentResultEvent  →  break</text>
+  <text x="435" y="554" text-anchor="middle" fill="#9d8bd6" font-size="11" font-family="monospace">stop condition fired  (model done or iteration ceiling)</text>
+  <line x1="435" y1="564" x2="435" y2="578" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ⑦ OnSessionEnd -->
+  <rect x="215" y="580" width="440" height="44" rx="12" fill="#241d3d" stroke="#5cc8ff" stroke-width="1.6"/>
+  <text x="435" y="600" text-anchor="middle" fill="#e9e4ff" font-size="13" font-weight="600">⑦  ChatSession.DisposeAsync  →  OnSessionEnd</text>
+  <text x="435" y="616" text-anchor="middle" fill="#8fb6d6" font-size="11" font-family="monospace">enqueue DistillationJob{Trigger=SessionDisposed}</text>
+
+  <!-- cold-path dashed: ⑦ → enqueue FINAL job -->
+  <line x1="657" y1="602" x2="684" y2="602" stroke="#6ee7a8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-grn)"/>
+  <text x="690" y="598" fill="#9be3bd" font-size="10">enqueue FINAL job</text>
+
+  <line x1="435" y1="626" x2="435" y2="640" stroke="#6ee7a8" stroke-width="1.5" marker-end="url(#arrow-grn)"/>
+
+  <!-- channel boundary -->
+  <rect x="155" y="642" width="590" height="38" rx="10" fill="#241d3d" stroke="#6ee7a8" stroke-width="1.6"/>
+  <text x="450" y="666" text-anchor="middle" fill="#9be3bd" font-size="13" font-weight="600">channel boundary  →  cold path  (Diagram B)</text>
+</svg>

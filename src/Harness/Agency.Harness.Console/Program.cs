@@ -98,20 +98,23 @@ internal class Program
         //    behaves exactly as before. When enabled, Postgres + LM Studio embeddings must
         //    be reachable; schema init at startup will fail fast with a clear message if not.
         bool memoryEnabled = builder.Configuration.GetValue<bool>("Memory:Enabled");
-        int embeddingDimensions = 1024;
+        int embeddingDimensions = builder.Configuration.GetValue<int>("Embedding:Dimensions", 1024);
+
+        // 5a. Embeddings — registered whenever Embedding:BaseUrl is configured, independently
+        //     of Memory:Enabled, so the vector store can use embeddings without requiring memory.
+        bool embeddingsConfigured = builder.Configuration["Embedding:BaseUrl"] is not null;
+        if (embeddingsConfigured)
+        {
+            builder.Services.AddAgencyEmbeddingsOpenAI(opts =>
+            {
+                builder.Configuration.GetSection(EmbeddingOptions.SectionName).Bind(opts);
+            });
+        }
 
         if (memoryEnabled)
         {
             // Provider selection: "postgres" (default) or "sqlite".
             string provider = builder.Configuration.GetValue<string>("Memory:Provider") ?? "postgres";
-
-            embeddingDimensions = builder.Configuration.GetValue<int>("Embedding:Dimensions", 1024);
-
-            // 5a. Embeddings
-            builder.Services.AddAgencyEmbeddingsOpenAI(opts =>
-            {
-                builder.Configuration.GetSection(EmbeddingOptions.SectionName).Bind(opts);
-            });
 
             // 5b. Memory store + repositories + schema initializer — provider chosen via Memory:Provider.
             switch (provider.ToLowerInvariant())
@@ -181,8 +184,8 @@ internal class Program
 
         // 5.7 Vector store, ingestion, and retrieval.
         //     Options bindings are unconditional so configuration is always validated.
-        //     Vector store and text-splitter require IEmbeddingGenerator, so they are gated
-        //     on memoryEnabled to avoid startup failures when embeddings are not configured.
+        //     Vector store and text-splitter require IEmbeddingGenerator; gated on
+        //     embeddingsConfigured so they work independently of Memory:Enabled.
         builder.Services.Configure<VectorStoreOptions>(
             builder.Configuration.GetSection(VectorStoreOptions.SectionName));
         builder.Services.Configure<IngestionOptions>(
@@ -193,7 +196,7 @@ internal class Program
         // Session state: stable per-scope UserId/SessionId, independent of memory.
         builder.Services.AddScoped<IProjectSessionState, ProjectSessionState>();
 
-        if (memoryEnabled)
+        if (embeddingsConfigured)
         {
             builder.Services.AddSingleton<ITextSplitter>(sp =>
             {
@@ -370,8 +373,26 @@ internal class Program
                 var initializer = initScope.ServiceProvider
                     .GetRequiredService<IMemorySchemaInitializer>();
                 await initializer.InitializeAsync(embeddingDimensions, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                System.Console.Error.WriteLine(
+                    $"[Agency] Memory is enabled but the store/embeddings are unreachable: {ex.Message}");
+                System.Console.Error.WriteLine(
+                    "[Agency] Ensure the configured Memory:Provider backend (Postgres requires its docker " +
+                    "container) and the embeddings endpoint are reachable, or set Memory:Enabled=false in " +
+                    "appsettings.json to run without memory.");
+                throw;
+            }
+        }
 
-                IVectorStore vectorStore = initScope.ServiceProvider.GetRequiredService<IVectorStore>();
+        // 8b. Vector store schema init — independent of memory.
+        if (embeddingsConfigured)
+        {
+            try
+            {
+                using IServiceScope vsScope = host.Services.CreateScope();
+                IVectorStore vectorStore = vsScope.ServiceProvider.GetRequiredService<IVectorStore>();
                 if (vectorStore is SqliteKVStore sqliteKVStore)
                 {
                     await sqliteKVStore.InitializeSchemaAsync(embeddingDimensions, CancellationToken.None);
@@ -384,11 +405,7 @@ internal class Program
             catch (Exception ex)
             {
                 System.Console.Error.WriteLine(
-                    $"[Agency] Memory is enabled but the store/embeddings are unreachable: {ex.Message}");
-                System.Console.Error.WriteLine(
-                    "[Agency] Ensure the configured Memory:Provider backend (Postgres requires its docker " +
-                    "container) and the embeddings endpoint are reachable, or set Memory:Enabled=false in " +
-                    "appsettings.json to run without memory.");
+                    $"[Agency] Vector store schema initialization failed: {ex.Message}");
                 throw;
             }
         }

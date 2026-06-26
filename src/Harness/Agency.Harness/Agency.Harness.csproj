@@ -13,9 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Agency.RagFormatter\Agency.RagFormatter.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
+    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" />
   </ItemGroup>
 
   <ItemGroup>

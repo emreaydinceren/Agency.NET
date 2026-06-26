@@ -51,7 +51,7 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key = this._fixture.UniqueName("meta");
         var metadata = new Dictionary<string, object> { ["source"] = "test", ["priority"] = "high" };
 
-        await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key, new { description = "Item with metadata" }, metadata, TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key, new { description = "Item with metadata" }, metadata, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query("test-user", "test-session", key, null, null, 1, true), TestContext.Current.CancellationToken);
         var item = results.FirstOrDefault(r => r.Key == key);
@@ -106,9 +106,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key2 = this._fixture.UniqueName("cat_archived");
 
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key1, new { name = "Important item" },
-            new Dictionary<string, object> { ["category"] = "important" }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["category"] = "important" }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key2, new { name = "Archived item" },
-            new Dictionary<string, object> { ["category"] = "archived" }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["category"] = "archived" }, cancellationToken: TestContext.Current.CancellationToken);
 
         var filter = new Dictionary<string, object> { ["category"] = "important" };
         var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query("test-user", "test-session", null, null, filter, 100, true), TestContext.Current.CancellationToken);
@@ -124,9 +124,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var keyWithoutMedical = this._fixture.UniqueName("tags_no_medical");
 
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
@@ -193,21 +193,21 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         await this._fixture.KVStore.UpsertAsync("test-user", null, keyGlobal, new { text = "global" }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keySession, new { text = "session" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        // Null sessionId → both entries visible
-        var allResults = await this._fixture.KVStore.SearchAsync<dynamic>(
+        // Null sessionId resolves to the global sentinel '*' — only global-scope entries are returned.
+        var globalOnlyResults = await this._fixture.KVStore.SearchAsync<dynamic>(
             new Query("test-user", null, null, null, null, 100),
             TestContext.Current.CancellationToken);
 
-        Assert.Contains(allResults, r => r.Key == keyGlobal);
-        Assert.Contains(allResults, r => r.Key == keySession);
+        Assert.Contains(globalOnlyResults, r => r.Key == keyGlobal);
+        Assert.DoesNotContain(globalOnlyResults, r => r.Key == keySession);
 
-        // Specific sessionId → only session-scoped entry visible
+        // Specific sessionId activates the three-scope union: global + that session are both visible.
         var sessionResults = await this._fixture.KVStore.SearchAsync<dynamic>(
             new Query("test-user", "test-session", null, null, null, 100),
             TestContext.Current.CancellationToken);
 
         Assert.Contains(sessionResults, r => r.Key == keySession);
-        Assert.DoesNotContain(sessionResults, r => r.Key == keyGlobal);
+        Assert.Contains(sessionResults, r => r.Key == keyGlobal);
     }
 
     /// <summary>
@@ -222,7 +222,7 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         await this._fixture.KVStore.UpsertAsync("test-user", null, key, new { text = "global" }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key, new { text = "session" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        bool deleted = await this._fixture.KVStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        bool deleted = await this._fixture.KVStore.DeleteAsync("test-user", null, key, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(deleted);
 
         // Global entry is gone
@@ -252,23 +252,255 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         await this._fixture.KVStore.UpsertAsync("test-user", null, key, new { text = "global version" }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "session-a", key, new { text = "session-a version" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        // Searching with null sessionId returns both entries for this key
+        // Searching with session-a activates the three-scope union (global + session-a),
+        // so both the null-session entry and the session-a entry are visible.
         var allResults = await this._fixture.KVStore.SearchAsync<dynamic>(
-            new Query("test-user", null, key, null, null, 100),
+            new Query("test-user", "session-a", key, null, null, 100),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(2, allResults.Count(r => r.Key == key));
 
-        // Deleting the global entry leaves the session-a entry intact
-        await this._fixture.KVStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        // Deleting the global entry leaves the session-a entry intact.
+        await this._fixture.KVStore.DeleteAsync("test-user", null, key, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterDelete = await this._fixture.KVStore.SearchAsync<dynamic>(
-            new Query("test-user", null, key, null, null, 100),
+            new Query("test-user", "session-a", key, null, null, 100),
             TestContext.Current.CancellationToken);
 
         var remaining = afterDelete.Where(r => r.Key == key).ToList();
         Assert.Single(remaining);
         Assert.Equal("session-a", remaining[0].SessionId);
+    }
+
+    // ── Project scope — UpsertAsync and SearchAsync ──────────────────────────
+
+    [Fact]
+    public async Task UpsertAsync_WithProjectId_StoredUnderProjectScope()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string key = this._fixture.UniqueName("proj_entry");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "project entry" },
+            projectId: "proj-alpha",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, key, null, null, 1, false, ["proj-alpha"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == key);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ThreeScopeUnion_ReturnsAllScopes()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string key1 = this._fixture.UniqueName("global");
+        string key2 = this._fixture.UniqueName("session");
+        string key3 = this._fixture.UniqueName("project");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key1, new { text = "global" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, "sess-abc", key2, new { text = "session" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key3, new { text = "project" },
+            projectId: "myproj",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, "sess-abc", null, null, null, 100, false, ["myproj"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == key1);
+        Assert.Contains(results, r => r.Key == key2);
+        Assert.Contains(results, r => r.Key == key3);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithProjectIds_ExcludesOtherProjects()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string keyA = this._fixture.UniqueName("proj_a");
+        string keyB = this._fixture.UniqueName("proj_b");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, keyA, new { text = "project A" },
+            projectId: "proj-A",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, keyB, new { text = "project B" },
+            projectId: "proj-B",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, null, null, null, 100, false, ["proj-A"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == keyA);
+        Assert.DoesNotContain(results, r => r.Key == keyB);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithoutProjectIds_ExcludesProjectScopedEntries()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string key = this._fixture.UniqueName("hidden");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "hidden project entry" },
+            projectId: "hidden-proj",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, "check-session", null, null, null, 100, false, null),
+            TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(results, r => r.Key == key);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithProjectId_RemovesOnlyProjectEntry()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string key = this._fixture.UniqueName("del_key");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "global" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "project" },
+            projectId: "del-proj",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> before = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, key, null, null, 100, false, ["del-proj"]),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(2, before.Count(r => r.Key == key));
+
+        bool deleted = await this._fixture.KVStore.DeleteAsync(userId, null, key,
+            projectId: "del-proj",
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(deleted);
+
+        IReadOnlyList<SearchHit<dynamic>> after = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, key, null, null, 100, false, null),
+            TestContext.Current.CancellationToken);
+        Assert.Single(after, r => r.Key == key);
+    }
+
+    // ── ListProjectsAsync ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListProjectsAsync_ReturnsDistinctProjectNames()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("k1"), new { },
+            projectId: "proj-x", cancellationToken: TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("k2"), new { },
+            projectId: "proj-y", cancellationToken: TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("k3"), new { },
+            projectId: "proj-x", cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.Contains("proj-x", projects);
+        Assert.Contains("proj-y", projects);
+        Assert.DoesNotContain("*", projects);
+        Assert.Equal(2, projects.Count);
+    }
+
+    [Fact]
+    public async Task ListProjectsAsync_NoProjects_ReturnsEmpty()
+    {
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(
+            Guid.NewGuid().ToString("N"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(projects);
+    }
+
+    [Fact]
+    public async Task ListProjectsAsync_IsolatedByUserId()
+    {
+        string userId1 = Guid.NewGuid().ToString("N");
+        string userId2 = Guid.NewGuid().ToString("N");
+
+        await this._fixture.KVStore.UpsertAsync(userId1, null, this._fixture.UniqueName("k"), new { },
+            projectId: "proj-user1", cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId2, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain("proj-user1", projects);
+    }
+
+    // ── ListDocumentsAsync ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListDocumentsAsync_ReturnsEntriesWithSourceFileMetadata()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string key = this._fixture.UniqueName("doc");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "document content" },
+            metadata: new Dictionary<string, object> { ["source_file"] = "docs/Home.md" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<DocumentInfo> docs = await this._fixture.KVStore.ListDocumentsAsync(
+            userId, "test-sess", null, TestContext.Current.CancellationToken);
+
+        DocumentInfo doc = Assert.Single(docs, d => d.SourceFile == "docs/Home.md");
+        Assert.Equal("*", doc.SessionId);
+        Assert.Equal("*", doc.ProjectId);
+    }
+
+    [Fact]
+    public async Task ListDocumentsAsync_ReturnsProjectScopedEntries()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string key = this._fixture.UniqueName("proj_doc");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "project document" },
+            metadata: new Dictionary<string, object> { ["source_file"] = "docs/Project.md" },
+            projectId: "listproj",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<DocumentInfo> docs = await this._fixture.KVStore.ListDocumentsAsync(
+            userId, "test-sess", ["listproj"], TestContext.Current.CancellationToken);
+
+        DocumentInfo doc = Assert.Single(docs, d => d.SourceFile == "docs/Project.md");
+        Assert.Equal("*", doc.SessionId);
+        Assert.Equal("listproj", doc.ProjectId);
+    }
+
+    [Fact]
+    public async Task ListDocumentsAsync_ExcludesEntriesWithoutSourceFileMetadata()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string keyWithFile = this._fixture.UniqueName("with_file");
+        string keyWithoutFile = this._fixture.UniqueName("without_file");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, keyWithFile, new { text = "has source" },
+            metadata: new Dictionary<string, object> { ["source_file"] = "notes/keep.md" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, keyWithoutFile, new { text = "no source" },
+            metadata: new Dictionary<string, object> { ["other"] = "value" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<DocumentInfo> docs = await this._fixture.KVStore.ListDocumentsAsync(
+            userId, null, null, TestContext.Current.CancellationToken);
+
+        DocumentInfo doc = Assert.Single(docs);
+        Assert.Equal("notes/keep.md", doc.SourceFile);
+    }
+
+    [Fact]
+    public async Task ListDocumentsAsync_NoEntries_ReturnsEmpty()
+    {
+        IReadOnlyList<DocumentInfo> docs = await this._fixture.KVStore.ListDocumentsAsync(
+            Guid.NewGuid().ToString("N"), "sess", null, TestContext.Current.CancellationToken);
+
+        Assert.Empty(docs);
     }
 
     // ── Fixture ──────────────────────────────────────────────────────────────

@@ -80,7 +80,7 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         var value = new { description = "Item with metadata" };
         var metadata = new Dictionary<string, object> { ["source"] = "test", ["priority"] = "high" };
 
-        await kvStore.UpsertAsync("test-user", "test-session", key, value, metadata, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key, value, metadata, cancellationToken: TestContext.Current.CancellationToken);
 
         // Search with exact key match to get the item
         var query = new Query("test-user", "test-session", key, null, null, 100);
@@ -175,8 +175,8 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         var metadata1 = new Dictionary<string, object> { ["category"] = "important" };
         var metadata2 = new Dictionary<string, object> { ["category"] = "archived" };
 
-        await kvStore.UpsertAsync("test-user", "test-session", key1, new { name = "Important item" }, metadata1, TestContext.Current.CancellationToken);
-        await kvStore.UpsertAsync("test-user", "test-session", key2, new { name = "Archived item" }, metadata2, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key1, new { name = "Important item" }, metadata1, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", key2, new { name = "Archived item" }, metadata2, cancellationToken: TestContext.Current.CancellationToken);
 
         // Search with vector search and metadata filter for "important"
         var filterDict = new Dictionary<string, object> { ["category"] = "important" };
@@ -271,8 +271,8 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         var tagsWithMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } };
         var tagsWithoutMedical = new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } };
 
-        await kvStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" }, tagsWithMedical, TestContext.Current.CancellationToken);
-        await kvStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical, TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" }, tagsWithMedical, cancellationToken: TestContext.Current.CancellationToken);
+        await kvStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" }, tagsWithoutMedical, cancellationToken: TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
@@ -350,7 +350,7 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         await kvStore.UpsertAsync("test-user", null, key, new { text = "global" }, cancellationToken: TestContext.Current.CancellationToken);
         await kvStore.UpsertAsync("test-user", "test-session", key, new { text = "session" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        bool deleted = await kvStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        bool deleted = await kvStore.DeleteAsync("test-user", null, key, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(deleted);
 
         // Global entry is gone
@@ -389,7 +389,7 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         Assert.Equal(2, allResults.Count(r => r.Key == key));
 
         // Deleting the global entry leaves the session-a entry intact
-        await kvStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        await kvStore.DeleteAsync("test-user", null, key, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterDelete = await kvStore.SearchAsync<dynamic>(
             new Query("test-user", null, key, null, null, 100),

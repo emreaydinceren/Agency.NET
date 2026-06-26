@@ -40,7 +40,9 @@ public sealed class SqliteKVStore : IVectorStore
     private readonly SqliteRunner _sqliteRunner;
 
     private const string GlobalSession = "*";
+    private const string GlobalProject = "*";
     private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
+    private static string ResolveProjectId(string? projectId) => projectId ?? GlobalProject;
 
     /// <summary>
     /// Creates a new <see cref="SqliteKVStore"/>.
@@ -85,7 +87,7 @@ public sealed class SqliteKVStore : IVectorStore
     }
 
     /// <summary>
-    /// Creates the <c>semantic_kv_store</c> table and a key index if they do not already exist.
+    /// Drops and recreates the <c>semantic_kv_store</c> table with the new schema including <c>project_id</c>.
     /// </summary>
     public async Task InitializeSchemaAsync(int dimensions = 1536, CancellationToken cancellationToken = default)
     {
@@ -99,16 +101,22 @@ public sealed class SqliteKVStore : IVectorStore
         try
         {
             await this._sqliteRunner.ExecuteAsync(
+                "DROP TABLE IF EXISTS semantic_kv_store",
+                null,
+                cancellationToken);
+
+            await this._sqliteRunner.ExecuteAsync(
                 """
-                CREATE TABLE IF NOT EXISTS semantic_kv_store (
+                CREATE TABLE semantic_kv_store (
                     user_id    TEXT NOT NULL,
                     session_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL DEFAULT '*',
                     key        TEXT NOT NULL,
                     value      TEXT NOT NULL,
                     embedding  TEXT NOT NULL,
                     metadata   TEXT,
                     updated_on TEXT DEFAULT (datetime('now')),
-                    PRIMARY KEY (user_id, session_id, key)
+                    PRIMARY KEY (user_id, session_id, project_id, key)
                 )
                 """,
                 null,
@@ -162,31 +170,39 @@ public sealed class SqliteKVStore : IVectorStore
             // can apply it after the containment check. LIMIT -1 means "no limit" in SQLite.
             int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
-            const string sql = """
+            var parameters = new Dictionary<string, object?> { ["l"] = sqlLimit };
+            parameters["uid"] = query.UserId;
+            parameters["sid"] = query.SessionId ?? GlobalSession;
+
+            string projectClause = "";
+            bool hasProjects = (query.ProjectIds?.Count ?? 0) > 0;
+            if (hasProjects)
+            {
+                var paramNames = new List<string>();
+                for (int i = 0; i < query.ProjectIds!.Count; i++)
+                {
+                    string paramName = $"pid{i}";
+                    paramNames.Add($"@{paramName}");
+                    parameters[paramName] = query.ProjectIds[i];
+                }
+                projectClause = $"OR (session_id = '*' AND project_id IN ({string.Join(", ", paramNames)}))";
+            }
+
+            string sql = $"""
                 SELECT user_id, session_id, key, value, metadata,
                        CASE WHEN @qVector IS NULL THEN 0.0 ELSE vec_distance_cosine(embedding, @qVector) END AS distance,
                        updated_on
                 FROM semantic_kv_store
                 WHERE user_id = @uid
-                  AND (@hasSessionId = 0 OR session_id = @sid)
-                  AND (@hasKey       = 0 OR key = @k)
+                  AND (
+                      (session_id = '*' AND project_id = '*')
+                      OR (session_id = @sid AND project_id = '*')
+                      {projectClause}
+                  )
+                  AND (@hasKey = 0 OR key = @k)
                 ORDER BY distance ASC
                 LIMIT @l
                 """;
-
-            var parameters = new Dictionary<string, object?> { ["l"] = sqlLimit };
-            parameters["uid"] = query.UserId;
-
-            if (query.SessionId != null)
-            {
-                parameters["sid"] = query.SessionId;
-                parameters["hasSessionId"] = 1;
-            }
-            else
-            {
-                parameters["sid"] = string.Empty;
-                parameters["hasSessionId"] = 0;
-            }
 
             if (string.IsNullOrWhiteSpace(query.Value) == false)
             {
@@ -253,7 +269,7 @@ public sealed class SqliteKVStore : IVectorStore
     }
 
     /// <inheritdoc/>
-    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
+    public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, string? projectId = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.upsert", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "upsert");
@@ -273,9 +289,9 @@ public sealed class SqliteKVStore : IVectorStore
             string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
             const string upsertSql = """
-                INSERT INTO semantic_kv_store (user_id, session_id, key, value, embedding, metadata)
-                VALUES (@uid, @sid, @k, @v, @e, @m)
-                ON CONFLICT (user_id, session_id, key) DO UPDATE
+                INSERT INTO semantic_kv_store (user_id, session_id, project_id, key, value, embedding, metadata)
+                VALUES (@uid, @sid, @pid, @k, @v, @e, @m)
+                ON CONFLICT (user_id, session_id, project_id, key) DO UPDATE
                 SET value      = excluded.value,
                     embedding  = excluded.embedding,
                     metadata   = excluded.metadata,
@@ -288,6 +304,7 @@ public sealed class SqliteKVStore : IVectorStore
                 {
                     ["uid"] = userId,
                     ["sid"] = ResolveSessionId(sessionId),
+                    ["pid"] = ResolveProjectId(projectId),
                     ["k"] = key,
                     ["v"] = contentToEmbed,
                     ["e"] = vectorLiteral,
@@ -322,7 +339,7 @@ public sealed class SqliteKVStore : IVectorStore
     }
 
     /// <inheritdoc/>
-    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, string? projectId = null, CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity("vectorstore.delete", ActivityKind.Client);
         activity?.SetTag("vectorstore.operation", "delete");
@@ -336,8 +353,8 @@ public sealed class SqliteKVStore : IVectorStore
         try
         {
             int rowsAffected = await this._sqliteRunner.ExecuteAsync(
-                "DELETE FROM semantic_kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
-                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
+                "DELETE FROM semantic_kv_store WHERE user_id = @uid AND session_id = @sid AND project_id = @pid AND key = @k;",
+                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["pid"] = ResolveProjectId(projectId), ["k"] = key },
                 cancellationToken);
 
             stopwatch.Stop();
@@ -366,6 +383,76 @@ public sealed class SqliteKVStore : IVectorStore
             this._logger.LogError(ex, "Error deleting SQLite vector store entry after {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", stopwatch.Elapsed.TotalMilliseconds, userId, sessionId, key);
             throw;
         }
+    }
+
+    public async Task<IReadOnlyList<string>> ListProjectsAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT DISTINCT project_id
+            FROM semantic_kv_store
+            WHERE user_id = @uid AND project_id != '*'
+            ORDER BY project_id
+            """;
+
+        return await this._sqliteRunner.QueryAsync<string>(
+            sql,
+            reader => Task.FromResult(reader.GetString(0)),
+            new Dictionary<string, object?> { ["uid"] = userId },
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
+        string userId,
+        string? sessionId,
+        IReadOnlyList<string>? projectIds,
+        CancellationToken cancellationToken = default)
+    {
+        string sid = sessionId ?? GlobalSession;
+        bool hasProjects = (projectIds?.Count ?? 0) > 0;
+
+        var parameters = new Dictionary<string, object?>
+        {
+            ["uid"] = userId,
+            ["sid"] = sid,
+        };
+
+        string projectClause = "";
+        if (hasProjects)
+        {
+            var paramNames = new List<string>();
+            for (int i = 0; i < projectIds!.Count; i++)
+            {
+                string paramName = $"pid{i}";
+                paramNames.Add($"@{paramName}");
+                parameters[paramName] = projectIds[i];
+            }
+            projectClause = $"OR (session_id = '*' AND project_id IN ({string.Join(", ", paramNames)}))";
+        }
+
+        string sql = $"""
+            SELECT DISTINCT
+                json_extract(metadata, '$.source_file') AS source_file,
+                session_id,
+                project_id
+            FROM semantic_kv_store
+            WHERE user_id = @uid
+            AND json_extract(metadata, '$.source_file') IS NOT NULL
+            AND (
+                (session_id = '*' AND project_id = '*')
+                OR (session_id = @sid AND project_id = '*')
+                {projectClause}
+            )
+            ORDER BY source_file
+            """;
+
+        return await this._sqliteRunner.QueryAsync<DocumentInfo>(
+            sql,
+            reader => Task.FromResult(new DocumentInfo(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2))),
+            parameters,
+            cancellationToken);
     }
 
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)

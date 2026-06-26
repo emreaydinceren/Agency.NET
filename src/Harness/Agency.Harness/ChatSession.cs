@@ -22,7 +22,9 @@ public sealed class ChatSession : IAsyncDisposable
     private readonly ToolContext _toolContext;
     private readonly UserSpecificContext? _user;
     private readonly SkillContext? _skills;
+    private readonly SessionContext? _session;
     private Context? _ctx;
+    private KnowledgeContext? _pendingKnowledge;
     private int _turnCount;
     private bool _disposed;
 
@@ -36,13 +38,15 @@ public sealed class ChatSession : IAsyncDisposable
     /// </param>
     /// <param name="user">Optional caller identity propagated into the context on first send.</param>
     /// <param name="skills">Optional skill catalog context; defaults to <see cref="SkillContext.Empty"/>.</param>
-    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null, SkillContext? skills = null)
+    /// <param name="session">Optional pre-seeded session context forwarded to the context on first send.</param>
+    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null, SkillContext? skills = null, SessionContext? session = null)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
         this._options = options ?? throw new ArgumentNullException(nameof(options));
         this._toolContext = toolContext ?? ToolContext.Empty;
         this._user = user;
         this._skills = skills;
+        this._session = session;
     }
 
     /// <summary>Gets the model identifier of the agent driving this session.</summary>
@@ -75,7 +79,8 @@ public sealed class ChatSession : IAsyncDisposable
         new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
         user: this._user,
         timeProvider: this._agent.TimeProvider,
-        skills: this._skills);
+        skills: this._skills,
+        session: this._session);
 
     /// <summary>
     /// Switches the agent used for subsequent turns. Conversation history is preserved;
@@ -85,6 +90,23 @@ public sealed class ChatSession : IAsyncDisposable
     public void SetAgent(Agent agent)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
+    }
+
+    /// <summary>
+    /// Injects runtime knowledge into the session. If the context has already been created,
+    /// updates it immediately; otherwise queues the knowledge to be applied on first send.
+    /// </summary>
+    /// <param name="knowledge">The knowledge context to inject.</param>
+    public void SetKnowledge(KnowledgeContext knowledge)
+    {
+        if (this._ctx is null)
+        {
+            this._pendingKnowledge = knowledge;
+        }
+        else
+        {
+            this._ctx.Knowledge = knowledge;
+        }
     }
 
     /// <summary>
@@ -109,7 +131,14 @@ public sealed class ChatSession : IAsyncDisposable
             new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
             user: this._user,
             timeProvider: this._agent.TimeProvider,
-            skills: this._skills);
+            skills: this._skills,
+            session: this._session);
+
+        if (this._pendingKnowledge is not null)
+        {
+            this._ctx.Knowledge = this._pendingKnowledge;
+            this._pendingKnowledge = null;
+        }
 
         // Abandonment (spec §6.4): if a turn is parked and the user sends a new message,
         // implicitly deny all pending calls with the abandonment reason, complete the batch

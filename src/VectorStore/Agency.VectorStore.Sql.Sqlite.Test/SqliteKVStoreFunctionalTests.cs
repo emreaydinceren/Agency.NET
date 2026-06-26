@@ -51,7 +51,7 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key = this._fixture.UniqueName("meta");
         var metadata = new Dictionary<string, object> { ["source"] = "test", ["priority"] = "high" };
 
-        await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key, new { description = "Item with metadata" }, metadata, TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key, new { description = "Item with metadata" }, metadata, cancellationToken: TestContext.Current.CancellationToken);
 
         var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query("test-user", "test-session", key, null, null, 1, true), TestContext.Current.CancellationToken);
         var item = results.FirstOrDefault(r => r.Key == key);
@@ -106,9 +106,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var key2 = this._fixture.UniqueName("cat_archived");
 
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key1, new { name = "Important item" },
-            new Dictionary<string, object> { ["category"] = "important" }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["category"] = "important" }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key2, new { name = "Archived item" },
-            new Dictionary<string, object> { ["category"] = "archived" }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["category"] = "archived" }, cancellationToken: TestContext.Current.CancellationToken);
 
         var filter = new Dictionary<string, object> { ["category"] = "important" };
         var results = await this._fixture.KVStore.SearchAsync<dynamic>(new Query("test-user", "test-session", null, null, filter, 100, true), TestContext.Current.CancellationToken);
@@ -124,9 +124,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var keyWithoutMedical = this._fixture.UniqueName("tags_no_medical");
 
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };
@@ -222,7 +222,7 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         await this._fixture.KVStore.UpsertAsync("test-user", null, key, new { text = "global" }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", key, new { text = "session" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        bool deleted = await this._fixture.KVStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        bool deleted = await this._fixture.KVStore.DeleteAsync("test-user", null, key, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(deleted);
 
         // Global entry is gone
@@ -260,7 +260,7 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Equal(2, allResults.Count(r => r.Key == key));
 
         // Deleting the global entry leaves the session-a entry intact
-        await this._fixture.KVStore.DeleteAsync("test-user", null, key, TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.DeleteAsync("test-user", null, key, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterDelete = await this._fixture.KVStore.SearchAsync<dynamic>(
             new Query("test-user", null, key, null, null, 100),

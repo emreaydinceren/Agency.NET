@@ -22,5 +22,6 @@ public interface IIngestionPipeline<TValue>
         IVectorStore store,
         string userId,
         string? sessionId,
+        string? projectId = null,
         CancellationToken ct = default);
 }

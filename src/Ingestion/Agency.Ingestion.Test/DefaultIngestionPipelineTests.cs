@@ -132,7 +132,7 @@ public sealed class DefaultIngestionPipelineTests
         var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("store error"));
 
         var loaderMock = new Mock<IDocumentLoader>();
@@ -162,7 +162,7 @@ public sealed class DefaultIngestionPipelineTests
         var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("error"));
 
         var loaderMock = new Mock<IDocumentLoader>();
@@ -221,6 +221,7 @@ public sealed class DefaultIngestionPipelineTests
             "my-source:chunk:0",
             It.IsAny<string>(),
             It.IsAny<IDictionary<string, object>?>(),
+            It.IsAny<string?>(),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -238,9 +239,9 @@ public sealed class DefaultIngestionPipelineTests
         var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string?, string, string, IDictionary<string, object>?, CancellationToken>(
-                (_, _, _, _, meta, _) => capturedMetadata = meta)
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string?, string, string, IDictionary<string, object>?, string?, CancellationToken>(
+                (_, _, _, _, meta, _, _) => capturedMetadata = meta)
             .Returns(Task.CompletedTask);
 
         var loaderMock = new Mock<IDocumentLoader>();
@@ -272,9 +273,9 @@ public sealed class DefaultIngestionPipelineTests
         var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string?, string, string, IDictionary<string, object>?, CancellationToken>(
-                (_, _, _, _, meta, _) => capturedMetadata.Add(meta))
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string?, string, string, IDictionary<string, object>?, string?, CancellationToken>(
+                (_, _, _, _, meta, _, _) => capturedMetadata.Add(meta))
             .Returns(Task.CompletedTask);
 
         var loaderMock = new Mock<IDocumentLoader>();
@@ -306,9 +307,9 @@ public sealed class DefaultIngestionPipelineTests
         var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string?, string, string, IDictionary<string, object>?, CancellationToken>(
-                (_, _, _, _, meta, _) => capturedMetadata = meta)
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string?, string, string, IDictionary<string, object>?, string?, CancellationToken>(
+                (_, _, _, _, meta, _, _) => capturedMetadata = meta)
             .Returns(Task.CompletedTask);
 
         var loaderMock = new Mock<IDocumentLoader>();
@@ -345,7 +346,7 @@ public sealed class DefaultIngestionPipelineTests
         var storeMock = new Mock<IVectorStore>();
         storeMock
             .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         return (loaderMock.Object, splitterMock.Object, storeMock.Object);

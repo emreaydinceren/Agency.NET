@@ -1,8 +1,11 @@
+using Agency.Harness;
 using Agency.Harness.Console.Commands;
+using Agency.Harness.Console.Services;
 using Agency.Harness.Contexts;
 using Agency.Harness.Loop;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -101,12 +104,14 @@ internal sealed class ConsoleChatSession
     {
         // Ensure a chat session exists (it is created lazily on the first real turn,
         // but a user could invoke a /skill command before any LLM turn has started).
+        IProjectSessionState? sessionState = this.ServiceProvider.GetService<IProjectSessionState>();
         this._chatSession ??= new(
             this._agent,
             this._options,
             this.toolContext,
             new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
-            this._skillContext);
+            this._skillContext,
+            session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
 
         long prevIn = this._chatSession.TotalUsage.InputTokens;
         long prevOut = this._chatSession.TotalUsage.OutputTokens;
@@ -173,9 +178,11 @@ internal sealed class ConsoleChatSession
         {
             this.WriteHeader();
 
+            IProjectSessionState? sessionState = this.ServiceProvider.GetService<IProjectSessionState>();
             this._chatSession = new(this._agent, this._options, this.toolContext,
                 new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
-                this._skillContext);
+                this._skillContext,
+                session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
 
             bool shouldExitSession = false;
             CancellationTokenSource? turnCts = null;
@@ -203,6 +210,18 @@ internal sealed class ConsoleChatSession
                 }
 
                 turnCts = new CancellationTokenSource();
+
+                DocumentContextHydrationService? hydration =
+                    this.ServiceProvider.GetService<DocumentContextHydrationService>();
+                if (hydration is not null)
+                {
+                    string? fact = await hydration.RefreshIfDirtyAsync(turnCts.Token);
+                    if (fact is not null)
+                    {
+                        this._chatSession!.SetKnowledge(new KnowledgeContext { Facts = [fact] });
+                    }
+                }
+
                 var input = initialInput ?? await this._inputReader.ReadLineAsync(PromptMarkup, turnCts.Token);
 
                 if (input is null)
@@ -247,7 +266,8 @@ internal sealed class ConsoleChatSession
                         }
                         this._chatSession = new(this._agent, this._options, this.toolContext,
                             new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
-                            this._skillContext);
+                            this._skillContext,
+                            session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
                         continue;
                         case CommandContinuation.Continue:
                         continue;

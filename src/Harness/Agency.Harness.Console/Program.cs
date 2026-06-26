@@ -1,7 +1,10 @@
 global using System.Runtime.CompilerServices;
 
+using Agency.Embeddings.Common;
 using Agency.Embeddings.OpenAI;
 using Agency.Harness.Console.Commands;
+using Agency.Harness.Console.Configuration;
+using Agency.Harness.Console.Services;
 using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
@@ -9,6 +12,8 @@ using Agency.Harness.Hooks.Configuration;
 using Agency.Harness.Permissions;
 using Agency.Harness.Skills;
 using Agency.Harness.Tools;
+using Agency.Ingestion;
+using Agency.Ingestion.SemanticKernel;
 using Agency.Memory.Consolidator.DependencyInjection;
 using Agency.Memory.Distiller;
 using Agency.Memory.Distiller.DependencyInjection;
@@ -19,9 +24,15 @@ using Agency.Memory.Sql.Sqlite;
 using Agency.Llm.OpenAI;
 using Agency.Llm.Common;
 using Agency.Llm.Common.Tools;
+using Agency.Sql.Postgres;
+using Agency.Sql.Sqlite;
+using Agency.VectorStore.Common;
+using Agency.VectorStore.Sql.Postgres;
+using Agency.VectorStore.Sql.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -168,6 +179,55 @@ internal class Program
             builder.Services.AddAgencyHygiene();
         }
 
+        // 5.7 Vector store, ingestion, and retrieval.
+        //     Options bindings are unconditional so configuration is always validated.
+        //     Vector store and text-splitter require IEmbeddingGenerator, so they are gated
+        //     on memoryEnabled to avoid startup failures when embeddings are not configured.
+        builder.Services.Configure<VectorStoreOptions>(
+            builder.Configuration.GetSection(VectorStoreOptions.SectionName));
+        builder.Services.Configure<IngestionOptions>(
+            builder.Configuration.GetSection(IngestionOptions.SectionName));
+        builder.Services.Configure<RetrievalOptions>(
+            builder.Configuration.GetSection(RetrievalOptions.SectionName));
+
+        // Session state: stable per-scope UserId/SessionId, independent of memory.
+        builder.Services.AddScoped<IProjectSessionState, ProjectSessionState>();
+
+        if (memoryEnabled)
+        {
+            builder.Services.AddSingleton<ITextSplitter>(sp =>
+            {
+                IngestionOptions ingestion = sp.GetRequiredService<IOptions<IngestionOptions>>().Value;
+                return new SemanticKernelTextSplitter(ingestion.ChunkSize, ingestion.ChunkOverlap);
+            });
+
+            builder.Services.AddSingleton<IVectorStore>(sp =>
+            {
+                string provider = sp.GetRequiredService<IOptions<VectorStoreOptions>>().Value.Provider;
+                IEmbeddingGenerator embeddings = sp.GetRequiredService<IEmbeddingGenerator>();
+
+                if (provider.Equals("postgres", StringComparison.OrdinalIgnoreCase))
+                {
+                    string cs = builder.Configuration.GetConnectionString("VectorStorePostgreSql")
+                        ?? throw new InvalidOperationException(
+                            "ConnectionStrings:VectorStorePostgreSql is required when VectorStore:Provider is 'postgres'.");
+                    PostgreSqlRunner runner = new(cs, sp.GetService<ILogger<PostgreSqlRunner>>());
+                    return new PostgresKVStore(embeddings, runner, sp.GetRequiredService<ILogger<PostgresKVStore>>());
+                }
+                else
+                {
+                    string cs = builder.Configuration.GetConnectionString("VectorStoreSqlite")
+                        ?? throw new InvalidOperationException(
+                            "ConnectionStrings:VectorStoreSqlite is required when VectorStore:Provider is 'sqlite'.");
+                    SqliteRunner runner = new(cs, SqliteKVStore.RegisterVectorFunctions, sp.GetService<ILogger<SqliteRunner>>());
+                    return new SqliteKVStore(embeddings, runner, sp.GetService<ILogger<SqliteKVStore>>());
+                }
+            });
+
+            builder.Services.AddScoped<IngestionCommandService>();
+            builder.Services.AddScoped<DocumentContextHydrationService>();
+        }
+
         // 5.5 MCP servers — opt-in via the "Mcp" config section.
         //     Skipped under Test: MCP servers are external processes that are not present in the
         //     functional-test environment (CI), and their discovered tools would be injected into the
@@ -279,6 +339,15 @@ internal class Program
                 }
             }
 
+            // Semantic search — only registered when the vector store is available.
+            IVectorStore? vectorStore = sp.GetService<IVectorStore>();
+            if (vectorStore is not null)
+            {
+                IProjectSessionState sessionState = sp.GetRequiredService<IProjectSessionState>();
+                RetrievalOptions retrieval = sp.GetRequiredService<IOptions<RetrievalOptions>>().Value;
+                inner.Register(new SemanticSearchTool(vectorStore, sessionState, retrieval.TopK));
+            }
+
             // Progressive discovery applies to MCP tools only: their schemas are withheld behind
             // tool_help. Native/internal tools are revealed in full.
             outward = options.ProgressiveDiscovery
@@ -301,6 +370,16 @@ internal class Program
                 var initializer = initScope.ServiceProvider
                     .GetRequiredService<IMemorySchemaInitializer>();
                 await initializer.InitializeAsync(embeddingDimensions, CancellationToken.None);
+
+                IVectorStore vectorStore = initScope.ServiceProvider.GetRequiredService<IVectorStore>();
+                if (vectorStore is SqliteKVStore sqliteKVStore)
+                {
+                    await sqliteKVStore.InitializeSchemaAsync(embeddingDimensions, CancellationToken.None);
+                }
+                else if (vectorStore is PostgresKVStore postgresKVStore)
+                {
+                    await postgresKVStore.InitializeSchemaAsync(embeddingDimensions, CancellationToken.None);
+                }
             }
             catch (Exception ex)
             {

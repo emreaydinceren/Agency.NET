@@ -16,6 +16,12 @@
     <ProjectReference Include="..\..\Memory\Agency.Memory.Consolidator\Agency.Memory.Consolidator.csproj" />
     <ProjectReference Include="..\..\Memory\Agency.Memory.Hygiene\Agency.Memory.Hygiene.csproj" />
     <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
+    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Common\Agency.VectorStore.Common.csproj" />
+    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion\Agency.Ingestion.csproj" />
+    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion.FileSystem\Agency.Ingestion.FileSystem.csproj" />
+    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion.SemanticKernel\Agency.Ingestion.SemanticKernel.csproj" />
+    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Sqlite\Agency.VectorStore.Sql.Sqlite.csproj" />
+    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Postgres\Agency.VectorStore.Sql.Postgres.csproj" />
   </ItemGroup>
 
   <ItemGroup>

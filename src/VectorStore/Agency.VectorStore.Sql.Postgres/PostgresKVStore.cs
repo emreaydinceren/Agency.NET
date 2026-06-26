@@ -153,7 +153,6 @@ public class PostgresKVStore : IVectorStore
             WHERE user_id = @uid
               AND (
                   @allSessions
-                  OR (session_id = '*' AND project_id = '*')
                   OR (session_id = @sid AND project_id = '*')
                   OR (@hasProjects AND session_id = '*' AND project_id = ANY(@pids))
               )

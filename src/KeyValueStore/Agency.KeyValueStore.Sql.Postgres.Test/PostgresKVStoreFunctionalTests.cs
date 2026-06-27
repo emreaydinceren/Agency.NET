@@ -9,7 +9,7 @@ namespace Agency.KeyValueStore.Sql.Postgres.Test;
 /// <summary>
 /// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml.
 /// Requires the container to be running: docker compose up -d
-/// Connection: Host=llm-host.example;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
+/// Connection configured via <c>ConnectionStrings:PostgreSql</c> in appsettings.json.
 /// Run with: dotnet test --filter "Category=Functional"
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>

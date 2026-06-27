@@ -4,8 +4,6 @@ using Agency.Sql.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Data.Common;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Text.Json;
 
@@ -24,20 +22,10 @@ public sealed class SqliteKVStore : IKVStore
     /// <summary>The meter name used for KV store telemetry.</summary>
     public const string MeterName = "Agency.KeyValueStore.Sql.Sqlite";
 
-    private static readonly ActivitySource _activitySource = new(ActivitySourceName);
-    private static readonly Meter _meter = new(MeterName);
-
-    private static readonly Counter<long> _operationCount =
-        _meter.CreateCounter<long>("kvstore.operations", unit: "{operation}", description: "Total number of KV store operations executed.");
-
-    private static readonly Histogram<double> _operationDuration =
-        _meter.CreateHistogram<double>("kvstore.duration", unit: "ms", description: "Duration of KV store operations in milliseconds.");
+    private static readonly KvStoreTelemetry _telemetry = new(ActivitySourceName, MeterName);
 
     private readonly ILogger<SqliteKVStore> _logger;
     private readonly SqliteRunner _sqliteRunner;
-
-    private const string GlobalSession = "*";
-    private static string ResolveSessionId(string? sessionId) => sessionId ?? GlobalSession;
 
     /// <summary>
     /// Creates a new <see cref="SqliteKVStore"/>.
@@ -58,15 +46,14 @@ public sealed class SqliteKVStore : IKVStore
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("kvstore.initialize", ActivityKind.Client);
+        using var activity = _telemetry.StartActivity("kvstore.initialize");
         activity?.SetTag("kvstore.operation", "initialize");
-
-        var stopwatch = Stopwatch.StartNew();
         this._logger.LogDebug("Initializing SQLite KV store schema");
 
-        try
-        {
-            await this._sqliteRunner.ExecuteAsync(
+        await _telemetry.ExecuteAsync<int>(
+            "initialize",
+            activity,
+            () => this._sqliteRunner.ExecuteAsync(
                 """
                 CREATE TABLE IF NOT EXISTS kv_store (
                     user_id    TEXT NOT NULL,
@@ -79,32 +66,9 @@ public sealed class SqliteKVStore : IKVStore
                 )
                 """,
                 null,
-                cancellationToken);
-
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "initialize" }, { "status", "success" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "initialize" } });
-
-            activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite KV store schema initialization completed in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "initialize" }, { "status", "error" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "initialize" } });
-
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                { "exception.type", ex.GetType().FullName },
-                { "exception.message", ex.Message },
-                { "exception.stacktrace", ex.ToString() },
-            }));
-
-            this._logger.LogError(ex, "Error initializing SQLite KV store schema after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
-            throw;
-        }
+                cancellationToken),
+            onSuccess: (_, elapsedMs) => this._logger.LogDebug("SQLite KV store schema initialization completed in {ElapsedMs}ms", elapsedMs),
+            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error initializing SQLite KV store schema after {ElapsedMs}ms", elapsedMs));
     }
 
     /// <inheritdoc/>
@@ -115,224 +79,210 @@ public sealed class SqliteKVStore : IKVStore
             throw new ArgumentNullException(nameof(query));
         }
 
-        using var activity = _activitySource.StartActivity("kvstore.search", ActivityKind.Client);
+        using var activity = _telemetry.StartActivity("kvstore.search");
         activity?.SetTag("kvstore.operation", "search");
         activity?.SetTag("kvstore.limit", query.Limit ?? 10);
         activity?.SetTag("kvstore.has_metadata_filter", query.MetadataFilter != null);
-
-        var stopwatch = Stopwatch.StartNew();
         this._logger.LogDebug("Searching SQLite KV store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
 
-        try
-        {
-            // When a metadata filter is present we skip the SQL LIMIT so that C#-side filtering
-            // can apply it after the containment check. LIMIT -1 means "no limit" in SQLite.
-            int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
-
-            const string sql = """
-                SELECT session_id, key, value, metadata, updated_on
-                FROM kv_store
-                WHERE user_id = @uid
-                  AND (@hasSessionId = 0 OR session_id = @sid)
-                  AND (@hasKey       = 0 OR key = @k)
-                  AND (@hasValue     = 0 OR instr(value, @v) > 0)
-                ORDER BY updated_on DESC
-                LIMIT @l
-                """;
-
-            var parameters = new Dictionary<string, object?> { ["l"] = sqlLimit };
-
-            parameters["uid"] = query.UserId;
-
-            if (query.SessionId != null)
+        return await _telemetry.ExecuteAsync<IReadOnlyList<SearchHit<TValue>>>(
+            "search",
+            activity,
+            async () =>
             {
-                parameters["sid"] = query.SessionId;
-                parameters["hasSessionId"] = 1;
-            }
-            else
-            {
-                parameters["sid"] = string.Empty;
-                parameters["hasSessionId"] = 0;
-            }
+                // When a metadata filter is present we skip the SQL LIMIT so that C#-side filtering
+                // can apply it after the containment check. LIMIT -1 means "no limit" in SQLite.
+                int sqlLimit = query.MetadataFilter != null ? -1 : (query.Limit ?? 10);
 
-            if (string.IsNullOrWhiteSpace(query.Value) == false)
-            {
-                parameters["v"] = query.Value;
-                parameters["hasValue"] = 1;
-            }
-            else
-            {
-                parameters["v"] = string.Empty;
-                parameters["hasValue"] = 0;
-            }
+                const string sql = """
+                    SELECT session_id, key, value, metadata, updated_on
+                    FROM kv_store
+                    WHERE user_id = @uid
+                      AND (@hasSessionId = 0 OR session_id = @sid)
+                      AND (@hasKey       = 0 OR key = @k)
+                      AND (@hasValue     = 0 OR instr(value, @v) > 0)
+                    ORDER BY updated_on DESC
+                    LIMIT @l
+                    """;
 
-            if (string.IsNullOrWhiteSpace(query.Key) == false)
-            {
-                parameters["k"] = query.Key;
-                parameters["hasKey"] = 1;
-            }
-            else
-            {
-                parameters["k"] = null;
-                parameters["hasKey"] = 0;
-            }
+                var parameters = new Dictionary<string, object?> { ["l"] = sqlLimit };
 
-            List<SearchHit<TValue>> results = await this._sqliteRunner.QueryAsync<SearchHit<TValue>>(
-                sql,
-                reader => Task.FromResult(HydrateSearchHit<TValue>(reader)),
-                parameters,
-                cancellationToken);
+                parameters["uid"] = query.UserId;
 
-            if (query.MetadataFilter != null)
-            {
-                results = results
-                    .Where(r => MatchesMetadataFilter(r.Metadata, query.MetadataFilter))
-                    .Take(query.Limit ?? 10)
-                    .ToList();
-            }
+                if (query.SessionId != null)
+                {
+                    parameters["sid"] = query.SessionId;
+                    parameters["hasSessionId"] = 1;
+                }
+                else
+                {
+                    parameters["sid"] = string.Empty;
+                    parameters["hasSessionId"] = 0;
+                }
 
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
+                if (string.IsNullOrWhiteSpace(query.Value) == false)
+                {
+                    parameters["v"] = query.Value;
+                    parameters["hasValue"] = 1;
+                }
+                else
+                {
+                    parameters["v"] = string.Empty;
+                    parameters["hasValue"] = 0;
+                }
 
-            activity?.SetTag("kvstore.result_count", results.Count);
-            activity?.SetStatus(ActivityStatusCode.Ok);
+                if (string.IsNullOrWhiteSpace(query.Key) == false)
+                {
+                    parameters["k"] = query.Key;
+                    parameters["hasKey"] = 1;
+                }
+                else
+                {
+                    parameters["k"] = null;
+                    parameters["hasKey"] = 0;
+                }
 
-            this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
-            return results;
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "error" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
+                List<SearchHit<TValue>> results = await this._sqliteRunner.QueryAsync<SearchHit<TValue>>(
+                    sql,
+                    reader => Task.FromResult(HydrateSearchHit<TValue>(reader)),
+                    parameters,
+                    cancellationToken);
 
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                { "exception.type", ex.GetType().FullName },
-                { "exception.message", ex.Message },
-                { "exception.stacktrace", ex.ToString() },
-            }));
+                if (query.MetadataFilter != null)
+                {
+                    results = results
+                        .Where(r => MatchesMetadataFilter(r.Metadata, query.MetadataFilter))
+                        .Take(query.Limit ?? 10)
+                        .ToList();
+                }
 
-            this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
-            throw;
-        }
+                activity?.SetTag("kvstore.result_count", results.Count);
+                return results;
+            },
+            onSuccess: (results, elapsedMs) => this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", elapsedMs, results.Count),
+            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", elapsedMs));
     }
 
     /// <inheritdoc/>
     public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("kvstore.upsert", ActivityKind.Client);
+        using var activity = _telemetry.StartActivity("kvstore.upsert");
         activity?.SetTag("kvstore.operation", "upsert");
         activity?.SetTag("kvstore.key", key);
         activity?.SetTag("kvstore.has_metadata", metadata != null);
         activity?.SetTag("kvstore.user_id", userId);
-
-        var stopwatch = Stopwatch.StartNew();
         this._logger.LogDebug("Upserting SQLite KV store entry with key {Key}", key);
 
-        try
-        {
-            string contentJson = JsonSerializer.Serialize(value);
-            string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
-
-            const string upsertSql = """
-                INSERT INTO kv_store (user_id, session_id, key, value, metadata)
-                VALUES (@uid, @sid, @k, @v, @m)
-                ON CONFLICT (user_id, session_id, key) DO UPDATE
-                SET value      = excluded.value,
-                    metadata   = excluded.metadata,
-                    updated_on = datetime('now')
-                """;
-
-            await this._sqliteRunner.ExecuteAsync(
-                upsertSql,
-                new Dictionary<string, object?>
-                {
-                    ["uid"] = userId,
-                    ["sid"] = ResolveSessionId(sessionId),
-                    ["k"] = key,
-                    ["v"] = contentJson,
-                    ["m"] = metadataJson
-                },
-                cancellationToken);
-
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "upsert" }, { "status", "success" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "upsert" } });
-
-            activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite KV store upsert completed in {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "upsert" }, { "status", "error" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "upsert" } });
-
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+        await _telemetry.ExecuteAsync<int>(
+            "upsert",
+            activity,
+            () =>
             {
-                { "exception.type", ex.GetType().FullName },
-                { "exception.message", ex.Message },
-                { "exception.stacktrace", ex.ToString() },
-            }));
+                string contentJson = JsonSerializer.Serialize(value);
+                string? metadataJson = metadata != null ? JsonSerializer.Serialize(metadata) : null;
 
-            this._logger.LogError(ex, "Error upserting SQLite KV store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
-            throw;
-        }
+                const string upsertSql = """
+                    INSERT INTO kv_store (user_id, session_id, key, value, metadata)
+                    VALUES (@uid, @sid, @k, @v, @m)
+                    ON CONFLICT (user_id, session_id, key) DO UPDATE
+                    SET value      = excluded.value,
+                        metadata   = excluded.metadata,
+                        updated_on = datetime('now')
+                    """;
+
+                return this._sqliteRunner.ExecuteAsync(
+                    upsertSql,
+                    new Dictionary<string, object?>
+                    {
+                        ["uid"] = userId,
+                        ["sid"] = KvStoreTelemetry.ResolveSessionId(sessionId),
+                        ["k"] = key,
+                        ["v"] = contentJson,
+                        ["m"] = metadataJson
+                    },
+                    cancellationToken);
+            },
+            onSuccess: (_, elapsedMs) => this._logger.LogDebug("SQLite KV store upsert completed in {ElapsedMs}ms for key {Key}", elapsedMs, key),
+            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error upserting SQLite KV store entry after {ElapsedMs}ms for key {Key}", elapsedMs, key));
     }
 
     /// <inheritdoc/>
     public async Task<bool> DeleteAsync(string userId, string? sessionId, string key, CancellationToken cancellationToken = default)
     {
-        using var activity = _activitySource.StartActivity("kvstore.delete", ActivityKind.Client);
+        using var activity = _telemetry.StartActivity("kvstore.delete");
         activity?.SetTag("kvstore.operation", "delete");
         activity?.SetTag("kvstore.key", key);
-
-        var stopwatch = Stopwatch.StartNew();
         this._logger.LogDebug("Deleting SQLite KV store entry with key {Key}", key);
 
-        try
-        {
-            int rowsAffected = await this._sqliteRunner.ExecuteAsync(
-                "DELETE FROM kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
-                new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = ResolveSessionId(sessionId), ["k"] = key },
-                cancellationToken);
-
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "success" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
-
-            activity?.SetTag("kvstore.deleted", rowsAffected > 0);
-            activity?.SetStatus(ActivityStatusCode.Ok);
-            this._logger.LogDebug("SQLite KV store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", stopwatch.Elapsed.TotalMilliseconds, key, rowsAffected > 0);
-            return rowsAffected > 0;
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "delete" }, { "status", "error" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "delete" } });
-
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+        return await _telemetry.ExecuteAsync(
+            "delete",
+            activity,
+            async () =>
             {
-                { "exception.type", ex.GetType().FullName },
-                { "exception.message", ex.Message },
-                { "exception.stacktrace", ex.ToString() },
-            }));
+                int rowsAffected = await this._sqliteRunner.ExecuteAsync(
+                    "DELETE FROM kv_store WHERE user_id = @uid AND session_id = @sid AND key = @k;",
+                    new Dictionary<string, object?> { ["uid"] = userId, ["sid"] = KvStoreTelemetry.ResolveSessionId(sessionId), ["k"] = key },
+                    cancellationToken);
+                activity?.SetTag("kvstore.deleted", rowsAffected > 0);
+                return rowsAffected > 0;
+            },
+            onSuccess: (deleted, elapsedMs) => this._logger.LogDebug("SQLite KV store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", elapsedMs, key, deleted),
+            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting SQLite KV store entry after {ElapsedMs}ms for key {Key}", elapsedMs, key));
+    }
 
-            this._logger.LogError(ex, "Error deleting SQLite KV store entry after {ElapsedMs}ms for key {Key}", stopwatch.Elapsed.TotalMilliseconds, key);
-            throw;
+    public async Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default)
+    {
+        if (userId == null)
+        {
+            throw new ArgumentNullException(nameof(userId));
         }
+
+        using var activity = _telemetry.StartActivity("kvstore.getMetadata");
+        activity?.SetTag("kvstore.operation", "getMetadata");
+
+        return await _telemetry.ExecuteAsync<IReadOnlyList<SearchHit>>(
+            "search",
+            activity,
+            async () =>
+            {
+                const string sql = """
+                    SELECT session_id, key, metadata, updated_on
+                    FROM kv_store
+                    WHERE user_id = @uid
+                      AND (@hasSessionId = 0 OR session_id = @sid)
+                    ORDER BY updated_on DESC
+                    """;
+
+                var parameters = new Dictionary<string, object?> { ["uid"] = userId };
+
+                if (sessionId != null)
+                {
+                    parameters["sid"] = sessionId;
+                    parameters["hasSessionId"] = 1;
+                }
+                else
+                {
+                    parameters["sid"] = string.Empty;
+                    parameters["hasSessionId"] = 0;
+                }
+
+                List<SearchHit> results = await this._sqliteRunner.QueryAsync<SearchHit>(
+                    sql,
+                    reader => Task.FromResult(HydrateSearchHit(reader)),
+                    parameters,
+                    cancellationToken);
+
+                activity?.SetTag("kvstore.result_count", results.Count);
+                return results;
+            },
+            onSuccess: (results, elapsedMs) => this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", elapsedMs, results.Count),
+            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", elapsedMs));
     }
 
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)
     {
         // session_id, key, value, metadata, updated_on
-        string? sessionId = reader.GetString(0) == GlobalSession ? null : reader.GetString(0);
+        string? sessionId = reader.GetString(0) == KvStoreTelemetry.GlobalSession ? null : reader.GetString(0);
         string key = reader.GetString(1);
         string valueJson = reader.GetString(2);
         string? metadataJson = reader.IsDBNull(3) ? null : reader.GetString(3);
@@ -348,7 +298,7 @@ public sealed class SqliteKVStore : IKVStore
     private static SearchHit HydrateSearchHit(DbDataReader reader)
     {
         // session_id, key, metadata, updated_on
-        string? sessionId = reader.GetString(0) == GlobalSession ? null : reader.GetString(0);
+        string? sessionId = reader.GetString(0) == KvStoreTelemetry.GlobalSession ? null : reader.GetString(0);
         string key = reader.GetString(1);
         string? metadataJson = reader.IsDBNull(2) ? null : reader.GetString(2);
 
@@ -430,75 +380,5 @@ public sealed class SqliteKVStore : IKVStore
 
         // Scalar equality
         return string.Equals(metaValue?.ToString(), filterValue?.ToString(), StringComparison.Ordinal);
-    }
-
-    public async Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default)
-    {
-        if (userId == null)
-        {
-            throw new ArgumentNullException(nameof(userId));
-        }
-
-        using var activity = _activitySource.StartActivity("kvstore.getMetadata", ActivityKind.Client);
-        activity?.SetTag("kvstore.operation", "getMetadata");
-
-        var stopwatch = Stopwatch.StartNew();
-
-        try
-        {
-            const string sql = """
-                SELECT session_id, key, metadata, updated_on
-                FROM kv_store
-                WHERE user_id = @uid
-                  AND (@hasSessionId = 0 OR session_id = @sid)
-                ORDER BY updated_on DESC
-                """;
-
-            var parameters = new Dictionary<string, object?> { ["uid"] = userId };
-
-            if (sessionId != null)
-            {
-                parameters["sid"] = sessionId;
-                parameters["hasSessionId"] = 1;
-            }
-            else
-            {
-                parameters["sid"] = string.Empty;
-                parameters["hasSessionId"] = 0;
-            }
-
-            List<SearchHit> results = await this._sqliteRunner.QueryAsync<SearchHit>(
-                sql,
-                reader => Task.FromResult(HydrateSearchHit(reader)),
-                parameters,
-                cancellationToken);
-
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "success" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
-
-            activity?.SetTag("kvstore.result_count", results.Count);
-            activity?.SetStatus(ActivityStatusCode.Ok);
-
-            this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
-            return results;
-        }
-        catch (Exception ex)
-        {
-            stopwatch.Stop();
-            _operationCount.Add(1, new TagList { { "operation", "search" }, { "status", "error" } });
-            _operationDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "search" } });
-
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-            {
-                { "exception.type", ex.GetType().FullName },
-                { "exception.message", ex.Message },
-                { "exception.stacktrace", ex.ToString() },
-            }));
-
-            this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
-            throw;
-        }
     }
 }

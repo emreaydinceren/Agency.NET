@@ -218,7 +218,8 @@ internal sealed class MemoryE2EFixture : IAsyncLifetime
 
         this._dataSource = TestInfrastructure.BuildDataSource(config);
 
-        string baseUrl = config[LmStudioBaseUrlKey] ?? "http://llm-host.example:1234/v1";
+        string baseUrl = config[LmStudioBaseUrlKey]
+            ?? throw new InvalidOperationException($"Configuration key '{LmStudioBaseUrlKey}' is required.");
         string apiKey = config[LmStudioApiKeyKey] ?? "lm-studio";
         string embeddingModel = config[LmStudioEmbeddingModelKey] ?? "local-embedding-model";
 

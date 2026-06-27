@@ -60,6 +60,8 @@ internal sealed class ConsoleChatSession
     private readonly SkillContext _skillContext;
     private Agent _agent;
     private ChatSession? _chatSession;
+    private LoopRunner? _loopRunner;
+    private bool _goalObservedInCurrentTurn;
 
     internal IServiceProvider ServiceProvider { get; }
 
@@ -112,6 +114,7 @@ internal sealed class ConsoleChatSession
             new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
             this._skillContext,
             session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
+        this._loopRunner ??= this.CreateLoopRunner(this._chatSession);
 
         long prevIn = this._chatSession.TotalUsage.InputTokens;
         long prevOut = this._chatSession.TotalUsage.OutputTokens;
@@ -123,8 +126,9 @@ internal sealed class ConsoleChatSession
 
         this.output.StartSpinner();
 
+        this._goalObservedInCurrentTurn = false;
         (bool parked, lastLlmDuration) = await this.ProcessStreamAsync(
-            this._chatSession.SendAsync(renderedBody, cts.Token),
+            this._loopRunner!.RunAsync(renderedBody, cts.Token),
             pendingRequests,
             prevIn,
             prevOut,
@@ -183,6 +187,7 @@ internal sealed class ConsoleChatSession
                 new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
                 this._skillContext,
                 session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
+            this._loopRunner = this.CreateLoopRunner(this._chatSession);
 
             bool shouldExitSession = false;
             CancellationTokenSource? turnCts = null;
@@ -264,10 +269,12 @@ internal sealed class ConsoleChatSession
                             await this._chatSession.DisposeAsync();
                             this._chatSession = null;
                         }
+                        this._loopRunner = null;
                         this._chatSession = new(this._agent, this._options, this.toolContext,
                             new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
                             this._skillContext,
                             session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
+                        this._loopRunner = this.CreateLoopRunner(this._chatSession);
                         continue;
                         case CommandContinuation.Continue:
                         continue;
@@ -291,8 +298,9 @@ internal sealed class ConsoleChatSession
                     // gather answers and resume — repeating until the turn is no longer parked
                     // or the user cancels the permission picker.
                     var pendingRequests = new List<PermissionRequestedEvent>();
+                    this._goalObservedInCurrentTurn = false;
                     (bool parked, lastLlmDuration) = await this.ProcessStreamAsync(
-                        this._chatSession.SendAsync(input, turnCts.Token),
+                        this._loopRunner!.RunAsync(input, turnCts.Token),
                         pendingRequests,
                         prevIn, prevOut,
                         lastLlmDuration,
@@ -470,10 +478,26 @@ internal sealed class ConsoleChatSession
                 break;
 
                 case GoalSetEvent:
-                case TurnStartedEvent:
-                case VerdictEvent:
-                case LoopResultEvent:
+                this._goalObservedInCurrentTurn = true;
                 RenderLoopEvent(this.output, evt);
+                break;
+
+                case TurnStartedEvent:
+                if (this._goalObservedInCurrentTurn)
+                {
+                    RenderLoopEvent(this.output, evt);
+                }
+                break;
+
+                case VerdictEvent:
+                RenderLoopEvent(this.output, evt);
+                break;
+
+                case LoopResultEvent:
+                if (this._goalObservedInCurrentTurn)
+                {
+                    RenderLoopEvent(this.output, evt);
+                }
                 break;
 
                 // SessionStartedEvent: intentionally suppressed.
@@ -635,6 +659,23 @@ internal sealed class ConsoleChatSession
     /// throws <see cref="InvalidOperationException"/> ("Could not find color or style ''").
     /// </summary>
     internal static string FormatGrayPreview(string content) => $"[gray]{Markup.Escape(content)}[/]";
+
+    private LoopRunner CreateLoopRunner(ChatSession session)
+    {
+        var loopOptions = this.ServiceProvider.GetRequiredService<IOptions<LoopOptions>>().Value;
+        var models = this.ServiceProvider.GetRequiredService<Models>();
+        string gkClientName = !string.IsNullOrEmpty(loopOptions.GoalkeeperClientName)
+            ? loopOptions.GoalkeeperClientName
+            : this._options.DefaultClientName;
+        string gkModel = loopOptions.GoalkeeperModel
+            ?? this._options.DefaultModel
+            ?? throw new InvalidOperationException(
+                "Goalkeeper model not configured. Set Loop:GoalkeeperModel or Agent:DefaultModel.");
+        var (gkClient, gkClientType) = models.CreateChatClient(gkClientName);
+        var goalkeeper = new Goalkeeper(gkClient, gkModel, gkClientType, loopOptions.GoalkeeperRubric);
+        var goalState = this.ServiceProvider.GetRequiredService<GoalState>();
+        return new LoopRunner(session, goalkeeper, goalState, loopOptions);
+    }
 
     /// <summary>
     /// Renders a Loop Kit <see cref="AgentEvent"/> subtype to <paramref name="output"/>.

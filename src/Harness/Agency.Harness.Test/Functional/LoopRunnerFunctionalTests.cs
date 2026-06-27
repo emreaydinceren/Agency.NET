@@ -14,8 +14,7 @@ namespace Agency.Harness.Test.Functional;
 /// <para>
 /// Run with:  <c>dotnet test --filter "Category=Functional"</c><br/>
 /// Skip with: <c>dotnet test --filter "Category!=Functional"</c><br/>
-/// Requires LM Studio running at <c>http://llm-host.example:1234</c> (or proxy at
-/// <c>http://llm-host.example:12345</c>). Worker and Goalkeeper are resolved to DIFFERENT
+/// Requires LM Studio or the HTTP cache proxy at the configured base URL. Worker and Goalkeeper are resolved to DIFFERENT
 /// configured model IDs to verify the independence guarantee (§6.3, T-GK-4).
 /// </para>
 /// <para>

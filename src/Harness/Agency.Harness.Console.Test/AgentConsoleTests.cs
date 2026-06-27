@@ -14,6 +14,7 @@ namespace Agency.Harness.Console.Test;
 /// </para>
 /// </summary>
 [Trait("Category", "Functional")]
+[Collection("ConsoleProcessTests")]
 public sealed class AgentConsoleTests
 {
     // Resolved once at class load time. The test binary sits at:

@@ -4,7 +4,7 @@ Welcome! This guide shows you how to **use** the Agency Agent Console — the ch
 `src/Harness/Agency.Harness.Console`. You do **not** need to know how the code works, and you do **not**
 need any background in AI. If you can open a terminal and type, you can follow along.
 
-> > **What you'll learn:** how to start the app, chat with it, give it commands, let it use your files, and
+ > **What you'll learn:** how to start the app, chat with it, give it commands, let it use your files, and
 > stay in control of what it does.
 
 ---

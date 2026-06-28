@@ -188,7 +188,8 @@ public sealed class LoopConsoleIntegrationTests
             [
                 "Call the enable_goalkeeper tool with " +
                 "condition='the file XYZZY_NONEXISTENT.txt exists and its full contents are shown verbatim' " +
-                "and maxTurns=1. Then use read_file to try to read XYZZY_NONEXISTENT.txt.",
+                "and maxTurns=1. Then use read_file to try to read XYZZY_NONEXISTENT.txt. " +
+                "Do not call disable_goalkeeper.",
                 "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));

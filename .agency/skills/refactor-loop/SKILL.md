@@ -36,7 +36,7 @@ Execute each step of your plan:
 After every turn, the Goalkeeper reads the conversation and checks whether the condition is met. For it to return `Done`, the transcript must contain:
 
 - The actual `dotnet build` output showing `0 Error(s)`.
-- The actual `dotnet test` output showing all tests passing (e.g. `Passed!`).
+- The actual `dotnet test` output showing all tests passing (e.g. `Passed` status with zero failures).
 
 Do not declare yourself done in text — run the commands and let the output speak.
 

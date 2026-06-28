@@ -25,7 +25,7 @@ namespace Agency.Memory.Functional.Test;
 /// <remarks>
 /// This test exercises the full memory pipeline with real network calls:
 /// <list type="bullet">
-///   <item>LM Studio at <c>http://llm-host.example:1234</c> for episode extraction and embedding.</item>
+///   <item>LM Studio (via configured <c>MemoryFunctional:LmStudio:BaseUrl</c>) for episode extraction and embedding.</item>
 ///   <item>PostgreSQL (Docker) for record storage and retrieval.</item>
 /// </list>
 ///
@@ -65,7 +65,8 @@ public sealed class EndToEndRecallTests : IAsyncLifetime
         {
             var probeEmbedder = new EmbeddingGenerator(new EmbeddingOptions
             {
-                BaseUrl = _config["MemoryFunctional:LmStudio:BaseUrl"] ?? "http://llm-host.example:1234/v1",
+                BaseUrl = _config["MemoryFunctional:LmStudio:BaseUrl"]
+                    ?? throw new InvalidOperationException("Configuration key 'MemoryFunctional:LmStudio:BaseUrl' is required."),
                 ApiKey = _config["MemoryFunctional:LmStudio:ApiKey"] ?? "lm-studio",
                 ModelId = _config["MemoryFunctional:LmStudio:EmbeddingModel"] ?? "text-embedding-3-small",
             });
@@ -121,7 +122,8 @@ public sealed class EndToEndRecallTests : IAsyncLifetime
 
         // ── LM Studio configuration ──────────────────────────────────────────
 
-        string baseUrl = _config["MemoryFunctional:LmStudio:BaseUrl"] ?? "http://llm-host.example:1234/v1";
+        string baseUrl = _config["MemoryFunctional:LmStudio:BaseUrl"]
+            ?? throw new InvalidOperationException("Configuration key 'MemoryFunctional:LmStudio:BaseUrl' is required.");
         string apiKey = _config["MemoryFunctional:LmStudio:ApiKey"] ?? "lm-studio";
         string chatModel = _config["MemoryFunctional:LmStudio:ChatModel"] ?? "local-model";
         string embeddingModel = _config["MemoryFunctional:LmStudio:EmbeddingModel"] ?? "text-embedding-3-small";

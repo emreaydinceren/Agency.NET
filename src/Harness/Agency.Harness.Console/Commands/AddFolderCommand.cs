@@ -1,6 +1,8 @@
 using Agency.Harness;
+using Agency.Harness.Console.Configuration;
 using Agency.Harness.Console.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Spectre.Console;
 
 namespace Agency.Harness.Console.Commands;
@@ -24,7 +26,8 @@ internal static class AddFolderCommand
             return CommandContinuation.Continue;
         }
 
-        string pattern = AnsiConsole.Ask("File pattern", "*.md");
+        string defaultPattern = session.ServiceProvider.GetRequiredService<IOptions<IngestionOptions>>().Value.SearchPattern;
+        string pattern = AnsiConsole.Ask("File pattern", defaultPattern);
 
         IProjectSessionState state = session.ServiceProvider.GetRequiredService<IProjectSessionState>();
         int fileCount = IngestionCommandService.CountFiles(folderPath, pattern);

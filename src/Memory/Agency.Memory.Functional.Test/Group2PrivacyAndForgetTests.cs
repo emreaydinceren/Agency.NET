@@ -108,7 +108,8 @@ public sealed class Group2PrivacyAndForgetTests : IAsyncLifetime
                     _config, TestContext.Current.CancellationToken);
                 if (lmSkip is null)
                 {
-                    string baseUrl = _config[LmStudioBaseUrlKey] ?? "http://llm-host.example:1234/v1";
+                    string baseUrl = _config[LmStudioBaseUrlKey]
+                        ?? throw new InvalidOperationException($"Configuration key '{LmStudioBaseUrlKey}' is required.");
                     string apiKey = _config[LmStudioApiKeyKey] ?? "lm-studio";
                     string embeddingModel = _config[LmStudioEmbeddingModelKey] ?? "local-embedding-model";
                     var probeEmbedder = new Agency.Embeddings.OpenAI.EmbeddingGenerator(
@@ -677,7 +678,8 @@ public sealed class Group2PrivacyAndForgetTests : IAsyncLifetime
         InMemoryEventBus EventBus,
         DistillerOptions DistillerOpts) BuildRealPipeline()
     {
-        string baseUrl = _config[LmStudioBaseUrlKey] ?? "http://llm-host.example:1234/v1";
+        string baseUrl = _config[LmStudioBaseUrlKey]
+            ?? throw new InvalidOperationException($"Configuration key '{LmStudioBaseUrlKey}' is required.");
         string apiKey = _config[LmStudioApiKeyKey] ?? "lm-studio";
         string chatModel = _config[LmStudioChatModelKey] ?? "local-model";
         string embeddingModel = _config[LmStudioEmbeddingModelKey] ?? "text-embedding-3-small";

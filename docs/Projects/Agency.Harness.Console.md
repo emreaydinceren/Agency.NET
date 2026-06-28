@@ -280,10 +280,13 @@ if (embeddingsConfigured)
 
 // MCP (opt-in, skipped under Test); Skills (catalog + watcher + /skill-name commands)  (unchanged) …
 
-builder.Services.AddAgencyAgent();   // Models + IAgentFactory + scoped default Agent (Agency.Harness)
+builder.Services.AddAgencyAgent();                          // Models + IAgentFactory + scoped default Agent (Agency.Harness)
+builder.Services.AddAgencyLoop(builder.Configuration);      // binds LoopOptions from "Loop" section
+builder.Services.AddScoped<GoalState>();                    // shared by LoopRunner and the goalkeeper tools
 
-// ToolContext: built-in tools + AgentTool + SkillTool + MCP tools; plus SemanticSearchTool when an
-// IVectorStore is resolvable; optionally wrapped in ProgressiveDiscoveryToolRegistry for MCP tools.
+// ToolContext: built-in tools + AgentTool + SkillTool + EnableGoalkeeperTool + DisableGoalkeeperTool
+// + MCP tools; plus SemanticSearchTool when an IVectorStore is resolvable;
+// optionally wrapped in ProgressiveDiscoveryToolRegistry for MCP tools.
 builder.Services.AddScoped(sp => /* ... */);
 builder.Services.AddScoped<ConsoleChatSession>();
 
@@ -301,7 +304,7 @@ await Log.CloseAndFlushAsync();   // after the session finishes
 
 ### Configuration
 
-`appsettings.json` ships defaults for a local LM Studio instance. Key sections: `Agent` (clients, `DefaultClientName`/`DefaultModel`, `ProgressiveDiscovery` — **defaults to `true`** — `LogToolPayloads`, persisted `UserId`), `Memory` (`Enabled`, `Provider`), `Mcp` (`Servers` with `${RepoRoot}`/`${Configuration}` tokens), `ConnectionStrings` (memory + vector-store connection strings), `Embedding`, `VectorStore` (`Provider`), `Ingestion` (`ChunkSize`/`ChunkOverlap`/`SearchPattern`), `Retrieval` (`TopK`), `Skills` (`Directories`, `DisableShellExecution`), `Permissions`, `Hooks`, and `OpenTelemetry`.
+`appsettings.json` ships defaults for a local LM Studio instance. Key sections: `Agent` (clients, `DefaultClientName`/`DefaultModel`, `ProgressiveDiscovery` — **defaults to `true`** — `LogToolPayloads`, persisted `UserId`), `Memory` (`Enabled`, `Provider`), `Mcp` (`Servers` with `${RepoRoot}`/`${Configuration}` tokens), `ConnectionStrings` (memory + vector-store connection strings), `Embedding`, `VectorStore` (`Provider`), `Ingestion` (`ChunkSize`/`ChunkOverlap`/`SearchPattern`), `Retrieval` (`TopK`), `Skills` (`Directories`, `DisableShellExecution`), `Permissions`, `Hooks`, `Loop`, and `OpenTelemetry`.
 
 ```json
 {
@@ -338,6 +341,7 @@ await Log.CloseAndFlushAsync();   // after the session finishes
   "Retrieval": { "TopK": 5 },
   "Skills": { "Directories": [], "DisableShellExecution": false },
   "Permissions": { "Enabled": true, "Allow": [ "ReadFile" ], "Deny": [], "OnUnresolved": "Ask" },
+  "Loop": {},
   "OpenTelemetry": { "ServiceName": "Agency.Harness.Console", "FileExport": { "OutputDirectory": "./logs" } }
 }
 ```
@@ -373,7 +377,7 @@ Each iteration:
 2. `ConsoleInputReader.ReadLineAsync` renders a bordered prompt and reads input with history navigation, multi-line entry (Ctrl+Enter), and `/`-autocomplete via `ConsolePicker`.
 3. Bare `exit`/`quit` text terminates the session immediately.
 4. Input starting with `/` is dispatched to `CommandManager.ExecuteCommandAsync`, returning a `CommandContinuation`.
-5. All other input is forwarded to `ChatSession.SendAsync`, whose `IAsyncEnumerable<AgentEvent>` is drained by `ProcessStreamAsync`.
+5. All other input is forwarded to `LoopRunner.RunAsync` (which internally calls `ChatSession.SendAsync`); the resulting `IAsyncEnumerable<AgentEvent>` is drained by `ProcessStreamAsync`.
 
 ### Ingestion & semantic-search flow
 
@@ -399,7 +403,7 @@ When `Embedding:BaseUrl` is configured, the data-plane commands ingest documents
 - `VerdictEvent` → green `✓ Done` or yellow `↻ Continue`, with the Goalkeeper's reason.
 - `LoopResultEvent` → a gray `↳ Loop <Outcome> · N in, N out [$cost]` summary plus any final text.
 
-> **Scope note (V1):** the host *renders* these events but does not yet *drive* a `LoopRunner` — `Program.cs` does not call `AddAgencyLoop`, register the `enable_goalkeeper`/`disable_goalkeeper` tools, or wrap `ChatSession` in a loop driver. The rendering path is in place ahead of that host wiring; today these events only appear if a caller drives the loop. See the Loop Kit section in [[Agency.Harness]].
+> **Wiring.** `Program.cs` calls `AddAgencyLoop(config)` (binds `LoopOptions` from the `Loop` section), registers `GoalState` as a scoped DI service, and registers `EnableGoalkeeperTool` / `DisableGoalkeeperTool` in the `ToolContext` factory. `ConsoleChatSession` creates a `LoopRunner` per session (via `CreateLoopRunner`) and forwards all user input through `LoopRunner.RunAsync` instead of bare `ChatSession.SendAsync`. A **rendering guard** (`_goalObservedInCurrentTurn`) suppresses `TurnStartedEvent` and `LoopResultEvent` when no `GoalSetEvent` has been seen in the current turn, preventing loop infrastructure noise on plain (non-goal) turns.
 
 ### Ctrl+C handling
 
@@ -448,6 +452,8 @@ The `ToolContext` registered in DI includes built-in tools sourced from [[Agency
 | `WriteFileTool` | Writes content to the local file system |
 | `AgentTool` | Spawns a sub-`Agent` sharing the outward `ToolRegistry`, enabling recursive agent calls |
 | `SkillTool` | Lets the model invoke skills; runs skill shell steps (unless disabled) and forks sub-agents for skill turns |
+| `EnableGoalkeeperTool` | Arms the session `GoalState` with a verifiable done-condition; `LoopRunner` then evaluates the Goalkeeper after every turn |
+| `DisableGoalkeeperTool` | Disarms the `GoalState`, stopping goal-driven looping after the current turn |
 | `SemanticSearchTool` | Searches the ingested vector store, scoped to the session's user/session/loaded projects (defined in [[Agency.Harness]]) |
 
 `SemanticSearchTool` is **registered here but defined in [[Agency.Harness]]**. The DI factory only adds it when an `IVectorStore` is resolvable (i.e. `Embedding:BaseUrl` is configured); it is constructed with the resolved `IVectorStore`, the scoped `IProjectSessionState`, and `RetrievalOptions.TopK`.

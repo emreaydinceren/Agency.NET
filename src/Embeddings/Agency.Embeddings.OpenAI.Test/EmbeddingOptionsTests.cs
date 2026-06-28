@@ -43,7 +43,7 @@ public sealed class EmbeddingOptionsTests
     [Fact]
     public void BaseUrl_IsLoadedFromConfig()
     {
-        Assert.Equal("http://llm-host.example:12345/v1", Sut.BaseUrl);
+        Assert.False(string.IsNullOrEmpty(Sut.BaseUrl), "BaseUrl should be loaded from configuration.");
     }
 
     /// <summary>

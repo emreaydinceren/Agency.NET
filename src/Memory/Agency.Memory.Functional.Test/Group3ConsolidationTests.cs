@@ -38,7 +38,7 @@ namespace Agency.Memory.Functional.Test;
 ///
 /// Tests E3.1–E3.4 are LLM-driven: they seed Postgres with deterministic preconditions,
 /// drive consolidation via the real <see cref="ConsolidatorBackgroundService"/> through the
-/// HTTP cache proxy (BaseUrl <c>llm-host.example:12345</c>), and await
+/// HTTP cache proxy (configured via <c>MemoryFunctional:LmStudio:BaseUrl</c>), and await
 /// <see cref="ConsolidationCompletedEvent"/>. They skip gracefully when the proxy is
 /// unreachable. Tests E3.5 and E3.6 have deterministic sub-invariants verified without an LLM,
 /// plus optional LLM-gated halves that skip gracefully.
@@ -1121,7 +1121,8 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     private (ConsolidatorBackgroundService Service, InMemoryEventBus EventBus) BuildConsolidatorService(
         IMemoryStore store)
     {
-        string baseUrl = _config[LmStudioBaseUrlKey] ?? "http://llm-host.example:1234/v1";
+        string baseUrl = _config[LmStudioBaseUrlKey]
+            ?? throw new InvalidOperationException($"Configuration key '{LmStudioBaseUrlKey}' is required.");
         string apiKey = _config[LmStudioApiKeyKey] ?? "lm-studio";
         string chatModel = _config[LmStudioChatModelKey] ?? "local-model";
 

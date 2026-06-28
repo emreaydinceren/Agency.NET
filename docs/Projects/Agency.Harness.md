@@ -546,7 +546,7 @@ internal interface IGoalkeeper
 | `WallClockSeconds` | `int?` | `null` | Default per-loop timeout (linked-CTS, like `AgentOptions.TurnTimeoutSeconds`). |
 | `GoalkeeperRubric` | `string?` | `null` | Extra strictness text appended to the Goalkeeper system prompt. |
 
-> **V1 wiring note:** `AddAgencyLoop` binds `LoopOptions` only — it does **not** register `LoopRunner`/`Goalkeeper`/`GoalState`/the tools as DI services. A host that wants goal-driven loops constructs those itself and registers `enable_goalkeeper`/`disable_goalkeeper` on its `ToolContext`. The full Loop Kit lives in the library; the Console host currently renders the loop events but does not yet drive a `LoopRunner` (see [[Agency.Harness.Console]]).
+> **Host wiring.** `AddAgencyLoop` binds `LoopOptions` only — it does **not** register `LoopRunner`, `Goalkeeper`, `GoalState`, or the tools as DI services. A host that wants goal-driven loops wires those itself: register `GoalState` as a scoped service, add `EnableGoalkeeperTool`/`DisableGoalkeeperTool` to the `ToolContext`, and construct a `LoopRunner` per session (the Goalkeeper resolves its cheap client via `Models.CreateChatClient`). The Console host (`[[Agency.Harness.Console]]`) does all of this — it drives `LoopRunner.RunAsync` for every user turn.
 
 ### Skills
 
@@ -892,7 +892,7 @@ builder.Services.AddAgencyLoop(builder.Configuration);              // section "
 - `AddAgencyAgent(services)` registers `Models` (transient), `IAgentFactory` → `AgentFactory` (scoped), and a scoped default `Agent` built from `AgentOptions.DefaultClientName` / `DefaultModel`. The caller binds `AgentOptions` and optionally registers `IPermissionEvaluator` / `TimeProvider` for the factory to pick up.
 - `AddAgencyPermissions(services, config, sectionName = "Permissions")` binds `PermissionsOptions` and registers `IPermissionEvaluator` → `PermissionEvaluator` as a **singleton**. Malformed rules fail fast (`InvalidOperationException`) at first resolution via `PermissionsOptionsValidator`.
 - `AddAgencyConfiguredHooks(services, config, sectionName = "Hooks")` binds `HooksOptions`, calls `AddHttpClient()`, registers `IHookHandlerFactory` → `HookHandlerFactory` and a singleton `HookRegistry`, and sets `AgentOptions.ConfiguredHooks` via an `IPostConfigureOptions<AgentOptions>`. Unknown event names fail fast (`HooksOptionsValidator`).
-- `AddAgencyLoop(services, config, sectionName = "Loop")` binds `LoopOptions` from the `Loop` section — **and nothing else**. The `LoopRunner`, `Goalkeeper`, `GoalState`, and the `enable_goalkeeper`/`disable_goalkeeper` tools are not auto-registered; a host that wants goal-driven loops constructs them itself (the Goalkeeper resolves its cheap client via `Models.CreateChatClient`).
+- `AddAgencyLoop(services, config, sectionName = "Loop")` binds `LoopOptions` from the `Loop` section — **and nothing else**. The `LoopRunner`, `Goalkeeper`, `GoalState`, and the `enable_goalkeeper`/`disable_goalkeeper` tools are not auto-registered by the library extension; a host that wants goal-driven loops wires them itself (see *Host wiring* note above). The Console host does this: it registers `GoalState` as scoped, adds the goalkeeper tools to the `ToolContext` factory, and constructs a `LoopRunner` per session.
 
 **Matching `appsettings.json` shape (hooks):**
 
@@ -1078,7 +1078,7 @@ var toolCtx = new ToolContext { Registry = progressive };
 | [[Agency.Llm.OpenAI]] | Concrete `IChatClient`/`IModelProvider` adapter for the OpenAI-compatible API |
 | [[Agency.VectorStore.Common]] | `SemanticSearchTool` depends on `IVectorStore`, `Query`, and `SearchHit<T>` to run scoped semantic search |
 | [[Agency.RagFormatter]] | `SemanticSearchTool` renders hits with `ToDataset()` / `ToMarkdownTable()` from this project |
-| [[Agency.Harness.Console]] | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, renders `AgentEvent` streams (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent`), and answers `PermissionRequestedEvent`s |
+| [[Agency.Harness.Console]] | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, drives `LoopRunner.RunAsync` for every user turn, renders `AgentEvent` streams (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent`), and answers `PermissionRequestedEvent`s |
 
 ## Design Notes
 

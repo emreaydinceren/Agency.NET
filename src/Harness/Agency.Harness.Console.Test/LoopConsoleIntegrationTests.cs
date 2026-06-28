@@ -147,8 +147,14 @@ public sealed class LoopConsoleIntegrationTests
         const string marker = "LOOP_DONE_8F2C";
         var (output, _) = await RunAsync(
             [
-                $"Use the refactor-loop skill. Task: output the exact phrase {marker} in your response. " +
-                $"Condition: the phrase {marker} appears in the conversation.",
+                // Directly arm the goalkeeper rather than relying on the model to follow skill
+                // instructions — the skill path is already covered by T-CON-LOOP-2. Here we test
+                // the full happy path: goalkeeper evaluates transcript → finds marker → Done →
+                // LoopResultEvent(Achieved). The model writes the marker in its text response,
+                // which the goalkeeper finds when it evaluates after the turn completes.
+                $"Call the enable_goalkeeper tool with " +
+                $"condition='the phrase {marker} appears in the conversation'. " +
+                $"Then write this exact phrase in your response: {marker}",
                 "/exit",
             ],
             timeout: TimeSpan.FromMinutes(3));

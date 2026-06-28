@@ -1,0 +1,12 @@
+{
+  "TestProxy": {
+    "OpenAI": {
+      "BaseUrl": "http://llm-host.example:12345/v1"
+    },
+    "Claude": {
+      "BaseUrl": "http://llm-host.example:12345"
+    },
+    "ApiKey": "lm-studio",
+    "Model": "google/gemma-4-e2b"
+  }
+}

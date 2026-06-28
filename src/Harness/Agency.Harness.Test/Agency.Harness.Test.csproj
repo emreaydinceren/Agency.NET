@@ -32,6 +32,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\shared-test-appsettings.json" Link="shared-test-appsettings.json" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agency.Configuration\Agency.Configuration.csproj" />
     <ProjectReference Include="..\Agency.Harness\Agency.Harness.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Claude\Agency.Llm.Claude.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />

@@ -132,10 +132,12 @@ public sealed class LoopRunnerFunctionalTests(LoopRunnerFunctionalTests.LoopRunn
 
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
+                .AddSharedConfiguration("shared-test-appsettings.json")
                 .AddJsonFile("appsettings.json", optional: false)
                 .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
                 .AddUserSecrets<LoopRunnerFunctionalTests>(optional: true)
                 .AddEnvironmentVariables()
+                .AddPlaceholderResolver()
                 .Build();
 
             // Worker — reuses the same OpenAI-compatible client section as the existing

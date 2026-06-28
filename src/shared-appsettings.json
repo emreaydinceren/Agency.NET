@@ -1,0 +1,11 @@
+{
+  "LLmClients": {
+    "OpenAI": {
+      "BaseUrl": "http://llm-host.example:1234/v1"
+    },
+    "Claude": {
+      "BaseUrl": "http://llm-host.example:1234"
+    },
+    "ApiKey": "lm-studio"
+  }
+}

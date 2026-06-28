@@ -69,7 +69,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - PostgreSQL 18 + pgvector extension via Docker (`src/docker-compose.yml`)
 - Credentials: `dev_user` / `dev_password`, database: `dev_db`, port `5432`
-- Functional LLM tests target LM Studio at `http://llm-host.example:1234`
+- Functional LLM tests target LM Studio at `http://llm.test:1234`
 
 ## Codebase Exploration
 

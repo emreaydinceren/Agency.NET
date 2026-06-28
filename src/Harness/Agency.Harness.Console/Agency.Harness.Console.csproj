@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Agency.Configuration\Agency.Configuration.csproj" />
     <ProjectReference Include="..\Agency.Harness\Agency.Harness.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
     <ProjectReference Include="..\..\Memory\Agency.Memory.Distiller\Agency.Memory.Distiller.csproj" />
@@ -40,6 +41,17 @@
     <None Update="appsettings*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\shared-appsettings.json" Link="shared-appsettings.json" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Test-only shared values (proxy endpoint, test API key). Loaded by Program.cs only under
+         DOTNET_ENVIRONMENT=Test, where appsettings.Test.json references the ${TestProxy:…} tokens. -->
+    <Content Include="..\..\shared-test-appsettings.json" Link="shared-test-appsettings.json" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

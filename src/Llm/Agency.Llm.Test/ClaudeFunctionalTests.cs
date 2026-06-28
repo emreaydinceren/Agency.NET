@@ -221,10 +221,12 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
 
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
+                .AddSharedConfiguration("shared-test-appsettings.json")
                 .AddJsonFile("appsettings.json", optional: false)
                 .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
                 .AddUserSecrets<ClaudeFunctionalTests>(optional: true)
                 .AddEnvironmentVariables()
+                .AddPlaceholderResolver()
                 .Build();
 
             this.Model = GetRequiredConfiguration(configuration, $"{ConfigurationSection}:Model");

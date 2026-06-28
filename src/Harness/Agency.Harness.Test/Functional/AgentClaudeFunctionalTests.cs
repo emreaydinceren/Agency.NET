@@ -172,10 +172,12 @@ public sealed class AgentClaudeFunctionalTests(AgentClaudeFunctionalTests.Claude
 
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
+                .AddSharedConfiguration("shared-test-appsettings.json")
                 .AddJsonFile("appsettings.json", optional: false)
                 .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
                 .AddUserSecrets<AgentClaudeFunctionalTests>(optional: true)
                 .AddEnvironmentVariables()
+                .AddPlaceholderResolver()
                 .Build();
 
             this.Model = GetRequired(configuration, $"{ConfigurationSection}:Model");

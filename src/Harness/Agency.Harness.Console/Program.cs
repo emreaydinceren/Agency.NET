@@ -53,6 +53,25 @@ internal class Program
         // 1. Configuration:
         // Host.CreateApplicationBuilder automatically handles appsettings,
         // environment variables, and UserSecrets based on DOTNET_ENVIRONMENT.
+        builder.Configuration.AddSharedConfiguration();   // shared-appsettings.json inserted at the front (lowest precedence — host sources & env vars override it)
+        if (builder.Environment.IsEnvironment("Test"))
+        {
+            // appsettings.Test.json references ${TestProxy:…} tokens that resolve against this file.
+            // Only loaded under Test; in production those tokens are absent, so the keys aren't needed.
+            builder.Configuration.AddSharedConfiguration("shared-test-appsettings.json");
+        }
+
+        // The Postgres connection string lives in the shared "AgencySecrets" user-secrets vault
+        // (never a committed appsettings file), so ${ConnectionStrings:PostgreSql} resolves from
+        // there. Host.CreateApplicationBuilder only auto-loads user secrets in Development, so load
+        // the vault explicitly to cover every environment, then move it to the front (lowest
+        // precedence) — like shared-appsettings.json — so env vars and CLI args still override it.
+        builder.Configuration.AddUserSecrets("AgencySecrets");
+        IConfigurationSource agencySecrets = builder.Configuration.Sources[^1];
+        builder.Configuration.Sources.RemoveAt(builder.Configuration.Sources.Count - 1);
+        builder.Configuration.Sources.Insert(0, agencySecrets);
+
+        builder.Configuration.AddPlaceholderResolver();   // LAST config step — expands ${Section:Key} tokens; call once, before any reads
 
         // 2. Telemetry & Logging:
         builder.Services.AddTelemetry(builder.Configuration);

@@ -10,7 +10,7 @@
 
 ## Prerequisites
 
-- An LLM endpoint must be configured under `Agent:LLmClients` (the shipped defaults target a local LM Studio instance at `http://llm-host.example:1234`). `Agent:DefaultClientName` and `Agent:DefaultModel` must resolve to one of those clients.
+- An LLM endpoint must be configured under `Agent:LLmClients` (the shipped defaults target a local LM Studio instance at `http://llm.test:1234`). `Agent:DefaultClientName` and `Agent:DefaultModel` must resolve to one of those clients.
 - A stable per-installation **user id** (`Agent:UserId`) partitions memory. When absent it is generated once and persisted back into `appsettings.json` on first run (see `UserIdConfiguration`). The id is substituted for the `{userId}` placeholder in tool calls by `UserIdPlaceholderHook`.
 - **Memory** is opt-in via `Memory:Enabled` (default `false`). When enabled, the configured `Memory:Provider` backend (`postgres` — requires its Docker container — or `sqlite`) and the embeddings endpoint (`Embedding`) must be reachable; schema init fails fast at startup otherwise.
 - **Ingestion & semantic search** are an independent data plane gated only on an embedding endpoint: when `Embedding:BaseUrl` is configured, embeddings, a vector store (`VectorStore:Provider`), the ingestion services, and the `SemanticSearchTool` are registered and a vector-store schema is initialised at startup — regardless of `Memory:Enabled`. The vector store needs `ConnectionStrings:VectorStoreSqlite` (default provider `sqlite`) or `ConnectionStrings:VectorStorePostgreSql`.
@@ -314,8 +314,8 @@ await Log.CloseAndFlushAsync();   // after the session finishes
     "ProgressiveDiscovery": true,
     "LogToolPayloads": false,
     "LLmClients": [
-      { "Name": "LocalVia-OpenAI-API", "ClientType": "OpenAI", "BaseUrl": "http://llm-host.example:1234/v1", "ApiKey": "lm-studio", "Timeout": "00:10:00", "SuppressThinking": true },
-      { "Name": "LocalVia-Claude-API", "ClientType": "Claude", "BaseUrl": "http://llm-host.example:1234", "ApiKey": "lm-studio" }
+      { "Name": "LocalVia-OpenAI-API", "ClientType": "OpenAI", "BaseUrl": "http://llm.test:1234/v1", "ApiKey": "lm-studio", "Timeout": "00:10:00", "SuppressThinking": true },
+      { "Name": "LocalVia-Claude-API", "ClientType": "Claude", "BaseUrl": "http://llm.test:1234", "ApiKey": "lm-studio" }
     ]
   },
   "Memory": { "Enabled": false, "Provider": "postgres" },
@@ -330,12 +330,11 @@ await Log.CloseAndFlushAsync();   // after the session finishes
     ]
   },
   "ConnectionStrings": {
-    "PostgreSql": "Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password",
     "Sqlite": "Data Source=agency-memory.db",
     "VectorStoreSqlite": "Data Source=agency-vectorstore.db",
-    "VectorStorePostgreSql": "Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password"
+    "VectorStorePostgreSql": "${ConnectionStrings:PostgreSql}"
   },
-  "Embedding": { "BaseUrl": "http://llm-host.example:1234/v1", "ApiKey": "lm-studio", "ModelId": "local-embedding-model", "Dimensions": 1024 },
+  "Embedding": { "BaseUrl": "http://llm.test:1234/v1", "ApiKey": "lm-studio", "ModelId": "local-embedding-model", "Dimensions": 1024 },
   "VectorStore": { "Provider": "sqlite" },
   "Ingestion": { "ChunkSize": 512, "ChunkOverlap": 64, "SearchPattern": "*.md" },
   "Retrieval": { "TopK": 5 },
@@ -345,6 +344,8 @@ await Log.CloseAndFlushAsync();   // after the session finishes
   "OpenTelemetry": { "ServiceName": "Agency.Harness.Console", "FileExport": { "OutputDirectory": "./logs" } }
 }
 ```
+
+`appsettings.json` deliberately omits the `ConnectionStrings:PostgreSql` key — it is a secret sourced from the shared `AgencySecrets` user-secrets vault. `Program.cs` loads that vault explicitly (via `AddUserSecrets("AgencySecrets")`, front-inserted so env vars / CLI still override) because `Host.CreateApplicationBuilder` only auto-loads user secrets in the Development environment. `VectorStorePostgreSql` then resolves from it through the `${ConnectionStrings:PostgreSql}` placeholder. See [[Agency.Configuration]] and the Configuration Manual.
 
 `appsettings.Test.json` overrides values for the functional-test environment, where MCP startup and user-id persistence are skipped and the clock is frozen.
 

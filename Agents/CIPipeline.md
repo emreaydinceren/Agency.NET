@@ -18,7 +18,7 @@ a red CI run — most failures here are environmental, not code regressions.
   machine, so these resolve):
   - PostgreSQL — via `ConnectionStrings__PostgreSql` secret.
   - HTTP cache proxy — `http://llm-host.example:12345` (the **standalone `Agency.HttpCacheProxy` repo**).
-  - LM Studio — `http://llm-host.example:1234` (proxy's upstream on a miss).
+  - LM Studio — `http://llm.test:1234` (proxy's upstream on a miss).
 
 ## Checkout is manual
 

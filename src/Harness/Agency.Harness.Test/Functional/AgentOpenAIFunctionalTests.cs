@@ -262,10 +262,12 @@ public sealed class AgentOpenAIFunctionalTests(AgentOpenAIFunctionalTests.OpenAI
 
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
+                .AddSharedConfiguration("shared-test-appsettings.json")
                 .AddJsonFile("appsettings.json", optional: false)
                 .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
                 .AddUserSecrets<AgentOpenAIFunctionalTests>(optional: true)
                 .AddEnvironmentVariables()
+                .AddPlaceholderResolver()
                 .Build();
 
             this.Model = GetRequired(configuration, $"{ConfigurationSection}:Model");

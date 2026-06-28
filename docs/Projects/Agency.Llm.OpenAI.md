@@ -11,7 +11,7 @@ Agency.Llm.OpenAI is the OpenAI-compatible `IChatClient` factory that wraps the 
 ## Prerequisites
 
 - An API key supplied via `LlmClientOptions.ApiKey`. For local endpoints (LM Studio, Ollama) any non-empty placeholder such as `"lm-studio"` is accepted.
-- Optionally a `BaseUrl` in `LlmClientOptions` pointing to the endpoint's `/v1` root (e.g. `http://llm-host.example:1234/v1`). When omitted, the official OpenAI API endpoint is used.
+- Optionally a `BaseUrl` in `LlmClientOptions` pointing to the endpoint's `/v1` root (e.g. `http://llm.test:1234/v1`). When omitted, the official OpenAI API endpoint is used.
 - The `OpenAI` NuGet package and `Microsoft.Extensions.AI.OpenAI` are required dependencies (managed centrally via `Directory.Build.props`).
 
 ## API Surface
@@ -64,7 +64,7 @@ using Microsoft.Extensions.AI;
 var factory = new OpenAIClient(new LlmClientOptions
 {
     ApiKey          = "lm-studio",
-    BaseUrl         = "http://llm-host.example:1234/v1",
+    BaseUrl         = "http://llm.test:1234/v1",
     SuppressThinking = true,
 });
 

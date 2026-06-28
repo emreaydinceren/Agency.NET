@@ -11,10 +11,12 @@ public sealed class EmbeddingGeneratorTests
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
+            .AddSharedConfiguration("shared-test-appsettings.json")
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Development.json", optional: true)
             .AddUserSecrets<EmbeddingGeneratorTests>(optional: true)
             .AddEnvironmentVariables()
+            .AddPlaceholderResolver()
             .Build();
 
         return new EmbeddingOptions

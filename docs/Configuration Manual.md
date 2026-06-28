@@ -6,6 +6,133 @@ Run `src\SetupLocal.ps1` from the repo root to be prompted for secrets interacti
 
 ---
 
+## Shared Configuration and Placeholder Resolution
+
+Agency projects that share a common value (e.g. the LM Studio host or the API key) define it once in `src/shared-appsettings.json` and reference it with `${Section:Key}` tokens in their own `appsettings.json`. Secrets such as the Postgres connection string are **not** in that file — they live in the `AgencySecrets` user-secrets vault and are referenced by the same placeholder syntax. Two extension methods in [`Agency.Configuration`](Projects/Agency.Configuration.md) wire this up.
+
+> **Scope:** `Agency.Harness.Console` wires `AddSharedConfiguration` / `AddPlaceholderResolver` for the runtime host. The functional-test projects (`Agency.Llm.Test`, `Agency.Harness.Test`, `Agency.Embeddings.OpenAI.Test`, `Agency.Memory.Functional.Test`) also wire the same two extensions in their configuration builders, but reference a **second** shared file — [`shared-test-appsettings.json`](#shared-test-appsettingsjson) — that carries the test-proxy endpoint and test API key. The runtime shared file stays free of test-only concerns.
+
+### shared-appsettings.json
+
+`src/shared-appsettings.json` sits at the solution root and carries non-secret values common to multiple projects. The shipped default defines the LM Studio client endpoints and the shared API key:
+
+```json
+{
+  "LLmClients": {
+    "OpenAI": { "BaseUrl": "http://llm.test:1234/v1" },
+    "Claude": { "BaseUrl": "http://llm.test:1234" },
+    "ApiKey": "lm-studio"
+  }
+}
+```
+
+These keys live under a dedicated top-level section (`LLmClients`) and are referenced — not redefined — by each consumer's `appsettings.json`. The Postgres connection string is deliberately **absent** here: it is a secret, sourced from the [`AgencySecrets`](#agencysecrets-shared-test-vault) user-secrets vault as `ConnectionStrings:PostgreSql`, and reached through the same `${ConnectionStrings:PostgreSql}` placeholder.
+
+Each consuming project links the file in its `.csproj` so it is copied next to `appsettings.json` in the output directory at runtime:
+
+```xml
+<Content Include="..\..\shared-appsettings.json" Link="shared-appsettings.json" Pack="false">
+  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+</Content>
+```
+
+Any key in the fully merged configuration — including environment variables and user secrets — can serve as a resolution target.
+
+### shared-test-appsettings.json
+
+`src/shared-test-appsettings.json` is a **second**, test-only shared file. It carries the values that every functional-test project shares — the offline HTTP-cache **proxy** endpoint (distinct from the runtime LM Studio host), the test API key, and the default test model — without polluting the runtime `shared-appsettings.json`:
+
+```json
+{
+  "TestProxy": {
+    "OpenAI": { "BaseUrl": "http://proxy.test:12345/v1" },
+    "Claude": { "BaseUrl": "http://proxy.test:12345" },
+    "ApiKey": "lm-studio",
+    "Model": "google/gemma-4-e2b"
+  }
+}
+```
+
+Each functional-test project links the file and references it by placeholder (`${TestProxy:OpenAI:BaseUrl}`, `${TestProxy:ApiKey}`, `${TestProxy:Model}`). The test config builders register it alongside the resolver:
+
+```csharp
+new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddSharedConfiguration("shared-test-appsettings.json")  // test-proxy endpoint / key / model
+    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
+    .AddUserSecrets<T>(optional: true)
+    .AddEnvironmentVariables()
+    .AddPlaceholderResolver()                                // LAST
+    .Build();
+```
+
+`Agency.Memory.Functional.Test` resolves `ConnectionStrings:PostgreSql` from the `AgencySecrets` vault (`UserSecretsId=AgencySecrets` + `AddUserSecrets("AgencySecrets")`), so it does **not** link the runtime `shared-appsettings.json` — it references nothing else from there. The Console host loads `shared-test-appsettings.json` **only under `DOTNET_ENVIRONMENT=Test`**, where its `appsettings.Test.json` references the `${TestProxy:…}` tokens; in production those tokens are never present so the file is not needed. The Console additionally loads the `AgencySecrets` vault in every environment (Host auto-loads user secrets only in Development) so `${ConnectionStrings:PostgreSql}` always resolves.
+
+### Placeholder notation
+
+A placeholder has the form `${Section:Key}`, where the embedded key uses the standard IConfiguration colon (`:`) path separator. The resolver expands each token to the value of that key in the **fully merged** configuration. Resolution is recursive: a resolved value that itself contains tokens is expanded in turn (depth-limited to 32).
+
+**Colon required.** Only tokens that contain a `:` are treated as configuration references. A bare token such as `${RepoRoot}` or `${Configuration}` (see [Mcp](#mcp)) is left **verbatim** — those belong to `McpConfigResolver`, which expands them later against runtime paths. This lets both systems share the `${…}` syntax without the placeholder resolver claiming or failing on the MCP tokens.
+
+**Canonical example** — `appsettings.json` references the shared client endpoints and API key:
+
+```json
+{
+  "Agent": {
+    "LLmClients": [
+      { "BaseUrl": "${LLmClients:OpenAI:BaseUrl}", "ApiKey": "${LLmClients:ApiKey}" },
+      { "BaseUrl": "${LLmClients:Claude:BaseUrl}", "ApiKey": "${LLmClients:ApiKey}" }
+    ]
+  },
+  "Embedding": {
+    "BaseUrl": "${LLmClients:OpenAI:BaseUrl}",
+    "ApiKey": "${LLmClients:ApiKey}"
+  }
+}
+```
+
+With the shipped shared file, the OpenAI `BaseUrl` resolves to `http://llm.test:1234/v1`, the Claude `BaseUrl` to `http://llm.test:1234`, and both `ApiKey` values to `lm-studio`.
+
+To emit a literal `${...}` string without resolution, escape the dollar sign by doubling it: `$${LLmClients:ApiKey}` → `${LLmClients:ApiKey}`.
+
+### Wiring in Program.cs
+
+```csharp
+var builder = Host.CreateApplicationBuilder(args);
+// Host has already registered appsettings.json, env vars, user secrets, and CLI args.
+
+builder.Configuration.AddSharedConfiguration();   // inserts shared-appsettings.json at the FRONT (lowest precedence)
+builder.Configuration.AddPlaceholderResolver();   // LAST — snapshots the merged config and expands ${…} tokens
+```
+
+Both methods extend `IConfigurationBuilder` and live in the `Microsoft.Extensions.Configuration` namespace — no extra `using` directive is needed alongside the standard host setup.
+
+**Call order rules:**
+
+- Call `AddSharedConfiguration()` after the host builder is created. It **inserts the shared file at the front** of the source list — the *lowest* precedence — so the standard host sources (appsettings, env vars, user secrets, CLI) all override it. Call ordering relative to those sources therefore does not matter; only the resolver must come last.
+- Call `AddPlaceholderResolver()` **once, as the last configuration step** — after all sources are registered and before any values are read. It takes a point-in-time snapshot of all merged key/value pairs and publishes the expanded values as the highest-priority source. Every subsequent read of `IConfiguration` — including `IOptions<T>` binding via `Configure<T>` or `BindConfiguration` — sees the resolved values.
+
+### Environment-variable override
+
+Because the shared file is the lowest-precedence source and env vars are in the merged snapshot when `AddPlaceholderResolver()` runs, overriding a shared value requires only one change:
+
+```bash
+LLmClients__OpenAI__BaseUrl=http://my-other-host:1234/v1 dotnet run
+```
+
+Every `${LLmClients:OpenAI:BaseUrl}` token in `appsettings.json` resolves against the overridden value, so the new host propagates automatically to the OpenAI client and the embedding endpoint.
+
+### Error behaviour
+
+| Condition | Result |
+|---|---|
+| Colon-bearing placeholder references an absent key | `InvalidOperationException` at startup, before any service registrations. (A bare token like `${RepoRoot}` does **not** trigger this — it is passed through.) |
+| Resolution chain contains a cycle | `InvalidOperationException` with the full chain (e.g. `A -> B -> A`). |
+| Chain exceeds 32 levels | `InvalidOperationException` with the depth limit and the owning key. |
+
+---
+
 ## Configurations
 
 Each section below describes one logical configuration group. "Example config" shows the key in `appsettings.json`. Secrets that must not be checked in are instead set via `dotnet user-secrets` and are marked **secret**.
@@ -31,7 +158,7 @@ Controls which LLM clients are available, which one is active by default, and ge
 | `Agent:LLmClients[].Name` | string | required | Identifier used by `DefaultClientName` and `/model`. |
 | `Agent:LLmClients[].ClientType` | string | required | `"OpenAI"` or `"Claude"`. |
 | `Agent:LLmClients[].BaseUrl` | string | required | Full HTTP base URL of the endpoint. |
-| `Agent:LLmClients[].ApiKey` | string | required | API key; use `"lm-studio"` for LM Studio which ignores the value. |
+| `Agent:LLmClients[].ApiKey` | string | required | API key; shipped value references the shared `${LLmClients:ApiKey}` (`"lm-studio"`, which LM Studio ignores). |
 | `Agent:LLmClients[].Timeout` | TimeSpan? | `null` | Per-request HTTP timeout, e.g. `"00:10:00"`. |
 | `Agent:LLmClients[].SuppressThinking` | bool | `false` | Forces `enable_thinking: false` — needed for some Qwen3 deployments. |
 | `Agent:LLmClients[].MaxRetries` | int? | `null` | HTTP retry count. |
@@ -46,16 +173,16 @@ Controls which LLM clients are available, which one is active by default, and ge
     {
       "Name": "LocalVia-OpenAI-API",
       "ClientType": "OpenAI",
-      "BaseUrl": "http://llm-host.example:1234/v1",
-      "ApiKey": "lm-studio",
+      "BaseUrl": "${LLmClients:OpenAI:BaseUrl}",
+      "ApiKey": "${LLmClients:ApiKey}",
       "Timeout": "00:10:00",
       "SuppressThinking": true
     },
     {
       "Name": "LocalVia-Claude-API",
       "ClientType": "Claude",
-      "BaseUrl": "http://llm-host.example:1234",
-      "ApiKey": "lm-studio"
+      "BaseUrl": "${LLmClients:Claude:BaseUrl}",
+      "ApiKey": "${LLmClients:ApiKey}"
     }
   ]
 }
@@ -78,8 +205,8 @@ Configures the OpenAI-compatible embeddings endpoint used to vectorise documents
 
 ```json
 "Embedding": {
-  "BaseUrl": "http://llm-host.example:1234/v1",
-  "ApiKey": "lm-studio",
+  "BaseUrl": "${LLmClients:OpenAI:BaseUrl}",
+  "ApiKey": "${LLmClients:ApiKey}",
   "ModelId": "local-embedding-model",
   "Dimensions": 1024
 }
@@ -91,25 +218,26 @@ Configures the OpenAI-compatible embeddings endpoint used to vectorise documents
 
 ### ConnectionStrings
 
-Database connection strings for memory storage and the vector store. These are kept in `appsettings.json` for local defaults and overridden via **user secrets** (vault `AgencySecrets`) in CI or production.
+Database connection strings for memory storage and the vector store. The Postgres string is a **secret**: it lives in the `AgencySecrets` user-secrets vault as `ConnectionStrings:PostgreSql` — never in a committed `appsettings`/`shared-appsettings` file — and `appsettings.json` references it by placeholder. The Console loads that vault in every environment so the placeholder always resolves.
 
 | Key | Default | Purpose |
 |---|---|---|
-| `ConnectionStrings:PostgreSql` | `Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password` | Memory store (Postgres provider) and pgvector search. |
+| `ConnectionStrings:PostgreSql` | _(none — from `AgencySecrets` user secret)_ | Memory store (Postgres provider) and pgvector search. **Sourced from the `AgencySecrets` vault**, not any appsettings file. |
 | `ConnectionStrings:Sqlite` | `Data Source=agency-memory.db` | Memory store (SQLite provider). |
 | `ConnectionStrings:VectorStoreSqlite` | `Data Source=agency-vectorstore.db` | Vector store (SQLite provider). |
-| `ConnectionStrings:VectorStorePostgreSql` | `Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password` | Vector store (Postgres provider). |
+| `ConnectionStrings:VectorStorePostgreSql` | `${ConnectionStrings:PostgreSql}` | Vector store (Postgres provider). References the secret Postgres string by placeholder. |
+
+`appsettings.json` (the `PostgreSql` key is supplied by the `AgencySecrets` user secret):
 
 ```json
 "ConnectionStrings": {
-  "PostgreSql": "Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password",
   "Sqlite": "Data Source=agency-memory.db",
   "VectorStoreSqlite": "Data Source=agency-vectorstore.db",
-  "VectorStorePostgreSql": "Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password"
+  "VectorStorePostgreSql": "${ConnectionStrings:PostgreSql}"
 }
 ```
 
-> **Note:** `PostgreSql` and `VectorStorePostgreSql` share the same value in the dev defaults — they intentionally point at the same local Postgres instance and must be updated together; in production they may be set to different servers to split memory and vector storage.
+> **Note:** `VectorStorePostgreSql` resolves to the same value as `PostgreSql` via the placeholder, so by default both point at the same local Postgres instance. To split memory and vector storage onto different servers in production, give `VectorStorePostgreSql` a literal string instead of the placeholder (or override `ConnectionStrings:PostgreSql` and let both follow).
 
 To override the PostgreSQL string without committing credentials, run:
 
@@ -206,7 +334,7 @@ Controls how many results are returned by the `semantic_search` tool.
 
 Declares MCP (Model Context Protocol) servers whose tools are injected into the agent's tool registry. Startup is skipped entirely when `DOTNET_ENVIRONMENT=Test`.
 
-Path values support two portability tokens:
+Path values support two portability tokens, expanded by `McpConfigResolver` *after* the host is built (not by the placeholder resolver — both are bare, colon-less tokens, so the [placeholder resolver](#placeholder-notation) passes them through untouched):
 - `${RepoRoot}` — resolved to the nearest ancestor directory containing `.git`.
 - `${Configuration}` — resolved to `Debug` or `Release` from the output path.
 
@@ -456,17 +584,19 @@ Test-only configuration for functional LLM tests in `Agency.Llm.Test`. API keys 
 ```json
 "LlmTest": {
   "OpenAI": {
-    "BaseUrl": "http://llm-host.example:1234/v1",
-    "Model": "google/gemma-4-e2b"
+    "BaseUrl": "${TestProxy:OpenAI:BaseUrl}",
+    "Model": "${TestProxy:Model}"
   },
   "Claude": {
-    "BaseUrl": "http://llm-host.example:1234",
-    "Model": "google/gemma-4-e2b"
+    "BaseUrl": "${TestProxy:Claude:BaseUrl}",
+    "Model": "${TestProxy:Model}"
   }
 }
 ```
 
-To point the tests at a local LM Studio instance, override the `BaseUrl` keys in `appsettings.Development.json` — they are machine-specific but not sensitive:
+The `BaseUrl` and `Model` values reference [`shared-test-appsettings.json`](#shared-test-appsettingsjson); with the shipped file they resolve to the proxy endpoint `http://proxy.test:12345(/v1)` and model `google/gemma-4-e2b`.
+
+To point the tests at a local LM Studio instance, override the `BaseUrl` keys in `appsettings.Development.json` (or `TestProxy:OpenAI:BaseUrl` in `shared-test-appsettings.json`) — they are machine-specific but not sensitive:
 
 ```json
 {
@@ -504,17 +634,19 @@ Test-only configuration for functional agent tests in `Agency.Harness.Test`. Mir
 ```json
 "AgentTest": {
   "OpenAI": {
-    "BaseUrl": "http://llm-host.example:1234/v1",
-    "ApiKey": "lm-studio",
-    "Model": "google/gemma-4-e2b"
+    "BaseUrl": "${TestProxy:OpenAI:BaseUrl}",
+    "ApiKey": "${TestProxy:ApiKey}",
+    "Model": "${TestProxy:Model}"
   },
   "Claude": {
-    "BaseUrl": "http://llm-host.example:1234",
-    "ApiKey": "lm-studio",
-    "Model": "google/gemma-4-e2b"
+    "BaseUrl": "${TestProxy:Claude:BaseUrl}",
+    "ApiKey": "${TestProxy:ApiKey}",
+    "Model": "${TestProxy:Model}"
   }
 }
 ```
+
+All three values reference [`shared-test-appsettings.json`](#shared-test-appsettingsjson).
 
 **Used by:** [Agency.Harness.Test](#agencyharnestest)
 
@@ -534,13 +666,15 @@ Test-only configuration for functional memory pipeline tests in `Agency.Memory.F
 ```json
 "MemoryFunctional": {
   "LmStudio": {
-    "BaseUrl": "http://llm-host.example:1234/v1",
-    "ApiKey": "lm-studio",
+    "BaseUrl": "${TestProxy:OpenAI:BaseUrl}",
+    "ApiKey": "${TestProxy:ApiKey}",
     "ChatModel": "local-model",
     "EmbeddingModel": "local-embedding-model"
   }
 }
 ```
+
+`BaseUrl` and `ApiKey` reference [`shared-test-appsettings.json`](#shared-test-appsettingsjson); `ChatModel` / `EmbeddingModel` stay literal because they differ from the other test projects. The project's `ConnectionStrings:PostgreSql` is no longer carried in its own `appsettings.json` — it is inherited from the runtime [`shared-appsettings.json`](#shared-appsettingsjson) (overridable via the `AgencySecrets` user-secret).
 
 **Used by:** [Agency.Memory.Functional.Test](#agencymemoryfunctionaltest)
 
@@ -554,7 +688,7 @@ Running `dotnet user-secrets` stores values outside the repository so they are n
 
 Multiple test projects share one `UserSecretsId = "AgencySecrets"`. Secrets written to any of them land in the same file. Run the setup script once and all affected projects inherit the values.
 
-Projects in this vault: `Agency.Sql.Postgres.Test`, `Agency.Llm.Test`, `Agency.VectorStore.Sql.Postgres.Test`, `Agency.KeyValueStore.Sql.Postgres.Test`, `Agency.Memory.Sql.Postgres.Test`, `Agency.Memory.Functional.Test`.
+Projects in this vault: `Agency.Sql.Postgres.Test`, `Agency.Llm.Test`, `Agency.VectorStore.Sql.Postgres.Test`, `Agency.KeyValueStore.Sql.Postgres.Test`, `Agency.Memory.Sql.Postgres.Test`, `Agency.Memory.Functional.Test`. The runtime `Agency.Harness.Console` also reads `ConnectionStrings:PostgreSql` from this vault — not via its `UserSecretsId` (which is [`agency-harness-console`](#agency-harness-console-harnessconsole-vault)) but through an explicit `AddUserSecrets("AgencySecrets")` in `Program.cs`, so the one canonical Postgres secret serves both the app and the tests.
 
 | Secret key | Purpose |
 |---|---|

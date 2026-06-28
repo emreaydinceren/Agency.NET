@@ -14,10 +14,12 @@ public sealed class EmbeddingOptionsTests
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
+            .AddSharedConfiguration("shared-test-appsettings.json")
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Development.json", optional: true)
             .AddUserSecrets<EmbeddingOptionsTests>(optional: true)
             .AddEnvironmentVariables()
+            .AddPlaceholderResolver()
             .Build();
 
         return Options.Create(new EmbeddingOptions
@@ -61,6 +63,6 @@ public sealed class EmbeddingOptionsTests
     [Fact]
     public void ApiKey_IsLoadedFromConfig()
     {
-        Assert.Equal("lmstudio", Sut.ApiKey);
+        Assert.Equal("lm-studio", Sut.ApiKey);
     }
 }

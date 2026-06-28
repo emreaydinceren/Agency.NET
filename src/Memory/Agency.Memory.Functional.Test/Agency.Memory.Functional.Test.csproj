@@ -29,6 +29,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\shared-test-appsettings.json" Link="shared-test-appsettings.json" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agency.Configuration\Agency.Configuration.csproj" />
     <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
     <ProjectReference Include="..\..\Llm\Agency.Llm.OpenAI\Agency.Llm.OpenAI.csproj" />
     <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />

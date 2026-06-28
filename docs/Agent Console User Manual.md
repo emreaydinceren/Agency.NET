@@ -56,7 +56,7 @@ your messages to.
 > message to that URL and gets the AI's reply back from it.
 
 Out of the box, the app is set up to talk to a tool called **LM Studio** running on a machine at
-`http://llm-host.example:1234`. LM Studio is a free desktop program that runs AI models on your own hardware.
+`http://llm.test:1234`. LM Studio is a free desktop program that runs AI models on your own hardware.
 
 You have two realistic options:
 
@@ -384,7 +384,7 @@ and each entry under `LLmClients` describes one service:
     {
       "Name": "LocalVia-OpenAI-API",
       "ClientType": "OpenAI",
-      "BaseUrl": "http://llm-host.example:1234/v1",
+      "BaseUrl": "http://llm.test:1234/v1",
       "ApiKey": "lm-studio"
     }
   ]

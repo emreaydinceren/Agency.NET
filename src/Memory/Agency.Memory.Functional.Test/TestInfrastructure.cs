@@ -69,9 +69,11 @@ internal static class TestInfrastructure
     internal static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
+            .AddSharedConfiguration("shared-test-appsettings.json")   // shared-test-appsettings.json — test proxy endpoint / key
             .AddJsonFile("appsettings.json", optional: false)
-            .AddUserSecrets("AgencySecrets")
+            .AddUserSecrets("AgencySecrets")                          // ConnectionStrings:PostgreSql — canonical Postgres string
             .AddEnvironmentVariables()
+            .AddPlaceholderResolver()
             .Build();
 
     // ── Skip helpers ─────────────────────────────────────────────────────────

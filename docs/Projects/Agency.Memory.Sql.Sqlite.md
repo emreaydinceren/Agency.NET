@@ -157,7 +157,7 @@ Because both providers register the same `IMemoryStore`/`IWatermarkStore`/`IDead
 // appsettings.json
 "Memory": { "Enabled": true, "Provider": "sqlite" },
 "ConnectionStrings": {
-  "PostgreSql": "Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password",
+  // PostgreSql is a secret from the AgencySecrets user-secrets vault, not this file.
   "Sqlite": "Data Source=agency-memory.db"
 }
 ```

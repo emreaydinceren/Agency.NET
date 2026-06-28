@@ -31,7 +31,7 @@ LM Studio instance with:
 
 - A chat completion model loaded (e.g., Llama-3.2-3B or equivalent)
 - A text embedding model loaded (e.g., `text-embedding-3-small` compatible)
-- The server accessible at `http://llm-host.example:1234` (default)
+- The server accessible at `http://llm.test:1234` (default)
 
 Configure the endpoint and model names in `appsettings.json` or user secrets:
 
@@ -39,7 +39,7 @@ Configure the endpoint and model names in `appsettings.json` or user secrets:
 {
   "MemoryFunctional": {
     "LmStudio": {
-      "BaseUrl": "http://llm-host.example:1234/v1",
+      "BaseUrl": "http://llm.test:1234/v1",
       "ApiKey": "lm-studio",
       "ChatModel": "your-model-name",
       "EmbeddingModel": "your-embedding-model-name"

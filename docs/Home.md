@@ -45,6 +45,7 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 |---|---|
 | [Agency.Common](Projects/Agency.Common.md) | The `Dataset` type — the tabular shape query results flow through. No dependencies. |
 | [Agency.RagFormatter](Projects/Agency.RagFormatter.md) | Renders a `Dataset` as a Markdown table ready to drop into a prompt. |
+| [Agency.Configuration](Projects/Agency.Configuration.md) | `AddSharedConfiguration()` and `AddPlaceholderResolver()` — shared `appsettings` merging and `${Section:Key}` token resolution. |
 
 ### Embeddings
 | Project | Role |
@@ -106,4 +107,4 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 
 - **PostgreSQL 18 + pgvector** via Docker (`src/docker-compose.yml`). Dev credentials: `dev_user` / `dev_password`, database `dev_db`, port `5432`.
 - **SQLite** is the zero-infrastructure alternative for the same storage abstractions.
-- **Functional LLM tests** target LM Studio at `http://llm-host.example:1234` (recorded responses make CI runs offline-deterministic).
+- **Functional LLM tests** target LM Studio at `http://llm.test:1234` (recorded responses make CI runs offline-deterministic).

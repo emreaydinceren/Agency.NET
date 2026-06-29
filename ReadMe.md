@@ -11,6 +11,8 @@ Agency is a layered toolkit for building **RAG pipelines and autonomous agents**
 The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thinking. The *harness* — how it's prompted, what tools it may call, what it remembers, who decides it's finished, and what's fenced off — is everything else, and it's where production agents live or die. Agency is that harness, built for .NET 10.
 
 > 📚 **New here? Start at the [documentation portal](docs/Home.md).** It maps every subsystem and links the narrative deep-dives (the agent loop, memory, Loop Kit, hooks, permissions) and the per-project reference pages.
+>
+> 🧭 **Want to see the actual code path?** Open the interactive [**Code Walkthrough**](docs/walkthrough/code-walkthrough.html) — a single self-contained HTML page that traces the life of one agent turn through `Agency.Harness.Console`, from `Program.Main` through DI wiring and the REPL wait into the `LoopRunner` → `Agent` ReAct loop and back out as streamed events. Read it top to bottom; every step carries a source excerpt and a `project · class · method` pointer.
 
 ## Why Agency
 

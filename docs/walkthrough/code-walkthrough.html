@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+  AGENCY — CODE WALKTHROUGH  ·  MAINTAINER'S GUIDE  (read this before editing)
+================================================================================
+
+WHAT THIS IS
+  A single, self-contained, dependency-free static page that tells the story of
+  ONE agent turn in `Agency.Harness.Console`, from `Program.Main` to a rendered
+  reply. No build step, no network, no frameworks. Open it directly in a browser
+  (or serve the folder) — everything is inline in this one file.
+
+THE MENTAL MODEL (don't fight it — it's why the file stays small & editable)
+  The page is DATA + a tiny RENDERER. You almost never edit HTML by hand; you
+  edit JS data arrays near the bottom and the renderer expands them. Three data
+  structures, all in the <script> at the end:
+    • ACTS     — the 4 chapters (id, color, title, blurb).
+    • STEPS    — the ~31 numbered steps. Each: { act, where:{n,head,sub},
+                 detail:"<html>", ref:{proj,cls,mth,file} }.
+    • SNIPPETS — a map  { stepNumber: `C# excerpt` }  rendered under each step.
+  Renderer fns: stepHtml() / snippetHtml() / actHeadHtml() / hl(). They run once
+  at load and inject into <main id="story">.
+
+PAGE LAYOUT (per step = one CSS grid `.step`, 3 columns + a spanning 4th cell)
+    ┌─ col1 (.where) ─┬─ col2 (.detail) ─┬─ col3 (.ref card) ─┐   ← row 1
+    │  number bubble  │  prose w/ inline │  proj badge        │
+    │  + short "where │  <code> + .note  │  Class · Method    │
+    │  we are" text   │                  │  file name         │
+    ├─────────────────┴──────────────────┴────────────────────┤
+    │  .snippet  (grid-column: 2 / 4)  — C# code, spans 2+3    │   ← row 2
+    └──────────────────────────────────────────────────────────┘
+  The left chronological rail is `.step::before` (a vertical line); the number
+  bubble sits on top of it. It spans the FULL step height so it bridges row 2.
+
+HOW TO ADD / EDIT A STEP
+  1. Add (or edit) an object in STEPS. Keep `where.n` sequential — it is BOTH the
+     display number AND the key into SNIPPETS. Put it under the right `act`.
+  2. Add the matching code excerpt in SNIPPETS keyed by that same number.
+     (A step with no SNIPPETS entry simply renders no code block — that's fine.)
+  3. `detail` is raw HTML: use <strong>, <code>, and <div class="note">…</div>.
+  4. `ref` is the right-hand pointer card. We DELIBERATELY DROPPED LINE NUMBERS
+     (they rot on every edit) — point with Class + Method only, which survive
+     refactors. Do not re-add a `line` field to the display.
+
+⚠️  TWO ESCAPING GOTCHAS (both have bitten this file — heed them)
+  (a) `${...}` inside ANY backtick template literal is live JS interpolation.
+      Real C#/config tokens like  ${Section:Key}  MUST be written  \${Section:Key}
+      in `detail` strings and in SNIPPETS, or the page throws "Missing } in
+      template expression" and renders blank. Grep test before saving:
+        the only legit `${...}` are renderer vars (${s.…}, ${c}, ${a.…}, ${m}).
+  (b) The hl() highlighter protects string literals with a sentinel. It uses the
+      ESCAPE TEXT  \x00  (four ASCII chars) — never paste a real NUL byte. A raw
+      0x00 makes git/grep treat the whole file as binary. If you reintroduce one,
+      fix with a byte-level swap of 0x00 → the 4 bytes 5C 78 30 30.
+
+THE SNIPPETS ARE HAND-CURATED, TRIMMED EXCERPTS — not live source. They can
+  drift from the real code (same failure mode as line numbers). Source of truth:
+    src/Harness/Agency.Harness.Console/{Program,ConsoleChatSession}.cs
+    src/Harness/Agency.Harness/{Agent,ChatSession,SystemPromptBuilder}.cs
+    src/Harness/Agency.Harness/{Agents/AgentFactory,Loop/LoopRunner}.cs
+  When code changes materially, re-read those and update both the `detail` prose
+  and the SNIPPETS excerpt for the affected step(s).
+
+THEMING
+  Dark is default; light is a `:root[data-theme="light"]` override block — every
+  color is a CSS var, so a new theme = one override block. A pre-paint script in
+  <head> applies saved/OS theme before first render (avoids a flash). The toggle
+  button lives in nav.acts and persists to localStorage("agency-walkthrough-theme").
+
+VERIFYING A CHANGE (the loop that caught every bug above)
+    serve the folder  →  load in a browser  →  read the console for errors  →
+    screenshot top + a step row in BOTH themes. A syntax error renders the page
+    blank below the masthead (the static header/footer still show), so "header
+    shows but no steps" almost always means an unescaped `${` in the data.
+
+CSS SECTION MAP (search these to jump):  :root / light theme / Masthead /
+  Sticky act nav / theme toggle / Layout / Step row / left rail .where /
+  middle .detail / right .ref card / Code snippet / footer / responsive.
+================================================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agency — Code Walkthrough · One Turn, Top to Bottom</title>
+<style>
+  :root {
+    --bg:        #0d1117;
+    --bg-soft:   #131a23;
+    --panel:     #161d27;
+    --panel-2:   #1b2430;
+    --line:      #232d3a;
+    --ink:       #e6edf3;
+    --ink-soft:  #aab6c4;
+    --ink-dim:   #6b7888;
+    --accent:    #58c4ff;
+    --accent-2:  #7ee787;
+    --rail:      #2b3949;
+    --code:      #c9d6e3;
+    --bg-grad:   radial-gradient(1200px 600px at 80% -10%, #16202c 0%, transparent 60%);
+    --nav-bg:    rgba(13,17,23,.82);
+    --shadow:    rgba(0,0,0,.25);
+    /* act hues */
+    --act1:#58c4ff; --act2:#c792ea; --act3:#7ee787; --act4:#ffb86b;
+    --mono: "Cascadia Code","JetBrains Mono",ui-monospace,"SF Mono",Consolas,monospace;
+    --sans: "Inter",-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  /* ── Light theme overrides ──────────────────── */
+  :root[data-theme="light"] {
+    --bg:        #f6f8fb;
+    --bg-soft:   #eef2f7;
+    --panel:     #ffffff;
+    --panel-2:   #f0f4f9;
+    --line:      #d9e0ea;
+    --ink:       #1a2330;
+    --ink-soft:  #46546a;
+    --ink-dim:   #7b899c;
+    --accent:    #1769c9;
+    --accent-2:  #1a8a4a;
+    --rail:      #c2cde0;
+    --code:      #2f3b4d;
+    --bg-grad:   radial-gradient(1200px 600px at 80% -10%, #e3edfa 0%, transparent 60%);
+    --nav-bg:    rgba(246,248,251,.86);
+    --shadow:    rgba(40,60,90,.10);
+    --act1:#1769c9; --act2:#8b48c9; --act3:#1a8a4a; --act4:#c06a14;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg-grad), var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color .25s ease, color .25s ease;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ── Masthead ───────────────────────────────── */
+  header.masthead {
+    max-width: 1180px; margin: 0 auto; padding: 56px 28px 24px;
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 14px;
+  }
+  h1.title {
+    font-size: clamp(30px, 4vw, 46px); line-height: 1.08; margin: 0 0 16px;
+    font-weight: 800; letter-spacing: -.02em;
+  }
+  h1.title span { color: var(--ink-dim); font-weight: 700; }
+  .lede { max-width: 760px; color: var(--ink-soft); font-size: 17px; margin: 0 0 8px; }
+  .lede code { font-family: var(--mono); font-size: .9em; color: var(--accent-2);
+    background: var(--panel); padding: 1px 6px; border-radius: 5px; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 26px;
+    font-size: 13px; color: var(--ink-soft);
+  }
+  .legend .key { display: flex; align-items: center; gap: 8px; }
+  .legend .swatch { width: 26px; height: 8px; border-radius: 4px; }
+
+  /* ── Sticky act nav ─────────────────────────── */
+  nav.acts {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--nav-bg); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.acts .inner {
+    max-width: 1180px; margin: 0 auto; padding: 10px 28px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.acts a {
+    font-size: 12.5px; color: var(--ink-soft); padding: 6px 12px;
+    border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+  }
+  nav.acts a:hover { color: var(--ink); border-color: var(--line); background: var(--panel); }
+  nav.acts a b { font-family: var(--mono); margin-right: 6px; opacity: .7; }
+
+  /* theme toggle */
+  .theme-toggle {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+    background: var(--panel); border: 1px solid var(--line); cursor: pointer;
+    padding: 6px 11px; border-radius: 999px; transition: color .2s, border-color .2s;
+  }
+  .theme-toggle:hover { color: var(--ink); border-color: var(--rail); }
+  .theme-toggle .icon { width: 15px; height: 15px; display: block; }
+  /* show the right glyph per theme */
+  .theme-toggle .lbl-dark, .theme-toggle .ico-sun { display: none; }
+  :root[data-theme="light"] .theme-toggle .lbl-dark { display: inline; }
+  :root[data-theme="light"] .theme-toggle .lbl-light { display: none; }
+  :root[data-theme="light"] .theme-toggle .ico-sun { display: block; }
+  :root[data-theme="light"] .theme-toggle .ico-moon { display: none; }
+
+  /* ── Layout ─────────────────────────────────── */
+  main { max-width: 1180px; margin: 0 auto; padding: 16px 28px 120px; }
+
+  .act-head { margin: 56px 0 8px; }
+  .act-head .tag {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .15em;
+    text-transform: uppercase; font-weight: 700;
+  }
+  .act-head h2 { margin: 6px 0 4px; font-size: 24px; letter-spacing: -.01em; }
+  .act-head p { margin: 0; color: var(--ink-dim); font-size: 14.5px; max-width: 720px; }
+  .act-head .rule { height: 2px; margin-top: 16px; border-radius: 2px; opacity: .5; }
+
+  /* ── Step row: three columns ────────────────── */
+  .step {
+    display: grid;
+    grid-template-columns: 250px 1fr 320px;
+    gap: 22px;
+    padding: 26px 0;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+
+  /* Left rail — "where we are in the story" */
+  .where { position: relative; padding-left: 46px; }
+  .where .bubble {
+    position: absolute; left: 0; top: 1px;
+    width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    background: var(--panel-2); color: var(--ink);
+    border: 1px solid var(--rail);
+    box-shadow: 0 0 0 4px var(--shadow);
+  }
+  /* connecting chronological line — spans the full step so it bridges the snippet row */
+  .step::before {
+    content: ""; position: absolute; left: 15px; top: 0; bottom: 0;
+    width: 2px; background: var(--rail); opacity: .45;
+  }
+  .step:last-child::before { background: linear-gradient(var(--rail), transparent 70%); }
+  .where h3 { margin: 2px 0 6px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+  .where p { margin: 0; font-size: 13.5px; color: var(--ink-dim); }
+
+  /* Middle — detail */
+  .detail { font-size: 14.5px; color: var(--ink-soft); }
+  .detail p { margin: 0 0 10px; }
+  .detail p:last-child { margin-bottom: 0; }
+  .detail strong { color: var(--ink); font-weight: 600; }
+  .detail code {
+    font-family: var(--mono); font-size: .86em; color: var(--code);
+    background: var(--bg-soft); border: 1px solid var(--line);
+    padding: .5px 5px; border-radius: 5px;
+  }
+  .detail .note {
+    margin-top: 12px; padding: 10px 12px; border-left: 3px solid var(--rail);
+    background: var(--bg-soft); border-radius: 0 8px 8px 0;
+    font-size: 13px; color: var(--ink-dim);
+  }
+  .detail .note b { color: var(--ink-soft); }
+
+  /* Right — code pointer */
+  .ref { align-self: start; }
+  .card {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    position: sticky; top: 64px;
+  }
+  .card .bar { height: 4px; }
+  .card .body { padding: 13px 14px; }
+  .card .proj {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    letter-spacing: .04em; padding: 3px 8px; border-radius: 6px;
+    background: var(--panel-2); color: var(--ink-soft); margin-bottom: 10px;
+    border: 1px solid var(--line);
+  }
+  .card .sym {
+    font-family: var(--mono); font-size: 13.5px; color: var(--ink);
+    word-break: break-word; line-height: 1.45;
+  }
+  .card .sym .cls { color: var(--accent); }
+  .card .sym .dot { color: var(--ink-dim); }
+  .card .sym .mth { color: var(--accent-2); }
+  .card .file {
+    margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--line);
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+    display: flex; align-items: center; gap: 6px; word-break: break-all;
+  }
+  .card .file .ln { color: var(--ffb86b,#ffb86b); }
+  .card .file .lnum { color: #ffb86b; }
+
+  /* ── Code snippet (spans middle + right columns, second row) ── */
+  .snippet { grid-column: 2 / 4; margin-top: 2px; }
+  .code {
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+  }
+  .code .hd {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-dim);
+    padding: 7px 12px; border-bottom: 1px solid var(--line);
+    background: var(--panel); display: flex; gap: 9px; align-items: center;
+  }
+  .code .hd .dots { display: flex; gap: 5px; }
+  .code .hd .dots i { width: 9px; height: 9px; border-radius: 50%; display: block; opacity: .55; }
+  .code pre {
+    margin: 0; padding: 12px 15px; overflow-x: auto; tab-size: 4;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.66; color: var(--code);
+  }
+  .code .k { color: var(--act2); }                      /* keyword */
+  .code .s { color: var(--act3); }                      /* string  */
+  .code .c { color: var(--ink-dim); font-style: italic; } /* comment */
+
+  footer {
+    max-width: 1180px; margin: 0 auto; padding: 10px 28px 80px;
+    color: var(--ink-dim); font-size: 13px;
+  }
+  footer code { font-family: var(--mono); color: var(--ink-soft); }
+
+  /* responsive */
+  @media (max-width: 980px) {
+    .step { grid-template-columns: 1fr; gap: 14px; }
+    .step::before { display: none; }
+    .card { position: static; }
+    .ref { max-width: 360px; }
+    .snippet { grid-column: 1; }
+  }
+</style>
+<script>
+  /* Set theme before first paint to avoid a flash. Priority: saved choice → OS preference. */
+  (function () {
+    try {
+      var saved = localStorage.getItem("agency-walkthrough-theme");
+      var theme = saved
+        || (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      document.documentElement.setAttribute("data-theme", theme);
+    } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+  })();
+</script>
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Agency · Documentation · Code Walkthrough</p>
+  <h1 class="title">The life of one turn<br><span>from <code>Main()</code> to a rendered reply</span></h1>
+  <p class="lede">
+    A chronological reading of <code>Agency.Harness.Console</code> — the reference host — as it
+    boots the .NET Generic Host, wires dependency injection, waits at the prompt, then turns a
+    single line of user input into an LLM turn, tool calls, and streamed output. Read it top to
+    bottom: the <strong>left rail</strong> tells you where you are in the story, the
+    <strong>middle</strong> explains what happens, and the <strong>right card</strong> points at the
+    exact project, type, and <code>file:line</code>.
+  </p>
+
+  <div class="legend">
+    <span class="key"><span class="swatch" style="background:var(--act1)"></span> Act I — Cold start (host &amp; DI)</span>
+    <span class="key"><span class="swatch" style="background:var(--act2)"></span> Act II — The console takes the stage</span>
+    <span class="key"><span class="swatch" style="background:var(--act3)"></span> Act III — A prompt becomes a turn</span>
+    <span class="key"><span class="swatch" style="background:var(--act4)"></span> Act IV — Events stream home</span>
+  </div>
+</header>
+
+<nav class="acts">
+  <div class="inner">
+    <a href="#act1"><b>I</b>Cold start</a>
+    <a href="#act2"><b>II</b>The console</a>
+    <a href="#act3"><b>III</b>A prompt becomes a turn</a>
+    <a href="#act4"><b>IV</b>Events stream home</a>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark / light theme">
+      <svg class="icon ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
+      <span class="lbl-light">Light</span><span class="lbl-dark">Dark</span>
+    </button>
+  </div>
+</nav>
+
+<main id="story"></main>
+
+<footer>
+  Generated from source at <code>src/Harness/Agency.Harness.Console</code> and
+  <code>src/Harness/Agency.Harness</code>. Line numbers reflect the working tree at authoring time —
+  if code has moved, search for the named method. Start broader context at <code>docs/Home.md</code>.
+</footer>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────────────
+   DATA  (edit here, not the HTML). See the MAINTAINER'S GUIDE at the top of the
+   file for the full contract, the `${...}` escaping rule, and the verify loop.
+
+   Each STEP:
+     act    : "act1".."act4"          which chapter it belongs to (see ACTS)
+     where  : { n, head, sub }        left rail. `n` is the display number AND
+                                       the SNIPPETS key — keep it sequential.
+     detail : "<html>"                middle column. Raw HTML: <strong>, <code>,
+                                       <div class="note">…</div>. ⚠ literal ${…}
+                                       config tokens must be written \${…}.
+     ref    : { proj, cls, mth, file } right pointer card. NOTE: a `line` field
+                                       may still exist on older entries but is
+                                       NOT displayed and NOT maintained — ignore
+                                       it; point with Class·Method, which survive
+                                       refactors. Don't rely on or update `line`.
+   The matching code excerpt lives in SNIPPETS[n] (further down).
+   Act colors are CSS vars keyed by `act`.
+   ────────────────────────────────────────────────────────────────────────── */
+const ACTS = [
+  { id:"act1", tag:"Act I", color:"var(--act1)", title:"Cold start — the host boots",
+    blurb:"Before a single token is generated, the Generic Host assembles configuration, telemetry, identity, the optional data plane, tools, and the agent — all as DI registrations resolved lazily later." },
+  { id:"act2", tag:"Act II", color:"var(--act2)", title:"The console takes the stage",
+    blurb:"A DI scope yields one ConsoleChatSession. It prints a header, creates the stateful ChatSession + LoopRunner, and enters the REPL — where it will sit and wait for you." },
+  { id:"act3", tag:"Act III", color:"var(--act3)", title:"A prompt becomes an agent turn",
+    blurb:"You type a line. It flows through the goal-loop, into the stateful session, into the Agent's ReAct loop: build the system prompt, call the LLM, run tools in parallel, repeat until a stop condition fires." },
+  { id:"act4", tag:"Act IV", color:"var(--act4)", title:"Events stream home",
+    blurb:"Every step above emits an AgentEvent. The console drains that stream, renders Markdown / tool panels / permission prompts, parks-and-resumes for consent, applies the Goalkeeper verdict, and finally closes the session." },
+];
+
+const STEPS = [
+  /* ===================== ACT I ===================== */
+  { act:"act1", where:{ n:1, head:"Process entry", sub:"The OS hands control to Main()." },
+    detail:`<p>Execution begins in <code>Program.Main</code>. It pins console I/O to <strong>UTF-8</strong>
+      (so box-drawing and emoji render), then creates the .NET <strong>Generic Host</strong> builder —
+      the container that will own configuration, logging, DI, and the application lifetime.</p>
+      <p>Everything that follows in Act I only <em>registers</em> services; nothing is constructed until
+      <code>host.Build()</code> and the first scope resolve.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"Program", mth:"Main", file:"Program.cs", line:45 } },
+
+  { act:"act1", where:{ n:2, head:"Configuration is layered", sub:"appsettings, shared defaults, secrets, ${…} tokens." },
+    detail:`<p>Four sources are stacked, lowest-precedence first: shared <code>shared-appsettings.json</code>,
+      the host's own <code>appsettings.json</code>/env vars, and the <code>AgencySecrets</code> user-secrets
+      vault (loaded explicitly and moved to the front, because the host only auto-loads secrets in
+      <em>Development</em>).</p>
+      <p>The <strong>last</strong> config step installs a placeholder resolver so tokens like
+      <code>\${ConnectionStrings:PostgreSql}</code> expand exactly once, before anything reads config.</p>
+      <div class="note"><b>Why the order matters:</b> the Postgres connection string is a secret that never
+      lives in a committed file — the vault feeds the <code>\${…}</code> token that the vector store later resolves.</div>`,
+    ref:{ proj:"Agency.Harness.Console + Agency.Configuration", cls:"Program", mth:"Main — config block", file:"Program.cs", line:53 } },
+
+  { act:"act1", where:{ n:3, head:"Telemetry & logging", sub:"Traces, metrics, Serilog — all to files." },
+    detail:`<p><code>AddTelemetry</code> wires up to three independently-disableable OpenTelemetry pipelines:
+      span export, periodic metric export, and Serilog logs — each to a date- or session-stamped file under
+      <code>./logs</code>. Then <code>IChatOutput</code> is bound to <code>ConsoleOutput</code> (the Spectre.Console
+      renderer with its background spinner thread).</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"TelemetryServiceCollectionExtensions", mth:"AddTelemetry", file:"Program.cs", line:77 } },
+
+  { act:"act1", where:{ n:4, head:"Who is the user?", sub:"A stable id is resolved and AgentOptions is bound." },
+    detail:`<p>A per-installation <strong>user id</strong> is generated once and persisted back into
+      <code>appsettings.json</code> (skipped under <em>Test</em> for deterministic replay). <code>AgentOptions</code>
+      is then bound from the <code>Agent</code> section with <code>ValidateOnStart()</code>.</p>
+      <p>A <code>PostConfigure</code> composes the <strong>{userId} placeholder hook</strong> onto the options:
+      the model is told to pass the literal <code>{userId}</code>, and this hook rewrites it to the real GUID at
+      tool-call time — so the model can never fabricate or leak an identity.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"UserIdConfiguration", mth:"EnsureUserId / PostConfigure", file:"Program.cs", line:97 } },
+
+  { act:"act1", where:{ n:5, head:"The cross-cutting spine", sub:"Hooks, permissions, the loop, goal state." },
+    detail:`<p>Four registrations install the harness's governance layer: configured
+      <strong>lifecycle hooks</strong>, the <strong>permission evaluator</strong> (allow/deny rules at the tool
+      boundary), <strong>Loop Kit</strong> options, and a scoped <code>GoalState</code> shared between the
+      <code>LoopRunner</code> and the goalkeeper tools.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Hooks / Permissions / Loop", mth:"AddAgencyConfiguredHooks · AddAgencyPermissions · AddAgencyLoop", file:"Program.cs", line:113 } },
+
+  { act:"act1", where:{ n:6, head:"Memory (opt-in)", sub:"Embeddings, store, distiller/consolidator/hygiene." },
+    detail:`<p>If <code>Embedding:BaseUrl</code> is set, the embedding client is registered — independently of
+      memory, so documents can be embedded even with memory off. If <code>Memory:Enabled</code> is true, the chosen
+      store (Postgres or SQLite), a consolidator chat client, a thinking-suppressed distiller, and three background
+      services (distiller / consolidator / hygiene) come online.</p>
+      <div class="note"><b>Default:</b> memory ships <em>off</em>. The console behaves identically to a stateless
+      agent until you opt in.</div>`,
+    ref:{ proj:"Agency.Memory.*", cls:"Program", mth:"Main — memory block", file:"Program.cs", line:118 } },
+
+  { act:"act1", where:{ n:7, head:"The data plane", sub:"Vector store, text splitter, ingestion services." },
+    detail:`<p>Option classes (<code>VectorStoreOptions</code>, <code>IngestionOptions</code>,
+      <code>RetrievalOptions</code>) bind unconditionally so config is always validated, and
+      <code>IProjectSessionState</code> is always available so session identity exists even without embeddings.</p>
+      <p>When embeddings are configured, the <code>IVectorStore</code> (SQLite or Postgres), a
+      <code>SemanticKernelTextSplitter</code>, and the ingestion/hydration services are registered — this is what
+      <code>/add-file</code> and <code>semantic_search</code> will use.</p>`,
+    ref:{ proj:"Agency.VectorStore.* + Agency.Ingestion", cls:"Program", mth:"Main — vector-store block", file:"Program.cs", line:207 } },
+
+  { act:"act1", where:{ n:8, head:"External tools (MCP)", sub:"Spawn server processes, discover their tools." },
+    detail:`<p>If the <code>Mcp</code> section lists servers, <code>\${RepoRoot}</code>/<code>\${Configuration}</code>
+      tokens in their paths are expanded for portability, then <code>McpClientPool.CreateAsync</code> connects to each
+      and discovers its tools. Skipped entirely under <em>Test</em> (external processes would change the LLM request
+      body and break offline cache replay).</p>`,
+    ref:{ proj:"Agency.Harness", cls:"McpClientPool", mth:"CreateAsync (+ McpConfigResolver.Expand)", file:"Program.cs", line:256 } },
+
+  { act:"act1", where:{ n:9, head:"Skills discovery", sub:"SKILL.md folders become /commands." },
+    detail:`<p>Skill directories (project-first, then personal) are scanned into a
+      <code>ReloadableSkillCatalog</code>; a <code>SkillWatcher</code> hot-reloads on <code>SKILL.md</code> changes.
+      Each user-invocable skill is registered as a <code>/skill-name</code> console command from the startup snapshot.</p>`,
+    ref:{ proj:"Agency.Harness.Skills", cls:"ReloadableSkillCatalog · SkillWatcher", mth:"CommandRegistry.RegisterSkillCommands", file:"Program.cs", line:284 } },
+
+  { act:"act1", where:{ n:10, head:"The agent itself", sub:"Models + factory + the scoped default Agent." },
+    detail:`<p>One call, <code>AddAgencyAgent()</code>, registers the <code>Models</code> catalog, the
+      <code>IAgentFactory</code>, and a scoped default <code>Agent</code>. The factory folds baseline + configured +
+      user hooks, resolves an <code>IChatClient</code> for the configured client, and hands back an <code>Agent</code>
+      with its permission evaluator and clock attached.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"AgentFactory", mth:"CreateAgent", file:"Agents/AgentFactory.cs", line:31 } },
+
+  { act:"act1", where:{ n:11, head:"Assembling the toolbox", sub:"One ToolRegistry the agent may call." },
+    detail:`<p>A scoped factory builds the <code>ToolRegistry</code>: the built-in
+      <code>ExecutePowershell</code>/<code>ReadFile</code>/<code>WriteFile</code> tools, the goalkeeper arm/disarm
+      tools, <code>AgentTool</code> (sub-agents) and <code>SkillTool</code>, every discovered MCP tool, and —
+      when a vector store exists — <code>SemanticSearchTool</code>.</p>
+      <p>If progressive discovery is on, the registry is wrapped so <strong>MCP</strong> tool schemas are withheld
+      behind a <code>tool_help</code> tool while native tools stay fully visible.</p>
+      <div class="note"><b>Closure trick:</b> <code>AgentTool</code>/<code>SkillTool</code> capture the
+      <em>variable</em> <code>outward</code>, which is assigned the final (possibly wrapped) registry just before
+      return — so sub-agents share the exact same toolset and disclosure mode.</div>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"Program", mth:"Main — ToolContext factory", file:"Program.cs", line:323 } },
+
+  { act:"act1", where:{ n:12, head:"Build & verify", sub:"Construct the host; init schemas; fail fast." },
+    detail:`<p><code>builder.Build()</code> materializes the container. Then schema initialization runs in throwaway
+      scopes: the <strong>memory schema</strong> when memory is enabled, and the <strong>vector-store schema</strong>
+      when embeddings are configured — each failing fast with a clear message if its backend is unreachable.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"Program", mth:"Main — host.Build + schema init", file:"Program.cs", line:391 } },
+
+  { act:"act1", where:{ n:13, head:"Hand-off", sub:"Resolve ConsoleChatSession in a scope; run it." },
+    detail:`<p>The <code>SkillWatcher</code> singleton is resolved to start filesystem monitoring, then a DI
+      <strong>scope</strong> is opened and the single <code>ConsoleChatSession</code> is resolved and awaited via
+      <code>RunAsync()</code>. Control now belongs to the console.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"Program", mth:"Main — CreateScope + RunAsync", file:"Program.cs", line:442 } },
+
+  /* ===================== ACT II ===================== */
+  { act:"act2", where:{ n:14, head:"The session opens", sub:"Header, stateful ChatSession, Ctrl+C wiring." },
+    detail:`<p><code>RunAsync</code> starts a telemetry span, prints the banner, and constructs the stateful
+      <code>ChatSession</code> — seeding it with a <code>UserSpecificContext</code> (the resolved user id) and a
+      <code>SessionContext</code> (the project session id). It builds a <code>LoopRunner</code> around that session
+      and registers a <code>Ctrl+C</code> handler that cancels the current turn (or exits if idle).</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"ConsoleChatSession", mth:"RunAsync", file:"ConsoleChatSession.cs", line:159 } },
+
+  { act:"act2", where:{ n:15, head:"Top of the REPL", sub:"Refresh document inventory, then read a line." },
+    detail:`<p>Each iteration first asks the <code>DocumentContextHydrationService</code> whether the in-scope
+      document list changed; if so, it pushes a fresh <strong>Fact</strong> into the session via
+      <code>SetKnowledge</code> so the next turn knows what <code>semantic_search</code> can reach.</p>
+      <p>Then <code>ConsoleInputReader.ReadLineAsync</code> renders the bordered <code>❯</code> prompt and blocks —
+      with history, multi-line entry, and <code>/</code> autocomplete. <strong>This is where the app waits for you.</strong></p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"ConsoleChatSession", mth:"RunAsync — REPL loop", file:"ConsoleChatSession.cs", line:210 } },
+
+  { act:"act2", where:{ n:16, head:"What did they type?", sub:"Exit · slash-command · or a prompt." },
+    detail:`<p>Input is classified: bare <code>exit</code>/<code>quit</code> ends the session; a leading
+      <code>/</code> is dispatched to <code>CommandManager</code> (handled in-process, never sent to the model);
+      anything else is a <strong>prompt</strong> and is forwarded to <code>LoopRunner.RunAsync</code>. Token counts
+      are snapshotted first so the per-turn delta can be shown afterward.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"ConsoleChatSession", mth:"RunAsync — input dispatch", file:"ConsoleChatSession.cs", line:244 } },
+
+  /* ===================== ACT III ===================== */
+  { act:"act3", where:{ n:17, head:"The goal-loop", sub:"LoopRunner drives turns toward a done-condition." },
+    detail:`<p><code>LoopRunner.RunAsync</code> is the outer loop. With <strong>no goal armed</strong> it runs exactly
+      one pass-through turn — identical to a bare <code>SendAsync</code>. Once the model arms the Goalkeeper, it keeps
+      issuing turns (each directive = the Goalkeeper's reason) until <em>Done</em>, a cap trips, or it's cancelled.</p>
+      <p>It emits <code>TurnStartedEvent</code>, then awaits the inner <code>ChatSession.SendAsync</code> stream,
+      re-yielding every event upward to the console.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"LoopRunner", mth:"RunCoreAsync", file:"Loop/LoopRunner.cs", line:64 } },
+
+  { act:"act3", where:{ n:18, head:"Stateful session", sub:"Lazily build the Context; preserve history." },
+    detail:`<p><code>ChatSession.SendAsync</code> creates the conversation <code>Context</code> on the first turn and
+      reuses it after — this is what makes the chat multi-turn. Pending knowledge is flushed in, and if a previous
+      turn was <em>parked</em> awaiting permission and the user typed a new message instead, the pending batch is
+      abandoned (auto-denied) before proceeding.</p>
+      <p>It then delegates to <code>Agent.ChatAsync</code>, incrementing the turn count on each
+      <code>AgentResultEvent</code>.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"ChatSession", mth:"SendAsync", file:"ChatSession.cs", line:124 } },
+
+  { act:"act3", where:{ n:19, head:"Turn bookkeeping", sub:"Telemetry, append the user message, hooks." },
+    detail:`<p><code>Agent.ChatAsync</code> opens the turn span, records counters, and appends the user message to the
+      conversation (on the first turn the prompt is already seeded). It clears the active-skill permission window,
+      fires the <code>OnUserPromptSubmit</code> hook, and arms an optional per-turn timeout — then drives the inner
+      iterator, surfacing any error after metrics are recorded.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"ChatAsync", file:"Agent.cs", line:175 } },
+
+  { act:"act3", where:{ n:20, head:"Turn starts", sub:"SessionStartedEvent, seed history, list tools." },
+    detail:`<p><code>RunAsync</code> assigns a session id (first turn), yields <code>SessionStartedEvent</code>, fires
+      <code>OnSessionStarted</code>, seeds the conversation if empty, and snapshots the available
+      <code>ToolDefinition</code>s from the registry. It then enters the core iteration loop.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"RunAsync", file:"Agent.cs", line:303 } },
+
+  { act:"act3", where:{ n:21, head:"Compose the prompt", sub:"A fresh system prompt every iteration." },
+    detail:`<p>At the top of each iteration the <code>OnPreIteration</code> hook fires, then
+      <code>SystemPromptBuilder.Build</code> reassembles the <strong>entire system prompt from the Context</strong>:
+      persona, ReAct instruction, progressive-discovery note, the skills catalog, and freshly-injected
+      <strong>Knowledge facts</strong> (e.g. the document inventory) — rebuilt every loop so nothing goes stale.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"SystemPromptBuilder", mth:"Build", file:"SystemPromptBuilder.cs", line:17 } },
+
+  { act:"act3", where:{ n:22, head:"Call the LLM", sub:"ChatOptions → GetResponseAsync → usage." },
+    detail:`<p>A <code>ChatOptions</code> is built with the model id, the fresh system prompt, a max-output cap, and the
+      tool definitions. <code>IChatClient.GetResponseAsync</code> makes the call; the assistant message is appended to
+      history, token usage is accumulated, and an <code>AssistantTurnEvent</code> + <code>IterationCompletedEvent</code>
+      (carrying the LLM duration, used for the <code>tok/s</code> readout) are yielded.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"RunIterationsAsync — LLM call", file:"Agent.cs", line:586 } },
+
+  { act:"act3", where:{ n:23, head:"Are we done?", sub:"Truncation guard, then stop conditions." },
+    detail:`<p>If the provider reports <code>finish_reason=length</code>, the turn ends as an <em>Error</em> with a
+      helpful truncation message. Otherwise the <strong>stop condition</strong> is evaluated (default:
+      <em>no tool calls</em> OR <em>20 steps reached</em>). When it fires, the final text is extracted and an
+      <code>AgentResultEvent</code> is yielded after the <code>OnStop</code> hook — ending the turn.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"RunIterationsAsync — stop/truncation", file:"Agent.cs", line:625 } },
+
+  { act:"act3", where:{ n:24, head:"Run the tools", sub:"Parallel calls, hooks, the permission gate." },
+    detail:`<p>If the model requested tools, they run <strong>in parallel</strong>. For each call:
+      <code>OnPreToolUse</code> may deny / rewrite / ask; then the permission gate applies the combined order —
+      <em>rule-deny &gt; active-skill pre-approval &gt; hook-ask &gt; rule-allow &gt; unresolved</em>. Allowed calls
+      hit <code>Registry.InvokeAsync</code>; a successful <code>skill</code> call records its allowed-tools for the
+      rest of the turn. Each settled call becomes a <code>ToolInvokedEvent</code>.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"RunIterationsAsync — tool tasks", file:"Agent.cs", line:670 } },
+
+  { act:"act3", where:{ n:25, head:"Parking for consent", sub:"Suspend the turn, ask the human." },
+    detail:`<p>If any call needs the user's say-so, the loop <strong>does not block</strong>. It yields the completed
+      siblings, one <code>PermissionRequestedEvent</code> per pended call, stores a <code>PendingToolBatch</code> on the
+      context, emits <code>AwaitingPermission</code>, and returns. The conversation is left in the legal intermediate
+      state between <em>tool_use</em> and <em>tool_result</em> — ready to resume.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"RunIterationsAsync — park", file:"Agent.cs", line:881 } },
+
+  { act:"act3", where:{ n:26, head:"Feed results back", sub:"Append tool results; loop again." },
+    detail:`<p>When the batch completes without parking, <code>OnPostToolUse</code> fires per call,
+      <code>OnPostToolBatch</code> fires once, and each result is appended as a <code>Tool</code>-role message paired
+      to its call id. The <code>while(true)</code> loops back to step 21 — a fresh prompt, another LLM call — until a
+      stop condition ends the turn.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"Agent", mth:"RunIterationsAsync — append & loop", file:"Agent.cs", line:948 } },
+
+  /* ===================== ACT IV ===================== */
+  { act:"act4", where:{ n:27, head:"Draining the stream", sub:"Render each AgentEvent as it arrives." },
+    detail:`<p>Back in the console, <code>ProcessStreamAsync</code> consumes the event stream and renders:
+      <code>AssistantTurnEvent</code> → Markdown + tool-call panels; <code>ToolInvokedEvent</code> → a bordered result
+      panel; <code>IterationCompletedEvent</code> → records duration; the four Loop Kit events → goal banner / turn /
+      verdict / summary. It returns <em>parked</em> when the stream ends in <code>AwaitingPermission</code>.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"ConsoleChatSession", mth:"ProcessStreamAsync", file:"ConsoleChatSession.cs", line:410 } },
+
+  { act:"act4", where:{ n:28, head:"Ask, then resume", sub:"Permission picker → ResumeWithPermissionsAsync." },
+    detail:`<p>On a park, <code>CollectPermissionResponses</code> shows a panel + picker (<em>Allow once/always,
+      Deny once/always</em> — "Allow always" hidden for hook asks) and gathers one response per request. The host then
+      calls <code>ResumeWithPermissionsAsync</code>, which re-enters the <strong>same</strong> agent loop, executes or
+      blocks the pended calls, and continues. Pressing <em>Escape</em> abandons the turn instead.</p>`,
+    ref:{ proj:"Agency.Harness.Console + Agency.Harness", cls:"ConsoleChatSession · ChatSession", mth:"CollectPermissionResponses → ResumeWithPermissionsAsync", file:"ConsoleChatSession.cs", line:517 } },
+
+  { act:"act4", where:{ n:29, head:"The Goalkeeper rules", sub:"Done, or continue with a new directive?" },
+    detail:`<p>When a goal is armed, the inner turn returns to <code>LoopRunner</code>, which calls the
+      <strong>Goalkeeper</strong> — a separate model evaluating the conversation against the done-condition. A
+      <code>VerdictEvent</code> is emitted; <em>Done</em> ends the loop, <em>Continue</em> makes the Goalkeeper's reason
+      the next directive — subject to hard caps on turns, budget, and tokens that guarantee termination.</p>`,
+    ref:{ proj:"Agency.Harness", cls:"LoopRunner · Goalkeeper", mth:"RunCoreAsync — verdict gate", file:"Loop/LoopRunner.cs", line:219 } },
+
+  { act:"act4", where:{ n:30, head:"The receipt", sub:"+N in, +N out · tok/s · [Status]." },
+    detail:`<p>The terminal <code>AgentResultEvent</code> (status ≠ AwaitingPermission) prints the per-turn token delta
+      and throughput line, e.g. <code>↳ +230 in, +47 out  12.4 tok/s  [Success]</code>. The REPL counts the turn and
+      loops back to step 15 to wait for the next input.</p>`,
+    ref:{ proj:"Agency.Harness.Console", cls:"ConsoleChatSession", mth:"ProcessStreamAsync — AgentResultEvent", file:"ConsoleChatSession.cs", line:452 } },
+
+  { act:"act4", where:{ n:31, head:"Closing time", sub:"Exit drains the session; OnSessionEnd fires." },
+    detail:`<p>When you exit, the loop prints the session summary and the <code>finally</code> block disposes the
+      <code>ChatSession</code> — which raises the <code>OnSessionEnd</code> hook (memory distillation, if enabled),
+      records duration / token / turn metrics, and tags the span. Back in <code>Program.Main</code>,
+      <code>Log.CloseAndFlushAsync()</code> flushes the last log lines and the process exits.</p>`,
+    ref:{ proj:"Agency.Harness.Console + Agency.Harness", cls:"ConsoleChatSession · ChatSession", mth:"RunAsync finally → DisposeAsync (OnSessionEnd)", file:"ConsoleChatSession.cs", line:359 } },
+];
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Faithful (but trimmed) source excerpts, keyed by step number.
+   Trimmed for focus — never invent syntax. Literal C# ${...} tokens are
+   written as \${ so the JS template literal doesn't interpolate them.
+   ────────────────────────────────────────────────────────────────────────── */
+const SNIPPETS = {
+1:`public static async Task Main(string[] args)
+{
+    System.Console.OutputEncoding = System.Text.Encoding.UTF8;
+    var builder = Host.CreateApplicationBuilder(args);`,
+
+2:`builder.Configuration.AddSharedConfiguration();        // shared defaults, lowest precedence
+
+builder.Configuration.AddUserSecrets("AgencySecrets");
+var agencySecrets = builder.Configuration.Sources[^1];
+builder.Configuration.Sources.RemoveAt(builder.Configuration.Sources.Count - 1);
+builder.Configuration.Sources.Insert(0, agencySecrets);  // move secrets to the front
+
+builder.Configuration.AddPlaceholderResolver();          // expand \${Section:Key} — last step`,
+
+3:`builder.Services.AddTelemetry(builder.Configuration);   // traces, metrics, Serilog
+builder.Services.AddSingleton<IChatOutput, ConsoleOutput>();`,
+
+4:`UserIdConfiguration.EnsureUserId(builder.Configuration, appSettingsPath,
+    static () => Guid.NewGuid().ToString());
+
+builder.Services.AddOptions<AgentOptions>().BindConfiguration("Agent").ValidateOnStart();
+
+builder.Services.PostConfigure<AgentOptions>(options =>
+    options.UserHooks = options.UserHooks is { } existing
+        ? existing.Compose(UserIdPlaceholderHook.Hooks)
+        : UserIdPlaceholderHook.Hooks);`,
+
+5:`builder.Services.AddAgencyConfiguredHooks(builder.Configuration);
+builder.Services.AddAgencyPermissions(builder.Configuration);
+builder.Services.AddAgencyLoop(builder.Configuration);
+builder.Services.AddScoped<GoalState>();`,
+
+6:`bool embeddingsConfigured = builder.Configuration["Embedding:BaseUrl"] is not null;
+if (embeddingsConfigured)
+    builder.Services.AddAgencyEmbeddingsOpenAI(opts => /* bind Embedding */);
+
+if (memoryEnabled)
+{
+    // postgres or sqlite store, then the background services:
+    builder.Services.AddAgencyMemory();
+    builder.Services.AddAgencyConsolidator(opts => opts.Model = defaultModel);
+    builder.Services.AddAgencyHygiene();
+}`,
+
+7:`builder.Services.Configure<VectorStoreOptions>(/* ... */);   // always bound + validated
+builder.Services.AddScoped<IProjectSessionState, ProjectSessionState>();
+
+if (embeddingsConfigured)
+{
+    builder.Services.AddSingleton<ITextSplitter>(sp => new SemanticKernelTextSplitter(...));
+    builder.Services.AddSingleton<IVectorStore>(sp => /* Sqlite or Postgres KVStore */);
+    builder.Services.AddScoped<IngestionCommandService>();
+}`,
+
+8:`var mcpOptions = builder.Environment.IsEnvironment("Test")
+    ? null
+    : builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
+
+if (mcpOptions is { Servers.Length: > 0 })
+{
+    McpConfigResolver.Expand(mcpOptions, repoRoot, configuration);
+    var pool = await McpClientPool.CreateAsync(mcpOptions);
+    builder.Services.AddSingleton(pool);
+}`,
+
+9:`ReloadableSkillCatalog reloadableCatalog = new(skillRoots);
+builder.Services.AddSingleton<ISkillCatalog>(reloadableCatalog);
+builder.Services.AddSingleton(new SkillContext { Catalog = reloadableCatalog });
+builder.Services.AddSingleton(new SkillWatcher(skillRoots, reloadableCatalog.Reload));
+CommandRegistry.RegisterSkillCommands(reloadableCatalog);`,
+
+10:`public Agent CreateAgent(string? clientName, string? modelName)
+{
+    AgentHooks? hooks = AgentHooksExtensions.Fold(
+        options.BaselineHooks, options.ConfiguredHooks, options.UserHooks);
+
+    var (chatClient, clientType) = models.CreateChatClient(clientName);
+    return new Agent(chatClient, modelName, clientType, null, hooks,
+        permissions: permissions, logger: logger, timeProvider: timeProvider);
+}`,
+
+11:`var inner = new ToolRegistry();
+IToolRegistry outward = null!;
+inner.Register(new ExecutePowershellTool());
+inner.Register(new ReadFileTool());
+inner.Register(new WriteFileTool());
+inner.Register(new AgentTool((clientName, modelName) =>
+    (options, agentFactory.CreateAgent(clientName, modelName), outward)));
+// ... MCP tools + SemanticSearchTool ...
+outward = options.ProgressiveDiscovery
+    ? new ProgressiveDiscoveryToolRegistry(inner, mcpToolNames)
+    : inner;
+return new ToolContext { Registry = outward };`,
+
+12:`using IHost host = builder.Build();
+
+if (embeddingsConfigured)
+{
+    using var vsScope = host.Services.CreateScope();
+    var vectorStore = vsScope.ServiceProvider.GetRequiredService<IVectorStore>();
+    if (vectorStore is SqliteKVStore s)   await s.InitializeSchemaAsync(dims, default);
+    if (vectorStore is PostgresKVStore p) await p.InitializeSchemaAsync(dims, default);
+}`,
+
+13:`using SkillWatcher skillWatcher = host.Services.GetRequiredService<SkillWatcher>();
+
+using (var scope = host.Services.CreateScope())
+{
+    var app = scope.ServiceProvider.GetRequiredService<ConsoleChatSession>();
+    await app.RunAsync();
+}
+await Log.CloseAndFlushAsync();`,
+
+14:`this.WriteHeader();
+this._chatSession = new(this._agent, this._options, this.toolContext,
+    new UserSpecificContext { Id = this._options.UserId ?? Environment.UserName },
+    this._skillContext,
+    session: new SessionContext { Id = sessionState.SessionId });
+this._loopRunner = this.CreateLoopRunner(this._chatSession);
+
+System.Console.CancelKeyPress += (_, e) => { e.Cancel = true; turnCts?.Cancel(); };`,
+
+15:`string? fact = await hydration.RefreshIfDirtyAsync(turnCts.Token);
+if (fact is not null)
+    this._chatSession!.SetKnowledge(new KnowledgeContext { Facts = [fact] });
+
+var input = await this._inputReader.ReadLineAsync(PromptMarkup, turnCts.Token);`,
+
+16:`if (input.Equals("exit", StringComparison.OrdinalIgnoreCase)) break;
+
+if (input.StartsWith('/'))
+{
+    CommandContinuation continuation = await commandManager.ExecuteCommandAsync(input);
+    continue;   // Continue / Clear / ExitSession — never sent to the model
+}
+
+(bool parked, lastLlmDuration) = await this.ProcessStreamAsync(
+    this._loopRunner!.RunAsync(input, turnCts.Token), ...);`,
+
+17:`while (true)
+{
+    yield return new TurnStartedEvent(turn, directive);
+
+    await foreach (AgentEvent evt in this._session.SendAsync(directive, loopCt))
+    {
+        yield return evt;
+        if (evt is AgentResultEvent r) result = r;
+    }
+
+    GoalSpec? activeGoal = this._goal.Active;   // read the goal AFTER the turn
+    if (activeGoal is null) { yield return new LoopResultEvent(...); yield break; }`,
+
+18:`this._ctx ??= Agent.CreateContext(userMessage, this._toolContext, ...);
+
+await foreach (AgentEvent evt in this._agent.ChatAsync(userMessage, this._ctx, this._options, ct))
+{
+    if (evt is AgentResultEvent) this._turnCount++;
+    yield return evt;
+}`,
+
+19:`if (ctx.Conversation.Messages.Count > 0)
+    ctx.Conversation.Append(new ChatMessage(ChatRole.User, userMessage));
+
+ctx.ActiveSkillState.Clear();
+
+if (this._hooks.OnUserPromptSubmit is { } onUserPromptSubmit)
+    await onUserPromptSubmit(ctx, ct);
+
+var enumerator = this.RunAsync(ctx, turnCts.Token).GetAsyncEnumerator(turnCts.Token);`,
+
+20:`if (ctx.Session.Id is null)
+    ctx.Session = ctx.Session with { Id = Guid.NewGuid().ToString("N") };
+yield return new SessionStartedEvent(ctx.Session.Id);
+
+if (ctx.Conversation.Messages.Count == 0)
+    ctx.Conversation.Append(new ChatMessage(ChatRole.User, ctx.Query.Prompt));
+
+var toolDefs = ctx.Tools.Registry.ListDefinitions();
+await foreach (var evt in this.RunIterationsAsync(ctx, toolDefs, ct)) yield return evt;`,
+
+21:`if (this._hooks.OnPreIteration is { } onPreIteration)
+    await onPreIteration(ctx, ct);
+
+// Rebuilt from the Context every iteration, so Knowledge is always fresh:
+string systemPrompt = SystemPromptBuilder.Build(ctx);
+//   → persona + ReAct instruction + skills catalog + injected Knowledge facts`,
+
+22:`var options = new ChatOptions
+{
+    ModelId = this._model,
+    Instructions = systemPrompt,
+    MaxOutputTokens = 8096,
+};
+if (toolDefs.Count > 0)
+    options.Tools = toolDefs.Select(t => (AITool)ToolDefinitionFunction.Create(t)).ToList();
+
+var response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+yield return new AssistantTurnEvent(lastAssistant);
+yield return new IterationCompletedEvent(ctx.IterationCount, turnUsage, llmSw.Elapsed);`,
+
+23:`if (response.FinishReason == ChatFinishReason.Length)
+{
+    yield return new AgentResultEvent(AgentResultStatus.Error, truncationMessage, ...);
+    yield break;
+}
+
+// default stop: NoToolCalls OR StepCountIs(20)
+if (this._stop(ctx, lastAssistant))
+{
+    var status = DetermineStatus(ctx, lastAssistant);
+    yield return new AgentResultEvent(status, ExtractFinalText(lastAssistant), ...);
+    yield break;
+}`,
+
+24:`var toolTasks = toolCalls.Select(async (call, index) =>
+{
+    if (this._hooks.OnPreToolUse is { } onPreToolUse)
+    {
+        var decision = await onPreToolUse(new PreToolUseHookContext(call.Name, input, ctx), ct);
+        if (decision is PreToolUseDecision.Ask)     hookAsk = true;
+        if (decision is PreToolUseDecision.Rewrite r) input = r.NewInput;
+    }
+    // gate order: rule-deny > active-skill > hook-ask > rule-allow > unresolved
+    result = await ctx.Tools.Registry.InvokeAsync(call.Name, input, ct);
+    return new ToolInvokedEvent(call.Name, input, result);
+});
+ToolInvokedEvent[] toolEvents = await Task.WhenAll(toolTasks);`,
+
+25:`if (pendingCalls.Count > 0)
+{
+    foreach (PendingToolCall pending in pendingCalls)
+        yield return new PermissionRequestedEvent(pending.RequestId, pending.ToolName, ...);
+
+    // Park: stash the batch; conversation stays in the legal tool_use → tool_result gap.
+    ctx.PendingToolBatch = new PendingToolBatch { Results = resultMessages, Pending = pendingCalls };
+    yield return new AgentResultEvent(AgentResultStatus.AwaitingPermission, null, ...);
+    yield break;
+}`,
+
+26:`for (int i = 0; i < toolEvents.Length; i++)
+{
+    yield return toolEvents[i];
+    if (this._hooks.OnPostToolUse is { } onPostToolUse)
+        await onPostToolUse(new PostToolUseHookContext(...), ct);
+}
+if (this._hooks.OnPostToolBatch is { } onPostToolBatch)
+    await onPostToolBatch(toolEvents, ctx, ct);
+
+foreach (var resultContent in resultMessages)
+    ctx.Conversation.Append(new ChatMessage(ChatRole.Tool, [resultContent!]));
+// → loop back to the top: fresh prompt, another LLM call`,
+
+27:`await foreach (AgentEvent evt in stream.WithCancellation(ct))
+{
+    switch (evt)
+    {
+        case AssistantTurnEvent turn: this.PrintAssistantTurn(turn.Message); break;
+        case ToolInvokedEvent tool:   this.output.WriteMarkdownInBorderedPanel(...); break;
+        case PermissionRequestedEvent permReq: pendingRequests.Add(permReq); break;
+        case IterationCompletedEvent it: lastLlmDuration = it.LlmDuration; break;
+        case AgentResultEvent result: /* park, or print the token delta */ break;
+    }
+}`,
+
+28:`string? picked = ConsolePicker.Show(rows, returnItemIndex: 1, title: "Choose an action:");
+responses.Add(new PermissionResponse(req.RequestId, kind, message));
+
+// Re-enter the SAME agent loop where it parked:
+(parked, lastLlmDuration) = await this.ProcessStreamAsync(
+    this._chatSession.ResumeWithPermissionsAsync(responses, turnCts.Token), ...);`,
+
+29:`Verdict verdict = await this._goalkeeper.EvaluateAsync(
+    activeGoal.Condition, this._session.PreviewContext().Conversation.Messages, loopCt);
+
+yield return new VerdictEvent(turn, verdict);
+if (verdict is Verdict.Done) { yield return new LoopResultEvent(LoopOutcome.Achieved, ...); yield break; }
+
+turn++;                                   // strictly increases → guarantees termination
+if (turn >= activeGoal.MaxTurns) { /* CapReached */ }
+directive = ((Verdict.Continue)verdict).Reason;   // becomes the next directive`,
+
+30:`long deltaIn  = this._chatSession!.TotalUsage.InputTokens  - prevIn;
+long deltaOut = this._chatSession!.TotalUsage.OutputTokens - prevOut;
+
+string throughput = lastLlmDuration.TotalSeconds > 0
+    ? $"  {((deltaIn + deltaOut) / lastLlmDuration.TotalSeconds):F1} tok/s" : "";
+
+this.output.WriteLine("gray",
+    $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out{throughput}  [{result.Status}]");`,
+
+31:`finally
+{
+    if (this._chatSession is not null)
+        await this._chatSession.DisposeAsync();   // fires OnSessionEnd → memory distillation
+}
+
+// ChatSession.DisposeAsync:
+if (this._ctx is not null)
+    await this._agent.RaiseSessionEndAsync(this._ctx);`,
+};
+
+/* ── A small, safe C# highlighter ────────────────────────────────────────────
+   Escapes HTML first; protects strings (so // inside a URL isn't a comment, and
+   keywords inside strings aren't recolored), then comments, then keywords.
+   ORDER IS LOAD-BEARING: strings → comment → keywords → restore strings.
+   ⚠ The string-protection sentinel below is the ESCAPE TEXT \x00 (backslash-x-
+   zero-zero, 4 chars), NEVER a real 0x00 byte — a raw NUL turns this file binary
+   to git/grep. To extend coloring, add words to KW (it's just a denylist-free
+   keyword set); don't try to parse types/identifiers — keep it dumb and robust. */
+const KW = new Set(("public,private,internal,protected,static,sealed,async,await,var,new,return,"
+  + "if,else,for,foreach,while,switch,case,break,continue,yield,throw,using,this,null,true,false,"
+  + "void,bool,int,long,string,class,record,struct,enum,const,is,as,not,or,and,with,default,out,ref")
+  .split(","));
+
+function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function hl(code){
+  return code.split("\n").map(raw => {
+    let html = escapeHtml(raw);
+
+    // 1. protect string literals (incl. verbatim @"..") behind placeholders
+    const strs = [];
+    html = html.replace(/(@?"(?:[^"]|"")*")/g, m => { strs.push(m); return "\x00" + (strs.length-1) + "\x00"; });
+
+    // 2. split off a line comment (strings already removed → no false positives)
+    let comment = "";
+    const ci = html.indexOf("//");
+    if (ci >= 0){ comment = '<span class="c">' + html.slice(ci) + '</span>'; html = html.slice(0, ci); }
+
+    // 3. keywords on the remaining code
+    html = html.replace(/\b([A-Za-z_]\w*)\b/g, w => KW.has(w) ? '<span class="k">' + w + '</span>' : w);
+
+    // 4. restore strings across the whole line
+    let out = (html + comment).replace(/\x00(\d+)\x00/g, (_, i) => '<span class="s">' + strs[+i] + '</span>');
+    return out;
+  }).join("\n");
+}
+
+/* ── Render ─────────────────────────────────────── */
+const actColor = id => (ACTS.find(a => a.id === id) || {}).color || "var(--accent)";
+
+function symHtml(ref){
+  // class .method  (method may carry " — note")
+  let m = ref.mth;
+  return `<span class="cls">${ref.cls}</span><span class="dot"> · </span><span class="mth">${m}</span>`;
+}
+
+function stepHtml(s){
+  const c = actColor(s.act);
+  return `
+  <section class="step">
+    <div class="where">
+      <div class="bubble" style="border-color:${c};color:${c}">${s.where.n}</div>
+      <h3>${s.where.head}</h3>
+      <p>${s.where.sub}</p>
+    </div>
+    <div class="detail">${s.detail}</div>
+    <div class="ref">
+      <div class="card">
+        <div class="bar" style="background:${c}"></div>
+        <div class="body">
+          <span class="proj">${s.ref.proj}</span>
+          <div class="sym">${symHtml(s.ref)}</div>
+          <div class="file">${s.ref.file}</div>
+        </div>
+      </div>
+    </div>
+    ${snippetHtml(s, c)}
+  </section>`;
+}
+
+function snippetHtml(s, c){
+  const code = SNIPPETS[s.where.n];
+  if (!code) return "";
+  return `
+    <div class="snippet">
+      <div class="code">
+        <div class="hd">
+          <span class="dots"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></span>
+          <span style="color:${c}">${s.ref.file}</span>
+        </div>
+        <pre>${hl(code)}</pre>
+      </div>
+    </div>`;
+}
+
+function actHeadHtml(a){
+  return `
+  <div class="act-head" id="${a.id}">
+    <span class="tag" style="color:${a.color}">${a.tag}</span>
+    <h2>${a.title}</h2>
+    <p>${a.blurb}</p>
+    <div class="rule" style="background:${a.color}"></div>
+  </div>`;
+}
+
+const root = document.getElementById("story");
+let html = "";
+for (const a of ACTS){
+  html += actHeadHtml(a);
+  for (const s of STEPS.filter(s => s.act === a.id)) html += stepHtml(s);
+}
+root.innerHTML = html;
+
+/* ── Theme toggle ──────────────────────────────── */
+const toggle = document.getElementById("themeToggle");
+toggle.addEventListener("click", () => {
+  const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("agency-walkthrough-theme", next); } catch (e) {}
+});
+</script>
+</body>
+</html>

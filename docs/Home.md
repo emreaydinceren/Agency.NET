@@ -11,6 +11,8 @@ This page is the **portal**. It is deliberately not comprehensive — it gives y
 > - **Narrative deep-dives** (this folder) explain *how* a subsystem works and *why*.
 > - **[`Projects/`](Projects/)** has one terse reference page per assembly — the fastest way to orient inside an unfamiliar project.
 
+> 🧭 **Prefer to read the code as a story?** The interactive [**Code Walkthrough**](walkthrough/code-walkthrough.html) traces one full agent turn through `Agency.Harness.Console` — `Program.Main` → DI wiring → the REPL wait → `LoopRunner` → `Agent`'s ReAct loop → streamed events — top to bottom, with a source excerpt and a `project · class · method` pointer at each step. A fast way to see the whole control flow before diving into the deep-dives below.
+
 ---
 
 ## Explore by topic — narrative deep-dives

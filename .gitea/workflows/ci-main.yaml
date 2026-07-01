@@ -101,14 +101,8 @@ jobs:
             [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."
           done
 
-      - name: 🔎 Read package revision
-        id: version
-        run: |
-          REVISION=$(grep '<Revision>' src/Directory.Build.props | grep -o '[0-9]*')
-          echo "revision=$REVISION" >> $GITHUB_OUTPUT
-
       - name: 📋 Generate third-party notices
-        if: steps.version.outputs.revision == '0'
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
         run: |
           # Agency packages embed localhost:3000 as repository URL; forward to actual Gitea host
@@ -125,12 +119,12 @@ jobs:
           kill $SOCAT_PID 2>/dev/null || true
 
       - name: 📦 Pack NuGet packages
-        if: steps.version.outputs.revision == '0'
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
         run: dotnet pack --configuration Release --no-build /p:BuildNumber=${{ github.run_number }} --output ./nupkg
 
       - name: 🚀 Publish NuGet packages
-        if: steps.version.outputs.revision == '0'
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
         run: |
           for pkg in nupkg/*.nupkg; do

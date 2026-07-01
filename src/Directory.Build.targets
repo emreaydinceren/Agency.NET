@@ -1,0 +1,48 @@
+<Project>
+  <!--
+    IsTestProject is set inside each *.Test.csproj's own PropertyGroup, which is evaluated
+    after Directory.Build.props but before Directory.Build.targets — so these conditions
+    must live here, not in Directory.Build.props, or IsTestProject would always read as unset.
+  -->
+
+  <!-- All non-test projects produce NuGet packages -->
+  <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <!-- Symbol and source embedding for NuGet packages -->
+  <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedAllSources>true</EmbedAllSources>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'">
+    <None Include="THIRD-PARTY-NOTICES.TXT" Condition="Exists('$(MSBuildProjectDirectory)\THIRD-PARTY-NOTICES.TXT')" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\NOTICE" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\assets\Agency_128.png" Pack="true" PackagePath="" Visible="false" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <!-- Test project defaults -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+        <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Auto-include Xunit for test projects -->
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

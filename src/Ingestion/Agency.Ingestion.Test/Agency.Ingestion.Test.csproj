@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
     <!-- TextChunker is used directly in splitter tests (SKEXP0050) -->
     <NoWarn>$(NoWarn);SKEXP0050</NoWarn>
   </PropertyGroup>

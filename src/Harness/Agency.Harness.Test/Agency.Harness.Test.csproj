@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
     <!-- CS8509: switch not exhaustive — suppressed so closed-hierarchy records compile without a discard arm -->
     <!-- xUnit1051: Task.Run in contention test does not need CT — suppressed project-wide, mirrors inline pragma in CommandHookHandlerTests -->
     <NoWarn>$(NoWarn);CS8509;xUnit1051</NoWarn>

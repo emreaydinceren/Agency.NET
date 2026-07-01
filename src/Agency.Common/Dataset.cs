@@ -19,7 +19,7 @@ public interface IColumnMetadata
 /// <summary>
 /// Represents a tabular result set with column metadata and row values.
 /// </summary>
-public class Dataset
+public sealed class Dataset
 {
     /// <summary>
     /// Gets the column metadata for the dataset.

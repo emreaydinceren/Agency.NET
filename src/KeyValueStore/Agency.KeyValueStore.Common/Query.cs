@@ -23,4 +23,4 @@ namespace Agency.KeyValueStore.Common;
 /// A value indicating whether to include metadata in the query results. If <see langword="true"/>, metadata is
 /// included; otherwise, it is excluded.
 /// </param>
-public record class Query(string UserId, string? SessionId, string? Key, string? Value, IDictionary<string, object>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false);
+public sealed record class Query(string UserId, string? SessionId, string? Key, string? Value, IDictionary<string, object>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false);

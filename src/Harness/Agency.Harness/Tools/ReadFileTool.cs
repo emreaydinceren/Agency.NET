@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace Agency.Harness.Tools;
 
-public class ReadFileTool : ITool
+public sealed class ReadFileTool : ITool
 {
     static JsonElement InputSchema => JsonDocument.Parse(@"{
         ""type"": ""object"",

@@ -8,7 +8,7 @@ namespace Agency.Sql.Sqlite;
 /// <summary>
 /// Replaces vectorize(...) calls in SQL text with generated vector literals.
 /// </summary>
-public partial class SQLQueryEmbedder
+public sealed partial class SQLQueryEmbedder
 {
     [GeneratedRegex(@"vectorize\(\s*'(?<text>(?:''|[^'])*)'\s*\)", RegexOptions.IgnoreCase)]
     private static partial Regex VectorizeRegex();

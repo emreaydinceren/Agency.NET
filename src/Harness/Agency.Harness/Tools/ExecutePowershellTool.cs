@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Agency.Harness.Tools;
 
-public class ExecutePowershellTool : ITool
+public sealed class ExecutePowershellTool : ITool
 {
     // The OS / working directory / path-separator advertised in the tool description are
     // machine-dependent, which makes the serialized tool definition (and therefore the LLM

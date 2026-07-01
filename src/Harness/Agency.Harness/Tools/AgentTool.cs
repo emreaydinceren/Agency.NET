@@ -5,7 +5,7 @@ using Agency.Harness.Contexts;
 using Agency.Harness.Permissions;
 
 namespace Agency.Harness.Tools;
-public class AgentTool : ITool
+public sealed class AgentTool : ITool
 {
     private const string SubAgentDenyMessage =
         "Sub-agents cannot request permission; grant a rule to the parent session instead.";

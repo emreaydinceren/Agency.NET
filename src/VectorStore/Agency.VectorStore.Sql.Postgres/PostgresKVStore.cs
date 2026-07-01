@@ -12,7 +12,7 @@ using System.Globalization;
 using System.Text.Json;
 
 namespace Agency.VectorStore.Sql.Postgres;
-public class PostgresKVStore : IVectorStore
+public sealed class PostgresKVStore : IVectorStore
 {
     /// <summary>
     /// The activity source name used for vector store telemetry.

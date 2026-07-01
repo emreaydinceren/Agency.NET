@@ -13,7 +13,7 @@ namespace Agency.KeyValueStore.Sql.Postgres;
 /// PostgreSQL-backed implementation of <see cref="IKVStore"/> that stores key-value entries without vector embeddings.
 /// Results are ordered by recency (<c>updated_on DESC</c>) and substring matching is used for value search.
 /// </summary>
-public class PostgresKVStore : IKVStore
+public sealed class PostgresKVStore : IKVStore
 {
     /// <summary>
     /// The activity source name used for KV store telemetry.

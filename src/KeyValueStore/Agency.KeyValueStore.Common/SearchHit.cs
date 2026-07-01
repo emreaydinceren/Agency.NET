@@ -8,7 +8,7 @@ namespace Agency.KeyValueStore.Common;
 /// <param name="Key">The key that uniquely identifies the entry.</param>
 /// <param name="Value">The value associated with the specified key.</param>
 /// <param name="Metadata">Key value pairs.</param>
-public record class SearchHit<TValue>(string? SessionId, string Key, TValue Value, Dictionary<string, object>? Metadata, DateTimeOffset UpdatedOn) : 
+public sealed record class SearchHit<TValue>(string? SessionId, string Key, TValue Value, Dictionary<string, object>? Metadata, DateTimeOffset UpdatedOn) :
     SearchHit(SessionId, Key, Metadata, UpdatedOn)
 {
 }

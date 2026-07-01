@@ -3,7 +3,7 @@ namespace Agency.Ingestion;
 /// <summary>
 /// Captures the outcome of a completed ingestion pipeline run.
 /// </summary>
-public record IngestionResult(
+public sealed record IngestionResult(
     int Succeeded,
     int Failed,
     IReadOnlyList<string>? FailedKeys = null)

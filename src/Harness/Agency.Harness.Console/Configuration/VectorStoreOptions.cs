@@ -1,6 +1,6 @@
 namespace Agency.Harness.Console.Configuration;
 
-public sealed class VectorStoreOptions
+internal sealed class VectorStoreOptions
 {
     public const string SectionName = "VectorStore";
 

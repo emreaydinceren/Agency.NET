@@ -1,6 +1,6 @@
 namespace Agency.Harness.Console.Configuration;
 
-public sealed class RetrievalOptions
+internal sealed class RetrievalOptions
 {
     public const string SectionName = "Retrieval";
 

@@ -62,7 +62,11 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 
 ## Publishing (ci-main only)
 
-- Gated on `src/Directory.Build.props` `<Revision>` == `0`.
+- Gated on `if: startsWith(github.ref, 'refs/tags/v')` (tag-based, matching MinVer's own
+  release model). Ordinary pushes to `main` build/test but never pack/notice/publish.
+- `ci-main.yaml` currently only triggers on `push: branches: [main]` — it has no `tags:`
+  trigger, so a `v*` tag push doesn't run this workflow at all yet. Publishing a real release
+  needs that trigger added (tracked separately; RT15/RT3).
 - Third-party notices: packages embed `localhost:3000` as their repo URL; the step runs
   `socat` to forward local `:3000` → `gitea-host.example:3000` so `thirdlicense` can read license
   data from inside the `.nupkg`.
@@ -95,6 +99,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | `Agency.CodeIndexer` `EdgeResolver` `Assert.Single` flake | Known metrics race | Re-run; not a regression |
 | `thirdlicense` can't fetch license data | packages embed `localhost:3000` | `socat` forward to `gitea-host.example:3000` (already in ci-main) |
 | Cassette "missing" after clearing `cache/` | Proxy in-memory tier masks the miss | Restart the proxy after clearing `cache/` |
+| `build-and-publish` fails at a "Read package revision"-style step right after a versioning change | A gate step greps a field that a prior commit removed/renamed; empty grep + `bash -e -o pipefail` → exit 1 | Check what the *previous* merge to `main` changed in versioning/build props before assuming a code regression |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -124,3 +129,36 @@ flip the line endings and rebuild, don't theorize.
 - `git ls-files --eol` is the diagnostic; `git status` hides the index↔worktree EOL split.
 - The cache proxy forwards misses **live** (no 502), so a cache problem disguises itself as a
   flaky model/parse error.
+
+## Reflection — 2026-07-01: the revision-gate break after the MinVer migration
+
+**Failure:** three consecutive `push`-triggered `build-and-publish` runs (jobs for the RT5,
+RT9, and RT2 merges to `main`) failed at a "🔎 Read package revision" step, each after tests
+had already passed.
+
+**Root cause:** that step gated pack/notices/publish on `steps.version.outputs.revision == '0'`,
+where `revision` was grepped out of a hand-maintained `<Revision>` in `src/Directory.Build.props`.
+RT2 (`027888d`) migrated versioning to MinVer and deleted `<Revision>` in the same push that
+merged to `main`. From that point, the grep matched nothing, `revision` was empty, and the step
+ran under Actions' default `bash -e -o pipefail` — an empty/false comparison exits non-zero, so
+the step itself failed (not just evaluated to skip).
+
+**Proof:** each failing job's step list showed Checkout → Restore → Build → Unit Tests →
+Functional Tests all green, then "Read package revision" red, then pack/notices/publish
+`skipped` as a consequence — i.e. a gate-evaluation failure, not a test or build regression.
+Confirmed by reading `git show` on the RT2 commit and seeing `<Revision>` removed from
+`Directory.Build.props`.
+
+**Fix:** RT16 (`b30f456`) deleted the "Read package revision" step entirely and switched the
+three gated steps to `if: startsWith(github.ref, 'refs/tags/v')`. The next push-triggered run
+(job 377) showed those three steps as `skipped` (not failed) — the intended behavior for an
+ordinary `main` push under the new tag-based gate.
+
+**Lessons for future agents:**
+- A gate/setup step failing immediately after tests pass, right after a versioning or
+  build-props change landed, is very likely reading a field the prior change removed — check
+  the immediately preceding merge to `main` before assuming a regression in the new commit.
+- `skipped` and `failed` look similar in a step list at a glance — read the `conclusion` field
+  per step, not just whether the job as a whole is red.
+- `bash -e -o pipefail` turns an empty-variable comparison into a hard failure, not a silent
+  false — a grep-based gate has no graceful "field doesn't exist" path.

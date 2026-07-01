@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <Description>MCP (Model Context Protocol) memory server for the Agency AI Toolkit. Exposes memorize, recall, and forget tools over IKVStore for any MCP-compatible client.</Description>
+    <PackageTags>agency.net;ai;mcp;memory;key-value;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

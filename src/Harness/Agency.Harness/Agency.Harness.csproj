@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Description>Core agentic loop for the Agency AI Toolkit: Agent, ChatSession, Context composition, ToolRegistry, and StopConditions for multi-turn LLM agents with tool calling.</Description>
+    <PackageTags>agency.net;ai;agent;llm;tool-use;dotnet</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

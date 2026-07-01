@@ -166,10 +166,10 @@ specifically so a hook or tool can replace them between iterations:
 `MemoryLastRetrievedAt` (`:127`). The records they hold are themselves immutable — so "updating
 knowledge" means *assigning a new instance*, which the source spells out (`:63`):
 
-> "KnowlegdeContext is immutable, so to update the knowledge facts you must assign a new instance
+> "KnowledgeContext is immutable, so to update the knowledge facts you must assign a new instance
 > to this property."
 
-(The typo `KnowlegdeContext` is in the source verbatim.) On the loop diagram, every Tier-2 write
+On the loop diagram, every Tier-2 write
 happens at the `OnPreIteration` seam (`:574`) or via a tool — never by the loop body itself.
 
 **Tier 3 — loop-owned mutable state.** `IterationCount` (`:111`), `TotalCostUsd` (`:114`), and
@@ -536,8 +536,6 @@ the loop step from §4 in parentheses.
   `PreIterationHookContext`, and `PostToolBatchHookContext` (`HookContexts.cs:32-38`) are defined
   but never constructed by the loop, because the corresponding `AgentHooks` delegates pass
   `Context` directly (§9).
-- **Verbatim source typo.** The `Context.Knowledge` XML doc spells it `KnowlegdeContext`
-  (`Context.cs:63`). Quoted as-is above; not a transcription error.
 - **`required` members.** Exactly two members in the whole graph are `required`: `Context.Query`
   (`:57`) and `QueryContext.Prompt`. The user's first message is the one mandatory input.
 

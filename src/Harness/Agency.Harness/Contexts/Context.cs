@@ -60,7 +60,7 @@ public sealed record Context
     /// Gets or sets the knowledge context re-injected into the system prompt each iteration.
     /// Settable (not <c>init</c>-only) so lifecycle hooks such as <c>OnSessionStarted</c> can refresh
     /// domain facts mid-session; the rebuilt system prompt picks up the change on the next iteration.
-    /// KnowlegdeContext is immutable, so to update the knowledge facts you must assign a new instance to this property.
+    /// KnowledgeContext is immutable, so to update the knowledge facts you must assign a new instance to this property.
     /// Knowledge updates are additive; the system prompt accumulates all facts ever assigned to this property over the session lifetime.
     /// KnowledgeContext contains a collection string Facts.
     /// </summary>

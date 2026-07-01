@@ -494,7 +494,7 @@ Configures file-based traces, metrics, and structured logs exported by Harness.C
 | `OpenTelemetry:FileExport:Logs:FilePrefix` | string | `"app"` | Log file name prefix. Per-installation preference. |
 | `OpenTelemetry:FileExport:Logs:MinimumLevel` | string | `"Information"` | Serilog minimum level: `Verbose`/`Debug`/`Information`/`Warning`/`Error`/`Fatal`. Per-installation preference. |
 
-> **Exception to the "Default" column convention (line 13):** The three `Enabled` keys are absent from the shipped `appsettings.json`, so their effective defaults come from the C# type-level initialiser (`true`) rather than from `appsettings.json`. This is one of two documented exceptions to that convention — the other is `Loop`. A fresh `dotnet run` therefore writes traces, metrics, and Serilog output to `./logs` from first launch.
+> **Exception to the "Default" column convention (line 140):** The three `Enabled` keys are absent from the shipped `appsettings.json`, so their effective defaults come from the C# type-level initialiser (`true`) rather than from `appsettings.json`. This is one of two documented exceptions to that convention — the other is `Loop`. A fresh `dotnet run` therefore writes traces, metrics, and Serilog output to `./logs` from first launch.
 
 ```json
 "OpenTelemetry": {

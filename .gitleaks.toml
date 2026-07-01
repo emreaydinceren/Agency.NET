@@ -1,0 +1,28 @@
+# gitleaks configuration for the Agency repo.
+# Extends the built-in ruleset and allowlists the repo's *intended* placeholders and
+# local-only dev credentials so the CI gate flags only genuine leaked secrets.
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intended placeholders, local dev credentials, and local-only config"
+
+regexes = [
+  # ${TestProxy:ApiKey}, ${ConnectionStrings:PostgreSql}, ${LLmClients:ApiKey} — config placeholders
+  '''\$\{[^}]+\}''',
+  # ${{ secrets.X }} — Gitea/GitHub Actions expressions (never contain the value)
+  '''\$\{\{\s*secrets\.[^}]+\}\}''',
+  # Local Docker dev database credentials (src/docker-compose.yml)
+  '''dev_user''',
+  '''dev_password''',
+  '''dev_db''',
+  # LM Studio's placeholder API key (any value works; the local server ignores it)
+  '''lm-studio''',
+]
+
+paths = [
+  # Local-only, gitignored MCP config — holds a real token that is never committed.
+  '''\.mcp\.json$''',
+]

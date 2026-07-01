@@ -40,6 +40,10 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 1a: Registration resolves IPermissionEvaluator ──────────────────
 
+    /// <summary>
+    /// After calling <c>AddAgencyPermissions</c> with a valid configuration,
+    /// <see cref="IPermissionEvaluator"/> must be resolvable from the container.
+    /// </summary>
     [Fact]
     public void Di_ValidConfig_ResolvesIPermissionEvaluator()
     {
@@ -58,6 +62,10 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 1b: Singleton — two resolutions return the same instance ─────────
 
+    /// <summary>
+    /// The <see cref="IPermissionEvaluator"/> registration made by <c>AddAgencyPermissions</c>
+    /// must be a singleton: two resolutions from the same provider return the same instance.
+    /// </summary>
     [Fact]
     public void Di_ValidConfig_EvaluatorIsSingleton()
     {
@@ -76,6 +84,12 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 1c: Bound config reaches the evaluator — deny rule returns Deny ──
 
+    /// <summary>
+    /// A deny rule bound from configuration must actually reach the resolved
+    /// <see cref="IPermissionEvaluator"/>: evaluating a matching call must return
+    /// <see cref="PermissionDecision.Deny"/>, proving the options were not swallowed during
+    /// binding.
+    /// </summary>
     [Fact]
     public void Di_BoundConfig_DenyRuleReachesEvaluator()
     {
@@ -99,6 +113,11 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 2: Fail-fast on malformed rule ────────────────────────────────────
 
+    /// <summary>
+    /// A malformed allow rule in configuration must fail fast: resolving
+    /// <see cref="IPermissionEvaluator"/> must throw <see cref="InvalidOperationException"/>
+    /// whose message chain contains the offending rule text.
+    /// </summary>
     [Fact]
     public void Di_MalformedAllowRule_ThrowsOnEvaluatorResolution()
     {
@@ -120,6 +139,11 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 3: Custom section name ────────────────────────────────────────────
 
+    /// <summary>
+    /// <c>AddAgencyPermissions</c> must bind from a caller-supplied configuration section name
+    /// (rather than the default "Permissions"): a deny rule under that custom section must
+    /// reach the resolved evaluator.
+    /// </summary>
     [Fact]
     public void Di_CustomSectionName_BindsCorrectSection()
     {
@@ -146,6 +170,11 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 4a: No-registration → GetService returns null ────────────────────
 
+    /// <summary>
+    /// Without calling <c>AddAgencyPermissions</c>, <see cref="IPermissionEvaluator"/> must not
+    /// be registered: <c>GetService&lt;IPermissionEvaluator&gt;()</c> returns
+    /// <see langword="null"/> rather than throwing.
+    /// </summary>
     [Fact]
     public void Di_NoRegistration_GetServiceReturnsNull()
     {
@@ -160,6 +189,12 @@ public sealed class PermissionServiceCollectionExtensionsTests
 
     // ── Test 4b: AgentFactory still constructs without permissions registration ─
 
+    /// <summary>
+    /// Regression pin for spec §2.4 ("no evaluator → unchanged behavior"): when
+    /// <see cref="IPermissionEvaluator"/> is absent from DI, resolution must yield
+    /// <see langword="null"/> without throwing, and passing that <see langword="null"/> as the
+    /// agent-level permissions parameter must remain a valid, compiling call shape.
+    /// </summary>
     [Fact]
     public void Di_NoPermissionsRegistration_AgentFactoryConstructsSuccessfully()
     {

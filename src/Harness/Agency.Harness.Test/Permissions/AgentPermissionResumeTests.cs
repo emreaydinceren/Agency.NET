@@ -157,6 +157,15 @@ public sealed class AgentPermissionResumeTests
     //     resume stream ends with a Success result.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resuming a parked ask with <see cref="PermissionResponseKind.AllowOnce"/> invokes the
+    /// tool with the post-rewrite input captured at park time, fires
+    /// <see cref="AgentHooks.OnPostToolUse"/> for the resumed call and
+    /// <see cref="AgentHooks.OnPostToolBatch"/> exactly once with the full batch (the sibling
+    /// allowed call plus the resumed call), appends all Tool-role messages after resume in
+    /// batch order, and lets the loop continue to a <see cref="AgentResultStatus.Success"/>
+    /// terminal result with <see cref="Context.PendingToolBatch"/> cleared.
+    /// </summary>
     [Fact]
     public async Task Resume_AllowOnce_ToolInvokedWithPostRewriteInput_FullBatchAppended_LoopContinues()
     {
@@ -291,6 +300,12 @@ public sealed class AgentPermissionResumeTests
     //   → IsError true, tool never invoked, loop continues.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resuming a parked ask with <see cref="PermissionResponseKind.DenyOnce"/> and a message
+    /// produces a Tool-role result whose content is
+    /// "[Blocked] The user denied permission for this tool call: {message}", the tool is never
+    /// invoked, and the loop continues past the deny to a non-parked terminal result.
+    /// </summary>
     [Fact]
     public async Task Resume_DenyOnce_WithMessage_BlockedResultContainsMessage_ToolNotInvoked()
     {
@@ -346,6 +361,11 @@ public sealed class AgentPermissionResumeTests
     //   → "[Blocked] The user denied permission for this tool call."
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resuming a parked ask with <see cref="PermissionResponseKind.DenyOnce"/> and no message
+    /// produces the default blocked string "[Blocked] The user denied permission for this tool
+    /// call." without the trailing colon-and-message form used when a message is supplied.
+    /// </summary>
     [Fact]
     public async Task Resume_DenyOnce_NoMessage_BlockedResultHasDefaultDenyString()
     {
@@ -404,6 +424,11 @@ public sealed class AgentPermissionResumeTests
     // Sub-case B: DenyAlways  → RecordAlwaysAsync(proposedRule, deny:true) + blocked result.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resuming with <see cref="PermissionResponseKind.AllowAlways"/> calls
+    /// <see cref="IPermissionEvaluator.RecordAlwaysAsync"/> exactly once with the pending call's
+    /// proposed rule and <c>deny: false</c>.
+    /// </summary>
     [Fact]
     public async Task Resume_AllowAlways_RecordAlwaysAsyncCalledWithDenyFalse()
     {
@@ -441,6 +466,12 @@ public sealed class AgentPermissionResumeTests
         Assert.False(deny);
     }
 
+    /// <summary>
+    /// Resuming with <see cref="PermissionResponseKind.DenyAlways"/> calls
+    /// <see cref="IPermissionEvaluator.RecordAlwaysAsync"/> exactly once with the pending call's
+    /// proposed rule and <c>deny: true</c>, the tool is never invoked, and the appended Tool-role
+    /// message carries a [Blocked] result.
+    /// </summary>
     [Fact]
     public async Task Resume_DenyAlways_RecordAlwaysAsyncCalledWithDenyTrue_AndBlockedResult()
     {
@@ -497,6 +528,13 @@ public sealed class AgentPermissionResumeTests
     // the temp file contains the rule.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// With a real <see cref="PermissionEvaluator"/> backed by a temp local-rules file, resuming
+    /// an unresolved rule-sourced ask with <see cref="PermissionResponseKind.AllowAlways"/>
+    /// persists the allow rule and makes the grant live immediately: an identical subsequent
+    /// call from the LLM in the same resumed loop executes without parking again, and the local
+    /// rules file on disk contains the proposed rule under its "Allow" array.
+    /// </summary>
     [Fact]
     public async Task Resume_AllowAlways_RuleSourced_SecondCallDoesNotPark_FileContainsRule()
     {
@@ -576,6 +614,15 @@ public sealed class AgentPermissionResumeTests
     // still pends because the hook always returns Ask.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Hook-sourced asks recur by design: resuming a hook-flagged call with
+    /// <see cref="PermissionResponseKind.AllowAlways"/> still records a grant via
+    /// <see cref="IPermissionEvaluator.RecordAlwaysAsync"/> and executes the resumed call, but
+    /// because the hook unconditionally returns <see cref="PreToolUseDecision.Ask"/>, an
+    /// identical subsequent call within the resumed loop parks again with a new
+    /// <see cref="PermissionRequestedEvent"/> whose <see cref="PermissionRequestedEvent.Source"/>
+    /// is <see cref="PermissionRequestSource.Hook"/>.
+    /// </summary>
     [Fact]
     public async Task Resume_AllowAlways_HookSourced_GrantRecorded_ButNextCallParksAgain()
     {
@@ -647,6 +694,11 @@ public sealed class AgentPermissionResumeTests
     // (d) Resume when nothing parked → InvalidOperationException (ChatSession seam).
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Calling <c>Agent.ResumeAsync</c> with an empty response list while a call is still
+    /// pending must throw <see cref="ArgumentException"/> — every pending request needs a
+    /// matching response.
+    /// </summary>
     [Fact]
     public async Task Resume_EmptyResponses_WhileOnePending_ThrowsArgumentException()
     {
@@ -671,6 +723,11 @@ public sealed class AgentPermissionResumeTests
             CollectAsync(agent.ResumeAsync(ctx, [], options: null, ct), ct));  // CS1061 expected
     }
 
+    /// <summary>
+    /// A response naming a <see cref="PermissionResponse.RequestId"/> that does not match any
+    /// pending request must cause <c>Agent.ResumeAsync</c> to throw
+    /// <see cref="ArgumentException"/>.
+    /// </summary>
     [Fact]
     public async Task Resume_UnknownRequestId_ThrowsArgumentException()
     {
@@ -699,6 +756,10 @@ public sealed class AgentPermissionResumeTests
             CollectAsync(agent.ResumeAsync(ctx, responses, options: null, ct), ct));  // CS1061 expected
     }
 
+    /// <summary>
+    /// Supplying two responses for the same <see cref="PermissionResponse.RequestId"/> must
+    /// cause <c>Agent.ResumeAsync</c> to throw <see cref="ArgumentException"/>.
+    /// </summary>
     [Fact]
     public async Task Resume_DuplicateRequestId_ThrowsArgumentException()
     {
@@ -730,6 +791,10 @@ public sealed class AgentPermissionResumeTests
             CollectAsync(agent.ResumeAsync(ctx, responses, options: null, ct), ct));  // CS1061 expected
     }
 
+    /// <summary>
+    /// Calling <see cref="ChatSession.ResumeWithPermissionsAsync"/> when no turn is parked must
+    /// throw <see cref="InvalidOperationException"/>.
+    /// </summary>
     [Fact]
     public async Task Resume_NothingParked_ThrowsInvalidOperationException()
     {
@@ -766,6 +831,13 @@ public sealed class AgentPermissionResumeTests
     //   • PendingToolBatch cleared after the second SendAsync.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Calling <see cref="ChatSession.SendAsync"/> with a new user message while a turn is
+    /// parked implicitly denies every pending call with "The user did not respond to the
+    /// permission request.", completes the batch, appends the new user message, and processes
+    /// it normally: the denied tool is never invoked, the abandonment deny string reaches the
+    /// LLM in history, and the new message is processed alongside it.
+    /// </summary>
     [Fact]
     public async Task Abandonment_SendAsyncWhileParked_DeniesAllPendings_ProcessesNewMessage()
     {
@@ -835,6 +907,11 @@ public sealed class AgentPermissionResumeTests
     // After Reset(), ResumeWithPermissionsAsync → InvalidOperationException (nothing parked).
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="ChatSession.Reset"/> clears any pending permission batch: after calling it,
+    /// <see cref="ChatSession.ResumeWithPermissionsAsync"/> must throw
+    /// <see cref="InvalidOperationException"/> because nothing remains parked.
+    /// </summary>
     [Fact]
     public async Task Reset_ClearsPendingBatch_ResumeAfterResetThrowsInvalidOperation()
     {
@@ -875,6 +952,14 @@ public sealed class AgentPermissionResumeTests
     //         Answering THAT resume completes (loop until non-AwaitingPermission).
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A resume that triggers a follow-up LLM turn can itself re-park: resuming the first ask
+    /// executes that call and then parks again when the LLM immediately requests a second
+    /// unresolved tool, yielding a new <see cref="PermissionRequestedEvent"/> and an
+    /// <see cref="AgentResultStatus.AwaitingPermission"/> terminal result on the first resume
+    /// stream; resuming the second ask then completes the loop with
+    /// <see cref="AgentResultStatus.Success"/> and both tools invoked exactly once.
+    /// </summary>
     [Fact]
     public async Task Resume_TriggerRepark_ResumeStreamEndsWithAwaitingPermissionAgain()
     {
@@ -946,6 +1031,11 @@ public sealed class AgentPermissionResumeTests
     // directly; this confirms ChatSession wires the plumbing.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="ChatSession.ResumeWithPermissionsAsync"/> delegates correctly to
+    /// <c>Agent.ResumeAsync</c>: resuming an allowed call while parked invokes the tool and
+    /// completes the resume stream with <see cref="AgentResultStatus.Success"/>.
+    /// </summary>
     [Fact]
     public async Task ChatSession_ResumeWithPermissionsAsync_WhileParked_CompletesNormally()
     {
@@ -987,6 +1077,11 @@ public sealed class AgentPermissionResumeTests
         Assert.Equal(1, toolA.InvokeCount);
     }
 
+    /// <summary>
+    /// Calling <see cref="ChatSession.ResumeWithPermissionsAsync"/> on a session that has never
+    /// sent a message (no context, nothing parked) must throw
+    /// <see cref="InvalidOperationException"/>.
+    /// </summary>
     [Fact]
     public async Task ChatSession_ResumeWithPermissionsAsync_SessionNotStarted_ThrowsInvalidOperation()
     {

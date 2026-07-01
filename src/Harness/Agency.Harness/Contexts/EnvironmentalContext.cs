@@ -3,6 +3,7 @@ namespace Agency.Harness.Contexts;
 /// <summary>Operating-environment facts injected into the system prompt.</summary>
 public sealed record EnvironmentalContext
 {
+    /// <summary>Initializes a new, empty <see cref="EnvironmentalContext"/>.</summary>
     public EnvironmentalContext()
     {
     }

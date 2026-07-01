@@ -39,6 +39,7 @@ public sealed class AgentToolHookTests
 
     // ── OnPreToolUse — Allow ───────────────────────────────────────────────────
 
+    /// <summary>When <c>OnPreToolUse</c> returns <see cref="PreToolUseDecision.Allow"/>, the requested tool is invoked.</summary>
     [Fact]
     public async Task OnPreToolUse_Allow_ToolIsInvoked()
     {
@@ -56,6 +57,7 @@ public sealed class AgentToolHookTests
         Assert.Equal(1, tool.InvokeCount);
     }
 
+    /// <summary>The <c>OnPreToolUse</c> hook context's <c>ToolName</c> matches the tool the LLM requested.</summary>
     [Fact]
     public async Task OnPreToolUse_Allow_ReceivesCorrectToolName()
     {
@@ -78,6 +80,7 @@ public sealed class AgentToolHookTests
         Assert.Equal("search", capturedName);
     }
 
+    /// <summary>Leaving <c>OnPreToolUse</c> unset (<see langword="null"/>) does not block tool invocation.</summary>
     [Fact]
     public async Task OnPreToolUse_Null_ToolIsInvokedNormally()
     {
@@ -93,6 +96,7 @@ public sealed class AgentToolHookTests
 
     // ── OnPreToolUse — Deny ────────────────────────────────────────────────────
 
+    /// <summary>When <c>OnPreToolUse</c> returns <see cref="PreToolUseDecision.Deny"/>, the tool is never invoked.</summary>
     [Fact]
     public async Task OnPreToolUse_Deny_ToolIsNotInvoked()
     {
@@ -110,6 +114,7 @@ public sealed class AgentToolHookTests
         Assert.Equal(0, tool.InvokeCount);
     }
 
+    /// <summary>A denied tool call surfaces a <c>"[Blocked]"</c>-tagged tool-role message back to the LLM on the next turn.</summary>
     [Fact]
     public async Task OnPreToolUse_Deny_BlockedResultAppearsInConversation()
     {
@@ -131,6 +136,7 @@ public sealed class AgentToolHookTests
         Assert.Contains("[Blocked]", result.Result?.ToString());
     }
 
+    /// <summary>After a tool call is denied, the agent loop continues and still reaches a successful <see cref="AgentResultEvent"/>.</summary>
     [Fact]
     public async Task OnPreToolUse_Deny_AgentLoopContinues()
     {
@@ -151,6 +157,7 @@ public sealed class AgentToolHookTests
 
     // ── OnPreToolUse — Rewrite ─────────────────────────────────────────────────
 
+    /// <summary>When <c>OnPreToolUse</c> returns <see cref="PreToolUseDecision.Rewrite"/>, the tool receives the rewritten input rather than the LLM's original arguments.</summary>
     [Fact]
     public async Task OnPreToolUse_Rewrite_ToolReceivesNewInput()
     {
@@ -189,6 +196,7 @@ public sealed class AgentToolHookTests
 
     // ── OnPostToolUse ──────────────────────────────────────────────────────────
 
+    /// <summary><c>OnPostToolUse</c> fires exactly once after a tool call completes.</summary>
     [Fact]
     public async Task OnPostToolUse_FiresAfterToolCompletion()
     {
@@ -207,6 +215,7 @@ public sealed class AgentToolHookTests
         Assert.Equal(1, count);
     }
 
+    /// <summary>The <c>OnPostToolUse</c> hook context carries the invoked tool's name and its result content.</summary>
     [Fact]
     public async Task OnPostToolUse_ReceivesCorrectToolNameAndResult()
     {
@@ -232,6 +241,7 @@ public sealed class AgentToolHookTests
         Assert.Equal("42", capturedContent);
     }
 
+    /// <summary><c>OnPostToolUse</c> still fires when the tool throws, and its result context reports <c>IsError</c> as <see langword="true"/>.</summary>
     [Fact]
     public async Task OnPostToolUse_FiresEvenOnToolError()
     {

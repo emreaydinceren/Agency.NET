@@ -5,11 +5,16 @@ using Moq;
 
 namespace Agency.Harness.Test;
 
+/// <summary>
+/// Unit tests for <see cref="SemanticSearchTool"/>, covering result formatting and the shape of
+/// the <see cref="Query"/> it builds from the current <see cref="IProjectSessionState"/>.
+/// </summary>
 public sealed class SemanticSearchToolTests
 {
     private readonly Mock<IVectorStore> _storeMock = new();
     private readonly Mock<IProjectSessionState> _stateMock = new();
 
+    /// <summary>Configures the mocked session state with a default user, session, and no loaded projects.</summary>
     public SemanticSearchToolTests()
     {
         _stateMock.Setup(s => s.UserId).Returns("user1");
@@ -30,6 +35,10 @@ public sealed class SemanticSearchToolTests
             .ReturnsAsync((IReadOnlyList<SearchHit<string>>)hits);
     }
 
+    /// <summary>
+    /// When the vector store returns no hits, the tool result content is the fixed
+    /// "no matching documents" message.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_EmptyResults_ReturnsNoDocumentsMessage()
     {
@@ -41,6 +50,10 @@ public sealed class SemanticSearchToolTests
         Assert.Equal("No matching documents found.", result.Content);
     }
 
+    /// <summary>
+    /// When the vector store returns at least one hit, the tool result is non-empty and distinct
+    /// from the no-results message.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_WithResults_ReturnsMarkdownTable()
     {
@@ -54,6 +67,10 @@ public sealed class SemanticSearchToolTests
         Assert.NotEqual("No matching documents found.", result.Content);
     }
 
+    /// <summary>
+    /// The <see cref="Query"/> passed to the vector store carries the user id from
+    /// <see cref="IProjectSessionState.UserId"/>.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_BuildsQueryWithCorrectUserId()
     {
@@ -70,6 +87,10 @@ public sealed class SemanticSearchToolTests
         Assert.Equal("user1", capturedQuery.UserId);
     }
 
+    /// <summary>
+    /// The <see cref="Query"/> passed to the vector store carries the session id from
+    /// <see cref="IProjectSessionState.SessionId"/>.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_BuildsQueryWithCorrectSessionId()
     {
@@ -86,6 +107,10 @@ public sealed class SemanticSearchToolTests
         Assert.Equal("sess-abc", capturedQuery.SessionId);
     }
 
+    /// <summary>
+    /// The <see cref="Query"/>'s project id filter is populated from
+    /// <see cref="IProjectSessionState.LoadedProjects"/>.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_BuildsQueryWithLoadedProjects()
     {
@@ -106,6 +131,10 @@ public sealed class SemanticSearchToolTests
         Assert.Contains("projB", capturedQuery.ProjectIds);
     }
 
+    /// <summary>
+    /// The <c>topK</c> value supplied at construction flows through to the
+    /// <see cref="Query"/>'s result limit.
+    /// </summary>
     [Fact]
     public async Task ExecuteAsync_RespectsTopK()
     {

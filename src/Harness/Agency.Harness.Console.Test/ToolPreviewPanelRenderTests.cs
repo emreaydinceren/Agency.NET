@@ -11,6 +11,11 @@ namespace Agency.Harness.Console.Test;
 /// </summary>
 public sealed class ToolPreviewPanelRenderTests
 {
+    /// <summary>
+    /// Arbitrary tool-preview content — including bracket characters that resemble Spectre
+    /// markup tags — must escape cleanly into a <see cref="Panel"/> without throwing.
+    /// </summary>
+    /// <param name="content">The raw, untrusted content to format.</param>
     [Theory]
     [InlineData("[]")]                       // the empty JSON array that crashed
     [InlineData("{}")]
@@ -26,6 +31,10 @@ public sealed class ToolPreviewPanelRenderTests
         Assert.Null(Record.Exception(() => new Panel(markup)));
     }
 
+    /// <summary>
+    /// Bracket data in the content is escaped, not interpreted as a markup tag, so it survives
+    /// intact once the markup is stripped back out.
+    /// </summary>
     [Fact]
     public void FormatGrayPreview_PreservesContentAfterMarkupIsStripped()
     {
@@ -35,6 +44,10 @@ public sealed class ToolPreviewPanelRenderTests
         Assert.Equal("[]", Markup.Remove(markup));
     }
 
+    /// <summary>
+    /// Pins the original regression: wrapping unescaped bracket content in a <see cref="Panel"/>
+    /// throws, proving the escaping step in <see cref="ConsoleChatSession.FormatGrayPreview"/> is load-bearing.
+    /// </summary>
     [Fact]
     public void UnescapedPreview_Throws_DemonstratingTheEscapeIsLoadBearing()
     {

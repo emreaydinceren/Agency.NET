@@ -52,6 +52,7 @@ public sealed class LoopSkillParseTests
     // T-SKILL-1 — plan skill
     // ---------------------------------------------------------------------------
 
+    /// <summary>The shipped <c>plan</c> skill parses to the expected name with a non-empty description and body.</summary>
     [Fact]
     public void Plan_Skill_ParsesWithDescriptionAndBody()
     {
@@ -68,6 +69,7 @@ public sealed class LoopSkillParseTests
     // T-SKILL-1 — refactor-loop skill
     // ---------------------------------------------------------------------------
 
+    /// <summary>The shipped <c>refactor-loop</c> skill parses to the expected name with a non-empty description and body.</summary>
     [Fact]
     public void RefactorLoop_Skill_ParsesWithDescriptionAndBody()
     {
@@ -80,6 +82,7 @@ public sealed class LoopSkillParseTests
             "refactor-loop skill must have a non-empty body.");
     }
 
+    /// <summary>The shipped <c>refactor-loop</c> skill declares <c>enable_goalkeeper</c> among its <see cref="Skill.AllowedTools"/>.</summary>
     [Fact]
     public void RefactorLoop_Skill_AllowedTools_ContainsEnableGoalkeeper()
     {
@@ -88,6 +91,7 @@ public sealed class LoopSkillParseTests
         Assert.Contains("enable_goalkeeper", skill.AllowedTools, StringComparer.Ordinal);
     }
 
+    /// <summary>The shipped <c>refactor-loop</c> skill declares <c>disable_goalkeeper</c> among its <see cref="Skill.AllowedTools"/>.</summary>
     [Fact]
     public void RefactorLoop_Skill_AllowedTools_ContainsDisableGoalkeeper()
     {
@@ -96,6 +100,7 @@ public sealed class LoopSkillParseTests
         Assert.Contains("disable_goalkeeper", skill.AllowedTools, StringComparer.Ordinal);
     }
 
+    /// <summary>The shipped <c>refactor-loop</c> skill declares <c>subagent_tool</c> among its <see cref="Skill.AllowedTools"/>.</summary>
     [Fact]
     public void RefactorLoop_Skill_AllowedTools_ContainsSubagentTool()
     {

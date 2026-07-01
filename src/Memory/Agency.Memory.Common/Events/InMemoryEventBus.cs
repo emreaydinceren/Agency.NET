@@ -5,7 +5,7 @@ namespace Agency.Memory.Common.Events;
 
 /// <summary>
 /// Simple in-process implementation of <see cref="IAsyncEventBus"/> using a
-/// <see cref="ConcurrentDictionary"/> of subscriber lists per event type.
+/// <see cref="ConcurrentDictionary{TKey, TValue}"/> of subscriber lists per event type.
 /// </summary>
 /// <remarks>
 /// Suitable for single-process deployments. Exceptions in individual handlers are

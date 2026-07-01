@@ -230,6 +230,7 @@ public sealed class SqliteKVStore : IKVStore
             onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting SQLite KV store entry after {ElapsedMs}ms for key {Key}", elapsedMs, key));
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default)
     {
         if (userId == null)

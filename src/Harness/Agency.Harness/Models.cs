@@ -8,9 +8,17 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace Agency.Harness;
+
+/// <summary>
+/// Discovers the models available across the configured LLM clients and creates
+/// <see cref="IChatClient"/> instances for a named client.
+/// </summary>
 public sealed class Models
 {
+    /// <summary>Name of the <see cref="ActivitySource"/> used for model-discovery tracing spans.</summary>
     public const string ActivitySourceName = "Agency.Harness.Models";
+
+    /// <summary>Name of the <see cref="Meter"/> used for model-discovery metrics.</summary>
     public const string MeterName = "Agency.Harness.Models";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
@@ -39,12 +47,17 @@ public sealed class Models
 
     private IEnumerable<LlmClientOptions> _llmClientOptions => this._agentOptions.Value.LLmClients;
 
+    /// <param name="agentOptions">Supplies the configured <see cref="LlmClientOptions"/> to discover models from and create clients for.</param>
+    /// <param name="logger">Optional structured logger; defaults to <see cref="NullLogger{T}.Instance"/>.</param>
     public Models(IOptions<AgentOptions> agentOptions, ILogger<Models>? logger = null)
     {
         this._agentOptions = agentOptions ?? throw new ArgumentNullException(nameof(agentOptions));
         this._logger = logger ?? NullLogger<Models>.Instance;
     }
 
+    /// <summary>Queries every configured LLM client for its available models.</summary>
+    /// <param name="cancellationToken">Token used to stop discovery early; a client request already in flight still completes.</param>
+    /// <returns>The discovered models, grouped by the <see cref="LlmClientOptions"/> of the client that returned them.</returns>
     public async Task<IEnumerable<IGrouping<LlmClientOptions, Model>>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         using var activity = _activitySource.StartActivity(nameof(GetAllAsync));

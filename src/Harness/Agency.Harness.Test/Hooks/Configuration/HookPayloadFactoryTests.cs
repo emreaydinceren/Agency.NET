@@ -43,6 +43,7 @@ public sealed class HookPayloadFactoryTests
 
     // ── tests ─────────────────────────────────────────────────────────────────
 
+    /// <summary>A <c>PreToolUse</c> payload serializes with snake_case keys for session id, event name, tool name/input, cwd, iteration count, and total cost.</summary>
     [Fact]
     public void Payload_PreToolUse_HasSnakeCaseKeys()
     {
@@ -65,6 +66,7 @@ public sealed class HookPayloadFactoryTests
         Assert.True(root.TryGetProperty("total_cost_usd", out _));
     }
 
+    /// <summary>Fields that don't apply to a <c>PreToolUse</c> event (<c>prompt</c>, <c>message</c>, <c>tool_response</c>) are omitted from the serialized payload rather than emitted as <see langword="null"/>.</summary>
     [Fact]
     public void Payload_OmitsNullFields()
     {
@@ -79,6 +81,7 @@ public sealed class HookPayloadFactoryTests
         Assert.False(root.TryGetProperty("tool_response", out _));
     }
 
+    /// <summary>A <c>PostToolUse</c> payload's <c>tool_response</c> object carries an <c>is_error</c> flag reflecting the tool result's error state.</summary>
     [Fact]
     public void Payload_PostToolUse_ToolResponseIsErrorMapped()
     {
@@ -96,6 +99,7 @@ public sealed class HookPayloadFactoryTests
         Assert.True(isError.GetBoolean());
     }
 
+    /// <summary>The tool input's original <see cref="JsonElement"/> shape and property values round-trip unchanged into the serialized <c>tool_input</c> field.</summary>
     [Fact]
     public void Payload_ToolInput_RoundTripsJsonElement()
     {
@@ -112,6 +116,7 @@ public sealed class HookPayloadFactoryTests
         Assert.Equal("value", keyProp.GetString());
     }
 
+    /// <summary>A <c>UserPromptSubmit</c> payload includes the submitted prompt text and the correct event name.</summary>
     [Fact]
     public void Payload_UserPromptSubmit_CarriesPrompt()
     {

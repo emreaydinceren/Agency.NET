@@ -15,6 +15,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 {
     private readonly VectorStoreFixture _fixture;
 
+    /// <summary>
+    /// Creates the test class with its shared in-memory SQLite fixture.
+    /// </summary>
     public SqliteKVStoreFunctionalTests(VectorStoreFixture fixture)
     {
         this._fixture = fixture;
@@ -22,6 +25,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
     // ── Schema initialization ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that InitializeSchemaAsync creates the <c>semantic_kv_store</c> table.
+    /// </summary>
     [Fact]
     public async Task InitializeSchemaAsync_CreatesTable_Succeeds()
     {
@@ -35,6 +41,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
     // ── Upsert ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that UpsertAsync stores and retrieves a simple object.
+    /// </summary>
     [Fact]
     public async Task UpsertAsync_SimpleObject_Succeeds()
     {
@@ -45,6 +54,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.NotEmpty(results);
     }
 
+    /// <summary>
+    /// Verifies that UpsertAsync with metadata stores and retrieves the metadata correctly.
+    /// </summary>
     [Fact]
     public async Task UpsertAsync_WithMetadata_StoresAndRetrievesMetadata()
     {
@@ -62,6 +74,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Equal("test", item.Metadata["source"]);
     }
 
+    /// <summary>
+    /// Verifies that UpsertAsync on an existing key updates the entry in place rather than
+    /// creating a second record.
+    /// </summary>
     [Fact]
     public async Task UpsertAsync_UpdateExistingEntry_RetainsOneRecord()
     {
@@ -76,6 +92,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
     // ── Search ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that SearchAsync returns an empty list when no entry matches the query key.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_NoMatches_ReturnsEmptyList()
     {
@@ -86,6 +105,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Empty(results);
     }
 
+    /// <summary>
+    /// Verifies that SearchAsync respects the <see cref="Query.Limit"/> parameter.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_WithLimit_ReturnsAtMostLimitResults()
     {
@@ -99,6 +121,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.True(results.Count <= 2, $"Expected at most 2 results, got {results.Count}");
     }
 
+    /// <summary>
+    /// Verifies that SearchAsync with a metadata filter returns only entries whose metadata
+    /// matches the filter.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_WithMetadataFilter_FiltersCorrectly()
     {
@@ -117,6 +143,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.DoesNotContain(results, r => r.Key == key2);
     }
 
+    /// <summary>
+    /// Verifies that an entry tagged with multiple values (e.g. "document", "pdf", "medical") is
+    /// found by filtering on a single tag ("medical"), while entries without that tag are excluded.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_WithTagsMetadata_FindsByTag()
     {
@@ -136,6 +166,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.DoesNotContain(results, r => r.Key == keyWithoutMedical);
     }
 
+    /// <summary>
+    /// Verifies that SearchAsync returns results ordered by ascending cosine distance.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_ResultsOrderedByDistance_Succeeds()
     {
@@ -274,6 +307,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
     // ── Project scope — UpsertAsync and SearchAsync ──────────────────────────
 
+    /// <summary>
+    /// Verifies that UpsertAsync with a <c>projectId</c> stores the entry under that project scope
+    /// and that it is retrievable by including the project id in the search query.
+    /// </summary>
     [Fact]
     public async Task UpsertAsync_WithProjectId_StoredUnderProjectScope()
     {
@@ -291,6 +328,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Contains(results, r => r.Key == key);
     }
 
+    /// <summary>
+    /// Verifies that a search with a specific session id and project ids returns entries from all
+    /// three scopes: user-global, session-scoped, and project-scoped.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_ThreeScopeUnion_ReturnsAllScopes()
     {
@@ -318,6 +359,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Contains(results, r => r.Key == key3);
     }
 
+    /// <summary>
+    /// Verifies that SearchAsync with <see cref="Query.ProjectIds"/> set returns only entries scoped
+    /// to the requested projects, excluding entries scoped to other projects.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_WithProjectIds_ExcludesOtherProjects()
     {
@@ -341,6 +386,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.DoesNotContain(results, r => r.Key == keyB);
     }
 
+    /// <summary>
+    /// Verifies that SearchAsync without <see cref="Query.ProjectIds"/> excludes entries that were
+    /// upserted under a project scope.
+    /// </summary>
     [Fact]
     public async Task SearchAsync_WithoutProjectIds_ExcludesProjectScopedEntries()
     {
@@ -358,6 +407,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.DoesNotContain(results, r => r.Key == key);
     }
 
+    /// <summary>
+    /// Verifies that DeleteAsync with a <c>projectId</c> removes only the project-scoped entry for
+    /// that key, leaving the global-scoped entry with the same key intact.
+    /// </summary>
     [Fact]
     public async Task DeleteAsync_WithProjectId_RemovesOnlyProjectEntry()
     {
@@ -389,6 +442,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
     // ── ListProjectsAsync ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that ListProjectsAsync returns the distinct project ids for a user, excluding the
+    /// global project sentinel.
+    /// </summary>
     [Fact]
     public async Task ListProjectsAsync_ReturnsDistinctProjectNames()
     {
@@ -409,6 +466,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Equal(2, projects.Count);
     }
 
+    /// <summary>
+    /// Verifies that ListProjectsAsync returns an empty list for a user with no project-scoped entries.
+    /// </summary>
     [Fact]
     public async Task ListProjectsAsync_NoProjects_ReturnsEmpty()
     {
@@ -419,6 +479,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Empty(projects);
     }
 
+    /// <summary>
+    /// Verifies that ListProjectsAsync only returns projects belonging to the requested user.
+    /// </summary>
     [Fact]
     public async Task ListProjectsAsync_IsolatedByUserId()
     {
@@ -435,6 +498,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
 
     // ── ListDocumentsAsync ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// Verifies that ListDocumentsAsync returns an entry that carries a <c>source_file</c> metadata
+    /// value, with the global session and project scope reflected on the returned <see cref="DocumentInfo"/>.
+    /// </summary>
     [Fact]
     public async Task ListDocumentsAsync_ReturnsEntriesWithSourceFileMetadata()
     {
@@ -453,6 +520,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Equal("*", doc.ProjectId);
     }
 
+    /// <summary>
+    /// Verifies that ListDocumentsAsync returns an entry scoped to a project when that project id is
+    /// included in the request.
+    /// </summary>
     [Fact]
     public async Task ListDocumentsAsync_ReturnsProjectScopedEntries()
     {
@@ -472,6 +543,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Equal("listproj", doc.ProjectId);
     }
 
+    /// <summary>
+    /// Verifies that ListDocumentsAsync excludes entries that do not carry a <c>source_file</c>
+    /// metadata value.
+    /// </summary>
     [Fact]
     public async Task ListDocumentsAsync_ExcludesEntriesWithoutSourceFileMetadata()
     {
@@ -494,6 +569,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         Assert.Equal("notes/keep.md", doc.SourceFile);
     }
 
+    /// <summary>
+    /// Verifies that ListDocumentsAsync returns an empty list for a user with no matching entries.
+    /// </summary>
     [Fact]
     public async Task ListDocumentsAsync_NoEntries_ReturnsEmpty()
     {
@@ -515,6 +593,10 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         private readonly SqliteConnection _keepAlive;
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
+        /// <summary>
+        /// Creates an isolated in-memory SQLite database with vector functions registered, and
+        /// configures a deterministic mock <see cref="IEmbeddingGenerator"/> for the fixture's lifetime.
+        /// </summary>
         public VectorStoreFixture()
         {
             string dbName = $"kvstore_tests_{Guid.NewGuid():N}";
@@ -546,16 +628,33 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
             this.KVStore = new SqliteKVStore(mockGenerator.Object, this.Runner, logger.Object);
         }
 
+        /// <summary>
+        /// Gets the SQLite runner backing the in-memory database.
+        /// </summary>
         public SqliteRunner Runner { get; }
+
+        /// <summary>
+        /// Gets the shared SQLite vector store instance under test.
+        /// </summary>
         public SqliteKVStore KVStore { get; }
 
+        /// <summary>
+        /// Returns a unique key scoped to this test run.
+        /// </summary>
+        /// <param name="prefix">The prefix to prepend to the generated unique suffix.</param>
         public string UniqueName(string prefix) => $"{prefix}_{this._runId}";
 
+        /// <summary>
+        /// Initializes the vector store schema before the first test runs.
+        /// </summary>
         public async ValueTask InitializeAsync()
         {
             await this.KVStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
         }
 
+        /// <summary>
+        /// Closes the keep-alive connection, allowing the in-memory database to be discarded.
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             await this._keepAlive.CloseAsync();

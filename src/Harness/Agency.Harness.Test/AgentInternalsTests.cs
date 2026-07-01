@@ -27,6 +27,10 @@ public sealed class AgentInternalsTests
     private static ChatMessage ToolUseMessage() =>
         new(ChatRole.Assistant, [new FunctionCallContent("id-1", "tool")]);
 
+    /// <summary>
+    /// A message with no pending tool calls yields <see cref="AgentResultStatus.Success"/>,
+    /// even at a high iteration count.
+    /// </summary>
     [Fact]
     public void DetermineStatus_ReturnsSuccess_WhenLastMessageHasNoToolCalls()
     {
@@ -37,6 +41,9 @@ public sealed class AgentInternalsTests
         Assert.Equal(AgentResultStatus.Success, status);
     }
 
+    /// <summary>
+    /// A message that still has pending tool calls yields <see cref="AgentResultStatus.MaxStepsReached"/>.
+    /// </summary>
     [Fact]
     public void DetermineStatus_ReturnsMaxStepsReached_WhenStepLimitHitWithPendingToolCalls()
     {
@@ -47,6 +54,10 @@ public sealed class AgentInternalsTests
         Assert.Equal(AgentResultStatus.MaxStepsReached, status);
     }
 
+    /// <summary>
+    /// A message with no pending tool calls yields <see cref="AgentResultStatus.Success"/>
+    /// at a low iteration count too, confirming the iteration count itself has no bearing.
+    /// </summary>
     [Fact]
     public void DetermineStatus_ReturnsSuccess_WhenIterationBelowLimitAndNoToolCalls()
     {
@@ -57,6 +68,10 @@ public sealed class AgentInternalsTests
         Assert.Equal(AgentResultStatus.Success, status);
     }
 
+    /// <summary>
+    /// The presence of pending tool calls alone drives <see cref="AgentResultStatus.MaxStepsReached"/>;
+    /// the iteration count is not consulted.
+    /// </summary>
     [Fact]
     public void DetermineStatus_ReturnsMaxStepsReached_WhenToolCallsPresentRegardlessOfIteration()
     {
@@ -72,6 +87,9 @@ public sealed class AgentInternalsTests
 
     // ── Agent.ExtractFinalText ────────────────────────────────────────────────
 
+    /// <summary>
+    /// A message containing a single <c>TextContent</c> block returns that block's text verbatim.
+    /// </summary>
     [Fact]
     public void ExtractFinalText_ReturnsSingleBlockText()
     {
@@ -82,6 +100,9 @@ public sealed class AgentInternalsTests
         Assert.Equal("Hello!", result);
     }
 
+    /// <summary>
+    /// Multiple <c>TextContent</c> blocks in one message are concatenated in order.
+    /// </summary>
     [Fact]
     public void ExtractFinalText_ConcatenatesMultipleTextContents()
     {
@@ -99,6 +120,10 @@ public sealed class AgentInternalsTests
         Assert.Equal("Part one. Part two.", result);
     }
 
+    /// <summary>
+    /// A message consisting solely of tool-call content has no extractable text and returns
+    /// <see langword="null"/>.
+    /// </summary>
     [Fact]
     public void ExtractFinalText_ReturnsNull_WhenNoTextContentsPresent()
     {
@@ -111,6 +136,10 @@ public sealed class AgentInternalsTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// Text content blocks that are all empty strings concatenate to an empty string, which is
+    /// normalized to <see langword="null"/> rather than returned as-is.
+    /// </summary>
     [Fact]
     public void ExtractFinalText_ReturnsNull_WhenTextContentsAreAllEmpty()
     {
@@ -122,6 +151,10 @@ public sealed class AgentInternalsTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// Reasoning and function-call content blocks are skipped; only the interleaved
+    /// <c>TextContent</c> block contributes to the extracted text.
+    /// </summary>
     [Fact]
     public void ExtractFinalText_IgnoresReasoningAndFunctionCallContents()
     {
@@ -139,6 +172,10 @@ public sealed class AgentInternalsTests
 
     // ── Agent.ToJsonElement ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// A <see langword="null"/> arguments dictionary serializes to an empty JSON object,
+    /// not a JSON null.
+    /// </summary>
     [Fact]
     public void ToJsonElement_ReturnsEmptyObject_WhenArgumentsIsNull()
     {
@@ -148,6 +185,9 @@ public sealed class AgentInternalsTests
         Assert.Empty(result.EnumerateObject());
     }
 
+    /// <summary>
+    /// An empty arguments dictionary serializes to an empty JSON object.
+    /// </summary>
     [Fact]
     public void ToJsonElement_ReturnsEmptyObject_WhenArgumentsIsEmpty()
     {
@@ -157,6 +197,10 @@ public sealed class AgentInternalsTests
         Assert.Empty(result.EnumerateObject());
     }
 
+    /// <summary>
+    /// Each key/value pair in the arguments dictionary is serialized as a matching JSON
+    /// property, preserving the original value's type.
+    /// </summary>
     [Fact]
     public void ToJsonElement_SerializesKeyValuePairs()
     {
@@ -169,6 +213,9 @@ public sealed class AgentInternalsTests
         Assert.Equal("hello", result.GetProperty("y").GetString());
     }
 
+    /// <summary>
+    /// A dictionary value of <see langword="null"/> serializes to a JSON null property value.
+    /// </summary>
     [Fact]
     public void ToJsonElement_HandlesNullValueInDictionary()
     {
@@ -188,6 +235,10 @@ public sealed class AgentInternalsTests
         return ctx;
     }
 
+    /// <summary>
+    /// When an <see cref="AgentHooks.OnSessionEnd"/> hook is configured, invoking it passes the
+    /// current session's id through the hook context.
+    /// </summary>
     [Fact]
     public async Task RaiseSessionEndAsync_WithHook_InvokesHookWithSessionId()
     {
@@ -210,6 +261,10 @@ public sealed class AgentInternalsTests
         Assert.Equal("session-abc", capturedSessionId);
     }
 
+    /// <summary>
+    /// When no <see cref="AgentHooks.OnSessionEnd"/> hook is configured, raising the session-end
+    /// event is a no-op that completes without throwing.
+    /// </summary>
     [Fact]
     public async Task RaiseSessionEndAsync_NoHook_DoesNotThrow()
     {
@@ -223,6 +278,9 @@ public sealed class AgentInternalsTests
 
     // ── EmptyToolRegistry ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="EmptyToolRegistry"/> exposes no tool definitions.
+    /// </summary>
     [Fact]
     public void EmptyToolRegistry_ListDefinitions_ReturnsEmpty()
     {
@@ -231,6 +289,10 @@ public sealed class AgentInternalsTests
         Assert.Empty(registry.ListDefinitions());
     }
 
+    /// <summary>
+    /// Invoking any tool name against <see cref="EmptyToolRegistry"/> returns an error result
+    /// that echoes the requested tool name back in its content.
+    /// </summary>
     [Fact]
     public async Task EmptyToolRegistry_InvokeAsync_ReturnsErrorResult()
     {

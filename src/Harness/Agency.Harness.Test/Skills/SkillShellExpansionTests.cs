@@ -56,6 +56,7 @@ public sealed class SkillShellExpansionTests
     // Inline !`cmd` expansion
     // ---------------------------------------------------------------------------
 
+    /// <summary>An inline <c>!`cmd`</c> directive is replaced with the runner's output for that command.</summary>
     [Fact]
     public async Task ExpandShellAsync_InlineDirective_IsReplacedWithRunnerOutput()
     {
@@ -69,6 +70,7 @@ public sealed class SkillShellExpansionTests
         Assert.Equal("Get-Date", runner.Invocations[0]);
     }
 
+    /// <summary>Multiple inline <c>!`cmd`</c> directives in the same input are each replaced with their own runner output.</summary>
     [Fact]
     public async Task ExpandShellAsync_MultipleInlineDirectives_AllExpanded()
     {
@@ -90,6 +92,7 @@ public sealed class SkillShellExpansionTests
     // Fenced ```! block expansion
     // ---------------------------------------------------------------------------
 
+    /// <summary>A fenced <c>```!</c> code block is replaced with the runner's output for the command it contains.</summary>
     [Fact]
     public async Task ExpandShellAsync_FencedBlock_IsReplacedWithRunnerOutput()
     {
@@ -103,6 +106,7 @@ public sealed class SkillShellExpansionTests
         Assert.Equal("dir /b", runner.Invocations[0]);
     }
 
+    /// <summary>A fenced <c>```!</c> block and an inline <c>!`cmd`</c> directive present in the same input are both expanded.</summary>
     [Fact]
     public async Task ExpandShellAsync_FencedBlockAndInline_BothExpanded()
     {
@@ -125,6 +129,7 @@ public sealed class SkillShellExpansionTests
     // One-pass only — substituted output is NOT re-scanned
     // ---------------------------------------------------------------------------
 
+    /// <summary>When runner output itself looks like a shell directive, it is inserted literally and is not re-executed or re-scanned.</summary>
     [Fact]
     public async Task ExpandShellAsync_OutputContainingShellDirective_NotReExpanded()
     {
@@ -146,6 +151,7 @@ public sealed class SkillShellExpansionTests
     // Disabled gate — runner never called when disabled
     // ---------------------------------------------------------------------------
 
+    /// <summary>When shell expansion is disabled, directives are left verbatim in the output and the runner is never invoked.</summary>
     [Fact]
     public async Task ExpandShellAsync_WhenDisabled_DirectivesLeftIntact_RunnerNeverCalled()
     {
@@ -160,6 +166,7 @@ public sealed class SkillShellExpansionTests
         Assert.Empty(runner.Invocations);
     }
 
+    /// <summary>When no <see cref="ISkillShellRunner"/> is supplied, shell directives are left verbatim in the output.</summary>
     [Fact]
     public async Task ExpandShellAsync_WhenRunnerIsNull_DirectivesLeftIntact()
     {
@@ -175,6 +182,7 @@ public sealed class SkillShellExpansionTests
     // here we verify the Skill record carries it through to SkillTool invocation)
     // ---------------------------------------------------------------------------
 
+    /// <summary>Invoking <see cref="SkillTool"/> with a configured shell runner expands inline shell directives in the rendered body.</summary>
     [Fact]
     public async Task SkillTool_WithShellRunner_ExpandsInlineDirective()
     {
@@ -193,6 +201,7 @@ public sealed class SkillShellExpansionTests
         Assert.Single(runner.Invocations);
     }
 
+    /// <summary>Invoking <see cref="SkillTool"/> with shell execution disabled leaves shell directives unexpanded in the rendered body.</summary>
     [Fact]
     public async Task SkillTool_WithDisableShellExecution_SkipsExpansion()
     {
@@ -211,6 +220,7 @@ public sealed class SkillShellExpansionTests
         Assert.Empty(runner.Invocations);
     }
 
+    /// <summary>Invoking <see cref="SkillTool"/> with no shell runner configured behaves exactly like the pre-shell-expansion (Phase 1) renderer.</summary>
     [Fact]
     public async Task SkillTool_WithNoRunner_BehavesLikePhase1()
     {
@@ -232,6 +242,7 @@ public sealed class SkillShellExpansionTests
     // Skill.Shell field — parser integration (field exists on the record)
     // ---------------------------------------------------------------------------
 
+    /// <summary>When not explicitly set, <see cref="Skill.Shell"/> defaults to <see langword="null"/>.</summary>
     [Fact]
     public void Skill_ShellField_DefaultsToNull()
     {
@@ -240,6 +251,7 @@ public sealed class SkillShellExpansionTests
         Assert.Null(skill.Shell);
     }
 
+    /// <summary><see cref="Skill.Shell"/> can be set to <c>"powershell"</c> and is retained on the record.</summary>
     [Fact]
     public void Skill_ShellField_CanBeSetToPowershell()
     {
@@ -248,6 +260,7 @@ public sealed class SkillShellExpansionTests
         Assert.Equal("powershell", skill.Shell);
     }
 
+    /// <summary>A <c>shell</c> frontmatter field is parsed and exposed on <see cref="Skill.Shell"/>.</summary>
     [Fact]
     public void SkillParser_ShellField_ParsedFromFrontmatter()
     {
@@ -264,6 +277,7 @@ public sealed class SkillShellExpansionTests
         Assert.Equal("powershell", skill.Shell);
     }
 
+    /// <summary>When <c>shell</c> is absent from frontmatter, <see cref="Skill.Shell"/> is <see langword="null"/>.</summary>
     [Fact]
     public void SkillParser_ShellField_AbsentWhenNotInFrontmatter()
     {

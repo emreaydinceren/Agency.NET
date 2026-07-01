@@ -19,6 +19,9 @@ public sealed class SystemPromptBuilderTests
 
     // ── Baseline content ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The built prompt always identifies the assistant as an autonomous agent.
+    /// </summary>
     [Fact]
     public void Build_AlwaysContainsAgentIdentityLine()
     {
@@ -27,6 +30,10 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("autonomous agent", result, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The built prompt always contains the explicit ReAct reasoning instruction that encourages
+    /// chain-of-thought before tool use.
+    /// </summary>
     [Fact]
     public void Build_AlwaysContainsReActInstruction()
     {
@@ -38,6 +45,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── LongTermMemory ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When <see cref="MemoryContext.LongTermMemory"/> entries are provided, every entry's text
+    /// appears in the built prompt.
+    /// </summary>
     [Fact]
     public void Build_IncludesLongTermMemory_WhenProvided()
     {
@@ -53,6 +64,10 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("User is a C# expert.", result);
     }
 
+    /// <summary>
+    /// When no long-term memory context is supplied, the built prompt has no "Long-term memory"
+    /// section.
+    /// </summary>
     [Fact]
     public void Build_OmitsLongTermMemorySection_WhenEmpty()
     {
@@ -63,6 +78,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── TemporalContext ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When <see cref="TemporalContext.CurrentDateUtc"/> is set, the year from that date appears
+    /// in the built prompt.
+    /// </summary>
     [Fact]
     public void Build_IncludesCurrentDate_WhenTemporalContextProvided()
     {
@@ -79,6 +98,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── EnvironmentalContext ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// When <see cref="EnvironmentalContext.OperatingSystem"/> is set, its value appears in the
+    /// built prompt.
+    /// </summary>
     [Fact]
     public void Build_IncludesOsInfo_WhenEnvironmentalContextProvided()
     {
@@ -95,6 +118,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── UserSpecificContext ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When <see cref="UserSpecificContext.Name"/> is set, the user's name appears in the built
+    /// prompt.
+    /// </summary>
     [Fact]
     public void Build_IncludesUserName_WhenUserContextProvided()
     {
@@ -111,6 +138,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── KnowledgeContext ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When <see cref="KnowledgeContext.Facts"/> are provided, each fact's text appears in the
+    /// built prompt.
+    /// </summary>
     [Fact]
     public void Build_IncludesKnowledge_WhenKnowledgeContextProvided()
     {
@@ -127,6 +158,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── ContextWindowSize ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When <see cref="EnvironmentalContext.ContextWindowSize"/> is set, the built prompt renders
+    /// it as a thousands-separated number.
+    /// </summary>
     [Fact]
     public void Build_IncludesContextWindowSize_WhenSet()
     {
@@ -141,6 +176,11 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("4,096", result);
     }
 
+    /// <summary>
+    /// When both the context window size and prior token usage are known, the built prompt shows
+    /// both the tokens used so far and the remaining budget (window size minus input tokens
+    /// used).
+    /// </summary>
     [Fact]
     public void Build_IncludesRemainingEstimate_WhenContextWindowSetAndPriorUsageKnown()
     {
@@ -154,6 +194,10 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("511", result);
     }
 
+    /// <summary>
+    /// When <see cref="EnvironmentalContext.ContextWindowSize"/> is not set, the built prompt has
+    /// no "Context window" section.
+    /// </summary>
     [Fact]
     public void Build_OmitsContextWindowSection_WhenNotSet()
     {
@@ -164,6 +208,11 @@ public sealed class SystemPromptBuilderTests
 
     // ── Idempotency (D3 re-injection) ─────────────────────────────────────────
 
+    /// <summary>
+    /// Building the prompt twice from the same, unmodified context produces byte-identical
+    /// output — required so re-injecting the system prompt every turn does not perturb the
+    /// conversation.
+    /// </summary>
     [Fact]
     public void Build_IsIdempotent_GivenSameContext()
     {
@@ -177,6 +226,10 @@ public sealed class SystemPromptBuilderTests
 
     // ── Progressive tool discovery ────────────────────────────────────────────
 
+    /// <summary>
+    /// When the tool registry implements progressive discovery, the built prompt instructs the
+    /// model to use <c>tool_help</c> to fetch withheld schemas.
+    /// </summary>
     [Fact]
     public void Build_IncludesToolHelpInstruction_WhenRegistryIsProgressive()
     {
@@ -190,6 +243,10 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("tool_help", result);
     }
 
+    /// <summary>
+    /// When the tool registry is a plain <see cref="ToolRegistry"/> (no progressive discovery),
+    /// the built prompt has no <c>tool_help</c> instruction.
+    /// </summary>
     [Fact]
     public void Build_OmitsToolHelpInstruction_WhenRegistryIsPlain()
     {
@@ -216,6 +273,11 @@ public sealed class SystemPromptBuilderTests
             DisableModelInvocation = disableModelInvocation,
         };
 
+    /// <summary>
+    /// When the skill catalog has a model-invocable skill, the built prompt includes a "## Skills"
+    /// section listing the skill's name, description, and <c>WhenToUse</c> guidance, plus the
+    /// invocation syntax.
+    /// </summary>
     [Fact]
     public void Build_IncludesSkillsSection_WhenModelInvocableSkillsPresent()
     {
@@ -234,6 +296,10 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("`skill`", result);
     }
 
+    /// <summary>
+    /// A skill with no <c>WhenToUse</c> guidance is listed with just its name and description —
+    /// no trailing parenthetical is added.
+    /// </summary>
     [Fact]
     public void Build_SkillsSection_OmitsWhenToUse_WhenAbsent()
     {
@@ -250,6 +316,9 @@ public sealed class SystemPromptBuilderTests
         Assert.DoesNotContain("bare-skill** — A bare description (", result);
     }
 
+    /// <summary>
+    /// When the skill catalog is empty, the built prompt has no "## Skills" section.
+    /// </summary>
     [Fact]
     public void Build_OmitsSkillsSection_WhenCatalogIsEmpty()
     {
@@ -258,6 +327,10 @@ public sealed class SystemPromptBuilderTests
         Assert.DoesNotContain("## Skills", result);
     }
 
+    /// <summary>
+    /// When every skill in the catalog has <c>DisableModelInvocation</c> set, the built prompt
+    /// omits the "## Skills" section entirely and never mentions the disabled skill by name.
+    /// </summary>
     [Fact]
     public void Build_OmitsSkillsSection_WhenAllSkillsAreDisabled()
     {
@@ -273,6 +346,10 @@ public sealed class SystemPromptBuilderTests
         Assert.DoesNotContain("hidden-skill", result);
     }
 
+    /// <summary>
+    /// When the catalog mixes enabled and model-disabled skills, the "## Skills" section lists
+    /// only the enabled skill and excludes the disabled one by name.
+    /// </summary>
     [Fact]
     public void Build_ExcludesDisabledSkills_WhenMixedCatalog()
     {

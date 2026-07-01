@@ -19,7 +19,10 @@ namespace Agency.Harness;
 /// </summary>
 public sealed class Agent
 {
+    /// <summary>Name of the <see cref="ActivitySource"/> used for agent tracing spans.</summary>
     public const string ActivitySourceName = "Agency.Harness.Agent";
+
+    /// <summary>Name of the <see cref="Meter"/> used for agent metrics.</summary>
     public const string MeterName = "Agency.Harness.Agent";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
@@ -119,8 +122,10 @@ public sealed class Agent
     private string ForLog(string content) =>
         this._logToolPayloads ? content : RedactedPayload;
 
+    /// <summary>Gets the model identifier passed to the constructor and forwarded to the provider on every call.</summary>
     public string Model => this._model;
 
+    /// <summary>Gets the provider display name used in telemetry tags and UI (e.g. "Claude").</summary>
     public string ClientType => this._clientType;
 
     /// <summary>Gets the clock used for temporal grounding; <see cref="TimeProvider.System"/> unless overridden.</summary>

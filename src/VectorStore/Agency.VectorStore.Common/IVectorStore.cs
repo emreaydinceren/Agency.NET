@@ -22,6 +22,7 @@ public interface IVectorStore
     /// An optional collection of metadata to associate with the value. May be null if no metadata is required.
     /// </param>
     /// <param name="projectId">The project scope for this entry, or <see langword="null"/> for the global project (stored as <c>"*"</c>).</param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     Task UpsertAsync<TValue>(
         string userId,
         string? sessionId,
@@ -36,6 +37,7 @@ public interface IVectorStore
     /// </summary>
     /// <typeparam name="TValue">The type of the values contained in each search hit result.</typeparam>
     /// <param name="query">The query criteria used to filter and retrieve search results. Cannot be null.</param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result contains a read-only list of search hits
     /// matching the query. The list is empty if no results are found.
@@ -61,10 +63,36 @@ public interface IVectorStore
         string? projectId = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists the distinct project ids that have entries for the given user, excluding the global project
+    /// sentinel <c>"*"</c>.
+    /// </summary>
+    /// <param name="userId">The user whose projects to list. Cannot be null.</param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result contains the distinct project ids
+    /// for the user, in ascending order.
+    /// </returns>
     Task<IReadOnlyList<string>> ListProjectsAsync(
         string userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists the documents that carry a <c>source_file</c> metadata entry within the given scope.
+    /// </summary>
+    /// <param name="userId">The user whose documents to list. Cannot be null.</param>
+    /// <param name="sessionId">
+    /// The session to restrict results to, or <see langword="null"/> to use the global session scope.
+    /// </param>
+    /// <param name="projectIds">
+    /// The projects to include in addition to the global scope, or <see langword="null"/> to restrict results
+    /// to the global scope.
+    /// </param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation. The task result contains the matching documents,
+    /// ordered by source file.
+    /// </returns>
     Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
         string userId,
         string? sessionId,

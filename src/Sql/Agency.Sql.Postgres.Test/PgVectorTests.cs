@@ -17,15 +17,15 @@ namespace Agency.Sql.Postgres.Test;
 ///   "apricot" → [0.707, 0.707, 0]   ≈ normalised midpoint of apple + banana
 /// </summary>
 [Trait("Category", "Functional")]
-/// <summary>
-/// Functional tests for pgvector operations against PostgreSQL.
-/// </summary>
 public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 {
     private const double Tolerance = 1e-4;
 
     private readonly VectorFixture _fx;
 
+    /// <summary>
+    /// Creates the test class with its shared vector fixture.
+    /// </summary>
     public PgVectorTests(VectorFixture fx)
     {
         this._fx = fx;
@@ -536,6 +536,9 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
     /// </summary>
     public sealed class VectorFixture : IAsyncLifetime
     {
+        /// <summary>
+        /// Creates the runner from the configured connection string.
+        /// </summary>
         public VectorFixture()
         {
 

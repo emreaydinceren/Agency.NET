@@ -12,12 +12,18 @@ public sealed class DirectoryLoaderTests : IDisposable
 {
     private readonly string _tempDir;
 
+    /// <summary>
+    /// Creates a fresh temporary directory for the test to populate with files.
+    /// </summary>
     public DirectoryLoaderTests()
     {
         this._tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(this._tempDir);
     }
 
+    /// <summary>
+    /// Deletes the temporary directory created for the test.
+    /// </summary>
     public void Dispose()
     {
         if (Directory.Exists(this._tempDir))

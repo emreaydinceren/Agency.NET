@@ -42,6 +42,9 @@ public sealed class PermissionEvaluatorTests
 
     // ── Group 1: Precedence ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// When both an allow rule and a deny rule match the same call, deny must win.
+    /// </summary>
     [Fact]
     public void Evaluate_DenyRuleBeatsAllowRule_ReturnsDeny()
     {
@@ -65,6 +68,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// The <see cref="PermissionDecision.Deny.Reason"/> produced when a deny rule beats a
+    /// matching allow rule must quote the raw text of the winning deny rule.
+    /// </summary>
     [Fact]
     public void Evaluate_DenyRuleBeatsAllowRule_DenyReasonContainsRawRuleText()
     {
@@ -90,6 +97,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// A matching allow rule must resolve the call before it ever reaches the unresolved
+    /// (Ask) fallback.
+    /// </summary>
     [Fact]
     public void Evaluate_AllowRuleBeatsAsk_ReturnsAllow()
     {
@@ -112,6 +123,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// A call matched by no allow or deny rule is unresolved and, under the default
+    /// <see cref="UnresolvedBehavior.Ask"/> setting, must return <see cref="PermissionDecision.Ask"/>.
+    /// </summary>
     [Fact]
     public void Evaluate_Unresolved_ReturnsAsk()
     {
@@ -131,6 +146,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// For a tool with a built-in default key field (<c>ExecutePowershell</c> → <c>command</c>),
+    /// an unresolved call's <see cref="PermissionDecision.Ask.KeyValue"/> must equal that field's value.
+    /// </summary>
     [Fact]
     public void Evaluate_Unresolved_AskHasCorrectKeyValue()
     {
@@ -151,6 +170,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// An unresolved call's <see cref="PermissionDecision.Ask.ProposedRule"/> must be formatted
+    /// as <c>ToolName(exactKeyValue)</c> when a key value was extracted.
+    /// </summary>
     [Fact]
     public void Evaluate_Unresolved_AskProposedRuleIsToolNameParenKeyValue()
     {
@@ -171,6 +194,11 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// When a tool's input has no recognized string field (no built-in default, no convention
+    /// match), an unresolved call's <see cref="PermissionDecision.Ask.KeyValue"/> must be
+    /// <see langword="null"/>.
+    /// </summary>
     [Fact]
     public void Evaluate_Unresolved_NoKeyValue_AskKeyValueIsNull()
     {
@@ -192,6 +220,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// When no key value can be extracted, an unresolved call's
+    /// <see cref="PermissionDecision.Ask.ProposedRule"/> must be just the bare tool name.
+    /// </summary>
     [Fact]
     public void Evaluate_Unresolved_NoKeyValue_AskProposedRuleIsBareName()
     {
@@ -212,6 +244,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// With <c>OnUnresolved</c> set to <c>Deny</c>, an otherwise-unresolved call must return
+    /// <see cref="PermissionDecision.Deny"/> instead of <see cref="PermissionDecision.Ask"/>.
+    /// </summary>
     [Fact]
     public void Evaluate_OnUnresolvedDeny_ReturnsDeny()
     {
@@ -233,6 +269,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// The deny produced by <c>OnUnresolved=Deny</c> must carry the fixed reason
+    /// "No permission rule allows this call."
+    /// </summary>
     [Fact]
     public void Evaluate_OnUnresolvedDeny_DenyReasonIsNoRuleAllows()
     {
@@ -255,6 +295,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// The kill switch (<c>Enabled=false</c>) short-circuits to Allow before any rule is
+    /// evaluated, even when a deny rule would otherwise match.
+    /// </summary>
     [Fact]
     public void Evaluate_EnabledFalse_ReturnsAllowEvenWithMatchingDenyRule()
     {
@@ -280,6 +324,11 @@ public sealed class PermissionEvaluatorTests
 
     // ── Group 2: Key extraction (§4.3) ───────────────────────────────────────
 
+    /// <summary>
+    /// A <c>ToolInputKeys</c> override for a tool takes precedence over its built-in default
+    /// key field: an allow rule matching the mapped field's value must match even though the
+    /// built-in default field holds a different value.
+    /// </summary>
     [Fact]
     public void Evaluate_ToolInputKeysMapWinsOverBuiltinDefault_MappedFieldUsedForMatch()
     {
@@ -306,6 +355,11 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// When a <c>ToolInputKeys</c> override is configured for a tool, an unresolved call's
+    /// <see cref="PermissionDecision.Ask.KeyValue"/> must come from the mapped field, not the
+    /// tool's built-in default field.
+    /// </summary>
     [Fact]
     public void Evaluate_ToolInputKeysMapWinsOverBuiltinDefault_AskKeyValueIsFromMappedField()
     {
@@ -329,6 +383,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// Without a <c>ToolInputKeys</c> override, <c>ExecutePowershell</c> must use its built-in
+    /// default key field, <c>command</c>.
+    /// </summary>
     [Fact]
     public void Evaluate_BuiltinDefault_ExecutePowershell_KeyIsCommand()
     {
@@ -349,6 +407,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// Without a <c>ToolInputKeys</c> override, <c>ReadFile</c> must use its built-in
+    /// default key field, <c>path</c>.
+    /// </summary>
     [Fact]
     public void Evaluate_BuiltinDefault_ReadFile_KeyIsPath()
     {
@@ -369,6 +431,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// Without a <c>ToolInputKeys</c> override, <c>WriteFile</c> must use its built-in
+    /// default key field, <c>path</c>.
+    /// </summary>
     [Fact]
     public void Evaluate_BuiltinDefault_WriteFile_KeyIsPath()
     {
@@ -391,6 +457,10 @@ public sealed class PermissionEvaluatorTests
 
     // Convention fallback order: command > path > file_path > url (§4.3 step 2).
 
+    /// <summary>
+    /// For a tool with no built-in default or configured key field, the convention fallback
+    /// must use the <c>url</c> field when it is the only recognized field present.
+    /// </summary>
     [Fact]
     public void Evaluate_ConventionFallback_OnlyUrlPresent_UrlUsedAsKeyValue()
     {
@@ -410,6 +480,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// The convention fallback order prefers <c>path</c> over <c>url</c> when both fields are
+    /// present in the input.
+    /// </summary>
     [Fact]
     public void Evaluate_ConventionFallback_PathAndUrlPresent_PathWinsOverUrl()
     {
@@ -429,6 +503,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// The convention fallback order prefers <c>command</c> over <c>path</c> when both fields
+    /// are present in the input.
+    /// </summary>
     [Fact]
     public void Evaluate_ConventionFallback_CommandAndPathPresent_CommandWinsOverPath()
     {
@@ -448,6 +526,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// When the <c>command</c> field is present but not a string, the convention fallback must
+    /// skip it and fall through to <c>path</c>.
+    /// </summary>
     [Fact]
     public void Evaluate_ConventionFallback_NonStringCommandField_SkipsToPath()
     {
@@ -468,6 +550,11 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// When no key value can be extracted from the input, a parameterized allow rule
+    /// (e.g. <c>SomeTool(x*)</c>) must NOT match — a null key value cannot satisfy a
+    /// value pattern.
+    /// </summary>
     [Fact]
     public void Evaluate_NoKeyFound_ParameterizedAllowRuleDoesNotMatch()
     {
@@ -491,6 +578,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// A bare allow rule (tool name only, no parameter pattern) must match even when no key
+    /// value can be extracted from the input.
+    /// </summary>
     [Fact]
     public void Evaluate_NoKeyFound_BareAllowRuleMatches()
     {
@@ -515,6 +606,11 @@ public sealed class PermissionEvaluatorTests
 
     // ── Group 3: RecordAlwaysAsync ────────────────────────────────────────────
 
+    /// <summary>
+    /// After <see cref="PermissionEvaluator.RecordAlwaysAsync"/> records an allow grant, a
+    /// subsequent <see cref="PermissionEvaluator.Evaluate"/> call for the same proposed rule
+    /// must return <see cref="PermissionDecision.Allow"/>.
+    /// </summary>
     [Fact]
     public async Task RecordAlwaysAsync_AllowGrant_SubsequentEvaluateReturnsAllow()
     {
@@ -538,6 +634,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// <see cref="PermissionEvaluator.RecordAlwaysAsync"/> with an allow grant must create the
+    /// local rules file if missing and persist the proposed rule under its "Allow" array.
+    /// </summary>
     [Fact]
     public async Task RecordAlwaysAsync_AllowGrant_WritesRuleToLocalFile()
     {
@@ -565,6 +665,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// A deny grant recorded via <see cref="PermissionEvaluator.RecordAlwaysAsync"/> must
+    /// override a config-supplied allow rule that matches the same call.
+    /// </summary>
     [Fact]
     public async Task RecordAlwaysAsync_DenyGrant_BeatsConfigAllowRule_ReturnsDeny()
     {
@@ -594,6 +698,11 @@ public sealed class PermissionEvaluatorTests
 
     // ── Group 4: Ctor seeding from local file ─────────────────────────────────
 
+    /// <summary>
+    /// An allow entry present in the local rules file at construction time must be live
+    /// immediately — the first <see cref="PermissionEvaluator.Evaluate"/> call after
+    /// construction observes it.
+    /// </summary>
     [Fact]
     public void Ctor_LocalFileWithAllowEntry_GrantIsLiveOnEvaluate()
     {
@@ -620,6 +729,11 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// A deny entry present in the local rules file at construction time must be live
+    /// immediately — the first <see cref="PermissionEvaluator.Evaluate"/> call after
+    /// construction observes it.
+    /// </summary>
     [Fact]
     public void Ctor_LocalFileWithDenyEntry_GrantIsLiveOnEvaluate()
     {
@@ -645,6 +759,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// Constructing a <see cref="PermissionEvaluator"/> from a local rules file containing a
+    /// mix of valid and malformed rule entries must not throw.
+    /// </summary>
     [Fact]
     public void Ctor_LocalFileWithMalformedEntry_DoesNotThrow()
     {
@@ -669,6 +787,10 @@ public sealed class PermissionEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// When the local rules file contains a malformed entry alongside a valid one, the
+    /// malformed entry must be skipped while the valid entry is still applied.
+    /// </summary>
     [Fact]
     public void Ctor_LocalFileWithMalformedEntry_ValidGrantsAreStillApplied()
     {
@@ -698,6 +820,11 @@ public sealed class PermissionEvaluatorTests
 
     // ── Group 5: Concurrency ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionEvaluator.Evaluate"/> must be safe to call concurrently: running
+    /// many parallel calls mixing allowed, denied, and unresolved inputs against a single
+    /// shared evaluator must produce deterministic per-input results with no exceptions.
+    /// </summary>
     [Fact]
     public void Evaluate_ParallelCalls_NoExceptionsAndDeterministicResults()
     {

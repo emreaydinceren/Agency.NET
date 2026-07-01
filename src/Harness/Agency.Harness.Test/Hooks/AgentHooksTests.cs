@@ -2,12 +2,14 @@ namespace Agency.Harness.Hooks.Tests;
 /// <summary>Verifies AgentHooks default state and init-only delegate assignment.</summary>
 public sealed class AgentHooksTests
 {
+    /// <summary><see cref="AgentHooks.None"/> returns a non-<see langword="null"/> instance.</summary>
     [Fact]
     public void None_IsNotNull()
     {
         Assert.NotNull(AgentHooks.None);
     }
 
+    /// <summary>Every hook delegate on <see cref="AgentHooks.None"/> is <see langword="null"/>.</summary>
     [Fact]
     public void None_AllDelegatesAreNull()
     {
@@ -19,6 +21,7 @@ public sealed class AgentHooksTests
         Assert.Null(hooks.OnStop);
     }
 
+    /// <summary>Object-initializer syntax can assign the <c>OnSessionStarted</c> delegate.</summary>
     [Fact]
     public void InitSyntax_AssignsOnSessionStarted()
     {
@@ -29,6 +32,7 @@ public sealed class AgentHooksTests
         Assert.NotNull(hooks.OnSessionStarted);
     }
 
+    /// <summary>Object-initializer syntax can assign the <c>OnPreToolUse</c> delegate.</summary>
     [Fact]
     public void InitSyntax_AssignsOnPreToolUse()
     {
@@ -39,6 +43,7 @@ public sealed class AgentHooksTests
         Assert.NotNull(hooks.OnPreToolUse);
     }
 
+    /// <summary><see cref="AgentHooks.None"/> returns the same cached instance on repeated access.</summary>
     [Fact]
     public void None_IsSameReferenceEveryTime()
     {

@@ -3,15 +3,13 @@ using Microsoft.Extensions.Configuration;
 namespace Agency.Embeddings.OpenAI.Test;
 
 /// <summary>
-/// Functional tests that call the real LM Studio server configured in <see cref="appsettings.json"/>.
+/// Functional tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingGenerator"/> that call the real LM
+/// Studio server configured in <c>appsettings.json</c>.
 /// Run with: dotnet test --filter "Category=Functional"
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// Requires LM Studio running with text-embedding-qwen3-embedding-0.6b loaded. Configure the endpoint in appsettings.json.
 /// </summary>
 [Trait("Category", "Functional")]
-/// <summary>
-/// Functional tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingGenerator"/>.
-/// </summary>
 public sealed class EmbeddingGeneratorFunctionalTests
 {
     private static readonly EmbeddingGenerator Generator = CreateGenerator();

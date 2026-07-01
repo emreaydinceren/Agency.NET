@@ -20,6 +20,7 @@ public sealed class AgentHooksConstructorTests
     private static Context MakeContext() =>
         new() { Query = new QueryContext { Prompt = "test" } };
 
+    /// <summary>Passing <see langword="null"/> for the <c>hooks</c> constructor parameter does not throw.</summary>
     [Fact]
     public void Agent_ConstructedWithNullHooks_DoesNotThrow()
     {
@@ -28,6 +29,7 @@ public sealed class AgentHooksConstructorTests
         Assert.Null(ex);
     }
 
+    /// <summary>Passing <see cref="AgentHooks.None"/> for the <c>hooks</c> constructor parameter does not throw.</summary>
     [Fact]
     public void Agent_ConstructedWithNoneHooks_DoesNotThrow()
     {
@@ -36,6 +38,7 @@ public sealed class AgentHooksConstructorTests
         Assert.Null(ex);
     }
 
+    /// <summary>Passing a populated <see cref="AgentHooks"/> instance to the constructor does not throw.</summary>
     [Fact]
     public void Agent_ConstructedWithHooks_DoesNotThrow()
     {
@@ -45,6 +48,7 @@ public sealed class AgentHooksConstructorTests
         Assert.Null(ex);
     }
 
+    /// <summary>Omitting the <c>hooks</c> constructor parameter entirely still yields a successful run.</summary>
     [Fact]
     public async Task Agent_ConstructedWithoutHooksParam_RunsNormally()
     {

@@ -1,5 +1,8 @@
 namespace Agency.KeyValueStore.Common.Test;
 
+/// <summary>
+/// Unit tests for <see cref="SearchHitExtensions.ToDataset{TValue}(IReadOnlyList{SearchHit{TValue}})"/>.
+/// </summary>
 public sealed class SearchHitExtensionsTests
 {
     // -------------------------------------------------------------------------

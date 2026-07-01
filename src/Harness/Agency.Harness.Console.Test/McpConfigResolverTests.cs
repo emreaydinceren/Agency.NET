@@ -8,6 +8,10 @@ namespace Agency.Harness.Console.Test;
 /// </summary>
 public sealed class McpConfigResolverTests
 {
+    /// <summary>
+    /// <c>${RepoRoot}</c> and <c>${Configuration}</c> placeholders are substituted in both
+    /// server arguments and environment variable values.
+    /// </summary>
     [Fact]
     public void Expand_SubstitutesTokensInCommandArgumentsAndEnvironment()
     {
@@ -38,6 +42,9 @@ public sealed class McpConfigResolverTests
         Assert.Equal("/work/Agency/data", server.EnvironmentVariables!["Memory__Home"]);
     }
 
+    /// <summary>
+    /// Command and argument values with no placeholder tokens pass through unmodified.
+    /// </summary>
     [Fact]
     public void Expand_LeavesValuesWithoutTokensUnchanged()
     {
@@ -52,6 +59,12 @@ public sealed class McpConfigResolverTests
         Assert.Equal(["-y", "@notionhq/notion-mcp-server"], options.Servers[0].Arguments!);
     }
 
+    /// <summary>
+    /// The build configuration is read from the <c>bin/&lt;Configuration&gt;/</c> segment of the
+    /// running assembly's base directory, defaulting to <c>Debug</c> when no such segment exists.
+    /// </summary>
+    /// <param name="baseDirectory">The candidate base directory to resolve from.</param>
+    /// <param name="expected">The expected resolved configuration name.</param>
     [Theory]
     [InlineData("/work/Agency/src/Harness/Agency.Harness.Console/bin/Release/net10.0/", "Release")]
     [InlineData("/work/Agency/src/Harness/Agency.Harness.Console/bin/Debug/net10.0", "Debug")]
@@ -61,6 +74,10 @@ public sealed class McpConfigResolverTests
         Assert.Equal(expected, McpConfigResolver.ResolveConfiguration(baseDirectory));
     }
 
+    /// <summary>
+    /// Starting from a deeply nested directory, the repo root is found by walking up until a
+    /// <c>.git</c> directory is encountered.
+    /// </summary>
     [Fact]
     public void FindRepoRoot_WalksUpToDirectoryContainingDotGit()
     {

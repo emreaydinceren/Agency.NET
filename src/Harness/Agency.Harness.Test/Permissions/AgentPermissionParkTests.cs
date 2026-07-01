@@ -127,6 +127,14 @@ public sealed class AgentPermissionParkTests
     // No Tool-role messages appended; OnPostToolBatch NOT fired; toolC never invoked.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A batch of 3 tool calls with Allow/Deny/Ask decisions runs the allowed and denied
+    /// calls to completion and parks on the ask, yielding two <see cref="ToolInvokedEvent"/>s
+    /// (toolB carrying a [Blocked] result), a single <see cref="PermissionRequestedEvent"/> for
+    /// toolC, and a terminal <see cref="AgentResultEvent"/> with
+    /// <see cref="AgentResultStatus.AwaitingPermission"/>. toolC is never invoked and no
+    /// Tool-role messages are appended.
+    /// </summary>
     [Fact]
     public async Task Park_OneBatchWith3Calls_AllowDenyAsk_YieldsCorrectEvents()
     {
@@ -184,6 +192,10 @@ public sealed class AgentPermissionParkTests
         Assert.DoesNotContain(ctx.Conversation.Messages, m => m.Role == ChatRole.Tool);
     }
 
+    /// <summary>
+    /// When a batch parks on an unresolved call, <see cref="AgentHooks.OnPostToolBatch"/>
+    /// must not fire — the batch is incomplete, so the post-batch hook has nothing to observe yet.
+    /// </summary>
     [Fact]
     public async Task Park_OnPostToolBatch_NotFired_WhenBatchParks()
     {
@@ -220,6 +232,12 @@ public sealed class AgentPermissionParkTests
     // Test 2 — Multiple asks: 2 unresolved calls → 2 PermissionRequestedEvents
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Two unresolved (Ask) tool calls in the same batch each yield their own
+    /// <see cref="PermissionRequestedEvent"/> with a distinct, non-empty
+    /// <see cref="PermissionRequestedEvent.RequestId"/>; neither tool is invoked and the turn
+    /// ends with <see cref="AgentResultStatus.AwaitingPermission"/>.
+    /// </summary>
     [Fact]
     public async Task Park_TwoUnresolvedCalls_YieldsTwoPermissionRequestedEventsWithDistinctIds()
     {
@@ -267,6 +285,12 @@ public sealed class AgentPermissionParkTests
     // even when an allow rule matches. Allow rules cannot clear a hook Ask.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A hook <see cref="PreToolUseDecision.Ask"/> flags a call for confirmation even when the
+    /// evaluator's rule would allow it — an allow rule cannot clear a hook Ask. The call still
+    /// parks, and the resulting <see cref="PermissionRequestedEvent"/> reports
+    /// <see cref="PermissionRequestSource.Hook"/> with the hook's reason; the tool is not invoked.
+    /// </summary>
     [Fact]
     public async Task Park_HookAsk_WithAllowRule_CallStillPends_SourceIsHook()
     {
@@ -315,6 +339,12 @@ public sealed class AgentPermissionParkTests
     // (deny always wins). Turn completes normally — no AwaitingPermission.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A matching deny rule still denies a call even when a hook flagged it with
+    /// <see cref="PreToolUseDecision.Ask"/> — deny always wins over Ask. The turn completes
+    /// normally without parking: no <see cref="PermissionRequestedEvent"/> is raised, the single
+    /// <see cref="ToolInvokedEvent"/> carries a [Blocked] result, and the tool is never invoked.
+    /// </summary>
     [Fact]
     public async Task Park_HookAsk_WithDenyRule_DeniedWithoutParking()
     {
@@ -384,6 +414,13 @@ public sealed class AgentPermissionParkTests
     //   + evaluator.OnUnresolved == Deny), the stub approach below works as-is.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When the evaluator resolves a hook-flagged (<see cref="PreToolUseDecision.Ask"/>) call to
+    /// deny — modeling an <c>OnUnresolved=Deny</c> configuration — the call fails closed instead
+    /// of parking: no <see cref="PermissionRequestedEvent"/> is raised, and the single
+    /// <see cref="ToolInvokedEvent"/> carries a [Blocked] result whose content includes the
+    /// original hook reason. The tool is never invoked.
+    /// </summary>
     [Fact]
     public async Task Park_HookAsk_OnUnresolvedDeny_FailsClosedWithHookReason()
     {
@@ -444,6 +481,12 @@ public sealed class AgentPermissionParkTests
     // Agent constructed WITHOUT permissions param → existing behavior byte-for-byte.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Regression guard: constructing an <see cref="Agent"/> without a permissions evaluator
+    /// leaves tool execution behavior unchanged — both tools in the batch are invoked, the turn
+    /// completes with <see cref="AgentResultStatus.Success"/>, no permission events are raised,
+    /// and Tool-role messages are appended for each invocation.
+    /// </summary>
     [Fact]
     public async Task NoEvaluator_AllToolsInvoke_NormalCompletion()
     {
@@ -492,6 +535,14 @@ public sealed class AgentPermissionParkTests
     // FINAL contract and is currently RED because today hook-Ask fail-closes.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Even without a permissions evaluator, a hook <see cref="PreToolUseDecision.Ask"/> still
+    /// parks the turn: the resulting <see cref="PermissionRequestedEvent"/> reports
+    /// <see cref="PermissionRequestSource.Hook"/> with the hook's reason, a null
+    /// <see cref="PermissionRequestedEvent.KeyValue"/> (no evaluator to derive one), and a
+    /// <see cref="PermissionRequestedEvent.ProposedRule"/> equal to the bare tool name. Park/resume
+    /// is Agent machinery, independent of whether an evaluator is configured.
+    /// </summary>
     [Fact]
     public async Task NoEvaluator_HookAsk_ParksWithSourceHook()
     {
@@ -544,6 +595,12 @@ public sealed class AgentPermissionParkTests
     // PermissionRequestedEvent.Input must equal the REWRITTEN input, not the original.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The permissions gate evaluates the post-rewrite tool input: when a hook returns
+    /// <see cref="PreToolUseDecision.Rewrite"/> for a call the evaluator then Asks on, the
+    /// resulting <see cref="PermissionRequestedEvent.Input"/> must reflect the rewritten
+    /// arguments, not the arguments originally proposed by the LLM.
+    /// </summary>
     [Fact]
     public async Task Park_HookRewrite_ThenEvaluatorAsk_PermissionRequestedEventHasRewrittenInput()
     {

@@ -40,6 +40,7 @@ public sealed class AgentOnSessionStartedHookTests
         return events;
     }
 
+    /// <summary>A single-turn run fires <c>OnSessionStarted</c> exactly once.</summary>
     [Fact]
     public async Task OnSessionStarted_FiresOnce_ForSingleTurnRun()
     {
@@ -55,6 +56,7 @@ public sealed class AgentOnSessionStartedHookTests
         Assert.Equal(1, count);
     }
 
+    /// <summary>A run spanning multiple turns due to a tool call still fires <c>OnSessionStarted</c> only once, at session start.</summary>
     [Fact]
     public async Task OnSessionStarted_FiresOnce_ForMultiTurnToolCallRun()
     {
@@ -73,6 +75,7 @@ public sealed class AgentOnSessionStartedHookTests
         Assert.Equal(1, count);
     }
 
+    /// <summary>The hook context's <c>SessionId</c> is populated with a non-empty value.</summary>
     [Fact]
     public async Task OnSessionStarted_ReceivesNonEmptySessionId()
     {
@@ -89,6 +92,7 @@ public sealed class AgentOnSessionStartedHookTests
         Assert.NotEmpty(capturedId);
     }
 
+    /// <summary>The hook context's <c>AgentContext</c> is the same <see cref="Context"/> instance passed into the run.</summary>
     [Fact]
     public async Task OnSessionStarted_ReceivesCorrectAgentContext()
     {
@@ -105,6 +109,7 @@ public sealed class AgentOnSessionStartedHookTests
         Assert.Same(agentCtx, capturedCtx);
     }
 
+    /// <summary>Leaving <c>OnSessionStarted</c> unset (<see langword="null"/>) does not throw during a run.</summary>
     [Fact]
     public async Task OnSessionStarted_Null_DoesNotThrow()
     {

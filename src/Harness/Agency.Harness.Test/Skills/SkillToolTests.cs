@@ -60,6 +60,7 @@ public sealed class SkillToolTests
     // Definition
     // ---------------------------------------------------------------------------
 
+    /// <summary>The tool's <c>Definition</c> exposes the name <c>skill</c>, a description mentioning skills, and an input schema requiring a string <c>name</c> with an optional string <c>arguments</c>.</summary>
     [Fact]
     public void Definition_HasExpectedNameAndSchema()
     {
@@ -79,6 +80,7 @@ public sealed class SkillToolTests
     // Happy path — arguments forwarded to renderer
     // ---------------------------------------------------------------------------
 
+    /// <summary>Invoking with a known skill name and arguments returns the rendered body with the arguments substituted.</summary>
     [Fact]
     public async Task InvokeAsync_KnownSkill_ReturnsRenderedBody()
     {
@@ -93,6 +95,7 @@ public sealed class SkillToolTests
         Assert.Equal("Hello, world!", result.Content);
     }
 
+    /// <summary>Invoking with a known skill name and no arguments returns the rendered body unchanged.</summary>
     [Fact]
     public async Task InvokeAsync_KnownSkill_WithoutArguments_ReturnsRenderedBody()
     {
@@ -107,6 +110,7 @@ public sealed class SkillToolTests
         Assert.Equal("Just do it.", result.Content);
     }
 
+    /// <summary>Invoking a skill substitutes the tool's configured session id into the rendered body.</summary>
     [Fact]
     public async Task InvokeAsync_KnownSkill_SessionIdSubstituted()
     {
@@ -125,6 +129,7 @@ public sealed class SkillToolTests
     // Unknown name → error listing available skills
     // ---------------------------------------------------------------------------
 
+    /// <summary>Invoking with an unknown skill name returns an error result whose content lists the requested name and every available skill name.</summary>
     [Fact]
     public async Task InvokeAsync_UnknownSkill_ReturnsErrorWithAvailableNames()
     {
@@ -142,6 +147,7 @@ public sealed class SkillToolTests
         Assert.Contains("beta", result.Content);
     }
 
+    /// <summary>The available-skills list in an unknown-skill error excludes skills with <see cref="Skill.DisableModelInvocation"/> set.</summary>
     [Fact]
     public async Task InvokeAsync_UnknownSkill_DisabledSkillsExcludedFromAvailableList()
     {
@@ -162,6 +168,7 @@ public sealed class SkillToolTests
     // DisableModelInvocation → refused
     // ---------------------------------------------------------------------------
 
+    /// <summary>Invoking a skill with <see cref="Skill.DisableModelInvocation"/> set returns an error result mentioning the skill's name.</summary>
     [Fact]
     public async Task InvokeAsync_DisabledSkill_ReturnsError()
     {
@@ -180,6 +187,7 @@ public sealed class SkillToolTests
     // Missing / empty name parameter
     // ---------------------------------------------------------------------------
 
+    /// <summary>Invoking with a JSON payload that omits the <c>name</c> property returns an error stating that <c>name</c> is required.</summary>
     [Fact]
     public async Task InvokeAsync_MissingNameProperty_ReturnsError()
     {
@@ -193,6 +201,7 @@ public sealed class SkillToolTests
         Assert.Contains("'name' is required", result.Content);
     }
 
+    /// <summary>Invoking with an empty <c>name</c> string returns an error stating that <c>name</c> is required.</summary>
     [Fact]
     public async Task InvokeAsync_EmptyNameString_ReturnsError()
     {

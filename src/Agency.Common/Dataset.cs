@@ -35,6 +35,11 @@ public sealed class Dataset
     /// </summary>
     public IReadOnlyList<object?[]> Rows { get; init; }
 
+    /// <summary>
+    /// Initializes a new dataset with the given column metadata and row values.
+    /// </summary>
+    /// <param name="columns">The column metadata for the dataset.</param>
+    /// <param name="rows">The row values for the dataset.</param>
     public Dataset(IReadOnlyCollection<IColumnMetadata> columns, IReadOnlyList<object?[]> rows)
     {
         this.Columns = columns;
@@ -44,6 +49,11 @@ public sealed class Dataset
         this.Rows = rows;
     }
 
+    /// <summary>
+    /// Initializes a new, empty dataset with the given column metadata. Rows can be added
+    /// afterward via <see cref="AddRow"/>.
+    /// </summary>
+    /// <param name="columns">The column metadata for the dataset.</param>
     public Dataset(IReadOnlyCollection<IColumnMetadata> columns)
     {
         this.Columns = columns;
@@ -54,6 +64,10 @@ public sealed class Dataset
         this.Rows = rows;
     }
 
+    /// <summary>
+    /// Appends a row of values to the dataset.
+    /// </summary>
+    /// <param name="values">The values for the new row, one per column.</param>
     public void AddRow(object?[] values) => this.rows.Add(values);
 
     /// <summary>

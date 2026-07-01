@@ -470,6 +470,9 @@ public sealed class SqliteRunnerTests : IClassFixture<SqliteRunnerTests.Database
         private readonly SqliteConnection _keepAlive;
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
+        /// <summary>
+        /// Opens the keep-alive connection to the named in-memory database and creates the runner.
+        /// </summary>
         public DatabaseFixture()
         {
             var dbName = $"runner_tests_{Guid.NewGuid():N}";

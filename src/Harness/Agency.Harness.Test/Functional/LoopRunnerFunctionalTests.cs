@@ -126,6 +126,10 @@ public sealed class LoopRunnerFunctionalTests(LoopRunnerFunctionalTests.LoopRunn
         private const string WorkerSection = "AgentTest:OpenAI";
         private const string GoalkeeperSection = "LoopTest:Goalkeeper";
 
+        /// <summary>
+        /// Loads test configuration and builds the worker and Goalkeeper chat clients from their
+        /// respective configuration sections.
+        /// </summary>
         public LoopRunnerFixture()
         {
             var environmentName = Environment.GetEnvironmentVariable(EnvironmentNameVariable) ?? "Development";

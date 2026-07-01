@@ -28,6 +28,7 @@ public sealed class AuditHooksTests
             new ToolResult("content", isError),
             new Context { Query = new QueryContext { Prompt = "test" } });
 
+    /// <summary><see cref="AuditHooks.ForLogger"/>'s <c>OnPreToolUse</c> logs the tool name at <see cref="LogLevel.Information"/>.</summary>
     [Fact]
     public async Task ForLogger_OnPreToolUse_LogsToolNameAtInformation()
     {
@@ -40,6 +41,7 @@ public sealed class AuditHooksTests
         Assert.Contains("search", msg);
     }
 
+    /// <summary><see cref="AuditHooks.ForLogger"/>'s <c>OnPostToolUse</c> logs a successful tool result at <see cref="LogLevel.Information"/>.</summary>
     [Fact]
     public async Task ForLogger_OnPostToolUse_LogsIsErrorFalseAtInformation()
     {
@@ -52,6 +54,7 @@ public sealed class AuditHooksTests
         Assert.NotEmpty(msg);
     }
 
+    /// <summary><see cref="AuditHooks.ForLogger"/>'s <c>OnPostToolUse</c> also logs a single entry when the tool result is an error.</summary>
     [Fact]
     public async Task ForLogger_OnPostToolUse_LogsWhenToolFails()
     {
@@ -61,6 +64,7 @@ public sealed class AuditHooksTests
         Assert.Single(logger.Entries);
     }
 
+    /// <summary><see cref="AuditHooks.ForLogger"/> leaves <c>OnSessionStarted</c> unset since auditing has nothing to log at session start.</summary>
     [Fact]
     public void ForLogger_OnSessionStarted_IsNull()
     {
@@ -69,6 +73,7 @@ public sealed class AuditHooksTests
         Assert.Null(hooks.OnSessionStarted);
     }
 
+    /// <summary><see cref="AuditHooks.ForLogger"/>'s <c>OnPreToolUse</c> is a pass-through audit hook that always returns <see cref="PreToolUseDecision.Allow"/>.</summary>
     [Fact]
     public async Task ForLogger_OnPreToolUse_ReturnsAllow()
     {

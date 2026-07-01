@@ -21,4 +21,8 @@
 /// A value indicating whether to include metadata in the query results. If <see langword="true"/>, metadata is
 /// included; otherwise, it is excluded.
 /// </param>
+/// <param name="ProjectIds">
+/// The projects to include in addition to the global and session scopes. If null or empty, project-scoped
+/// entries are excluded from the results.
+/// </param>
 public sealed record class Query(string UserId, string? SessionId, string? Key, string? Value, IDictionary<string, object>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false, IReadOnlyList<string>? ProjectIds = null);

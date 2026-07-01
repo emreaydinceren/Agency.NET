@@ -12,12 +12,14 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
 {
     private readonly string _root;
 
+    /// <summary>Creates a fresh temporary directory to act as a skill root for the test.</summary>
     public ReloadableSkillCatalogTests()
     {
         this._root = Path.Combine(Path.GetTempPath(), "ReloadableSkillCatalogTests_" + Path.GetRandomFileName());
         Directory.CreateDirectory(this._root);
     }
 
+    /// <summary>Deletes the temporary skill root created for the test, best-effort.</summary>
     public void Dispose()
     {
         try
@@ -53,6 +55,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Initial load
     // ---------------------------------------------------------------------------
 
+    /// <summary>Constructing the catalog from a root containing skill directories loads all of them.</summary>
     [Fact]
     public void Constructor_LoadsSkillsFromRoots()
     {
@@ -66,6 +69,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
         Assert.NotNull(catalog.Find("skill-b"));
     }
 
+    /// <summary>Constructing the catalog from a root that does not exist on disk starts with an empty catalog.</summary>
     [Fact]
     public void Constructor_NonExistentRoot_StartsEmpty()
     {
@@ -80,6 +84,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Reload — add
     // ---------------------------------------------------------------------------
 
+    /// <summary>Calling <c>Reload()</c> after a new skill directory is added to disk picks up the new skill.</summary>
     [Fact]
     public void Reload_AfterAddingSkill_CatalogReflectsAddition()
     {
@@ -102,6 +107,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Reload — edit
     // ---------------------------------------------------------------------------
 
+    /// <summary>Calling <c>Reload()</c> after a skill's SKILL.md is rewritten with a new description picks up the change.</summary>
     [Fact]
     public void Reload_AfterEditingSkillDescription_ReflectsNewDescription()
     {
@@ -127,6 +133,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Reload — remove
     // ---------------------------------------------------------------------------
 
+    /// <summary>Calling <c>Reload()</c> after a skill's SKILL.md is deleted removes that skill from the catalog while keeping the rest.</summary>
     [Fact]
     public void Reload_AfterRemovingSkill_SkillIsGone()
     {
@@ -150,6 +157,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Reload — resilience on bad root
     // ---------------------------------------------------------------------------
 
+    /// <summary>Calling <c>Reload()</c> after the skill root directory itself is deleted completes without throwing and leaves the catalog in a valid (non-null) state.</summary>
     [Fact]
     public void Reload_WhenRootDisappearsAfterConstruction_KeepsPriorCatalog()
     {
@@ -173,6 +181,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Reload — idempotent
     // ---------------------------------------------------------------------------
 
+    /// <summary>Calling <c>Reload()</c> repeatedly with no changes on disk does not throw or corrupt the catalog.</summary>
     [Fact]
     public void Reload_CalledMultipleTimes_IsIdempotent()
     {
@@ -192,6 +201,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     // Reload — multiple roots, precedence preserved across reloads
     // ---------------------------------------------------------------------------
 
+    /// <summary>Calling <c>Reload()</c> with multiple roots preserves the original root-precedence ordering when a skill name is shared across roots.</summary>
     [Fact]
     public void Reload_MultipleRoots_PrecedencePreservedAfterReload()
     {

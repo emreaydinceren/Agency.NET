@@ -411,6 +411,10 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         private readonly PostgreSqlRunner _sqlRunner;
         private readonly IEmbeddingGenerator _embeddingGenerator;
 
+        /// <summary>
+        /// Resolves the PostgreSQL connection string from user secrets or environment variables and
+        /// configures a deterministic mock <see cref="IEmbeddingGenerator"/> for the fixture's lifetime.
+        /// </summary>
         public VectorStoreFixture()
         {
             var config = new ConfigurationBuilder()
@@ -483,6 +487,11 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
             await ValueTask.CompletedTask;
         }
 
+        /// <summary>
+        /// Truncates the <c>semantic_kv_store</c> table so tests that assert on an empty store are isolated
+        /// from data left behind by other tests.
+        /// </summary>
+        /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
         public async Task ClearStoreAsync(CancellationToken cancellationToken = default)
         {
             await this._sqlRunner.ExecuteAsync("TRUNCATE TABLE semantic_kv_store;", cancellationToken: cancellationToken);

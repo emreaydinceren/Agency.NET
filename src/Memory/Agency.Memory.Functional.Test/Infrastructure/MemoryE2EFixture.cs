@@ -547,9 +547,9 @@ internal interface IChatSession
 /// to the <see cref="IChatSession"/> interface.
 /// </summary>
 /// <remarks>
-/// The <see cref="ChatSession"/> class manages its own <see cref="Context"/> (and therefore
-/// its own conversation), so this adapter forwards calls to it while exposing the
-/// externally-provided <paramref name="conversation"/> for registry registration.
+/// The <see cref="ChatSession"/> class manages its own <see cref="Agency.Harness.Contexts.Context"/>
+/// (and therefore its own conversation), so this adapter forwards calls to it while exposing the
+/// externally-provided <c>conversation</c> for registry registration.
 /// </remarks>
 internal sealed class MemoryChatSession : IChatSession
 {

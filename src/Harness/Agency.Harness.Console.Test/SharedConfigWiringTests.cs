@@ -15,6 +15,10 @@ namespace Agency.Harness.Console.Test;
 /// </summary>
 public sealed class SharedConfigWiringTests
 {
+    /// <summary>
+    /// Placeholder tokens referencing the shared <c>LLmClients</c> and <c>ConnectionStrings</c>
+    /// keys are expanded to their canonical values.
+    /// </summary>
     [Fact]
     public void AddPlaceholderResolver_Expands_SharedConfig_Tokens()
     {

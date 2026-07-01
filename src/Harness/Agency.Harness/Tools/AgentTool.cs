@@ -5,6 +5,14 @@ using Agency.Harness.Contexts;
 using Agency.Harness.Permissions;
 
 namespace Agency.Harness.Tools;
+
+/// <summary>
+/// <see cref="ITool"/> that delegates a single, focused task to a specialized subagent (built via the
+/// factory delegate supplied to the constructor) and returns its final text result. Because a subagent
+/// runs headless, it cannot present interactive permission prompts: any tool call that would otherwise
+/// park the subagent's turn awaiting permission is automatically denied so the subagent's run always
+/// completes (spec §9.5).
+/// </summary>
 public sealed class AgentTool : ITool
 {
     private const string SubAgentDenyMessage =
@@ -12,6 +20,10 @@ public sealed class AgentTool : ITool
 
     private readonly Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory;
 
+    /// <param name="agentFactory">
+    /// Builds the subagent to run for a given client/model name, returning the subagent's
+    /// <see cref="AgentOptions"/>, <see cref="Agent"/>, and <see cref="IToolRegistry"/>.
+    /// </param>
     public AgentTool(Func<string?, string?, (AgentOptions, Agent, IToolRegistry)> agentFactory)
     {
         this.agentFactory = agentFactory;
@@ -30,6 +42,7 @@ public sealed class AgentTool : ITool
         ""required"": [""prompt""]
     }").RootElement;
 
+    /// <summary>Gets the <c>subagent_tool</c> definition: JSON schema accepting a prompt and optional client/model overrides.</summary>
     public ToolDefinition Definition
     {
         get
@@ -42,6 +55,17 @@ public sealed class AgentTool : ITool
         }
     }
 
+    /// <summary>
+    /// Runs the given <c>prompt</c> to completion in a subagent, auto-denying any permission
+    /// requests raised during the run (subagents cannot interact with the user), and returns the
+    /// subagent's final assistant text.
+    /// </summary>
+    /// <param name="input">JSON object with a required <c>prompt</c> field and optional <c>clientName</c>/<c>model</c> fields.</param>
+    /// <param name="ct">Token used to cancel the subagent run.</param>
+    /// <returns>
+    /// A <see cref="ToolResult"/> carrying the subagent's final text; <see cref="ToolResult.IsError"/> is
+    /// <see langword="true"/> unless the subagent finished with <see cref="AgentResultStatus.Success"/>.
+    /// </returns>
     public async Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
     {
         dynamic accessor = new JsonDynamicAccessor(input);

@@ -36,6 +36,7 @@ public sealed class AgentAssistantTurnHookTests
         return events;
     }
 
+    /// <summary>A run that finishes after a single assistant turn fires <c>OnAssistantTurn</c> exactly once.</summary>
     [Fact]
     public async Task OnAssistantTurn_FiresOnce_ForSingleTurnRun()
     {
@@ -51,6 +52,7 @@ public sealed class AgentAssistantTurnHookTests
         Assert.Equal(1, count);
     }
 
+    /// <summary>A run with a tool call followed by a final answer fires <c>OnAssistantTurn</c> once per assistant turn.</summary>
     [Fact]
     public async Task OnAssistantTurn_FiresTwice_ForTwoTurnRun()
     {
@@ -69,6 +71,7 @@ public sealed class AgentAssistantTurnHookTests
         Assert.Equal(2, count);
     }
 
+    /// <summary>The hook context's <c>Message</c> has the <see cref="ChatRole.Assistant"/> role.</summary>
     [Fact]
     public async Task OnAssistantTurn_ReceivesAssistantMessage()
     {
@@ -84,6 +87,7 @@ public sealed class AgentAssistantTurnHookTests
         Assert.Equal(ChatRole.Assistant, capturedRole);
     }
 
+    /// <summary>The hook context's <c>Message</c> carries the exact text produced by the LLM response.</summary>
     [Fact]
     public async Task OnAssistantTurn_ReceivesMessageWithCorrectText()
     {
@@ -103,6 +107,7 @@ public sealed class AgentAssistantTurnHookTests
         Assert.Equal("expected content", capturedText);
     }
 
+    /// <summary>Leaving <c>OnAssistantTurn</c> unset (<see langword="null"/>) does not throw during a run.</summary>
     [Fact]
     public async Task OnAssistantTurn_Null_DoesNotThrow()
     {

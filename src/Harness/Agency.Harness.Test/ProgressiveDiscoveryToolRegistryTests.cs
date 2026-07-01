@@ -23,6 +23,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         return Decorate(inner);
     }
 
+    /// <summary>
+    /// The decorator's definitions include every inner tool definition plus the synthetic
+    /// <c>tool_help</c> definition it adds.
+    /// </summary>
     [Fact]
     public void ListDefinitions_ReturnsInnerCountPlusOne()
     {
@@ -34,6 +38,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Equal(innerCount + 1, defs.Count);
     }
 
+    /// <summary>
+    /// Every tool name registered on the inner registry is still present in the decorator's
+    /// definitions.
+    /// </summary>
     [Fact]
     public void ListDefinitions_IncludesOriginalToolsByName()
     {
@@ -46,6 +54,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("fake_beta", names);
     }
 
+    /// <summary>
+    /// A native (non-MCP) tool's definition keeps its full input schema — including per-parameter
+    /// descriptions and enum values — and its unabridged, multi-line description.
+    /// </summary>
     [Fact]
     public void ListDefinitions_NativeTool_KeepsFullSchemaAndDescription()
     {
@@ -68,6 +80,11 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Equal("Does a thing\nLine two of detail.", def.Description);
     }
 
+    /// <summary>
+    /// An MCP-originated tool's definition collapses its input schema to a bare object
+    /// placeholder (no properties or required fields advertised) and shortens its description to
+    /// the first line plus an inline <c>tool_help</c> directive.
+    /// </summary>
     [Fact]
     public void ListDefinitions_McpTool_WithholdsSchema_AndSummarizesDescription()
     {
@@ -92,6 +109,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("tool_help(name: \"API_get_user\")", def.Description);
     }
 
+    /// <summary>
+    /// When summarizing an MCP tool's description, the leading <c>"Vendor | "</c> prefix is
+    /// preserved, since it is often the model's only inline cue to which server a tool belongs.
+    /// </summary>
     [Fact]
     public void ListDefinitions_McpTool_SummarizePreservesVendorPrefix()
     {
@@ -107,6 +128,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.StartsWith("Notion | Update a page's content as Markdown", def.Description);
     }
 
+    /// <summary>
+    /// The summarized description for an MCP tool includes an inline directive that names this
+    /// specific tool for <c>tool_help</c> and states that its schema was withheld.
+    /// </summary>
     [Fact]
     public void ListDefinitions_McpTool_AppendsInlineToolHelpDirectiveNamingTheTool()
     {
@@ -123,6 +148,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("Schema withheld", def.Description);
     }
 
+    /// <summary>
+    /// A native tool's description carries no <c>tool_help</c> directive, since its full schema
+    /// is already advertised and there is nothing left to fetch.
+    /// </summary>
     [Fact]
     public void ListDefinitions_NativeTool_HasNoToolHelpDirective()
     {
@@ -138,6 +167,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.DoesNotContain("tool_help", def.Description);
     }
 
+    /// <summary>
+    /// The synthetic <c>tool_help</c> tool's own definition is never stripped — its schema still
+    /// advertises the <c>name</c> parameter.
+    /// </summary>
     [Fact]
     public void ListDefinitions_ToolHelpDefinitionHasFullSchema()
     {
@@ -151,6 +184,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.True(props.TryGetProperty("name", out _));
     }
 
+    /// <summary>
+    /// The synthetic <c>tool_help</c> definition is always appended as the last entry in the
+    /// returned definitions list.
+    /// </summary>
     [Fact]
     public void ListDefinitions_ToolHelpIsLast()
     {
@@ -161,6 +198,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Equal("tool_help", defs[^1].Name);
     }
 
+    /// <summary>
+    /// Invoking a real (non-<c>tool_help</c>) tool by name delegates straight through to the
+    /// inner registry and returns its actual result.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_RealTool_DelegatesToInner()
     {
@@ -186,6 +227,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         }
     }
 
+    /// <summary>
+    /// Invoking <c>tool_help</c> for a named tool returns text containing that tool's full
+    /// schema and description, even for a native tool whose schema was already fully advertised.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_ToolHelp_ReturnsFullSchemaText()
     {
@@ -201,6 +246,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("Reads the contents of a file", result.Content);
     }
 
+    /// <summary>
+    /// Invoking <c>tool_help</c> for an MCP tool reveals its full, unabridged description — not
+    /// the shortened summary shown in the catalog listing.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_ToolHelp_McpTool_ReturnsFullDescription_AfterSummarization()
     {
@@ -219,6 +268,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("Error Responses", result.Content);
     }
 
+    /// <summary>
+    /// Registering a tool through the decorator forwards it to the inner registry, and since it
+    /// was not declared as an MCP tool name, its schema is revealed in full.
+    /// </summary>
     [Fact]
     public void Register_DelegatesToInner_AndIsRevealedAsNative()
     {
@@ -255,6 +308,11 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
                 ? new ToolResult("ran")
                 : new ToolResult("Missing required 'command'.", IsError: true));
 
+    /// <summary>
+    /// When an MCP tool with a withheld schema fails because a required argument is missing, the
+    /// decorator folds the tool's full schema and description into the error content so the
+    /// caller can self-correct on retry, while preserving the tool's own error message.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_MissingRequiredArg_AppendsFullSchemaToError()
     {
@@ -278,6 +336,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("\"command\"", result.Content);
     }
 
+    /// <summary>
+    /// When the required argument is present and the tool succeeds, the decorator passes the
+    /// result through unmodified.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_ValidArgs_SuccessfulResultNotAltered()
     {
@@ -294,6 +356,11 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Equal("ran", result.Content);
     }
 
+    /// <summary>
+    /// When the required argument is present but the tool still errors for an unrelated runtime
+    /// reason, the decorator does not append the schema — the self-heal only applies to
+    /// wrong-shape calls.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_RequiredArgsPresentButToolErrors_NotAltered()
     {
@@ -316,6 +383,11 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.DoesNotContain("properties", result.Content);
     }
 
+    /// <summary>
+    /// End-to-end regression for the withheld-schema bug report: invoking the real
+    /// <see cref="ExecutePowershellTool"/> with an empty arguments object self-heals by folding
+    /// the <c>command</c> schema into the error.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_ExecutePowershell_EmptyArgs_SelfHealsWithCommandSchema()
     {
@@ -335,6 +407,10 @@ public sealed class ProgressiveDiscoveryToolRegistryTests
         Assert.Contains("\"command\"", result.Content);
     }
 
+    /// <summary>
+    /// <see cref="ProgressiveDiscoveryToolRegistry"/> implements <see cref="IProgressiveDiscovery"/>,
+    /// the marker interface the system prompt builder checks for.
+    /// </summary>
     [Fact]
     public void ImplementsIProgressiveDiscovery()
     {

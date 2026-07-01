@@ -18,6 +18,10 @@ namespace Agency.Harness.Test.Hooks.Configuration;
 [Trait("Category", "Process")]
 public sealed class ConfiguredHooksE2ETests
 {
+    /// <summary>
+    /// A JSON-configured <c>Command</c> handler that runs a real <c>pwsh</c> guard script and prints
+    /// deny JSON produces a <see cref="PreToolUseDecision.Deny"/> decision with the script's reason, end to end.
+    /// </summary>
     [Fact]
     public async Task E2E_PreToolUse_DenyFromCommandHandler_BlocksTool()
     {

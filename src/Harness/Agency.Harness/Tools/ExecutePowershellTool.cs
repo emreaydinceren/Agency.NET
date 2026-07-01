@@ -4,6 +4,10 @@ using System.Text.Json;
 
 namespace Agency.Harness.Tools;
 
+/// <summary>
+/// <see cref="ITool"/> that executes an arbitrary PowerShell command in a fresh runspace and
+/// returns its output rendered as Markdown.
+/// </summary>
 public sealed class ExecutePowershellTool : ITool
 {
     // The OS / working directory / path-separator advertised in the tool description are
@@ -38,14 +42,27 @@ public sealed class ExecutePowershellTool : ITool
         ""required"": [""command""]
     }").RootElement.Clone();
 
-    public ToolDefinition Definition 
-    { 
+    /// <summary>Gets the <c>execute_powershell</c> definition: JSON schema accepting a single required <c>command</c> string.</summary>
+    public ToolDefinition Definition
+    {
         get
         {
               return new ToolDefinition("execute_powershell", Description, InputSchema);
         }
     }
 
+    /// <summary>
+    /// Executes <c>command</c> in a new PowerShell runspace and returns its output. Tolerates the
+    /// command being supplied under the wrong JSON key (e.g. <c>path</c>) when it is the only string
+    /// argument present, since weaker models sometimes misname the field.
+    /// </summary>
+    /// <param name="input">JSON object expected to contain a <c>command</c> string field.</param>
+    /// <param name="ct">Cancellation token; not currently observed by the underlying PowerShell invocation.</param>
+    /// <returns>
+    /// A <see cref="ToolResult"/> with the command's output rendered as Markdown (or a Markdown table for
+    /// multiple results); <see cref="ToolResult.IsError"/> is <see langword="true"/> if <c>command</c> is
+    /// missing, the script reports errors, or an exception is thrown during execution.
+    /// </returns>
     public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
     {
         try

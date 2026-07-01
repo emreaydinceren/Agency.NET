@@ -90,6 +90,7 @@ internal static class ConsolePicker
     /// </param>
     /// <param name="title">Optional title text for the prompt; if <see langword="null"/>, not shown.</param>
     /// <param name="moreChoicesText">
+    /// Optional hint text shown when more choices exist than fit on one page.
     /// <example>
     /// var selection = await ShowSelectionPromptAsync( prompt => prompt .AddChoiceGroup("Berries", new[] {
     /// "Blackcurrant", "Blueberry", "Cloudberry", "Elderberry", "Honeyberry", "Mulberry" }) .AddChoices(new[] {
@@ -98,6 +99,16 @@ internal static class ConsolePicker
     /// "Nectarine", "Orange", "Olive" }), title: "Select your favorite [green]fruit[/]:", moreChoicesText: "[grey](Move
     /// up and down to reveal more fruits)[/]" );
     /// </example>
+    /// </param>
+    /// <param name="searchEnabled">When <see langword="true"/>, the user can type to filter the visible choices.</param>
+    /// <param name="searchPlaceholderText">Optional placeholder text shown in the search box when search is enabled.</param>
+    /// <param name="cancelValue">
+    /// Value returned if the prompt is cancelled (e.g. via Escape); when left <see langword="default"/>, no
+    /// cancel result is registered and cancellation instead falls through to the <see langword="default"/> return.
+    /// </param>
+    /// <param name="itemToStringConverter">Optional function used to render each item as display text.</param>
+    /// <param name="pageSize">Number of items to show per page. Defaults to 10.</param>
+    /// <returns>The selected item, or <paramref name="cancelValue"/> if the prompt was cancelled.</returns>
     public static T? Show<T>(
         Func<SelectionPrompt<T>, SelectionPrompt<T>> promptFunc,
         string? title = null,

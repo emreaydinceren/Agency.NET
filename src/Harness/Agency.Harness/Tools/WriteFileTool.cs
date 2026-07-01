@@ -2,6 +2,7 @@ using System.Text.Json;
 
 namespace Agency.Harness.Tools;
 
+/// <summary><see cref="ITool"/> that writes text content to a file at a given path, creating or overwriting it.</summary>
 public sealed class WriteFileTool : ITool
 {
     static JsonElement InputSchema => JsonDocument.Parse(@"{
@@ -13,6 +14,7 @@ public sealed class WriteFileTool : ITool
         ""required"": [""path"", ""content""]
     }").RootElement;
 
+    /// <summary>Gets the <c>write_file</c> definition: JSON schema accepting required <c>path</c> and <c>content</c> strings.</summary>
     public ToolDefinition Definition
     {
         get
@@ -21,6 +23,13 @@ public sealed class WriteFileTool : ITool
         }
     }
 
+    /// <summary>Writes <c>content</c> to the file at <c>path</c>, creating it if it does not exist or overwriting it if it does.</summary>
+    /// <param name="input">JSON object expected to contain <c>path</c> and <c>content</c> string fields.</param>
+    /// <param name="ct">Cancellation token; not currently observed since file I/O is synchronous.</param>
+    /// <returns>
+    /// A <see cref="ToolResult"/> confirming the write; <see cref="ToolResult.IsError"/> is
+    /// <see langword="true"/> if <c>path</c> or <c>content</c> is missing, or if the write fails.
+    /// </returns>
     public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
     {
         dynamic accessor = new JsonDynamicAccessor(input);

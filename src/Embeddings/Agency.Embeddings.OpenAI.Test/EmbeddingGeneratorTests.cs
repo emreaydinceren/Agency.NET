@@ -3,6 +3,10 @@ using Microsoft.Extensions.Options;
 
 namespace Agency.Embeddings.OpenAI.Test;
 
+/// <summary>
+/// Unit tests for <see cref="Agency.Embeddings.OpenAI.EmbeddingGenerator"/> covering construction,
+/// single and batch embedding generation, and cancellation.
+/// </summary>
 public sealed class EmbeddingGeneratorTests
 {
     private static readonly EmbeddingOptions DefaultOptions = LoadOptions();

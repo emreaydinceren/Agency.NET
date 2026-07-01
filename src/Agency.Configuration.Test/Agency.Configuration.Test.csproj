@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Agency.Configuration\Agency.Configuration.csproj" />
     <ProjectReference Include="..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />

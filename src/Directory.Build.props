@@ -29,53 +29,8 @@
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
-  <!-- Versioning: set MajorVersion, MinorVersion, Revision manually; BuildNumber is injected by CI (/p:BuildNumber=N) -->
+  <!-- Versioning: derived from git tags via MinVer (tag e.g. v0.1.0 -> package version 0.1.0) -->
   <PropertyGroup>
-    <MajorVersion>0</MajorVersion>
-    <MinorVersion>0</MinorVersion>
-    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
-    <Revision>0</Revision>
-    <Version>$(MajorVersion).$(MinorVersion).$(BuildNumber).$(Revision)</Version>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
-
-  <!-- All non-test projects produce NuGet packages -->
-  <PropertyGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
-    <IsPackable>true</IsPackable>
-  </PropertyGroup>
-
-  <!-- Symbol and source embedding for NuGet packages -->
-  <PropertyGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <EmbedAllSources>true</EmbedAllSources>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-  </PropertyGroup>
-
-  <ItemGroup Condition="!$(MSBuildProjectName.Contains('Test'))">
-    <None Include="THIRD-PARTY-NOTICES.TXT" Condition="Exists('$(MSBuildProjectDirectory)\THIRD-PARTY-NOTICES.TXT')" Pack="true" PackagePath="" />
-    <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
-    <None Include="$(MSBuildThisFileDirectory)..\NOTICE" Pack="true" PackagePath="" />
-    <None Include="$(MSBuildThisFileDirectory)..\assets\Agency_128.png" Pack="true" PackagePath="" Visible="false" />
-    <None Include="README.md" Pack="true" PackagePath="" />
-  </ItemGroup>
-
-  <!-- Test project defaults -->
-  <PropertyGroup Condition="$(MSBuildProjectName.Contains('Test'))">
-    <IsPackable>false</IsPackable>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
-
-  <ItemGroup Condition="$(MSBuildProjectName.Contains('Test'))">
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.v3" />
-        <PackageReference Include="xunit.runner.visualstudio">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-
-  <!-- Auto-include Xunit for test projects -->
-  <ItemGroup Condition="$(MSBuildProjectName.Contains('Test'))">
-    <Using Include="Xunit" />
-  </ItemGroup>
 </Project>

@@ -1,0 +1,6 @@
+#nullable enable
+Agency.Llm.OpenAI.OpenAIClient
+Agency.Llm.OpenAI.OpenAIClient.CreateChatClient() -> Microsoft.Extensions.AI.IChatClient!
+Agency.Llm.OpenAI.OpenAIClient.GetModelsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Model!>!>!
+Agency.Llm.OpenAI.OpenAIClient.OpenAIClient(Agency.Llm.Common.LlmClientOptions! options, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null) -> void
+Agency.Llm.OpenAI.OpenAIClient.OpenAIClient(Microsoft.Extensions.Options.IOptions<Agency.Llm.Common.LlmClientOptions!>! options, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null) -> void

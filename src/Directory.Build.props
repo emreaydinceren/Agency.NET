@@ -8,7 +8,11 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <LangVersion>latest</LangVersion>
-    <NoWarn>$(NoWarn);MSB3270</NoWarn>
+    <!-- RS0026 (no multiple public overloads with optional parameters) is a stricter API-design
+         rule bundled with PublicApiAnalyzers, separate from the Shipped/Unshipped tracking this
+         package is here for (RT11). Existing multi-ctor-with-optional-params classes are a design
+         choice to revisit under RT13 (raise the analyzer bar), not this task. -->
+    <NoWarn>$(NoWarn);MSB3270;RS0026</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

@@ -1,0 +1,9 @@
+#nullable enable
+Agency.Sql.Postgres.PostgreSqlRunner
+Agency.Sql.Postgres.PostgreSqlRunner.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Agency.Sql.Postgres.PostgreSqlRunner.PostgreSqlRunner(string! connectionString, Microsoft.Extensions.Logging.ILogger<Agency.Sql.Postgres.PostgreSqlRunner!>? logger = null) -> void
+Agency.Sql.Postgres.SQLQueryEmbedder
+Agency.Sql.Postgres.SQLQueryEmbedder.EmbedVectorsInQueryAsync(string! sqlQuery, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Agency.Sql.Postgres.SQLQueryEmbedder.SQLQueryEmbedder(Agency.Embeddings.Common.IEmbeddingGenerator! embeddingGenerator) -> void
+const Agency.Sql.Postgres.PostgreSqlRunner.ActivitySourceName = "Agency.Sql.Postgres" -> string!
+const Agency.Sql.Postgres.PostgreSqlRunner.MeterName = "Agency.Sql.Postgres" -> string!

@@ -1,0 +1,10 @@
+#nullable enable
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.DeleteAsync(string! userId, string? sessionId, string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.GetMetadataAsync(string! userId, string? sessionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit!>!>!
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.InitializeSchemaAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.PostgresKVStore(Agency.Sql.Postgres.PostgreSqlRunner! postgreSqlRunner, Microsoft.Extensions.Logging.ILogger<Agency.KeyValueStore.Sql.Postgres.PostgresKVStore!>! logger) -> void
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.SearchAsync<TValue>(Agency.KeyValueStore.Common.Query! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit<TValue>!>!>!
+Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.UpsertAsync<TValue>(string! userId, string? sessionId, string! key, TValue value, System.Collections.Generic.IDictionary<string!, object!>? metadata = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+const Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.ActivitySourceName = "Agency.KeyValueStore.Sql.Postgres" -> string!
+const Agency.KeyValueStore.Sql.Postgres.PostgresKVStore.MeterName = "Agency.KeyValueStore.Sql.Postgres" -> string!

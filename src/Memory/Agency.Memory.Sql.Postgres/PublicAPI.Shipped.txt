@@ -1,0 +1,55 @@
+#nullable enable
+Agency.Memory.Sql.Postgres.DeadLetterEntry
+Agency.Memory.Sql.Postgres.DeadLetterEntry.<Clone>$() -> Agency.Memory.Sql.Postgres.DeadLetterEntry!
+Agency.Memory.Sql.Postgres.DeadLetterEntry.CreatedAt.get -> System.DateTimeOffset
+Agency.Memory.Sql.Postgres.DeadLetterEntry.CreatedAt.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.DeadLetterEntry(string! Id, string! UserId, string? SessionId, string! JobKind, string! JobPayloadJson, string! Error, System.DateTimeOffset CreatedAt) -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.Deconstruct(out string! Id, out string! UserId, out string? SessionId, out string! JobKind, out string! JobPayloadJson, out string! Error, out System.DateTimeOffset CreatedAt) -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.Equals(Agency.Memory.Sql.Postgres.DeadLetterEntry? other) -> bool
+Agency.Memory.Sql.Postgres.DeadLetterEntry.Error.get -> string!
+Agency.Memory.Sql.Postgres.DeadLetterEntry.Error.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.Id.get -> string!
+Agency.Memory.Sql.Postgres.DeadLetterEntry.Id.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.JobKind.get -> string!
+Agency.Memory.Sql.Postgres.DeadLetterEntry.JobKind.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.JobPayloadJson.get -> string!
+Agency.Memory.Sql.Postgres.DeadLetterEntry.JobPayloadJson.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.SessionId.get -> string?
+Agency.Memory.Sql.Postgres.DeadLetterEntry.SessionId.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterEntry.UserId.get -> string!
+Agency.Memory.Sql.Postgres.DeadLetterEntry.UserId.init -> void
+Agency.Memory.Sql.Postgres.DeadLetterRepository
+Agency.Memory.Sql.Postgres.DeadLetterRepository.DeadLetterRepository(Npgsql.NpgsqlDataSource! dataSource) -> void
+Agency.Memory.Sql.Postgres.DeadLetterRepository.ListSinceAsync(System.DateTimeOffset cutoff, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Sql.Postgres.DeadLetterEntry!>!>!
+Agency.Memory.Sql.Postgres.DeadLetterRepository.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! error, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Postgres.MemorySchemaInitializer
+Agency.Memory.Sql.Postgres.MemorySchemaInitializer.InitializeAsync(int embeddingDim, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Postgres.MemorySchemaInitializer.MemorySchemaInitializer(Npgsql.NpgsqlDataSource! dataSource) -> void
+Agency.Memory.Sql.Postgres.PostgresMemoryServiceCollectionExtensions
+Agency.Memory.Sql.Postgres.PostgresMemoryStore
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.DeleteByIdAsync(string! recordId, string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.DeleteWhereLowImportanceStaleAsync(double importanceThreshold, System.TimeSpan staleAge, System.DateTimeOffset now, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.DeleteWhereTtlExceededAsync(Agency.Memory.Common.Records.ContentType contentType, System.TimeSpan ttl, System.DateTimeOffset now, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.ForgetAsync(string! userId, string! domain, string! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.ForgetMeAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.GetAllForUserAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Common.Records.Record!>!>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.GetByKeyAsync(string! userId, string? sessionId, string! domain, string! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record?>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.LastWrittenAtAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.DateTimeOffset?>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.MergeAsync(System.Collections.Generic.IReadOnlyList<string!>! idsToDelete, Agency.Memory.Common.Records.Record! newRecord, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record!>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.PostgresMemoryStore(Npgsql.NpgsqlDataSource! dataSource, Agency.Embeddings.Common.IEmbeddingGenerator! embedder, Microsoft.Extensions.Options.IOptions<Agency.Memory.Common.Options.MemoryOptions!>! options, Microsoft.Extensions.Logging.ILogger<Agency.Memory.Sql.Postgres.PostgresMemoryStore!>! logger) -> void
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.SearchAsync(Agency.Memory.Common.Storage.SearchQuery! query, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Common.Storage.SearchHit!>!>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.UpdateRecordAsync(string! recordId, string! userId, string? newValue, double? newImportance, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record?>!
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.UpsertAsync(Agency.Memory.Common.Records.Record! record, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record!>!
+Agency.Memory.Sql.Postgres.WatermarkRepository
+Agency.Memory.Sql.Postgres.WatermarkRepository.AdvanceAsync(string! userId, string! sessionId, int candidate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Postgres.WatermarkRepository.DeleteAsync(string! userId, string! sessionId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Postgres.WatermarkRepository.GetAsync(string! userId, string! sessionId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Postgres.WatermarkRepository.WatermarkRepository(Npgsql.NpgsqlDataSource! dataSource) -> void
+const Agency.Memory.Sql.Postgres.PostgresMemoryStore.ActivitySourceName = "Agency.Memory.Sql.Postgres" -> string!
+const Agency.Memory.Sql.Postgres.PostgresMemoryStore.MeterName = "Agency.Memory.Sql.Postgres" -> string!
+override Agency.Memory.Sql.Postgres.DeadLetterEntry.Equals(object? obj) -> bool
+override Agency.Memory.Sql.Postgres.DeadLetterEntry.GetHashCode() -> int
+override Agency.Memory.Sql.Postgres.DeadLetterEntry.ToString() -> string!
+static Agency.Memory.Sql.Postgres.DeadLetterEntry.operator !=(Agency.Memory.Sql.Postgres.DeadLetterEntry? left, Agency.Memory.Sql.Postgres.DeadLetterEntry? right) -> bool
+static Agency.Memory.Sql.Postgres.DeadLetterEntry.operator ==(Agency.Memory.Sql.Postgres.DeadLetterEntry? left, Agency.Memory.Sql.Postgres.DeadLetterEntry? right) -> bool
+static Agency.Memory.Sql.Postgres.PostgresMemoryServiceCollectionExtensions.AddAgencyMemoryPostgres(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

@@ -1,0 +1,45 @@
+#nullable enable
+Agency.Ingestion.DefaultIngestionPipeline<TValue>
+Agency.Ingestion.DefaultIngestionPipeline<TValue>.DefaultIngestionPipeline(System.Func<Agency.Ingestion.Document!, TValue>! chunkConverter, int maxDegreeOfParallelism = 0, Microsoft.Extensions.Logging.ILogger<Agency.Ingestion.DefaultIngestionPipeline<TValue>!>? logger = null) -> void
+Agency.Ingestion.DefaultIngestionPipeline<TValue>.ExecuteAsync(Agency.Ingestion.IDocumentLoader! loader, Agency.Ingestion.ITextSplitter! splitter, Agency.VectorStore.Common.IVectorStore! store, string! userId, string? sessionId, string? projectId = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Ingestion.IngestionResult!>!
+Agency.Ingestion.Document
+Agency.Ingestion.Document.<Clone>$() -> Agency.Ingestion.Document!
+Agency.Ingestion.Document.Content.get -> string!
+Agency.Ingestion.Document.Content.init -> void
+Agency.Ingestion.Document.Deconstruct(out string! Content, out string! SourceId, out System.Collections.Generic.Dictionary<string!, object!>? Metadata) -> void
+Agency.Ingestion.Document.Document(string! Content, string! SourceId, System.Collections.Generic.Dictionary<string!, object!>? Metadata = null) -> void
+Agency.Ingestion.Document.Equals(Agency.Ingestion.Document? other) -> bool
+Agency.Ingestion.Document.Metadata.get -> System.Collections.Generic.Dictionary<string!, object!>?
+Agency.Ingestion.Document.Metadata.init -> void
+Agency.Ingestion.Document.SourceId.get -> string!
+Agency.Ingestion.Document.SourceId.init -> void
+Agency.Ingestion.IDocumentLoader
+Agency.Ingestion.IDocumentLoader.LoadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Ingestion.Document!>!
+Agency.Ingestion.IIngestionPipeline<TValue>
+Agency.Ingestion.IIngestionPipeline<TValue>.ExecuteAsync(Agency.Ingestion.IDocumentLoader! loader, Agency.Ingestion.ITextSplitter! splitter, Agency.VectorStore.Common.IVectorStore! store, string! userId, string? sessionId, string? projectId = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Ingestion.IngestionResult!>!
+Agency.Ingestion.IngestionResult
+Agency.Ingestion.IngestionResult.<Clone>$() -> Agency.Ingestion.IngestionResult!
+Agency.Ingestion.IngestionResult.Deconstruct(out int Succeeded, out int Failed, out System.Collections.Generic.IReadOnlyList<string!>? FailedKeys) -> void
+Agency.Ingestion.IngestionResult.Equals(Agency.Ingestion.IngestionResult? other) -> bool
+Agency.Ingestion.IngestionResult.Failed.get -> int
+Agency.Ingestion.IngestionResult.Failed.init -> void
+Agency.Ingestion.IngestionResult.FailedKeys.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Agency.Ingestion.IngestionResult.FailedKeys.init -> void
+Agency.Ingestion.IngestionResult.IngestionResult(int Succeeded, int Failed, System.Collections.Generic.IReadOnlyList<string!>? FailedKeys = null) -> void
+Agency.Ingestion.IngestionResult.IsSuccess.get -> bool
+Agency.Ingestion.IngestionResult.Succeeded.get -> int
+Agency.Ingestion.IngestionResult.Succeeded.init -> void
+Agency.Ingestion.ITextSplitter
+Agency.Ingestion.ITextSplitter.Split(Agency.Ingestion.Document! document) -> System.Collections.Generic.IEnumerable<Agency.Ingestion.Document!>!
+const Agency.Ingestion.DefaultIngestionPipeline<TValue>.ActivitySourceName = "Agency.Ingestion" -> string!
+const Agency.Ingestion.DefaultIngestionPipeline<TValue>.MeterName = "Agency.Ingestion" -> string!
+override Agency.Ingestion.Document.Equals(object? obj) -> bool
+override Agency.Ingestion.Document.GetHashCode() -> int
+override Agency.Ingestion.Document.ToString() -> string!
+override Agency.Ingestion.IngestionResult.Equals(object? obj) -> bool
+override Agency.Ingestion.IngestionResult.GetHashCode() -> int
+override Agency.Ingestion.IngestionResult.ToString() -> string!
+static Agency.Ingestion.Document.operator !=(Agency.Ingestion.Document? left, Agency.Ingestion.Document? right) -> bool
+static Agency.Ingestion.Document.operator ==(Agency.Ingestion.Document? left, Agency.Ingestion.Document? right) -> bool
+static Agency.Ingestion.IngestionResult.operator !=(Agency.Ingestion.IngestionResult? left, Agency.Ingestion.IngestionResult? right) -> bool
+static Agency.Ingestion.IngestionResult.operator ==(Agency.Ingestion.IngestionResult? left, Agency.Ingestion.IngestionResult? right) -> bool

@@ -1,0 +1,6 @@
+#nullable enable
+Agency.Llm.Claude.ClaudeClient
+Agency.Llm.Claude.ClaudeClient.ClaudeClient(Agency.Llm.Common.LlmClientOptions! options, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null) -> void
+Agency.Llm.Claude.ClaudeClient.ClaudeClient(Microsoft.Extensions.Options.IOptions<Agency.Llm.Common.LlmClientOptions!>! options, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null) -> void
+Agency.Llm.Claude.ClaudeClient.CreateChatClient() -> Microsoft.Extensions.AI.IChatClient!
+Agency.Llm.Claude.ClaudeClient.GetModelsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Model!>!>!

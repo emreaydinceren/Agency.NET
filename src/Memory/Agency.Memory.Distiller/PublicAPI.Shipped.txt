@@ -1,0 +1,5 @@
+#nullable enable
+Agency.Memory.Distiller.DependencyInjection.MemoryServiceCollectionExtensions
+Agency.Memory.Distiller.DistillerLlmServiceCollectionExtensions
+static Agency.Memory.Distiller.DependencyInjection.MemoryServiceCollectionExtensions.AddAgencyMemory(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Agency.Memory.Common.Options.MemoryOptions!>? configureMemory = null, System.Action<Agency.Memory.Common.Options.DistillerOptions!>? configureDistiller = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Agency.Memory.Distiller.DistillerLlmServiceCollectionExtensions.AddAgencyDistillerLlm(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.AI.IChatClient! client, string! model) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

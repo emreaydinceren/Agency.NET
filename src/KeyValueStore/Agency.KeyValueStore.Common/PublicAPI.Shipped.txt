@@ -1,0 +1,77 @@
+#nullable enable
+Agency.KeyValueStore.Common.IKVStore
+Agency.KeyValueStore.Common.IKVStore.DeleteAsync(string! userId, string? sessionId, string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.KeyValueStore.Common.IKVStore.GetMetadataAsync(string! userId, string? sessionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit!>!>!
+Agency.KeyValueStore.Common.IKVStore.SearchAsync<TValue>(Agency.KeyValueStore.Common.Query! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit<TValue>!>!>!
+Agency.KeyValueStore.Common.IKVStore.UpsertAsync<TValue>(string! userId, string? sessionId, string! key, TValue value, System.Collections.Generic.IDictionary<string!, object!>? metadata = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.KeyValueStore.Common.JsonMetadataHelpers
+Agency.KeyValueStore.Common.KvStoreTelemetry
+Agency.KeyValueStore.Common.KvStoreTelemetry.ExecuteAsync<T>(string! operation, System.Diagnostics.Activity? activity, System.Func<System.Threading.Tasks.Task<T>!>! body, System.Action<T, double>? onSuccess = null, System.Action<System.Exception!, double>? onError = null) -> System.Threading.Tasks.Task<T>!
+Agency.KeyValueStore.Common.KvStoreTelemetry.KvStoreTelemetry(string! activitySourceName, string! meterName) -> void
+Agency.KeyValueStore.Common.KvStoreTelemetry.StartActivity(string! spanName) -> System.Diagnostics.Activity?
+Agency.KeyValueStore.Common.Query
+Agency.KeyValueStore.Common.Query.<Clone>$() -> Agency.KeyValueStore.Common.Query!
+Agency.KeyValueStore.Common.Query.Deconstruct(out string! UserId, out string? SessionId, out string? Key, out string? Value, out System.Collections.Generic.IDictionary<string!, object!>? MetadataFilter, out int? Limit, out bool? IncludeMetadataInResults) -> void
+Agency.KeyValueStore.Common.Query.Equals(Agency.KeyValueStore.Common.Query? other) -> bool
+Agency.KeyValueStore.Common.Query.IncludeMetadataInResults.get -> bool?
+Agency.KeyValueStore.Common.Query.IncludeMetadataInResults.init -> void
+Agency.KeyValueStore.Common.Query.Key.get -> string?
+Agency.KeyValueStore.Common.Query.Key.init -> void
+Agency.KeyValueStore.Common.Query.Limit.get -> int?
+Agency.KeyValueStore.Common.Query.Limit.init -> void
+Agency.KeyValueStore.Common.Query.MetadataFilter.get -> System.Collections.Generic.IDictionary<string!, object!>?
+Agency.KeyValueStore.Common.Query.MetadataFilter.init -> void
+Agency.KeyValueStore.Common.Query.Query(string! UserId, string? SessionId, string? Key, string? Value, System.Collections.Generic.IDictionary<string!, object!>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false) -> void
+Agency.KeyValueStore.Common.Query.SessionId.get -> string?
+Agency.KeyValueStore.Common.Query.SessionId.init -> void
+Agency.KeyValueStore.Common.Query.UserId.get -> string!
+Agency.KeyValueStore.Common.Query.UserId.init -> void
+Agency.KeyValueStore.Common.Query.Value.get -> string?
+Agency.KeyValueStore.Common.Query.Value.init -> void
+Agency.KeyValueStore.Common.SearchHit
+Agency.KeyValueStore.Common.SearchHit.Deconstruct(out string? SessionId, out string! Key, out System.Collections.Generic.Dictionary<string!, object!>? Metadata, out System.DateTimeOffset UpdatedOn) -> void
+Agency.KeyValueStore.Common.SearchHit.Key.get -> string!
+Agency.KeyValueStore.Common.SearchHit.Key.init -> void
+Agency.KeyValueStore.Common.SearchHit.Metadata.get -> System.Collections.Generic.Dictionary<string!, object!>?
+Agency.KeyValueStore.Common.SearchHit.Metadata.init -> void
+Agency.KeyValueStore.Common.SearchHit.RecencyHours.get -> double
+Agency.KeyValueStore.Common.SearchHit.RecencyMinutes.get -> double
+Agency.KeyValueStore.Common.SearchHit.SearchHit(Agency.KeyValueStore.Common.SearchHit! original) -> void
+Agency.KeyValueStore.Common.SearchHit.SearchHit(string? SessionId, string! Key, System.Collections.Generic.Dictionary<string!, object!>? Metadata, System.DateTimeOffset UpdatedOn) -> void
+Agency.KeyValueStore.Common.SearchHit.SessionId.get -> string?
+Agency.KeyValueStore.Common.SearchHit.SessionId.init -> void
+Agency.KeyValueStore.Common.SearchHit.UpdatedOn.get -> System.DateTimeOffset
+Agency.KeyValueStore.Common.SearchHit.UpdatedOn.init -> void
+Agency.KeyValueStore.Common.SearchHit<TValue>
+Agency.KeyValueStore.Common.SearchHit<TValue>.Deconstruct(out string? SessionId, out string! Key, out TValue Value, out System.Collections.Generic.Dictionary<string!, object!>? Metadata, out System.DateTimeOffset UpdatedOn) -> void
+Agency.KeyValueStore.Common.SearchHit<TValue>.Equals(Agency.KeyValueStore.Common.SearchHit<TValue>? other) -> bool
+Agency.KeyValueStore.Common.SearchHit<TValue>.SearchHit(string? SessionId, string! Key, TValue Value, System.Collections.Generic.Dictionary<string!, object!>? Metadata, System.DateTimeOffset UpdatedOn) -> void
+Agency.KeyValueStore.Common.SearchHit<TValue>.Value.get -> TValue
+Agency.KeyValueStore.Common.SearchHit<TValue>.Value.init -> void
+Agency.KeyValueStore.Common.SearchHitExtensions
+const Agency.KeyValueStore.Common.KvStoreTelemetry.GlobalSession = "*" -> string!
+override Agency.KeyValueStore.Common.Query.Equals(object? obj) -> bool
+override Agency.KeyValueStore.Common.Query.GetHashCode() -> int
+override Agency.KeyValueStore.Common.Query.ToString() -> string!
+override Agency.KeyValueStore.Common.SearchHit.Equals(object? obj) -> bool
+override Agency.KeyValueStore.Common.SearchHit.GetHashCode() -> int
+override Agency.KeyValueStore.Common.SearchHit.ToString() -> string!
+override Agency.KeyValueStore.Common.SearchHit<TValue>.<Clone>$() -> Agency.KeyValueStore.Common.SearchHit<TValue>!
+override Agency.KeyValueStore.Common.SearchHit<TValue>.Equals(object? obj) -> bool
+override Agency.KeyValueStore.Common.SearchHit<TValue>.GetHashCode() -> int
+override Agency.KeyValueStore.Common.SearchHit<TValue>.ToString() -> string!
+override sealed Agency.KeyValueStore.Common.SearchHit<TValue>.Equals(Agency.KeyValueStore.Common.SearchHit? other) -> bool
+static Agency.KeyValueStore.Common.JsonMetadataHelpers.ConvertJsonElementToObject(System.Text.Json.JsonElement element) -> object!
+static Agency.KeyValueStore.Common.JsonMetadataHelpers.DeserializeMetadata(string? metadataJson) -> System.Collections.Generic.Dictionary<string!, object!>?
+static Agency.KeyValueStore.Common.KvStoreTelemetry.ResolveSessionId(string? sessionId) -> string!
+static Agency.KeyValueStore.Common.Query.operator !=(Agency.KeyValueStore.Common.Query? left, Agency.KeyValueStore.Common.Query? right) -> bool
+static Agency.KeyValueStore.Common.Query.operator ==(Agency.KeyValueStore.Common.Query? left, Agency.KeyValueStore.Common.Query? right) -> bool
+static Agency.KeyValueStore.Common.SearchHit.operator !=(Agency.KeyValueStore.Common.SearchHit? left, Agency.KeyValueStore.Common.SearchHit? right) -> bool
+static Agency.KeyValueStore.Common.SearchHit.operator ==(Agency.KeyValueStore.Common.SearchHit? left, Agency.KeyValueStore.Common.SearchHit? right) -> bool
+static Agency.KeyValueStore.Common.SearchHit<TValue>.operator !=(Agency.KeyValueStore.Common.SearchHit<TValue>? left, Agency.KeyValueStore.Common.SearchHit<TValue>? right) -> bool
+static Agency.KeyValueStore.Common.SearchHit<TValue>.operator ==(Agency.KeyValueStore.Common.SearchHit<TValue>? left, Agency.KeyValueStore.Common.SearchHit<TValue>? right) -> bool
+static Agency.KeyValueStore.Common.SearchHitExtensions.ToDataset<TValue>(this System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit<TValue>!>! hits) -> Agency.Common.Dataset!
+virtual Agency.KeyValueStore.Common.SearchHit.<Clone>$() -> Agency.KeyValueStore.Common.SearchHit!
+virtual Agency.KeyValueStore.Common.SearchHit.EqualityContract.get -> System.Type!
+virtual Agency.KeyValueStore.Common.SearchHit.Equals(Agency.KeyValueStore.Common.SearchHit? other) -> bool
+virtual Agency.KeyValueStore.Common.SearchHit.PrintMembers(System.Text.StringBuilder! builder) -> bool

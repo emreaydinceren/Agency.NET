@@ -1,0 +1,84 @@
+#nullable enable
+Agency.Llm.Common.IModelProvider
+Agency.Llm.Common.IModelProvider.GetModelsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Model!>!>!
+Agency.Llm.Common.LlmClientOptions
+Agency.Llm.Common.LlmClientOptions.<Clone>$() -> Agency.Llm.Common.LlmClientOptions!
+Agency.Llm.Common.LlmClientOptions.ApiKey.get -> string!
+Agency.Llm.Common.LlmClientOptions.ApiKey.set -> void
+Agency.Llm.Common.LlmClientOptions.BaseUrl.get -> string?
+Agency.Llm.Common.LlmClientOptions.BaseUrl.set -> void
+Agency.Llm.Common.LlmClientOptions.ClientType.get -> string!
+Agency.Llm.Common.LlmClientOptions.ClientType.set -> void
+Agency.Llm.Common.LlmClientOptions.Equals(Agency.Llm.Common.LlmClientOptions? other) -> bool
+Agency.Llm.Common.LlmClientOptions.LlmClientOptions() -> void
+Agency.Llm.Common.LlmClientOptions.MaxRetries.get -> int?
+Agency.Llm.Common.LlmClientOptions.MaxRetries.set -> void
+Agency.Llm.Common.LlmClientOptions.Name.get -> string!
+Agency.Llm.Common.LlmClientOptions.Name.set -> void
+Agency.Llm.Common.LlmClientOptions.SuppressThinking.get -> bool
+Agency.Llm.Common.LlmClientOptions.SuppressThinking.set -> void
+Agency.Llm.Common.LlmClientOptions.Timeout.get -> System.TimeSpan?
+Agency.Llm.Common.LlmClientOptions.Timeout.set -> void
+Agency.Llm.Common.Model
+Agency.Llm.Common.Model.<Clone>$() -> Agency.Llm.Common.Model!
+Agency.Llm.Common.Model.Deconstruct(out string! Id, out string! Name) -> void
+Agency.Llm.Common.Model.Equals(Agency.Llm.Common.Model? other) -> bool
+Agency.Llm.Common.Model.Id.get -> string!
+Agency.Llm.Common.Model.Id.init -> void
+Agency.Llm.Common.Model.Model(string! Id, string! Name) -> void
+Agency.Llm.Common.Model.Name.get -> string!
+Agency.Llm.Common.Model.Name.init -> void
+Agency.Llm.Common.Tools.ITool
+Agency.Llm.Common.Tools.ITool.Definition.get -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Llm.Common.Tools.ITool.GetDefinitionAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Agency.Llm.Common.Tools.ToolDefinition!>
+Agency.Llm.Common.Tools.ITool.InvokeAsync(System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Llm.Common.Tools.IToolRegistry
+Agency.Llm.Common.Tools.IToolRegistry.DisabledToolBySystem(string! name) -> void
+Agency.Llm.Common.Tools.IToolRegistry.DisableToolByUser(string! name) -> void
+Agency.Llm.Common.Tools.IToolRegistry.EnableToolBySystem(string! name) -> void
+Agency.Llm.Common.Tools.IToolRegistry.EnableToolByUser(string! name) -> void
+Agency.Llm.Common.Tools.IToolRegistry.InvokeAsync(string! name, System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Llm.Common.Tools.IToolRegistry.ListAllDefinitions() -> System.Collections.Generic.IReadOnlyList<(bool Enabled, Agency.Llm.Common.Tools.ToolDefinition! Definition)>!
+Agency.Llm.Common.Tools.IToolRegistry.ListDefinitions() -> System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ToolDefinition!>!
+Agency.Llm.Common.Tools.IToolRegistry.Register(Agency.Llm.Common.Tools.ITool! tool) -> void
+Agency.Llm.Common.Tools.IToolRegistry.RegisterAsync(Agency.Llm.Common.Tools.ITool! tool, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Agency.Llm.Common.Tools.ToolDefinition
+Agency.Llm.Common.Tools.ToolDefinition.<Clone>$() -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Llm.Common.Tools.ToolDefinition.Deconstruct(out string! Name, out string! Description, out System.Text.Json.JsonElement InputSchema) -> void
+Agency.Llm.Common.Tools.ToolDefinition.Description.get -> string!
+Agency.Llm.Common.Tools.ToolDefinition.Description.init -> void
+Agency.Llm.Common.Tools.ToolDefinition.Equals(Agency.Llm.Common.Tools.ToolDefinition? other) -> bool
+Agency.Llm.Common.Tools.ToolDefinition.InputSchema.get -> System.Text.Json.JsonElement
+Agency.Llm.Common.Tools.ToolDefinition.InputSchema.init -> void
+Agency.Llm.Common.Tools.ToolDefinition.Name.get -> string!
+Agency.Llm.Common.Tools.ToolDefinition.Name.init -> void
+Agency.Llm.Common.Tools.ToolDefinition.ToolDefinition(string! Name, string! Description, System.Text.Json.JsonElement InputSchema) -> void
+Agency.Llm.Common.Tools.ToolResult
+Agency.Llm.Common.Tools.ToolResult.<Clone>$() -> Agency.Llm.Common.Tools.ToolResult!
+Agency.Llm.Common.Tools.ToolResult.Content.get -> string!
+Agency.Llm.Common.Tools.ToolResult.Content.init -> void
+Agency.Llm.Common.Tools.ToolResult.Deconstruct(out string! Content, out bool IsError) -> void
+Agency.Llm.Common.Tools.ToolResult.Equals(Agency.Llm.Common.Tools.ToolResult? other) -> bool
+Agency.Llm.Common.Tools.ToolResult.IsError.get -> bool
+Agency.Llm.Common.Tools.ToolResult.IsError.init -> void
+Agency.Llm.Common.Tools.ToolResult.ToolResult(string! Content, bool IsError = false) -> void
+override Agency.Llm.Common.LlmClientOptions.Equals(object? obj) -> bool
+override Agency.Llm.Common.LlmClientOptions.GetHashCode() -> int
+override Agency.Llm.Common.LlmClientOptions.ToString() -> string!
+override Agency.Llm.Common.Model.Equals(object? obj) -> bool
+override Agency.Llm.Common.Model.GetHashCode() -> int
+override Agency.Llm.Common.Model.ToString() -> string!
+override Agency.Llm.Common.Tools.ToolDefinition.Equals(object? obj) -> bool
+override Agency.Llm.Common.Tools.ToolDefinition.GetHashCode() -> int
+override Agency.Llm.Common.Tools.ToolDefinition.ToString() -> string!
+override Agency.Llm.Common.Tools.ToolResult.Equals(object? obj) -> bool
+override Agency.Llm.Common.Tools.ToolResult.GetHashCode() -> int
+override Agency.Llm.Common.Tools.ToolResult.ToString() -> string!
+static Agency.Llm.Common.LlmClientOptions.operator !=(Agency.Llm.Common.LlmClientOptions? left, Agency.Llm.Common.LlmClientOptions? right) -> bool
+static Agency.Llm.Common.LlmClientOptions.operator ==(Agency.Llm.Common.LlmClientOptions? left, Agency.Llm.Common.LlmClientOptions? right) -> bool
+static Agency.Llm.Common.Model.operator !=(Agency.Llm.Common.Model? left, Agency.Llm.Common.Model? right) -> bool
+static Agency.Llm.Common.Model.operator ==(Agency.Llm.Common.Model? left, Agency.Llm.Common.Model? right) -> bool
+static Agency.Llm.Common.Tools.ToolDefinition.operator !=(Agency.Llm.Common.Tools.ToolDefinition? left, Agency.Llm.Common.Tools.ToolDefinition? right) -> bool
+static Agency.Llm.Common.Tools.ToolDefinition.operator ==(Agency.Llm.Common.Tools.ToolDefinition? left, Agency.Llm.Common.Tools.ToolDefinition? right) -> bool
+static Agency.Llm.Common.Tools.ToolResult.operator !=(Agency.Llm.Common.Tools.ToolResult? left, Agency.Llm.Common.Tools.ToolResult? right) -> bool
+static Agency.Llm.Common.Tools.ToolResult.operator ==(Agency.Llm.Common.Tools.ToolResult? left, Agency.Llm.Common.Tools.ToolResult? right) -> bool

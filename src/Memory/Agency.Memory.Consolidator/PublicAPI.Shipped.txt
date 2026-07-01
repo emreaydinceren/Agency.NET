@@ -1,0 +1,5 @@
+#nullable enable
+Agency.Memory.Consolidator.DependencyInjection.ConsolidatorServiceCollectionExtensions
+Agency.Memory.Consolidator.Services.IConsolidationTrigger
+Agency.Memory.Consolidator.Services.IConsolidationTrigger.RequestAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Agency.Memory.Consolidator.DependencyInjection.ConsolidatorServiceCollectionExtensions.AddAgencyConsolidator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Agency.Memory.Common.Options.ConsolidatorOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

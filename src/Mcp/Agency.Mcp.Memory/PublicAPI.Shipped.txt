@@ -1,0 +1,48 @@
+#nullable enable
+Agency.Mcp.Memory.MemoryOptions
+Agency.Mcp.Memory.MemoryOptions.ConnectionString.get -> string!
+Agency.Mcp.Memory.MemoryOptions.ConnectionString.set -> void
+Agency.Mcp.Memory.MemoryOptions.MemoryOptions() -> void
+Agency.Mcp.Memory.MemoryOptions.Provider.get -> string!
+Agency.Mcp.Memory.MemoryOptions.Provider.set -> void
+Agency.Mcp.Memory.MemoryRecord
+Agency.Mcp.Memory.MemoryRecord.<Clone>$() -> Agency.Mcp.Memory.MemoryRecord!
+Agency.Mcp.Memory.MemoryRecord.Domain.get -> string?
+Agency.Mcp.Memory.MemoryRecord.Domain.set -> void
+Agency.Mcp.Memory.MemoryRecord.Equals(Agency.Mcp.Memory.MemoryRecord? other) -> bool
+Agency.Mcp.Memory.MemoryRecord.Key.get -> string?
+Agency.Mcp.Memory.MemoryRecord.Key.set -> void
+Agency.Mcp.Memory.MemoryRecord.MemoryRecord() -> void
+Agency.Mcp.Memory.MemoryRecord.Scope.get -> Agency.Mcp.Memory.MemoryScope?
+Agency.Mcp.Memory.MemoryRecord.Scope.set -> void
+Agency.Mcp.Memory.MemoryRecord.Tags.get -> string![]?
+Agency.Mcp.Memory.MemoryRecord.Tags.set -> void
+Agency.Mcp.Memory.MemoryRecord.Value.get -> string?
+Agency.Mcp.Memory.MemoryRecord.Value.set -> void
+Agency.Mcp.Memory.MemoryScope
+Agency.Mcp.Memory.MemoryScope.<Clone>$() -> Agency.Mcp.Memory.MemoryScope!
+Agency.Mcp.Memory.MemoryScope.Deconstruct(out string! UserId, out string? SessionId) -> void
+Agency.Mcp.Memory.MemoryScope.Equals(Agency.Mcp.Memory.MemoryScope? other) -> bool
+Agency.Mcp.Memory.MemoryScope.MemoryScope(string! UserId, string? SessionId) -> void
+Agency.Mcp.Memory.MemoryScope.SessionId.get -> string?
+Agency.Mcp.Memory.MemoryScope.SessionId.init -> void
+Agency.Mcp.Memory.MemoryScope.UserId.get -> string!
+Agency.Mcp.Memory.MemoryScope.UserId.init -> void
+Agency.Mcp.Memory.MemoryServiceCollectionExtensions
+Agency.Mcp.Memory.MemoryTool
+Agency.Mcp.Memory.MemoryTool.Forget(Agency.Mcp.Memory.MemoryScope? scope = null, string? domain = null, string? key = null) -> System.Threading.Tasks.Task<string!>!
+Agency.Mcp.Memory.MemoryTool.ListGlobalKeys(Agency.Mcp.Memory.MemoryScope? scope = null) -> System.Threading.Tasks.Task<string!>!
+Agency.Mcp.Memory.MemoryTool.Memorize(Agency.Mcp.Memory.MemoryRecord? record = null) -> System.Threading.Tasks.Task<string!>!
+Agency.Mcp.Memory.MemoryTool.MemoryTool(Agency.KeyValueStore.Common.IKVStore! kvStore) -> void
+Agency.Mcp.Memory.MemoryTool.Recall(Agency.Mcp.Memory.MemoryScope? scope = null, string? domain = null, string? key = null, string![]? tags = null) -> System.Threading.Tasks.Task<string!>!
+override Agency.Mcp.Memory.MemoryRecord.Equals(object? obj) -> bool
+override Agency.Mcp.Memory.MemoryRecord.GetHashCode() -> int
+override Agency.Mcp.Memory.MemoryRecord.ToString() -> string!
+override Agency.Mcp.Memory.MemoryScope.Equals(object? obj) -> bool
+override Agency.Mcp.Memory.MemoryScope.GetHashCode() -> int
+override Agency.Mcp.Memory.MemoryScope.ToString() -> string!
+static Agency.Mcp.Memory.MemoryRecord.operator !=(Agency.Mcp.Memory.MemoryRecord? left, Agency.Mcp.Memory.MemoryRecord? right) -> bool
+static Agency.Mcp.Memory.MemoryRecord.operator ==(Agency.Mcp.Memory.MemoryRecord? left, Agency.Mcp.Memory.MemoryRecord? right) -> bool
+static Agency.Mcp.Memory.MemoryScope.operator !=(Agency.Mcp.Memory.MemoryScope? left, Agency.Mcp.Memory.MemoryScope? right) -> bool
+static Agency.Mcp.Memory.MemoryScope.operator ==(Agency.Mcp.Memory.MemoryScope? left, Agency.Mcp.Memory.MemoryScope? right) -> bool
+static Agency.Mcp.Memory.MemoryServiceCollectionExtensions.AddKVStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

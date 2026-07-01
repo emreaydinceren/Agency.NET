@@ -1,0 +1,299 @@
+#nullable enable
+Agency.Memory.Common.Events.ConsolidationCompletedEvent
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.ConsolidationCompletedEvent(string! UserId, int Merges, int Updates, int Deletes) -> void
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Deconstruct(out string! UserId, out int Merges, out int Updates, out int Deletes) -> void
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Deletes.get -> int
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Deletes.init -> void
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Equals(Agency.Memory.Common.Events.ConsolidationCompletedEvent? other) -> bool
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Merges.get -> int
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Merges.init -> void
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Updates.get -> int
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.Updates.init -> void
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.UserId.get -> string!
+Agency.Memory.Common.Events.ConsolidationCompletedEvent.UserId.init -> void
+Agency.Memory.Common.Events.DistillationCompletedEvent
+Agency.Memory.Common.Events.DistillationCompletedEvent.Deconstruct(out string! UserId, out string! SessionId, out int RecordsWritten, out int NewWatermark) -> void
+Agency.Memory.Common.Events.DistillationCompletedEvent.DistillationCompletedEvent(string! UserId, string! SessionId, int RecordsWritten, int NewWatermark) -> void
+Agency.Memory.Common.Events.DistillationCompletedEvent.Equals(Agency.Memory.Common.Events.DistillationCompletedEvent? other) -> bool
+Agency.Memory.Common.Events.DistillationCompletedEvent.NewWatermark.get -> int
+Agency.Memory.Common.Events.DistillationCompletedEvent.NewWatermark.init -> void
+Agency.Memory.Common.Events.DistillationCompletedEvent.RecordsWritten.get -> int
+Agency.Memory.Common.Events.DistillationCompletedEvent.RecordsWritten.init -> void
+Agency.Memory.Common.Events.DistillationFailedEvent
+Agency.Memory.Common.Events.DistillationFailedEvent.DeadLettered.get -> bool
+Agency.Memory.Common.Events.DistillationFailedEvent.DeadLettered.init -> void
+Agency.Memory.Common.Events.DistillationFailedEvent.Deconstruct(out string! UserId, out string! SessionId, out string! Reason, out bool DeadLettered) -> void
+Agency.Memory.Common.Events.DistillationFailedEvent.DistillationFailedEvent(string! UserId, string! SessionId, string! Reason, bool DeadLettered) -> void
+Agency.Memory.Common.Events.DistillationFailedEvent.Equals(Agency.Memory.Common.Events.DistillationFailedEvent? other) -> bool
+Agency.Memory.Common.Events.DistillationFailedEvent.Reason.get -> string!
+Agency.Memory.Common.Events.DistillationFailedEvent.Reason.init -> void
+Agency.Memory.Common.Events.DistillationSettledEvent
+Agency.Memory.Common.Events.DistillationSettledEvent.Deconstruct(out string! UserId, out string! SessionId) -> void
+Agency.Memory.Common.Events.DistillationSettledEvent.DistillationSettledEvent(Agency.Memory.Common.Events.DistillationSettledEvent! original) -> void
+Agency.Memory.Common.Events.DistillationSettledEvent.DistillationSettledEvent(string! UserId, string! SessionId) -> void
+Agency.Memory.Common.Events.DistillationSettledEvent.SessionId.get -> string!
+Agency.Memory.Common.Events.DistillationSettledEvent.SessionId.init -> void
+Agency.Memory.Common.Events.DistillationSettledEvent.UserId.get -> string!
+Agency.Memory.Common.Events.DistillationSettledEvent.UserId.init -> void
+Agency.Memory.Common.Events.IAsyncEventBus
+Agency.Memory.Common.Events.IAsyncEventBus.PublishAsync<T>(T! evt, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Common.Events.IAsyncEventBus.Subscribe<T>(System.Func<T!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! handler) -> System.IDisposable!
+Agency.Memory.Common.Events.MemoryMutatedEvent
+Agency.Memory.Common.Events.MemoryMutatedEvent.Deconstruct(out string! UserId, out string! Operation, out string! Detail) -> void
+Agency.Memory.Common.Events.MemoryMutatedEvent.Detail.get -> string!
+Agency.Memory.Common.Events.MemoryMutatedEvent.Detail.init -> void
+Agency.Memory.Common.Events.MemoryMutatedEvent.Equals(Agency.Memory.Common.Events.MemoryMutatedEvent? other) -> bool
+Agency.Memory.Common.Events.MemoryMutatedEvent.MemoryMutatedEvent(string! UserId, string! Operation, string! Detail) -> void
+Agency.Memory.Common.Events.MemoryMutatedEvent.Operation.get -> string!
+Agency.Memory.Common.Events.MemoryMutatedEvent.Operation.init -> void
+Agency.Memory.Common.Events.MemoryMutatedEvent.UserId.get -> string!
+Agency.Memory.Common.Events.MemoryMutatedEvent.UserId.init -> void
+Agency.Memory.Common.Hooks.MemoryHookFactory
+Agency.Memory.Common.Jobs.ConsolidationJob
+Agency.Memory.Common.Jobs.ConsolidationJob.<Clone>$() -> Agency.Memory.Common.Jobs.ConsolidationJob!
+Agency.Memory.Common.Jobs.ConsolidationJob.ConsolidationJob(string! UserId, string! TriggeredBySessionId) -> void
+Agency.Memory.Common.Jobs.ConsolidationJob.Deconstruct(out string! UserId, out string! TriggeredBySessionId) -> void
+Agency.Memory.Common.Jobs.ConsolidationJob.Equals(Agency.Memory.Common.Jobs.ConsolidationJob? other) -> bool
+Agency.Memory.Common.Jobs.ConsolidationJob.TriggeredBySessionId.get -> string!
+Agency.Memory.Common.Jobs.ConsolidationJob.TriggeredBySessionId.init -> void
+Agency.Memory.Common.Jobs.ConsolidationJob.UserId.get -> string!
+Agency.Memory.Common.Jobs.ConsolidationJob.UserId.init -> void
+Agency.Memory.Common.Jobs.DistillationJob
+Agency.Memory.Common.Jobs.DistillationJob.<Clone>$() -> Agency.Memory.Common.Jobs.DistillationJob!
+Agency.Memory.Common.Jobs.DistillationJob.Deconstruct(out string! UserId, out string! SessionId, out Agency.Memory.Common.Jobs.DistillationTrigger Trigger, out int UpToTurnIndex, out string? TriggerSummary, out Agency.Harness.Contexts.FocusContext? Focus) -> void
+Agency.Memory.Common.Jobs.DistillationJob.DistillationJob(string! UserId, string! SessionId, Agency.Memory.Common.Jobs.DistillationTrigger Trigger, int UpToTurnIndex, string? TriggerSummary = null, Agency.Harness.Contexts.FocusContext? Focus = null) -> void
+Agency.Memory.Common.Jobs.DistillationJob.Equals(Agency.Memory.Common.Jobs.DistillationJob? other) -> bool
+Agency.Memory.Common.Jobs.DistillationJob.Focus.get -> Agency.Harness.Contexts.FocusContext?
+Agency.Memory.Common.Jobs.DistillationJob.Focus.init -> void
+Agency.Memory.Common.Jobs.DistillationJob.SessionId.get -> string!
+Agency.Memory.Common.Jobs.DistillationJob.SessionId.init -> void
+Agency.Memory.Common.Jobs.DistillationJob.Trigger.get -> Agency.Memory.Common.Jobs.DistillationTrigger
+Agency.Memory.Common.Jobs.DistillationJob.Trigger.init -> void
+Agency.Memory.Common.Jobs.DistillationJob.TriggerSummary.get -> string?
+Agency.Memory.Common.Jobs.DistillationJob.TriggerSummary.init -> void
+Agency.Memory.Common.Jobs.DistillationJob.UpToTurnIndex.get -> int
+Agency.Memory.Common.Jobs.DistillationJob.UpToTurnIndex.init -> void
+Agency.Memory.Common.Jobs.DistillationJob.UserId.get -> string!
+Agency.Memory.Common.Jobs.DistillationJob.UserId.init -> void
+Agency.Memory.Common.Jobs.DistillationTrigger
+Agency.Memory.Common.Jobs.DistillationTrigger.GoalCompletion = 0 -> Agency.Memory.Common.Jobs.DistillationTrigger
+Agency.Memory.Common.Jobs.DistillationTrigger.Inactivity = 1 -> Agency.Memory.Common.Jobs.DistillationTrigger
+Agency.Memory.Common.Jobs.DistillationTrigger.SessionDisposed = 2 -> Agency.Memory.Common.Jobs.DistillationTrigger
+Agency.Memory.Common.Options.BackpressurePolicy
+Agency.Memory.Common.Options.BackpressurePolicy.DropNewest = 1 -> Agency.Memory.Common.Options.BackpressurePolicy
+Agency.Memory.Common.Options.BackpressurePolicy.DropOldest = 0 -> Agency.Memory.Common.Options.BackpressurePolicy
+Agency.Memory.Common.Options.BackpressurePolicy.Wait = 2 -> Agency.Memory.Common.Options.BackpressurePolicy
+Agency.Memory.Common.Options.ConsolidationTrigger
+Agency.Memory.Common.Options.ConsolidationTrigger.Manual = 1 -> Agency.Memory.Common.Options.ConsolidationTrigger
+Agency.Memory.Common.Options.ConsolidationTrigger.OnSessionEnd = 0 -> Agency.Memory.Common.Options.ConsolidationTrigger
+Agency.Memory.Common.Options.ConsolidatorOptions
+Agency.Memory.Common.Options.ConsolidatorOptions.ConsolidatorOptions() -> void
+Agency.Memory.Common.Options.ConsolidatorOptions.MaxCostUsd.get -> decimal
+Agency.Memory.Common.Options.ConsolidatorOptions.MaxCostUsd.set -> void
+Agency.Memory.Common.Options.ConsolidatorOptions.MaxIterations.get -> int
+Agency.Memory.Common.Options.ConsolidatorOptions.MaxIterations.set -> void
+Agency.Memory.Common.Options.ConsolidatorOptions.Model.get -> string?
+Agency.Memory.Common.Options.ConsolidatorOptions.Model.set -> void
+Agency.Memory.Common.Options.ConsolidatorOptions.Trigger.get -> Agency.Memory.Common.Options.ConsolidationTrigger
+Agency.Memory.Common.Options.ConsolidatorOptions.Trigger.set -> void
+Agency.Memory.Common.Options.DistillerOptions
+Agency.Memory.Common.Options.DistillerOptions.Backpressure.get -> Agency.Memory.Common.Options.BackpressurePolicy
+Agency.Memory.Common.Options.DistillerOptions.Backpressure.set -> void
+Agency.Memory.Common.Options.DistillerOptions.DistillerOptions() -> void
+Agency.Memory.Common.Options.DistillerOptions.InactivityTimeout.get -> System.TimeSpan
+Agency.Memory.Common.Options.DistillerOptions.InactivityTimeout.set -> void
+Agency.Memory.Common.Options.DistillerOptions.MaxRetries.get -> int
+Agency.Memory.Common.Options.DistillerOptions.MaxRetries.set -> void
+Agency.Memory.Common.Options.DistillerOptions.PerSessionQueueCapacity.get -> int
+Agency.Memory.Common.Options.DistillerOptions.PerSessionQueueCapacity.set -> void
+Agency.Memory.Common.Options.DistillerOptions.RetryBaseDelay.get -> System.TimeSpan
+Agency.Memory.Common.Options.DistillerOptions.RetryBaseDelay.set -> void
+Agency.Memory.Common.Options.DistillerOptions.ShutdownDrainTimeout.get -> System.TimeSpan
+Agency.Memory.Common.Options.DistillerOptions.ShutdownDrainTimeout.set -> void
+Agency.Memory.Common.Options.MemoryOptions
+Agency.Memory.Common.Options.MemoryOptions.CollectionName.get -> string!
+Agency.Memory.Common.Options.MemoryOptions.CollectionName.set -> void
+Agency.Memory.Common.Options.MemoryOptions.ConsolidationSimilarityThreshold.get -> System.Collections.Generic.Dictionary<Agency.Memory.Common.Records.ContentType, double>!
+Agency.Memory.Common.Options.MemoryOptions.ConsolidationSimilarityThreshold.set -> void
+Agency.Memory.Common.Options.MemoryOptions.HygieneSchedule.get -> System.TimeSpan
+Agency.Memory.Common.Options.MemoryOptions.HygieneSchedule.set -> void
+Agency.Memory.Common.Options.MemoryOptions.ImportancePruneThreshold.get -> double
+Agency.Memory.Common.Options.MemoryOptions.ImportancePruneThreshold.set -> void
+Agency.Memory.Common.Options.MemoryOptions.MemoryOptions() -> void
+Agency.Memory.Common.Options.MemoryOptions.OverFetchFactor.get -> int
+Agency.Memory.Common.Options.MemoryOptions.OverFetchFactor.set -> void
+Agency.Memory.Common.Options.MemoryOptions.Ranking.get -> Agency.Memory.Common.Ranking.RankingWeights!
+Agency.Memory.Common.Options.MemoryOptions.Ranking.set -> void
+Agency.Memory.Common.Options.MemoryOptions.RecencyHalfLifeDays.get -> double
+Agency.Memory.Common.Options.MemoryOptions.RecencyHalfLifeDays.set -> void
+Agency.Memory.Common.Options.MemoryOptions.RetrievalTopK.get -> int
+Agency.Memory.Common.Options.MemoryOptions.RetrievalTopK.set -> void
+Agency.Memory.Common.Options.MemoryOptions.StalePruneAge.get -> System.TimeSpan
+Agency.Memory.Common.Options.MemoryOptions.StalePruneAge.set -> void
+Agency.Memory.Common.Options.MemoryOptions.Ttl.get -> System.Collections.Generic.Dictionary<Agency.Memory.Common.Records.ContentType, System.TimeSpan>!
+Agency.Memory.Common.Options.MemoryOptions.Ttl.set -> void
+Agency.Memory.Common.Ranking.RankingWeights
+Agency.Memory.Common.Ranking.RankingWeights.<Clone>$() -> Agency.Memory.Common.Ranking.RankingWeights!
+Agency.Memory.Common.Ranking.RankingWeights.Deconstruct(out double Similarity, out double Recency, out double Importance, out double SessionMatch) -> void
+Agency.Memory.Common.Ranking.RankingWeights.Equals(Agency.Memory.Common.Ranking.RankingWeights? other) -> bool
+Agency.Memory.Common.Ranking.RankingWeights.Importance.get -> double
+Agency.Memory.Common.Ranking.RankingWeights.Importance.init -> void
+Agency.Memory.Common.Ranking.RankingWeights.RankingWeights(double Similarity, double Recency, double Importance, double SessionMatch) -> void
+Agency.Memory.Common.Ranking.RankingWeights.Recency.get -> double
+Agency.Memory.Common.Ranking.RankingWeights.Recency.init -> void
+Agency.Memory.Common.Ranking.RankingWeights.SessionMatch.get -> double
+Agency.Memory.Common.Ranking.RankingWeights.SessionMatch.init -> void
+Agency.Memory.Common.Ranking.RankingWeights.Similarity.get -> double
+Agency.Memory.Common.Ranking.RankingWeights.Similarity.init -> void
+Agency.Memory.Common.Records.ContentType
+Agency.Memory.Common.Records.ContentType.Fact = 0 -> Agency.Memory.Common.Records.ContentType
+Agency.Memory.Common.Records.ContentType.Memory = 1 -> Agency.Memory.Common.Records.ContentType
+Agency.Memory.Common.Records.Record
+Agency.Memory.Common.Records.Record.<Clone>$() -> Agency.Memory.Common.Records.Record!
+Agency.Memory.Common.Records.Record.Age.get -> System.TimeSpan
+Agency.Memory.Common.Records.Record.ContentType.get -> Agency.Memory.Common.Records.ContentType
+Agency.Memory.Common.Records.Record.ContentType.init -> void
+Agency.Memory.Common.Records.Record.CreatedAt.get -> System.DateTimeOffset
+Agency.Memory.Common.Records.Record.CreatedAt.init -> void
+Agency.Memory.Common.Records.Record.Domain.get -> string!
+Agency.Memory.Common.Records.Record.Domain.init -> void
+Agency.Memory.Common.Records.Record.Embedding.get -> System.ReadOnlyMemory<float>
+Agency.Memory.Common.Records.Record.Embedding.init -> void
+Agency.Memory.Common.Records.Record.Equals(Agency.Memory.Common.Records.Record? other) -> bool
+Agency.Memory.Common.Records.Record.Id.get -> string!
+Agency.Memory.Common.Records.Record.Id.init -> void
+Agency.Memory.Common.Records.Record.Importance.get -> double
+Agency.Memory.Common.Records.Record.Importance.init -> void
+Agency.Memory.Common.Records.Record.Key.get -> string!
+Agency.Memory.Common.Records.Record.Key.init -> void
+Agency.Memory.Common.Records.Record.LastAccessedAt.get -> System.DateTimeOffset?
+Agency.Memory.Common.Records.Record.LastAccessedAt.init -> void
+Agency.Memory.Common.Records.Record.Record() -> void
+Agency.Memory.Common.Records.Record.SessionId.get -> string?
+Agency.Memory.Common.Records.Record.SessionId.init -> void
+Agency.Memory.Common.Records.Record.Tags.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Agency.Memory.Common.Records.Record.Tags.init -> void
+Agency.Memory.Common.Records.Record.Title.get -> string!
+Agency.Memory.Common.Records.Record.Title.init -> void
+Agency.Memory.Common.Records.Record.UpdatedAt.get -> System.DateTimeOffset
+Agency.Memory.Common.Records.Record.UpdatedAt.init -> void
+Agency.Memory.Common.Records.Record.UserId.get -> string!
+Agency.Memory.Common.Records.Record.UserId.init -> void
+Agency.Memory.Common.Records.Record.Value.get -> string!
+Agency.Memory.Common.Records.Record.Value.init -> void
+Agency.Memory.Common.Storage.IDeadLetterStore
+Agency.Memory.Common.Storage.IDeadLetterStore.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! error, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Common.Storage.IMemorySchemaInitializer
+Agency.Memory.Common.Storage.IMemorySchemaInitializer.InitializeAsync(int embeddingDim, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Common.Storage.IMemoryStore
+Agency.Memory.Common.Storage.IMemoryStore.DeleteByIdAsync(string! recordId, string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.Memory.Common.Storage.IMemoryStore.DeleteWhereLowImportanceStaleAsync(double importanceThreshold, System.TimeSpan staleAge, System.DateTimeOffset now, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Common.Storage.IMemoryStore.DeleteWhereTtlExceededAsync(Agency.Memory.Common.Records.ContentType contentType, System.TimeSpan ttl, System.DateTimeOffset now, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Common.Storage.IMemoryStore.ForgetAsync(string! userId, string! domain, string! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.Memory.Common.Storage.IMemoryStore.ForgetMeAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Common.Storage.IMemoryStore.GetAllForUserAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Common.Records.Record!>!>!
+Agency.Memory.Common.Storage.IMemoryStore.GetByKeyAsync(string! userId, string? sessionId, string! domain, string! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record?>!
+Agency.Memory.Common.Storage.IMemoryStore.LastWrittenAtAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.DateTimeOffset?>!
+Agency.Memory.Common.Storage.IMemoryStore.MergeAsync(System.Collections.Generic.IReadOnlyList<string!>! idsToDelete, Agency.Memory.Common.Records.Record! newRecord, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record!>!
+Agency.Memory.Common.Storage.IMemoryStore.SearchAsync(Agency.Memory.Common.Storage.SearchQuery! query, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Common.Storage.SearchHit!>!>!
+Agency.Memory.Common.Storage.IMemoryStore.UpdateRecordAsync(string! recordId, string! userId, string? newValue, double? newImportance, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record?>!
+Agency.Memory.Common.Storage.IMemoryStore.UpsertAsync(Agency.Memory.Common.Records.Record! record, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record!>!
+Agency.Memory.Common.Storage.IWatermarkStore
+Agency.Memory.Common.Storage.IWatermarkStore.AdvanceAsync(string! userId, string! sessionId, int candidate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Common.Storage.IWatermarkStore.GetAsync(string! userId, string! sessionId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Common.Storage.SearchHit
+Agency.Memory.Common.Storage.SearchHit.<Clone>$() -> Agency.Memory.Common.Storage.SearchHit!
+Agency.Memory.Common.Storage.SearchHit.Deconstruct(out Agency.Memory.Common.Records.Record! Record, out double Similarity) -> void
+Agency.Memory.Common.Storage.SearchHit.Equals(Agency.Memory.Common.Storage.SearchHit? other) -> bool
+Agency.Memory.Common.Storage.SearchHit.Record.get -> Agency.Memory.Common.Records.Record!
+Agency.Memory.Common.Storage.SearchHit.Record.init -> void
+Agency.Memory.Common.Storage.SearchHit.SearchHit(Agency.Memory.Common.Records.Record! Record, double Similarity) -> void
+Agency.Memory.Common.Storage.SearchHit.Similarity.get -> double
+Agency.Memory.Common.Storage.SearchHit.Similarity.init -> void
+Agency.Memory.Common.Storage.SearchQuery
+Agency.Memory.Common.Storage.SearchQuery.<Clone>$() -> Agency.Memory.Common.Storage.SearchQuery!
+Agency.Memory.Common.Storage.SearchQuery.ContentType.get -> Agency.Memory.Common.Records.ContentType?
+Agency.Memory.Common.Storage.SearchQuery.ContentType.init -> void
+Agency.Memory.Common.Storage.SearchQuery.Deconstruct(out string! UserId, out System.ReadOnlyMemory<float> QueryEmbedding, out int TopK, out Agency.Memory.Common.Records.ContentType? ContentType, out string? Domain) -> void
+Agency.Memory.Common.Storage.SearchQuery.Domain.get -> string?
+Agency.Memory.Common.Storage.SearchQuery.Domain.init -> void
+Agency.Memory.Common.Storage.SearchQuery.Equals(Agency.Memory.Common.Storage.SearchQuery? other) -> bool
+Agency.Memory.Common.Storage.SearchQuery.QueryEmbedding.get -> System.ReadOnlyMemory<float>
+Agency.Memory.Common.Storage.SearchQuery.QueryEmbedding.init -> void
+Agency.Memory.Common.Storage.SearchQuery.SearchQuery(string! UserId, System.ReadOnlyMemory<float> QueryEmbedding, int TopK, Agency.Memory.Common.Records.ContentType? ContentType = null, string? Domain = null) -> void
+Agency.Memory.Common.Storage.SearchQuery.TopK.get -> int
+Agency.Memory.Common.Storage.SearchQuery.TopK.init -> void
+Agency.Memory.Common.Storage.SearchQuery.UserId.get -> string!
+Agency.Memory.Common.Storage.SearchQuery.UserId.init -> void
+override abstract Agency.Memory.Common.Events.DistillationSettledEvent.<Clone>$() -> Agency.Memory.Common.Events.DistillationSettledEvent!
+override Agency.Memory.Common.Events.ConsolidationCompletedEvent.<Clone>$() -> Agency.Memory.Common.Events.ConsolidationCompletedEvent!
+override Agency.Memory.Common.Events.ConsolidationCompletedEvent.Equals(object? obj) -> bool
+override Agency.Memory.Common.Events.ConsolidationCompletedEvent.GetHashCode() -> int
+override Agency.Memory.Common.Events.ConsolidationCompletedEvent.ToString() -> string!
+override Agency.Memory.Common.Events.DistillationCompletedEvent.<Clone>$() -> Agency.Memory.Common.Events.DistillationCompletedEvent!
+override Agency.Memory.Common.Events.DistillationCompletedEvent.Equals(object? obj) -> bool
+override Agency.Memory.Common.Events.DistillationCompletedEvent.GetHashCode() -> int
+override Agency.Memory.Common.Events.DistillationCompletedEvent.ToString() -> string!
+override Agency.Memory.Common.Events.DistillationFailedEvent.<Clone>$() -> Agency.Memory.Common.Events.DistillationFailedEvent!
+override Agency.Memory.Common.Events.DistillationFailedEvent.Equals(object? obj) -> bool
+override Agency.Memory.Common.Events.DistillationFailedEvent.GetHashCode() -> int
+override Agency.Memory.Common.Events.DistillationFailedEvent.ToString() -> string!
+override Agency.Memory.Common.Events.DistillationSettledEvent.EqualityContract.get -> System.Type!
+override Agency.Memory.Common.Events.DistillationSettledEvent.Equals(object? obj) -> bool
+override Agency.Memory.Common.Events.DistillationSettledEvent.GetHashCode() -> int
+override Agency.Memory.Common.Events.DistillationSettledEvent.PrintMembers(System.Text.StringBuilder! builder) -> bool
+override Agency.Memory.Common.Events.DistillationSettledEvent.ToString() -> string!
+override Agency.Memory.Common.Events.MemoryMutatedEvent.<Clone>$() -> Agency.Memory.Common.Events.MemoryMutatedEvent!
+override Agency.Memory.Common.Events.MemoryMutatedEvent.Equals(object? obj) -> bool
+override Agency.Memory.Common.Events.MemoryMutatedEvent.GetHashCode() -> int
+override Agency.Memory.Common.Events.MemoryMutatedEvent.ToString() -> string!
+override Agency.Memory.Common.Jobs.ConsolidationJob.Equals(object? obj) -> bool
+override Agency.Memory.Common.Jobs.ConsolidationJob.GetHashCode() -> int
+override Agency.Memory.Common.Jobs.ConsolidationJob.ToString() -> string!
+override Agency.Memory.Common.Jobs.DistillationJob.Equals(object? obj) -> bool
+override Agency.Memory.Common.Jobs.DistillationJob.GetHashCode() -> int
+override Agency.Memory.Common.Jobs.DistillationJob.ToString() -> string!
+override Agency.Memory.Common.Ranking.RankingWeights.Equals(object? obj) -> bool
+override Agency.Memory.Common.Ranking.RankingWeights.GetHashCode() -> int
+override Agency.Memory.Common.Ranking.RankingWeights.ToString() -> string!
+override Agency.Memory.Common.Records.Record.Equals(object? obj) -> bool
+override Agency.Memory.Common.Records.Record.GetHashCode() -> int
+override Agency.Memory.Common.Records.Record.ToString() -> string!
+override Agency.Memory.Common.Storage.SearchHit.Equals(object? obj) -> bool
+override Agency.Memory.Common.Storage.SearchHit.GetHashCode() -> int
+override Agency.Memory.Common.Storage.SearchHit.ToString() -> string!
+override Agency.Memory.Common.Storage.SearchQuery.Equals(object? obj) -> bool
+override Agency.Memory.Common.Storage.SearchQuery.GetHashCode() -> int
+override Agency.Memory.Common.Storage.SearchQuery.ToString() -> string!
+override sealed Agency.Memory.Common.Events.ConsolidationCompletedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Memory.Common.Events.DistillationCompletedEvent.Equals(Agency.Memory.Common.Events.DistillationSettledEvent? other) -> bool
+override sealed Agency.Memory.Common.Events.DistillationFailedEvent.Equals(Agency.Memory.Common.Events.DistillationSettledEvent? other) -> bool
+override sealed Agency.Memory.Common.Events.DistillationSettledEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Memory.Common.Events.MemoryMutatedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+static Agency.Memory.Common.Events.ConsolidationCompletedEvent.operator !=(Agency.Memory.Common.Events.ConsolidationCompletedEvent? left, Agency.Memory.Common.Events.ConsolidationCompletedEvent? right) -> bool
+static Agency.Memory.Common.Events.ConsolidationCompletedEvent.operator ==(Agency.Memory.Common.Events.ConsolidationCompletedEvent? left, Agency.Memory.Common.Events.ConsolidationCompletedEvent? right) -> bool
+static Agency.Memory.Common.Events.DistillationCompletedEvent.operator !=(Agency.Memory.Common.Events.DistillationCompletedEvent? left, Agency.Memory.Common.Events.DistillationCompletedEvent? right) -> bool
+static Agency.Memory.Common.Events.DistillationCompletedEvent.operator ==(Agency.Memory.Common.Events.DistillationCompletedEvent? left, Agency.Memory.Common.Events.DistillationCompletedEvent? right) -> bool
+static Agency.Memory.Common.Events.DistillationFailedEvent.operator !=(Agency.Memory.Common.Events.DistillationFailedEvent? left, Agency.Memory.Common.Events.DistillationFailedEvent? right) -> bool
+static Agency.Memory.Common.Events.DistillationFailedEvent.operator ==(Agency.Memory.Common.Events.DistillationFailedEvent? left, Agency.Memory.Common.Events.DistillationFailedEvent? right) -> bool
+static Agency.Memory.Common.Events.DistillationSettledEvent.operator !=(Agency.Memory.Common.Events.DistillationSettledEvent? left, Agency.Memory.Common.Events.DistillationSettledEvent? right) -> bool
+static Agency.Memory.Common.Events.DistillationSettledEvent.operator ==(Agency.Memory.Common.Events.DistillationSettledEvent? left, Agency.Memory.Common.Events.DistillationSettledEvent? right) -> bool
+static Agency.Memory.Common.Events.MemoryMutatedEvent.operator !=(Agency.Memory.Common.Events.MemoryMutatedEvent? left, Agency.Memory.Common.Events.MemoryMutatedEvent? right) -> bool
+static Agency.Memory.Common.Events.MemoryMutatedEvent.operator ==(Agency.Memory.Common.Events.MemoryMutatedEvent? left, Agency.Memory.Common.Events.MemoryMutatedEvent? right) -> bool
+static Agency.Memory.Common.Hooks.MemoryHookFactory.Build(System.Func<Agency.Harness.Contexts.Context!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! retrievalCallback, System.Func<Agency.Harness.Hooks.AssistantTurnHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! timerRestartCallback, System.Func<Agency.Harness.Hooks.SessionStartedHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>? sessionStartedCallback = null, System.Func<Agency.Harness.Hooks.SessionEndedHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>? sessionEndCallback = null) -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Memory.Common.Hooks.MemoryHookFactory.BuildEmpty() -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Memory.Common.Jobs.ConsolidationJob.operator !=(Agency.Memory.Common.Jobs.ConsolidationJob? left, Agency.Memory.Common.Jobs.ConsolidationJob? right) -> bool
+static Agency.Memory.Common.Jobs.ConsolidationJob.operator ==(Agency.Memory.Common.Jobs.ConsolidationJob? left, Agency.Memory.Common.Jobs.ConsolidationJob? right) -> bool
+static Agency.Memory.Common.Jobs.DistillationJob.operator !=(Agency.Memory.Common.Jobs.DistillationJob? left, Agency.Memory.Common.Jobs.DistillationJob? right) -> bool
+static Agency.Memory.Common.Jobs.DistillationJob.operator ==(Agency.Memory.Common.Jobs.DistillationJob? left, Agency.Memory.Common.Jobs.DistillationJob? right) -> bool
+static Agency.Memory.Common.Ranking.RankingWeights.Default.get -> Agency.Memory.Common.Ranking.RankingWeights!
+static Agency.Memory.Common.Ranking.RankingWeights.operator !=(Agency.Memory.Common.Ranking.RankingWeights? left, Agency.Memory.Common.Ranking.RankingWeights? right) -> bool
+static Agency.Memory.Common.Ranking.RankingWeights.operator ==(Agency.Memory.Common.Ranking.RankingWeights? left, Agency.Memory.Common.Ranking.RankingWeights? right) -> bool
+static Agency.Memory.Common.Records.Record.Create(string! id, string! userId, string? sessionId, Agency.Memory.Common.Records.ContentType contentType, string! domain, string! key, string! title, string! value, System.Collections.Generic.IReadOnlyList<string!>! tags, double importance, System.DateTimeOffset createdAt, System.DateTimeOffset updatedAt, System.DateTimeOffset? lastAccessedAt = null, System.ReadOnlyMemory<float> embedding = default(System.ReadOnlyMemory<float>)) -> Agency.Memory.Common.Records.Record!
+static Agency.Memory.Common.Records.Record.operator !=(Agency.Memory.Common.Records.Record? left, Agency.Memory.Common.Records.Record? right) -> bool
+static Agency.Memory.Common.Records.Record.operator ==(Agency.Memory.Common.Records.Record? left, Agency.Memory.Common.Records.Record? right) -> bool
+static Agency.Memory.Common.Storage.SearchHit.operator !=(Agency.Memory.Common.Storage.SearchHit? left, Agency.Memory.Common.Storage.SearchHit? right) -> bool
+static Agency.Memory.Common.Storage.SearchHit.operator ==(Agency.Memory.Common.Storage.SearchHit? left, Agency.Memory.Common.Storage.SearchHit? right) -> bool
+static Agency.Memory.Common.Storage.SearchQuery.operator !=(Agency.Memory.Common.Storage.SearchQuery? left, Agency.Memory.Common.Storage.SearchQuery? right) -> bool
+static Agency.Memory.Common.Storage.SearchQuery.operator ==(Agency.Memory.Common.Storage.SearchQuery? left, Agency.Memory.Common.Storage.SearchQuery? right) -> bool
+virtual Agency.Memory.Common.Events.DistillationSettledEvent.Equals(Agency.Memory.Common.Events.DistillationSettledEvent? other) -> bool

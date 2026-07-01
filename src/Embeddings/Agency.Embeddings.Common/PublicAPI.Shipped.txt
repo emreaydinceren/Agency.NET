@@ -1,0 +1,11 @@
+#nullable enable
+Agency.Embeddings.Common.BatchingEmbeddingGenerator
+Agency.Embeddings.Common.BatchingEmbeddingGenerator.BatchingEmbeddingGenerator(Agency.Embeddings.Common.IEmbeddingGenerator! inner, int maxBatchSize = 32, System.TimeSpan? maxDelay = null) -> void
+Agency.Embeddings.Common.BatchingEmbeddingGenerator.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Agency.Embeddings.Common.BatchingEmbeddingGenerator.GenerateEmbeddingAsync(string! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.ReadOnlyMemory<float>>!
+Agency.Embeddings.Common.BatchingEmbeddingGenerator.GenerateEmbeddingsAsync(System.Collections.Generic.IEnumerable<string!>! inputs, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.ReadOnlyMemory<float>>!>!
+Agency.Embeddings.Common.IEmbeddingGenerator
+Agency.Embeddings.Common.IEmbeddingGenerator.GenerateEmbeddingAsync(string! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.ReadOnlyMemory<float>>!
+Agency.Embeddings.Common.IEmbeddingGenerator.GenerateEmbeddingsAsync(System.Collections.Generic.IEnumerable<string!>! inputs, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.ReadOnlyMemory<float>>!>!
+const Agency.Embeddings.Common.BatchingEmbeddingGenerator.DefaultMaxBatchSize = 32 -> int
+static readonly Agency.Embeddings.Common.BatchingEmbeddingGenerator.DefaultMaxDelay -> System.TimeSpan

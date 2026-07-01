@@ -13,12 +13,14 @@ public sealed class SkillLoaderTests : IDisposable
 
     private readonly string _root;
 
+    /// <summary>Creates a fresh temporary directory to act as a skill root for the test.</summary>
     public SkillLoaderTests()
     {
         this._root = Path.Combine(Path.GetTempPath(), "SkillLoaderTests_" + Path.GetRandomFileName());
         Directory.CreateDirectory(this._root);
     }
 
+    /// <summary>Deletes the temporary skill root created for the test, best-effort.</summary>
     public void Dispose()
     {
         try
@@ -47,6 +49,7 @@ public sealed class SkillLoaderTests : IDisposable
     // Discovery
     // ---------------------------------------------------------------------------
 
+    /// <summary>Loading a single root containing two skill directories discovers both skills.</summary>
     [Fact]
     public void Load_SingleRoot_DiscoversBothSkills()
     {
@@ -60,6 +63,7 @@ public sealed class SkillLoaderTests : IDisposable
         Assert.NotNull(catalog.Find("skill-b"));
     }
 
+    /// <summary>Loading a skill directory populates <see cref="Skill.Name"/>, <see cref="Skill.Description"/>, and <see cref="Skill.SkillDir"/> from its SKILL.md and location.</summary>
     [Fact]
     public void Load_SkillDir_PopulatesFields()
     {
@@ -78,6 +82,7 @@ public sealed class SkillLoaderTests : IDisposable
     // Precedence — first root wins
     // ---------------------------------------------------------------------------
 
+    /// <summary>When the same skill name exists in two roots, the skill from the first root passed to <c>Load</c> wins.</summary>
     [Fact]
     public void Load_SameSkillInTwoRoots_FirstRootWins()
     {
@@ -97,6 +102,7 @@ public sealed class SkillLoaderTests : IDisposable
         Assert.Equal("Project version", skill.Description);
     }
 
+    /// <summary>When the same skill name exists in two roots, the resulting catalog contains only one entry for that name.</summary>
     [Fact]
     public void Load_SameSkillInTwoRoots_OnlyOneEntryInList()
     {
@@ -118,6 +124,7 @@ public sealed class SkillLoaderTests : IDisposable
     // Skipping — no SKILL.md
     // ---------------------------------------------------------------------------
 
+    /// <summary>A directory without a SKILL.md file is skipped, while a valid sibling skill directory is still loaded.</summary>
     [Fact]
     public void Load_DirWithoutSkillMd_IsSkipped()
     {
@@ -137,6 +144,7 @@ public sealed class SkillLoaderTests : IDisposable
     // Skipping — non-existent root
     // ---------------------------------------------------------------------------
 
+    /// <summary>A non-existent root is skipped without throwing, while a valid root passed alongside it is still loaded.</summary>
     [Fact]
     public void Load_NonExistentRoot_IsSkippedGracefully()
     {
@@ -149,6 +157,7 @@ public sealed class SkillLoaderTests : IDisposable
         Assert.NotNull(catalog.Find("real-skill"));
     }
 
+    /// <summary>When every root passed to <c>Load</c> is non-existent, the result is an empty catalog rather than a thrown exception.</summary>
     [Fact]
     public void Load_AllRootsNonExistent_ReturnsEmptyCatalog()
     {
@@ -163,6 +172,7 @@ public sealed class SkillLoaderTests : IDisposable
     // SkillCatalog.Find
     // ---------------------------------------------------------------------------
 
+    /// <summary>Looking up a skill name that is not in the catalog returns <see langword="null"/>.</summary>
     [Fact]
     public void Find_UnknownName_ReturnsNull()
     {
@@ -173,6 +183,7 @@ public sealed class SkillLoaderTests : IDisposable
         Assert.Null(catalog.Find("unknown-skill"));
     }
 
+    /// <summary>Looking up a skill by name matches regardless of the casing used in the lookup.</summary>
     [Fact]
     public void Find_IsCaseInsensitive()
     {
@@ -188,6 +199,7 @@ public sealed class SkillLoaderTests : IDisposable
     // SkillCatalog.Empty
     // ---------------------------------------------------------------------------
 
+    /// <summary><see cref="SkillCatalog.Empty"/> exposes a catalog with no entries, whose lookups all return <see langword="null"/>.</summary>
     [Fact]
     public void Empty_ReturnsEmptyCatalog()
     {

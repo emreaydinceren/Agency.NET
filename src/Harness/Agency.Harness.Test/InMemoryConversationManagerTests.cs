@@ -5,6 +5,9 @@ namespace Agency.Harness.Test;
 /// </summary>
 public sealed class InMemoryConversationManagerTests
 {
+    /// <summary>
+    /// A freshly constructed manager starts with an empty <c>Messages</c> collection.
+    /// </summary>
     [Fact]
     public void Messages_IsEmpty_WhenNewlyCreated()
     {
@@ -13,6 +16,9 @@ public sealed class InMemoryConversationManagerTests
         Assert.Empty(manager.Messages);
     }
 
+    /// <summary>
+    /// Appending a message adds the exact same instance to <c>Messages</c>.
+    /// </summary>
     [Fact]
     public void Append_AddsMessage_ToMessages()
     {
@@ -25,6 +31,9 @@ public sealed class InMemoryConversationManagerTests
         Assert.Same(msg, manager.Messages[0]);
     }
 
+    /// <summary>
+    /// Successive appends preserve insertion order in <c>Messages</c>.
+    /// </summary>
     [Fact]
     public void Append_PreservesOrder_AcrossMultipleMessages()
     {
@@ -43,6 +52,10 @@ public sealed class InMemoryConversationManagerTests
         Assert.Equal(ChatRole.User, manager.Messages[2].Role);
     }
 
+    /// <summary>
+    /// The <c>Messages</c> collection is a live read-only view: appends made after it was
+    /// retrieved are still visible through the same reference.
+    /// </summary>
     [Fact]
     public void Messages_ReturnsReadOnlyView()
     {

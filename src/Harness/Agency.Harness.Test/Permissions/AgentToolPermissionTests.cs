@@ -126,6 +126,13 @@ public sealed class AgentToolPermissionTests
     // RED: today AgentTool returns IsError:true for AwaitingPermission and never resumes.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When a child agent's tool call is unresolved (Ask), <see cref="AgentTool"/> must
+    /// auto-deny it via <see cref="ChatSession.ResumeWithPermissionsAsync"/> rather than
+    /// surfacing an error: the denied child tool is never invoked, the child continues past the
+    /// deny to a final answer, and <see cref="AgentTool.InvokeAsync"/> returns a
+    /// non-error <see cref="ToolResult"/> containing that final answer.
+    /// </summary>
     [Fact]
     public async Task ChildAsk_AutoDenied_ParentSettles_DeniedToolNeverInvoked()
     {
@@ -178,6 +185,12 @@ public sealed class AgentToolPermissionTests
     // RED: today AgentTool never resumes; child LLM is called at most once.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The auto-deny issued by <see cref="AgentTool"/> for an unresolved child call must be a
+    /// <see cref="PermissionResponseKind.DenyOnce"/> carrying <see cref="SubAgentDenyMessage"/>:
+    /// the child LLM's second call must observe a Tool-role result whose content contains both
+    /// "[Blocked]" and that exact message.
+    /// </summary>
     [Fact]
     public async Task ChildAsk_AutoDenied_ChildHistoryContainsBlockedDenyMessage()
     {
@@ -241,6 +254,13 @@ public sealed class AgentToolPermissionTests
     // (it currently returns an error result instead).
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A child agent's permission park is fully contained by <see cref="AgentTool"/>: the
+    /// parent agent's event stream must never contain a <see cref="PermissionRequestedEvent"/>
+    /// and the parent turn must never end in <see cref="AgentResultStatus.AwaitingPermission"/>
+    /// — after the auto-deny, the parent's tool call succeeds and the parent batch completes
+    /// with <see cref="AgentResultStatus.Success"/>.
+    /// </summary>
     [Fact]
     public async Task ParentTurn_DoesNotPark_NoPermissionEventsEscape()
     {
@@ -305,6 +325,12 @@ public sealed class AgentToolPermissionTests
     // RED: today AgentTool never calls ResumeWithPermissionsAsync.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// When a child batch contains two unresolved calls, <see cref="AgentTool"/> must
+    /// auto-deny both with <see cref="SubAgentDenyMessage"/>: neither child tool is invoked,
+    /// both [Blocked] deny messages reach the child LLM's next call, and the child stream
+    /// completes so the parent settles with a non-error <see cref="ToolResult"/>.
+    /// </summary>
     [Fact]
     public async Task TwoChildAsks_BothAutoDenied_ChildStreamCompletes_ParentSettles()
     {
@@ -372,6 +398,12 @@ public sealed class AgentToolPermissionTests
     // RED: today AgentTool never resumes after park.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// In a mixed child batch with one allowed call and one unresolved call,
+    /// <see cref="AgentTool"/> must let the allowed call run normally while auto-denying only
+    /// the unresolved one: the allowed tool is invoked exactly once, the unresolved tool is
+    /// never invoked, and the overall <see cref="ToolResult"/> is non-error.
+    /// </summary>
     [Fact]
     public async Task ChildMixedBatch_AllowedToolRuns_UnresolvedAutoDenied_ParentSettles()
     {

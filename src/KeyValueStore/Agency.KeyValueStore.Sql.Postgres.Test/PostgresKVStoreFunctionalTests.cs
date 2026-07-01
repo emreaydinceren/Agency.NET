@@ -449,7 +449,7 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
 
     /// <summary>
     /// Verifies that an entry upserted with a null <c>sessionId</c> produces a
-    /// <see cref="SearchHit{TValue}"/> whose <see cref="SearchHit{TValue}.SessionId"/> is
+    /// <see cref="SearchHit{TValue}"/> whose <see cref="SearchHit.SessionId"/> is
     /// <see langword="null"/> when retrieved.
     /// </summary>
     [Fact]

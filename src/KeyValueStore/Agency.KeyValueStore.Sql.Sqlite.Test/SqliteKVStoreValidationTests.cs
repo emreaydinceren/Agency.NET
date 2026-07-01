@@ -6,7 +6,7 @@ public sealed class SqliteKVStoreValidationTests
 {
     /// <summary>
     /// Verifies that the constructor throws <see cref="ArgumentNullException"/> when
-    /// <paramref name="sqliteRunner"/> is <see langword="null"/>.
+    /// <c>sqliteRunner</c> is <see langword="null"/>.
     /// </summary>
     [Fact]
     public void Constructor_NullSqliteRunner_ThrowsArgumentNullException()

@@ -18,6 +18,10 @@ public sealed class PermissionsFileStoreTests
 
     // ── 1. Load missing file ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> on a path with no file must return an empty
+    /// allow list rather than throwing.
+    /// </summary>
     [Fact]
     public void Load_MissingFile_ReturnsEmptyAllowList()
     {
@@ -30,6 +34,10 @@ public sealed class PermissionsFileStoreTests
         Assert.Empty(allow);
     }
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> on a path with no file must return an empty
+    /// deny list rather than throwing.
+    /// </summary>
     [Fact]
     public void Load_MissingFile_ReturnsEmptyDenyList()
     {
@@ -41,6 +49,9 @@ public sealed class PermissionsFileStoreTests
         Assert.Empty(deny);
     }
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> must not throw when the backing file is absent.
+    /// </summary>
     [Fact]
     public void Load_MissingFile_DoesNotThrow()
     {
@@ -53,6 +64,10 @@ public sealed class PermissionsFileStoreTests
         Assert.Null(ex);
     }
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> must be read-only: calling it on a missing path
+    /// must not create the file.
+    /// </summary>
     [Fact]
     public void Load_MissingFile_DoesNotCreateFile()
     {
@@ -66,6 +81,10 @@ public sealed class PermissionsFileStoreTests
 
     // ── 2. Append creates file ────────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Append"/> must create the backing file when it does not
+    /// yet exist.
+    /// </summary>
     [Fact]
     public void Append_DenyFalse_CreatesFileWhenMissing()
     {
@@ -83,6 +102,10 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Append"/> with <c>deny: false</c> must write the rule
+    /// string into the file's "Allow" array.
+    /// </summary>
     [Fact]
     public void Append_DenyFalse_WritesRuleToAllowArray()
     {
@@ -107,6 +130,10 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Append"/> must always write both the "Allow" and "Deny"
+    /// properties, even when appending an allow rule.
+    /// </summary>
     [Fact]
     public void Append_DenyFalse_DocumentHasDenyProperty()
     {
@@ -128,6 +155,9 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// Appending an allow rule to a fresh file must leave the "Deny" array empty.
+    /// </summary>
     [Fact]
     public void Append_DenyFalse_DenyArrayIsEmpty()
     {
@@ -151,6 +181,10 @@ public sealed class PermissionsFileStoreTests
 
     // ── 3. Append deny:true routes to Deny array ──────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Append"/> with <c>deny: true</c> must write the rule
+    /// string into the file's "Deny" array.
+    /// </summary>
     [Fact]
     public void Append_DenyTrue_WritesRuleToDenyArray()
     {
@@ -174,6 +208,9 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// Appending a deny rule to a fresh file must leave the "Allow" array empty.
+    /// </summary>
     [Fact]
     public void Append_DenyTrue_AllowArrayIsEmpty()
     {
@@ -197,6 +234,10 @@ public sealed class PermissionsFileStoreTests
 
     // ── 4. Duplicate append is a no-op ────────────────────────────────────────
 
+    /// <summary>
+    /// Appending the same allow rule twice must be a no-op the second time: the "Allow" array
+    /// must contain exactly one entry.
+    /// </summary>
     [Fact]
     public void Append_DuplicateAllowRule_AllowArrayHasExactlyOneEntry()
     {
@@ -219,6 +260,10 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// Appending the same deny rule twice must be a no-op the second time: the "Deny" array
+    /// must contain exactly one entry.
+    /// </summary>
     [Fact]
     public void Append_DuplicateDenyRule_DenyArrayHasExactlyOneEntry()
     {
@@ -243,6 +288,11 @@ public sealed class PermissionsFileStoreTests
 
     // ── 5. Load round-trip ────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A rule written by <see cref="PermissionsFileStore.Append"/> as an allow entry must
+    /// round-trip through <see cref="PermissionsFileStore.Load"/> with a matching
+    /// <see cref="PermissionRule.Raw"/> value.
+    /// </summary>
     [Fact]
     public void Load_AfterAppendAllow_ReturnsMatchingRawValue()
     {
@@ -263,6 +313,11 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// A rule written by <see cref="PermissionsFileStore.Append"/> as a deny entry must
+    /// round-trip through <see cref="PermissionsFileStore.Load"/> with a matching
+    /// <see cref="PermissionRule.Raw"/> value.
+    /// </summary>
     [Fact]
     public void Load_AfterAppendDeny_ReturnsMatchingRawValue()
     {
@@ -283,6 +338,11 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// Multiple allow and deny rules written across several
+    /// <see cref="PermissionsFileStore.Append"/> calls must all be present when the file is
+    /// re-read via <see cref="PermissionsFileStore.Load"/>.
+    /// </summary>
     [Fact]
     public void Load_AfterMultipleAppends_ReturnsAllRules()
     {
@@ -310,6 +370,11 @@ public sealed class PermissionsFileStoreTests
 
     // ── 6. Contention: backoff/retry succeeds after exclusive handle released ──
 
+    /// <summary>
+    /// When the backing file is held open with an exclusive lock by another process/handle,
+    /// <see cref="PermissionsFileStore.Append"/> must retry with backoff and succeed once the
+    /// handle is released, rather than failing immediately.
+    /// </summary>
     [Fact]
     public async Task Append_WhileExclusiveHandleHeld_SucceedsAfterHandleReleased()
     {
@@ -373,6 +438,10 @@ public sealed class PermissionsFileStoreTests
 
     // ── 7. Malformed entries skipped on Load ──────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> must not throw when the file contains a mix of
+    /// valid and malformed rule strings.
+    /// </summary>
     [Fact]
     public void Load_MalformedEntry_DoesNotThrow()
     {
@@ -394,6 +463,11 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// When the "Allow" array contains a malformed rule alongside a valid one,
+    /// <see cref="PermissionsFileStore.Load"/> must silently skip the malformed entry and
+    /// return only the valid rule.
+    /// </summary>
     [Fact]
     public void Load_MalformedEntry_ReturnsOnlyValidRules()
     {
@@ -416,6 +490,11 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// When the "Deny" array contains a malformed rule alongside a valid one,
+    /// <see cref="PermissionsFileStore.Load"/> must silently skip the malformed entry and
+    /// return only the valid deny rule.
+    /// </summary>
     [Fact]
     public void Load_MalformedDenyEntry_ReturnsOnlyValidDenyRules()
     {
@@ -439,6 +518,10 @@ public sealed class PermissionsFileStoreTests
 
     // ── 8. Malformed JSON document ────────────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> must not throw when the file's contents are not
+    /// valid JSON at all.
+    /// </summary>
     [Fact]
     public void Load_MalformedJsonDocument_DoesNotThrow()
     {
@@ -459,6 +542,10 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// When the file's contents are not valid JSON, <see cref="PermissionsFileStore.Load"/>
+    /// must return empty allow and deny lists rather than partial or garbage data.
+    /// </summary>
     [Fact]
     public void Load_MalformedJsonDocument_ReturnsEmptyLists()
     {
@@ -479,6 +566,10 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// <see cref="PermissionsFileStore.Load"/> must not throw when the backing file exists but
+    /// is empty (also not valid JSON).
+    /// </summary>
     [Fact]
     public void Load_EmptyFile_DoesNotThrow()
     {
@@ -500,6 +591,10 @@ public sealed class PermissionsFileStoreTests
         }
     }
 
+    /// <summary>
+    /// An empty backing file must yield empty allow and deny lists from
+    /// <see cref="PermissionsFileStore.Load"/>.
+    /// </summary>
     [Fact]
     public void Load_EmptyFile_ReturnsEmptyLists()
     {

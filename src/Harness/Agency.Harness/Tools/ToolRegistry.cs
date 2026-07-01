@@ -38,6 +38,7 @@ internal sealed class EmptyToolRegistry : IToolRegistry
 /// </summary>
 public sealed class ToolRegistry : IToolRegistry
 {
+    /// <summary>Gets a shared no-op <see cref="IToolRegistry"/> instance used when no tools are registered.</summary>
     public static readonly IToolRegistry Empty = EmptyToolRegistry.Instance;
 
     private HashSet<string> _disabledByUserToolNames = new();
@@ -46,6 +47,7 @@ public sealed class ToolRegistry : IToolRegistry
 
     private readonly Dictionary<string, (ITool Tool, ToolDefinition Definition)> _tools;
 
+    /// <summary>Creates a registry pre-populated with <paramref name="tools"/>.</summary>
     /// <param name="tools">The tools to register.</param>
     public ToolRegistry(IEnumerable<ITool> tools)
     {
@@ -55,6 +57,8 @@ public sealed class ToolRegistry : IToolRegistry
             this.Register(tool);
         }
     }
+
+    /// <summary>Creates an empty registry with no tools registered.</summary>
     public ToolRegistry() : this([]) { }
 
     /// <inheritdoc/>

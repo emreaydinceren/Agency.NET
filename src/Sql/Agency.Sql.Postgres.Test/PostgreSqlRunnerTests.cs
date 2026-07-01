@@ -3,15 +3,12 @@ using Microsoft.Extensions.Configuration;
 namespace Agency.Sql.Postgres.Test;
 
 /// <summary>
-/// Functional tests that run against the real PostgreSQL instance defined in docker-compose.yml. Requires the container
-/// to be running: docker compose up -d
+/// Functional tests for <see cref="Agency.Sql.Postgres.PostgreSqlRunner"/> that run against the real PostgreSQL
+/// instance defined in docker-compose.yml. Requires the container to be running: docker compose up -d
 /// Connection configured via <c>ConnectionStrings:PostgreSql</c> in appsettings.json.
 /// Run with: dotnet test --filter "Category=Functional" Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
-/// <summary>
-/// Functional tests for <see cref="Agency.Sql.PostgreSqlRunner"/>.
-/// </summary>
 public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.DatabaseFixture>
 {
     private readonly DatabaseFixture _fixture;
@@ -466,6 +463,9 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
     /// </summary>
     public sealed class DatabaseFixture : IAsyncLifetime
     {
+        /// <summary>
+        /// Creates the runner from the configured connection string.
+        /// </summary>
         public DatabaseFixture() {
 
             var config = new ConfigurationBuilder()

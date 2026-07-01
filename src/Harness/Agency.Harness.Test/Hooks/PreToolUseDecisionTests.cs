@@ -5,12 +5,14 @@ namespace Agency.Harness.Hooks.Tests;
 /// <summary>Unit tests for the <see cref="PreToolUseDecision"/> discriminated union.</summary>
 public sealed class PreToolUseDecisionTests
 {
+    /// <summary>A new <see cref="PreToolUseDecision.Allow"/> instance is never <see langword="null"/>.</summary>
     [Fact]
     public void Allow_IsNotNull()
     {
         Assert.NotNull(new PreToolUseDecision.Allow());
     }
 
+    /// <summary><see cref="PreToolUseDecision.Deny"/> stores the reason passed to its constructor.</summary>
     [Fact]
     public void Deny_StoresReason()
     {
@@ -18,6 +20,7 @@ public sealed class PreToolUseDecisionTests
         Assert.Equal("blocked", deny.Reason);
     }
 
+    /// <summary><see cref="PreToolUseDecision.Rewrite"/> stores the replacement input <see cref="JsonElement"/> passed to its constructor.</summary>
     [Fact]
     public void Rewrite_StoresNewInput()
     {
@@ -26,12 +29,14 @@ public sealed class PreToolUseDecisionTests
         Assert.Equal(element.GetRawText(), rewrite.NewInput.GetRawText());
     }
 
+    /// <summary>The <see cref="PreToolUseDecision.Allowed"/> singleton is an instance of <see cref="PreToolUseDecision.Allow"/>.</summary>
     [Fact]
     public void Allowed_Singleton_IsAllow()
     {
         Assert.IsType<PreToolUseDecision.Allow>(PreToolUseDecision.Allowed);
     }
 
+    /// <summary>A switch expression over <see cref="PreToolUseDecision"/> is exhaustive across the Allow, Deny, and Rewrite arms without a discard pattern.</summary>
     [Fact]
     public void SwitchExpression_ExhaustiveOnAllThreeArms()
     {

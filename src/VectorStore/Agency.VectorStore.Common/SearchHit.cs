@@ -13,6 +13,7 @@
 /// A numeric value representing the distance metric for the entry. The interpretation of this value depends on the
 /// context in which the entry is used.
 /// </param>
+/// <param name="UpdatedOn">The timestamp at which the entry was last inserted or updated.</param>
 public sealed record class SearchHit<TValue>(string UserId, string? SessionId, string Key, TValue Value, Dictionary<string, object>? Metadata, double Distance, DateTimeOffset UpdatedOn)
 {
     /// <summary>

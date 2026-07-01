@@ -8,6 +8,7 @@ namespace Agency.KeyValueStore.Common;
 /// <param name="Key">The key that uniquely identifies the entry.</param>
 /// <param name="Value">The value associated with the specified key.</param>
 /// <param name="Metadata">Key value pairs.</param>
+/// <param name="UpdatedOn">The timestamp of the most recent update to the entry.</param>
 public sealed record class SearchHit<TValue>(string? SessionId, string Key, TValue Value, Dictionary<string, object>? Metadata, DateTimeOffset UpdatedOn) :
     SearchHit(SessionId, Key, Metadata, UpdatedOn)
 {
@@ -19,6 +20,7 @@ public sealed record class SearchHit<TValue>(string? SessionId, string Key, TVal
 /// <param name="SessionId">The session this entry belongs to, or <see langword="null"/> if it is user-global.</param>
 /// <param name="Key">The key that uniquely identifies the entry.</param>
 /// <param name="Metadata">Key value pairs.</param>
+/// <param name="UpdatedOn">The timestamp of the most recent update to the entry.</param>
 public record class SearchHit(string? SessionId, string Key, Dictionary<string, object>? Metadata, DateTimeOffset UpdatedOn)
 {
         private readonly TimeSpan _recency = DateTimeOffset.UtcNow - UpdatedOn;

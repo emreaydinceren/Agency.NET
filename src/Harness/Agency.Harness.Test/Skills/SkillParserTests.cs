@@ -18,6 +18,7 @@ public sealed class SkillParserTests
     // Frontmatter — present
     // ---------------------------------------------------------------------------
 
+    /// <summary>Parsing SKILL.md text with a fully populated frontmatter block populates every corresponding <see cref="Skill"/> field.</summary>
     [Fact]
     public void Parse_WithFullFrontmatter_PopulatesAllFields()
     {
@@ -42,6 +43,7 @@ public sealed class SkillParserTests
         Assert.Contains("Body text here.", skill.Body);
     }
 
+    /// <summary><see cref="Skill.SkillDir"/> is set from the directory path passed to <c>Parse</c>, not derived from the text.</summary>
     [Fact]
     public void Parse_SkillDir_IsSetFromParameter()
     {
@@ -56,6 +58,7 @@ public sealed class SkillParserTests
     // Name is ALWAYS dirName — frontmatter name is ignored
     // ---------------------------------------------------------------------------
 
+    /// <summary>A <c>name</c> field in frontmatter is ignored; <see cref="Skill.Name"/> is always the skill's directory name.</summary>
     [Fact]
     public void Parse_FrontmatterNameIsIgnored_DirNameUsedAsCanonicalName()
     {
@@ -75,6 +78,7 @@ public sealed class SkillParserTests
     // Frontmatter — absent
     // ---------------------------------------------------------------------------
 
+    /// <summary>When there is no frontmatter block, the entire text becomes <see cref="Skill.Body"/>.</summary>
     [Fact]
     public void Parse_NoFrontmatter_BodyIsWholeText()
     {
@@ -86,6 +90,7 @@ public sealed class SkillParserTests
         Assert.Equal("no-frontmatter", skill.Name);
     }
 
+    /// <summary>When there is no frontmatter block, <see cref="Skill.Description"/> falls back to the first paragraph of the text.</summary>
     [Fact]
     public void Parse_NoFrontmatter_DescriptionFallsBackToFirstParagraph()
     {
@@ -96,6 +101,7 @@ public sealed class SkillParserTests
         Assert.Equal("First paragraph text.", skill.Description);
     }
 
+    /// <summary>When the first paragraph used as the description fallback is a Markdown heading, the leading <c>#</c> prefix is stripped.</summary>
     [Fact]
     public void Parse_NoFrontmatter_FirstParagraphIsHeading_StripsHashPrefix()
     {
@@ -111,6 +117,7 @@ public sealed class SkillParserTests
     // Missing description — fallback to first body paragraph
     // ---------------------------------------------------------------------------
 
+    /// <summary>When frontmatter is present but omits <c>description</c>, <see cref="Skill.Description"/> falls back to the first paragraph of the body.</summary>
     [Fact]
     public void Parse_FrontmatterWithNoDescription_FallsBackToFirstBodyParagraph()
     {
@@ -132,6 +139,7 @@ public sealed class SkillParserTests
     // Boolean defaults
     // ---------------------------------------------------------------------------
 
+    /// <summary>When not specified in frontmatter, <see cref="Skill.DisableModelInvocation"/> defaults to <see langword="false"/> and <see cref="Skill.UserInvocable"/> defaults to <see langword="true"/>.</summary>
     [Fact]
     public void Parse_BooleanDefaults_DisableModelInvocationFalse_UserInvocableTrue()
     {
@@ -143,6 +151,7 @@ public sealed class SkillParserTests
         Assert.True(skill.UserInvocable);
     }
 
+    /// <summary>Setting <c>disable-model-invocation: true</c> in frontmatter is reflected on <see cref="Skill.DisableModelInvocation"/>.</summary>
     [Fact]
     public void Parse_DisableModelInvocationTrue_IsRespected()
     {
@@ -153,6 +162,7 @@ public sealed class SkillParserTests
         Assert.True(skill.DisableModelInvocation);
     }
 
+    /// <summary>Setting <c>user-invocable: false</c> in frontmatter is reflected on <see cref="Skill.UserInvocable"/>.</summary>
     [Fact]
     public void Parse_UserInvocableFalse_IsRespected()
     {
@@ -167,6 +177,7 @@ public sealed class SkillParserTests
     // Arguments — space-separated syntax
     // ---------------------------------------------------------------------------
 
+    /// <summary><c>arguments</c> declared as a space-separated inline value is split into individual argument names.</summary>
     [Fact]
     public void Parse_Arguments_SpaceSeparated_ParsesCorrectly()
     {
@@ -181,6 +192,7 @@ public sealed class SkillParserTests
     // Arguments — comma-separated syntax
     // ---------------------------------------------------------------------------
 
+    /// <summary><c>arguments</c> declared as a comma-separated inline value is split and trimmed into individual argument names.</summary>
     [Fact]
     public void Parse_Arguments_CommaSeparated_ParsesCorrectly()
     {
@@ -195,6 +207,7 @@ public sealed class SkillParserTests
     // Arguments — YAML block list syntax
     // ---------------------------------------------------------------------------
 
+    /// <summary><c>arguments</c> declared as a YAML block list is parsed item-by-item into individual argument names.</summary>
     [Fact]
     public void Parse_Arguments_YamlBlockList_ParsesCorrectly()
     {
@@ -217,6 +230,7 @@ public sealed class SkillParserTests
     // No arguments — empty list
     // ---------------------------------------------------------------------------
 
+    /// <summary>When <c>arguments</c> is absent from frontmatter, <see cref="Skill.Arguments"/> defaults to an empty list.</summary>
     [Fact]
     public void Parse_NoArgumentsField_ReturnsEmptyList()
     {
@@ -231,6 +245,7 @@ public sealed class SkillParserTests
     // WhenToUse — absent
     // ---------------------------------------------------------------------------
 
+    /// <summary>When <c>when_to_use</c> is absent from frontmatter, <see cref="Skill.WhenToUse"/> is <see langword="null"/>.</summary>
     [Fact]
     public void Parse_NoWhenToUse_IsNull()
     {
@@ -245,6 +260,7 @@ public sealed class SkillParserTests
     // Frontmatter with unclosed delimiter
     // ---------------------------------------------------------------------------
 
+    /// <summary>When the opening frontmatter delimiter is never closed, the entire text — including the unclosed delimiter line — is treated as <see cref="Skill.Body"/>.</summary>
     [Fact]
     public void Parse_UnclosedFrontmatter_TreatsWholeTextAsBody()
     {
@@ -259,6 +275,7 @@ public sealed class SkillParserTests
     // CRLF line endings
     // ---------------------------------------------------------------------------
 
+    /// <summary>SKILL.md text using CRLF line endings throughout is parsed correctly, including frontmatter fields and body content.</summary>
     [Fact]
     public void Parse_CrlfLineEndings_ParsedCorrectly()
     {

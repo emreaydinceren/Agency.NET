@@ -2,6 +2,7 @@ using Agency.Harness.Hooks;
 
 namespace Agency.Harness;
 
+/// <summary>Configuration options controlling how <see cref="AgentFactory"/> assembles <see cref="Agent"/> instances.</summary>
 public sealed class AgentOptions
 {
     /// <summary>

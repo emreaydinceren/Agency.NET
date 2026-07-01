@@ -1,5 +1,9 @@
 namespace Agency.Embeddings.Common.Test;
 
+/// <summary>
+/// Unit tests for <see cref="BatchingEmbeddingGenerator"/> covering constructor validation, request
+/// coalescing and splitting, cancellation, error propagation, and disposal draining.
+/// </summary>
 public sealed class BatchingEmbeddingGeneratorTests
 {
     // -------------------------------------------------------------------------

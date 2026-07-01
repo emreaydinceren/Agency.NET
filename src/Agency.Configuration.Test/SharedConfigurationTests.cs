@@ -11,11 +11,17 @@ public sealed class SharedConfigurationTests : IDisposable
     private readonly string _tempDir =
         Path.Combine(Path.GetTempPath(), $"AgencySharedConfigTest-{Guid.NewGuid():N}");
 
+    /// <summary>
+    /// Creates a fresh isolated temp directory for the test instance.
+    /// </summary>
     public SharedConfigurationTests()
     {
         Directory.CreateDirectory(_tempDir);
     }
 
+    /// <summary>
+    /// Deletes the isolated temp directory created for the test instance.
+    /// </summary>
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
@@ -33,6 +39,9 @@ public sealed class SharedConfigurationTests : IDisposable
     }
 
     // (a) Keys from a shared JSON file are visible in the merged configuration.
+    /// <summary>
+    /// Verifies that keys from a shared JSON file are visible in the merged configuration.
+    /// </summary>
     [Fact]
     public void KeysFromSharedFile_AreVisibleInMergedConfig()
     {
@@ -47,6 +56,9 @@ public sealed class SharedConfigurationTests : IDisposable
     }
 
     // (b) optional: true with a missing file — Build() must NOT throw.
+    /// <summary>
+    /// Verifies that a missing shared file with <c>optional: true</c> does not cause <c>Build()</c> to throw.
+    /// </summary>
     [Fact]
     public void MissingFile_WithOptionalTrue_DoesNotThrow()
     {
@@ -62,6 +74,10 @@ public sealed class SharedConfigurationTests : IDisposable
     // (c) Precedence: AddSharedConfiguration inserts at the FRONT (lowest precedence), so any
     //     other source — even one registered before the call — overrides the shared file. This
     //     mirrors the host scenario where appsettings/env/CLI sources must shadow shared defaults.
+    /// <summary>
+    /// Verifies that a shared file is inserted at the front (lowest precedence), so any other source —
+    /// even one registered before the call — overrides it.
+    /// </summary>
     [Fact]
     public void SharedFile_IsLowestPrecedence_OverriddenByOtherSource()
     {
@@ -81,6 +97,10 @@ public sealed class SharedConfigurationTests : IDisposable
     // (d) End-to-end override model: a shared default referenced by a ${…} placeholder is
     //     overridden by a higher-precedence source (here an in-memory source standing in for an
     //     environment variable), and the override flows through the placeholder expansion.
+    /// <summary>
+    /// Verifies that a shared default referenced by a <c>${…}</c> placeholder is overridden by a
+    /// higher-precedence source, and the override flows through the placeholder expansion.
+    /// </summary>
     [Fact]
     public void EnvOverride_OfSharedDefault_FlowsThroughPlaceholder()
     {
@@ -105,6 +125,11 @@ public sealed class SharedConfigurationTests : IDisposable
     //     model must hold on a real ConfigurationManager (the type Host.CreateApplicationBuilder
     //     exposes as builder.Configuration), whose Build() returns this and which applies sources
     //     eagerly. This is the scenario the precedence fix actually targets.
+    /// <summary>
+    /// Host-type regression guard: verifies the same front-insertion + override-through-placeholder model
+    /// holds on a real <see cref="ConfigurationManager"/>, whose <c>Build()</c> returns itself and which
+    /// applies sources eagerly.
+    /// </summary>
     [Fact]
     public void OverConfigurationManager_SharedFile_IsLowestPrecedence_AndOverrideFlowsThroughPlaceholder()
     {
@@ -132,6 +157,11 @@ public sealed class SharedConfigurationTests : IDisposable
     // (f) Host-shaped repro: ConfigurationManager that ALREADY has a JSON FILE source (like the
     //     host's appsettings.json), then AddSharedConfiguration inserts another file at the front.
     //     The pre-existing file's keys must still be readable.
+    /// <summary>
+    /// Host-shaped repro: verifies that when a <see cref="ConfigurationManager"/> already has a JSON file
+    /// source (like the host's appsettings.json), inserting a shared file at the front still preserves the
+    /// pre-existing file's keys.
+    /// </summary>
     [Fact]
     public void OverConfigurationManager_WithExistingFileSource_FrontInsert_PreservesExistingKeys()
     {

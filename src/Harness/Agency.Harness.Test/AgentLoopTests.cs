@@ -56,6 +56,9 @@ public sealed class AgentLoopTests
 
     // ── Session bookends ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The very first event emitted by <c>RunAsync</c> is always a <see cref="SessionStartedEvent"/>.
+    /// </summary>
     [Fact]
     public async Task RunAsync_AlwaysEmitsSessionStartedEventFirst()
     {
@@ -68,6 +71,9 @@ public sealed class AgentLoopTests
         Assert.IsType<SessionStartedEvent>(events[0]);
     }
 
+    /// <summary>
+    /// The very last event emitted by <c>RunAsync</c> is always an <see cref="AgentResultEvent"/>.
+    /// </summary>
     [Fact]
     public async Task RunAsync_AlwaysEmitsAgentResultEventLast()
     {
@@ -80,6 +86,9 @@ public sealed class AgentLoopTests
         Assert.IsType<AgentResultEvent>(events[^1]);
     }
 
+    /// <summary>
+    /// The <see cref="SessionStartedEvent"/> carries a non-empty, generated session id.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SessionStartedEvent_HasNonEmptySessionId()
     {
@@ -95,6 +104,10 @@ public sealed class AgentLoopTests
 
     // ── Single-turn happy path ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// A single text-only turn produces the exact event sequence: session started, assistant
+    /// turn, iteration completed, agent result.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SingleTurn_EmitsCorrectEventSequence()
     {
@@ -115,6 +128,10 @@ public sealed class AgentLoopTests
             e => Assert.IsType<AgentResultEvent>(e));
     }
 
+    /// <summary>
+    /// A single turn that ends without pending tool calls reports
+    /// <see cref="AgentResultStatus.Success"/>.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SingleTurn_ResultStatusIsSuccess()
     {
@@ -128,6 +145,9 @@ public sealed class AgentLoopTests
         Assert.Equal(AgentResultStatus.Success, result.Status);
     }
 
+    /// <summary>
+    /// The <see cref="AgentResultEvent.FinalText"/> matches the assistant's response text verbatim.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SingleTurn_FinalTextMatchesAssistantResponse()
     {
@@ -141,6 +161,10 @@ public sealed class AgentLoopTests
         Assert.Equal("The answer is 42.", result.FinalText);
     }
 
+    /// <summary>
+    /// The final result's <c>TotalUsage</c> reflects the single turn's reported input and output
+    /// token counts.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SingleTurn_AccumulatesTokenUsage()
     {
@@ -157,6 +181,10 @@ public sealed class AgentLoopTests
 
     // ── Conversation seeding ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// When the conversation starts empty, the user's prompt is seeded as the first message sent
+    /// to the LLM.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SeedsConversation_WithUserPromptAsFirstMessage()
     {
@@ -174,6 +202,10 @@ public sealed class AgentLoopTests
         Assert.Equal("My specific prompt", textContent.Text);
     }
 
+    /// <summary>
+    /// When the conversation already contains a message, the prompt is not re-seeded — only the
+    /// pre-existing message is sent to the LLM.
+    /// </summary>
     [Fact]
     public async Task RunAsync_DoesNotDuplicatePrompt_WhenConversationAlreadyHasMessages()
     {
@@ -195,6 +227,10 @@ public sealed class AgentLoopTests
 
     // ── Tool call → execution → continue ──────────────────────────────────────
 
+    /// <summary>
+    /// When the LLM requests a tool call, the loop invokes the tool exactly once and continues
+    /// with a second LLM call to obtain the final answer.
+    /// </summary>
     [Fact]
     public async Task RunAsync_ToolCall_InvokesTool_AndContinuesLoop()
     {
@@ -219,6 +255,10 @@ public sealed class AgentLoopTests
         Assert.Equal(2, llm.GetResponseCallCount);
     }
 
+    /// <summary>
+    /// A successful tool invocation emits a <see cref="ToolInvokedEvent"/> carrying the tool's
+    /// name and non-error result content.
+    /// </summary>
     [Fact]
     public async Task RunAsync_ToolCall_EmitsToolInvokedEvent()
     {
@@ -239,6 +279,10 @@ public sealed class AgentLoopTests
         Assert.False(toolEvent.Result.IsError);
     }
 
+    /// <summary>
+    /// The tool result is appended to the conversation as a Tool-role message whose
+    /// <c>FunctionResultContent</c> carries the same call id as the originating request.
+    /// </summary>
     [Fact]
     public async Task RunAsync_ToolCall_AppendsPairedToolResultToConversation()
     {
@@ -264,6 +308,10 @@ public sealed class AgentLoopTests
 
     // ── Parallel tool execution ────────────────────────────────────────────────
 
+    /// <summary>
+    /// When one assistant turn requests multiple tool calls, every requested tool is invoked
+    /// exactly once and each invocation emits its own <see cref="ToolInvokedEvent"/>.
+    /// </summary>
     [Fact]
     public async Task RunAsync_MultipleToolCalls_InvokesAllToolsInParallel()
     {
@@ -287,6 +335,10 @@ public sealed class AgentLoopTests
         Assert.Equal(2, toolEvents.Count);
     }
 
+    /// <summary>
+    /// Even though tools may execute concurrently, the resulting Tool-role messages sent back to
+    /// the LLM preserve the original call order.
+    /// </summary>
     [Fact]
     public async Task RunAsync_MultipleToolCalls_ResultBlocksPreserveOrder()
     {
@@ -316,6 +368,11 @@ public sealed class AgentLoopTests
 
     // ── Tool failure handling ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// When a tool throws, the loop captures the exception message as an error
+    /// <see cref="ToolInvokedEvent"/> result and still reaches
+    /// <see cref="AgentResultStatus.Success"/> once the LLM handles the error.
+    /// </summary>
     [Fact]
     public async Task RunAsync_ToolThrows_CapturesErrorAsToolResultBlock()
     {
@@ -340,6 +397,10 @@ public sealed class AgentLoopTests
         Assert.Equal(AgentResultStatus.Success, result.Status);
     }
 
+    /// <summary>
+    /// When one tool in a turn throws, the other tools requested in the same turn still run to
+    /// completion rather than being cancelled.
+    /// </summary>
     [Fact]
     public async Task RunAsync_ToolThrows_OtherToolsInSameTurnAreNotCancelled()
     {
@@ -361,6 +422,11 @@ public sealed class AgentLoopTests
 
     // ── Max steps ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Once the configured <see cref="StopConditions.StepCountIs"/> limit is reached with tool
+    /// calls still pending, the final result reports
+    /// <see cref="AgentResultStatus.MaxStepsReached"/>.
+    /// </summary>
     [Fact]
     public async Task RunAsync_MaxStepsReached_EmitsMaxStepsReachedStatus()
     {
@@ -380,6 +446,10 @@ public sealed class AgentLoopTests
         Assert.Equal(AgentResultStatus.MaxStepsReached, result.Status);
     }
 
+    /// <summary>
+    /// When the step-count stop condition halts the loop, <c>Context.IterationCount</c> equals
+    /// the configured step limit exactly.
+    /// </summary>
     [Fact]
     public async Task RunAsync_MaxStepsReached_IterationCountMatchesLimit()
     {
@@ -400,6 +470,10 @@ public sealed class AgentLoopTests
 
     // ── IterationCompleted events ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Every turn of the loop — including the tool-calling turn and the final turn — emits its
+    /// own <see cref="IterationCompletedEvent"/> with a strictly increasing iteration number.
+    /// </summary>
     [Fact]
     public async Task RunAsync_EmitsIterationCompletedEvent_PerTurn()
     {
@@ -422,6 +496,10 @@ public sealed class AgentLoopTests
 
     // ── System prompt rebuilt every iteration (D3) ─────────────────────────────
 
+    /// <summary>
+    /// The system prompt is rebuilt and (re-)sent to the LLM on every turn of the loop, not just
+    /// the first one.
+    /// </summary>
     [Fact]
     public async Task RunAsync_SystemPromptIsSentOnEveryLlmCall()
     {
@@ -442,6 +520,10 @@ public sealed class AgentLoopTests
 
     // ── Cancellation ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Running the loop with an already-cancelled token throws
+    /// <see cref="OperationCanceledException"/> rather than swallowing the cancellation.
+    /// </summary>
     [Fact]
     public async Task RunAsync_Cancellation_ThrowsOperationCanceledException()
     {
@@ -462,6 +544,10 @@ public sealed class AgentLoopTests
 
     // ── Token usage accumulation ───────────────────────────────────────────────
 
+    /// <summary>
+    /// Token usage from every turn — including the tool-calling turn — is summed into the final
+    /// result's <c>TotalUsage</c>.
+    /// </summary>
     [Fact]
     public async Task RunAsync_AccumulatesTokenUsage_AcrossMultipleTurns()
     {
@@ -495,6 +581,11 @@ public sealed class AgentLoopTests
 
     // ── Truncation (finish_reason=length) ─────────────────────────────────────
 
+    /// <summary>
+    /// When the LLM response finishes with <c>FinishReason.Length</c>, the loop reports
+    /// <see cref="AgentResultStatus.Error"/> with a final text that mentions the truncation and
+    /// the input token count that triggered it.
+    /// </summary>
     [Fact]
     public async Task RunAsync_WhenResponseTruncated_EmitsErrorResult()
     {
@@ -515,6 +606,10 @@ public sealed class AgentLoopTests
         Assert.Contains("3,350", result.FinalText);  // input token count surfaced in message
     }
 
+    /// <summary>
+    /// A truncated response that still contains a function-call block does not result in the
+    /// tool being invoked — truncation short-circuits the loop before tool execution.
+    /// </summary>
     [Fact]
     public async Task RunAsync_WhenResponseTruncated_DoesNotInvokeTools()
     {

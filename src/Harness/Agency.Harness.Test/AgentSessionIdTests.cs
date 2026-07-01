@@ -28,6 +28,10 @@ public sealed class AgentSessionIdTests
 
     // ── Stable session id across turns ────────────────────────────────────────
 
+    /// <summary>
+    /// A <see cref="ChatSession"/> preserves the same session id across successive
+    /// <c>SendAsync</c> turns rather than generating a new one each time.
+    /// </summary>
     [Fact]
     public async Task ChatAsync_SessionId_IsStableAcrossTwoTurns()
     {
@@ -64,6 +68,10 @@ public sealed class AgentSessionIdTests
 
     // ── Pre-set session id is honoured ────────────────────────────────────────
 
+    /// <summary>
+    /// When the caller sets <see cref="SessionContext.Id"/> on the context before running, the
+    /// agent loop honours it instead of generating a fresh session id.
+    /// </summary>
     [Fact]
     public async Task RunAsync_PresetSessionId_IsNotOverwritten()
     {

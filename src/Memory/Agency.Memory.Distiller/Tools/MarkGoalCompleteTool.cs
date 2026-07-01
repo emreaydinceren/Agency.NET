@@ -14,8 +14,8 @@ namespace Agency.Memory.Distiller.Tools;
 /// <remarks>
 /// Does NOT stop the agent loop — the agent may continue if the user has follow-ups.
 /// The watermark prevents reprocessing of already-distilled turns.
-/// This tool is instantiated per session with the <paramref name="userId"/> and
-/// <paramref name="sessionId"/> baked in, so there is no ambiguity about which session
+/// This tool is instantiated per session with the <c>userId</c> and
+/// <c>sessionId</c> baked in, so there is no ambiguity about which session
 /// is being marked complete.
 /// </remarks>
 internal sealed class MarkGoalCompleteTool : ITool

@@ -22,6 +22,10 @@ public sealed class DumpContextSchemaRenderTests
         "items":{"type":"string"}}}}},"required":["record"]}
         """;
 
+    /// <summary>
+    /// Rendering a schema with nested objects, arrays, unions, and nulls must produce markup
+    /// that Spectre's <see cref="Markup"/> parser accepts.
+    /// </summary>
     [Fact]
     public void RenderJson_ProducesMarkupSpectreCanParse()
     {
@@ -35,6 +39,10 @@ public sealed class DumpContextSchemaRenderTests
         Assert.Null(ex);
     }
 
+    /// <summary>
+    /// Rendered output is pretty-printed across multiple indented lines with object keys and
+    /// string values coloured, while the underlying JSON content survives markup stripping.
+    /// </summary>
     [Fact]
     public void RenderJson_IsIndentedAndColoured()
     {
@@ -50,6 +58,11 @@ public sealed class DumpContextSchemaRenderTests
         Assert.Contains("userId", Markup.Remove(markup));
     }
 
+    /// <summary>
+    /// Degenerate JSON values — empty containers, primitives, and strings containing
+    /// bracket characters — must still render as markup Spectre can parse.
+    /// </summary>
+    /// <param name="json">The raw JSON document to render.</param>
     [Theory]
     [InlineData("{}")]
     [InlineData("[]")]

@@ -16,6 +16,10 @@ public sealed class ToolHelpToolTests
         return registry;
     }
 
+    /// <summary>
+    /// The tool's <c>Definition</c> exposes the <c>tool_help</c> name, a description mentioning
+    /// the full parameter schema, and an input schema requiring a string <c>name</c> property.
+    /// </summary>
     [Fact]
     public void Definition_HasExpectedNameAndSchema()
     {
@@ -30,6 +34,10 @@ public sealed class ToolHelpToolTests
         Assert.Equal("name", schema.GetProperty("required")[0].GetString());
     }
 
+    /// <summary>
+    /// Requesting help for a tool that exists in the inner registry returns its full description
+    /// and parameter schema.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_KnownTool_ReturnsDescriptionAndSchema()
     {
@@ -45,6 +53,10 @@ public sealed class ToolHelpToolTests
         Assert.Contains("path", result.Content);
     }
 
+    /// <summary>
+    /// Requesting help for a name that is not registered returns an error that echoes the
+    /// requested name and lists the names that are actually available.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_UnknownTool_ReturnsErrorWithAvailableNames()
     {
@@ -61,6 +73,10 @@ public sealed class ToolHelpToolTests
         Assert.Contains("fake_alpha", result.Content);
     }
 
+    /// <summary>
+    /// Invoking with an arguments object that has no <c>name</c> property returns an error
+    /// stating that <c>name</c> is required.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_MissingNameProperty_ReturnsError()
     {
@@ -74,6 +90,10 @@ public sealed class ToolHelpToolTests
         Assert.Contains("'name' is required", result.Content);
     }
 
+    /// <summary>
+    /// Invoking with an empty string <c>name</c> is treated the same as a missing name and
+    /// returns the "name is required" error.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_EmptyNameString_ReturnsError()
     {

@@ -77,6 +77,7 @@ public sealed class HookRegistryProjectionTests
 
     // ── Test 1 ───────────────────────────────────────────────────────────────
 
+    /// <summary>Projecting an empty <see cref="HooksOptions"/> yields an <see cref="AgentHooks"/> with every delegate <see langword="null"/>.</summary>
     [Fact]
     public void Project_NoConfig_AllDelegatesNull()
     {
@@ -97,6 +98,7 @@ public sealed class HookRegistryProjectionTests
 
     // ── Test 2 ───────────────────────────────────────────────────────────────
 
+    /// <summary>Configuring a <c>PreToolUse</c> group projects a non-null <c>OnPreToolUse</c> delegate while leaving unconfigured events null.</summary>
     [Fact]
     public void Project_PreToolUseConfigured_DelegateNonNull()
     {
@@ -112,6 +114,7 @@ public sealed class HookRegistryProjectionTests
 
     // ── Test 3 ───────────────────────────────────────────────────────────────
 
+    /// <summary>A configured group's handler is skipped (never invoked) when the matcher doesn't match the calling tool's name.</summary>
     [Fact]
     public async Task Project_MatcherFiltersByToolName()
     {
@@ -132,6 +135,7 @@ public sealed class HookRegistryProjectionTests
 
     // ── Test 4 ───────────────────────────────────────────────────────────────
 
+    /// <summary>When two matcher groups run for the same event and one denies, the projected decision is deny even though the other group allowed.</summary>
     [Fact]
     public async Task Project_DenyWins_AcrossTwoGroups()
     {
@@ -170,6 +174,7 @@ public sealed class HookRegistryProjectionTests
 
     // ── Test 5 ───────────────────────────────────────────────────────────────
 
+    /// <summary>For a non-tool-gating event like <c>PostToolUse</c>, the projected delegate awaits the configured handler(s) rather than skipping them.</summary>
     [Fact]
     public async Task Project_NonToolEvent_AwaitsAllHandlers()
     {
@@ -189,6 +194,7 @@ public sealed class HookRegistryProjectionTests
 
     // ── Test 6 ───────────────────────────────────────────────────────────────
 
+    /// <summary><see cref="HookRegistry.Empty"/> projects to an <see cref="AgentHooks"/> with every delegate <see langword="null"/>, matching <see cref="AgentHooks.None"/>.</summary>
     [Fact]
     public void Empty_ProducesAgentHooksNone()
     {

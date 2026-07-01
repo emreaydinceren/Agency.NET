@@ -34,6 +34,7 @@ public sealed class HookServiceCollectionExtensionsTests
 
     // ── Test 1 ───────────────────────────────────────────────────────────────
 
+    /// <summary><c>AddAgencyConfiguredHooks</c> binds a valid <c>Hooks</c> section and registers a resolvable <see cref="HookRegistry"/>.</summary>
     [Fact]
     public void Di_BindsHooksSection_BuildsRegistry()
     {
@@ -58,6 +59,7 @@ public sealed class HookServiceCollectionExtensionsTests
 
     // ── Test 2 ───────────────────────────────────────────────────────────────
 
+    /// <summary><c>AddAgencyConfiguredHooks</c> wires the built registry's projection onto <c>AgentOptions.ConfiguredHooks</c> via a post-configure step.</summary>
     [Fact]
     public void Di_PostConfigure_SetsConfiguredHooks()
     {
@@ -83,6 +85,7 @@ public sealed class HookServiceCollectionExtensionsTests
 
     // ── Test 3 ───────────────────────────────────────────────────────────────
 
+    /// <summary>With no <c>Hooks</c> section present, <c>AgentOptions.ConfiguredHooks</c> ends up empty (null hooks or no <c>OnPreToolUse</c>) rather than throwing.</summary>
     [Fact]
     public void Di_NoHooksSection_ConfiguredHooksEmptyNone()
     {
@@ -100,6 +103,7 @@ public sealed class HookServiceCollectionExtensionsTests
 
     // ── Test 4 ───────────────────────────────────────────────────────────────
 
+    /// <summary>An unrecognized event name in the configured <c>Hooks</c> section causes resolving <see cref="HookRegistry"/> to throw with that name in the message.</summary>
     [Fact]
     public void Di_UnknownEventName_ThrowsOnBuild()
     {

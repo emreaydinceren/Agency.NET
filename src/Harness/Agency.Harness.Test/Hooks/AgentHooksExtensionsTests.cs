@@ -14,6 +14,7 @@ public sealed class AgentHooksExtensionsTests
 
     // ── Null-safety ────────────────────────────────────────────────────────────
 
+    /// <summary>When the first <see cref="AgentHooks"/> has no <c>OnSessionStarted</c>, the composed delegate is the second's.</summary>
     [Fact]
     public void Compose_FirstOnSessionStartedNull_UsesSecond()
     {
@@ -22,6 +23,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.Same(h2, result.OnSessionStarted);
     }
 
+    /// <summary>When the second <see cref="AgentHooks"/> has no <c>OnSessionStarted</c>, the composed delegate is the first's.</summary>
     [Fact]
     public void Compose_SecondOnSessionStartedNull_UsesFirst()
     {
@@ -30,6 +32,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.Same(h1, result.OnSessionStarted);
     }
 
+    /// <summary>Composing <see cref="AgentHooks.None"/> with itself yields an instance whose delegates are all <see langword="null"/>.</summary>
     [Fact]
     public void Compose_BothNull_AllDelegatesAreNull()
     {
@@ -44,6 +47,7 @@ public sealed class AgentHooksExtensionsTests
 
     // ── Sequential execution ───────────────────────────────────────────────────
 
+    /// <summary>When both instances define <c>OnSessionStarted</c>, the composed delegate runs the first's handler then the second's, in order.</summary>
     [Fact]
     public async Task Compose_OnSessionStarted_BothRun_InOrder()
     {
@@ -61,6 +65,7 @@ public sealed class AgentHooksExtensionsTests
 
     // ── OnSessionEnd: sequential execution ────────────────────────────────────
 
+    /// <summary>When the first <see cref="AgentHooks"/> has no <c>OnSessionEnd</c>, the composed delegate is the second's.</summary>
     [Fact]
     public void Compose_FirstOnSessionEndNull_UsesSecond()
     {
@@ -69,6 +74,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.Same(h2, result.OnSessionEnd);
     }
 
+    /// <summary>When the second <see cref="AgentHooks"/> has no <c>OnSessionEnd</c>, the composed delegate is the first's.</summary>
     [Fact]
     public void Compose_SecondOnSessionEndNull_UsesFirst()
     {
@@ -77,6 +83,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.Same(h1, result.OnSessionEnd);
     }
 
+    /// <summary>When both instances define <c>OnSessionEnd</c>, the composed delegate runs the first's handler then the second's, in order.</summary>
     [Fact]
     public async Task Compose_OnSessionEnd_BothRun_InOrder()
     {
@@ -94,6 +101,7 @@ public sealed class AgentHooksExtensionsTests
 
     // ── PreToolUse: most-restrictive-wins ─────────────────────────────────────
 
+    /// <summary>When both composed <c>OnPreToolUse</c> handlers allow, the merged decision is <see cref="PreToolUseDecision.Allow"/>.</summary>
     [Fact]
     public async Task Compose_PreToolUse_BothAllow_ReturnsAllow()
     {
@@ -103,6 +111,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.IsType<PreToolUseDecision.Allow>(result);
     }
 
+    /// <summary>When the first composed <c>OnPreToolUse</c> handler denies and the second allows, the merged decision is <see cref="PreToolUseDecision.Deny"/>.</summary>
     [Fact]
     public async Task Compose_PreToolUse_FirstDeny_ReturnsDeny()
     {
@@ -113,6 +122,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.IsType<PreToolUseDecision.Deny>(result);
     }
 
+    /// <summary>When the first composed <c>OnPreToolUse</c> handler allows and the second denies, the merged decision is <see cref="PreToolUseDecision.Deny"/>.</summary>
     [Fact]
     public async Task Compose_PreToolUse_SecondDeny_ReturnsDeny()
     {
@@ -123,6 +133,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.IsType<PreToolUseDecision.Deny>(result);
     }
 
+    /// <summary>When one composed <c>OnPreToolUse</c> handler denies and the other rewrites, deny wins as the most restrictive decision.</summary>
     [Fact]
     public async Task Compose_PreToolUse_DenyBeatsRewrite()
     {
@@ -134,6 +145,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.IsType<PreToolUseDecision.Deny>(result);
     }
 
+    /// <summary>When one composed <c>OnPreToolUse</c> handler rewrites and the other allows, rewrite wins over plain allow.</summary>
     [Fact]
     public async Task Compose_PreToolUse_RewriteBeatsAllow()
     {
@@ -144,6 +156,7 @@ public sealed class AgentHooksExtensionsTests
         Assert.IsType<PreToolUseDecision.Rewrite>(result);
     }
 
+    /// <summary>When both composed <c>OnPreToolUse</c> handlers deny, the merged decision keeps the first handler's deny reason.</summary>
     [Fact]
     public async Task Compose_PreToolUse_BothDeny_ReturnsFirstDeny()
     {

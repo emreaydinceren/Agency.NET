@@ -287,6 +287,7 @@ public sealed class SqliteKVStore : IVectorStore
             onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting SQLite vector store entry after {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", elapsedMs, userId, sessionId, key));
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<string>> ListProjectsAsync(string userId, CancellationToken cancellationToken = default)
     {
         const string sql = """
@@ -303,6 +304,7 @@ public sealed class SqliteKVStore : IVectorStore
             cancellationToken);
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
         string userId,
         string? sessionId,

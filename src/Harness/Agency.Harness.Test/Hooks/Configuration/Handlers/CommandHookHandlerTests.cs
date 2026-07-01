@@ -3,6 +3,10 @@ using Agency.Harness.Hooks.Configuration.Handlers;
 
 namespace Agency.Harness.Test.Hooks.Configuration.Handlers;
 
+/// <summary>
+/// Process-based tests for <see cref="CommandHookHandler"/>, covering exit-code interpretation
+/// (allow/deny/rewrite/non-blocking error), timeout handling, and stdout/stderr stream draining.
+/// </summary>
 [Trait("Category", "Process")]
 public sealed class CommandHookHandlerTests
 {
@@ -17,6 +21,7 @@ public sealed class CommandHookHandlerTests
 
     // ── tests ─────────────────────────────────────────────────────────────────
 
+    /// <summary>A process that exits 0 and writes deny JSON to stdout produces an <c>HookHandlerOutput</c> with that JSON populated.</summary>
     [Fact]
     public async Task Command_Exit0_DenyJson_ProducesDenyOutput()
     {
@@ -39,6 +44,7 @@ public sealed class CommandHookHandlerTests
         Assert.True(output.Json.HasValue);
     }
 
+    /// <summary>Exit code 2 is preserved on the output so downstream mapping can treat it as a deny.</summary>
     [Fact]
     public async Task Command_Exit2_ProducesDenyOutput()
     {
@@ -56,6 +62,7 @@ public sealed class CommandHookHandlerTests
         Assert.Equal(2, output.ExitCode);
     }
 
+    /// <summary>A process that exits 0 and writes rewrite JSON (a <c>tool_input</c> object) to stdout produces output with that JSON populated.</summary>
     [Fact]
     public async Task Command_Exit0_RewriteJson_ProducesRewriteOutput()
     {
@@ -78,6 +85,7 @@ public sealed class CommandHookHandlerTests
         Assert.True(output.Json.HasValue);
     }
 
+    /// <summary>A process that exits 0 but writes plain (non-JSON) text to stdout produces output with no parsed JSON, treated as allow.</summary>
     [Fact]
     public async Task Command_Exit0_NoJson_ProducesAllowOutput()
     {
@@ -98,6 +106,7 @@ public sealed class CommandHookHandlerTests
         Assert.Null(output.Json);
     }
 
+    /// <summary>An exit code other than 0 or 2 (here, 1) is preserved on the output so it can be mapped to a non-blocking error.</summary>
     [Fact]
     public async Task Command_NonZeroNonTwo_ProducesNonBlockingError()
     {
@@ -115,6 +124,7 @@ public sealed class CommandHookHandlerTests
         Assert.Equal(1, output.ExitCode);
     }
 
+    /// <summary>A process that outlives its configured timeout is killed (along with its process tree) and the output reports <c>HookExitCodes.Timeout</c>.</summary>
     [Fact]
     public async Task Command_Timeout_KillsProcessTree_NonBlocking()
     {
@@ -135,6 +145,7 @@ public sealed class CommandHookHandlerTests
         Assert.Equal(HookExitCodes.Timeout, output.ExitCode);
     }
 
+    /// <summary>Writing a large amount of stderr output alongside stdout does not deadlock the handler, which must drain both streams concurrently.</summary>
     [Fact]
     public async Task Command_LargeStderr_NoDeadlock()
     {

@@ -4,6 +4,11 @@ using Agency.Harness.Hooks;
 
 namespace Agency.Harness.Test.Agents;
 
+/// <summary>
+/// Unit tests for <see cref="AgentHooksExtensions.Fold"/>, which combines baseline, configured,
+/// and user-supplied <see cref="AgentHooks"/> into a single set that runs each source's handlers
+/// in order and lets deny decisions from any source win.
+/// </summary>
 public sealed class AgentFactoryHookFoldTests
 {
     private static Context MakeContext() =>
@@ -15,6 +20,10 @@ public sealed class AgentFactoryHookFoldTests
     private static PreToolUseHookContext MakePreToolUseCtx() =>
         new("tool", JsonSerializer.SerializeToElement(new Dictionary<string, object?>()), MakeContext());
 
+    /// <summary>
+    /// Folding three <see langword="null"/> hook sources returns <see langword="null"/> rather
+    /// than an empty <see cref="AgentHooks"/> instance.
+    /// </summary>
     [Fact]
     public void Fold_AllNull_ReturnsNull()
     {
@@ -22,6 +31,10 @@ public sealed class AgentFactoryHookFoldTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// When all three sources define an <see cref="AgentHooks.OnStop"/> handler, the folded
+    /// handler runs them in baseline, then configured, then user order.
+    /// </summary>
     [Fact]
     public async Task Fold_OrderBaselineConfiguredUser()
     {
@@ -36,6 +49,10 @@ public sealed class AgentFactoryHookFoldTests
         Assert.Equal(["baseline", "configured", "user"], order);
     }
 
+    /// <summary>
+    /// If any source's <see cref="AgentHooks.OnPreToolUse"/> handler denies, the folded decision
+    /// is a deny even when a later source in the fold order would allow.
+    /// </summary>
     [Fact]
     public async Task Fold_DenyWinsAcrossSources()
     {

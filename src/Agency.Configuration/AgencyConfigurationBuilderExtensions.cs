@@ -30,7 +30,7 @@ public static class AgencyConfigurationBuilderExtensions
     /// </para>
     /// <para>
     /// The source is <b>inserted at the front</b> of <see cref="IConfigurationBuilder.Sources"/>,
-    /// giving it the <em>lowest</em> precedence. Because <see cref="Host.CreateApplicationBuilder(string[])"/>
+    /// giving it the <em>lowest</em> precedence. Because <c>Host.CreateApplicationBuilder(string[])</c>
     /// has already registered the standard host sources (appsettings, user-secrets, environment
     /// variables, command line) by the time this method runs, appending would make the shared file
     /// win over those. Inserting first instead means any of those higher-precedence sources — for

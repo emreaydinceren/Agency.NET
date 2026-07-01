@@ -20,6 +20,7 @@ public sealed class HookConfigBindingTests
             .Get<HooksOptions>();
     }
 
+    /// <summary>A <c>PreToolUse</c> group with a matcher and a <c>Command</c> handler binds its matcher, command, args, and timeout.</summary>
     [Fact]
     public void Bind_PreToolUseGroup_PopulatesMatcherAndHandlers()
     {
@@ -61,6 +62,7 @@ public sealed class HookConfigBindingTests
         Assert.Equal(30, handler.Timeout);
     }
 
+    /// <summary>String event-name keys in the JSON (<c>PreToolUse</c>, <c>PostToolUse</c>) bind to the corresponding <see cref="HookEventName"/> dictionary keys.</summary>
     [Fact]
     public void Bind_EnumKeyedDictionary_ParsesEventNames()
     {
@@ -90,6 +92,7 @@ public sealed class HookConfigBindingTests
         Assert.True(options.Hooks.ContainsKey(HookEventName.PostToolUse));
     }
 
+    /// <summary>An <c>Http</c> handler binds its <c>url</c>, <c>headers</c>, and <c>timeout</c> keys.</summary>
     [Fact]
     public void Bind_HttpHandler_PopulatesUrlAndHeaders()
     {
@@ -122,6 +125,7 @@ public sealed class HookConfigBindingTests
         Assert.Equal("test", handler.Headers["X-Source"]);
     }
 
+    /// <summary>An empty <c>Hooks</c> section binds to <see cref="HooksOptions"/> with no entries, rather than <see langword="null"/> or throwing.</summary>
     [Fact]
     public void Bind_EmptyHooksSection_YieldsEmptyOptions()
     {
@@ -136,6 +140,7 @@ public sealed class HookConfigBindingTests
         Assert.Equal(0, options?.Hooks?.Count ?? 0);
     }
 
+    /// <summary>The JSON <c>timeout</c> key binds to the handler config's <c>Timeout</c> property, interpreted in seconds.</summary>
     [Fact]
     public void Bind_TimeoutKey_MapsToTimeoutSeconds()
     {
@@ -165,6 +170,7 @@ public sealed class HookConfigBindingTests
         Assert.Equal(10, handler.Timeout);
     }
 
+    /// <summary>An unrecognized event-name key under <c>Hooks</c> causes <c>HooksOptionsValidator.Validate</c> to throw with that key name in the message.</summary>
     [Fact]
     public void Bind_UnknownEventName_ThrowsWithKeyName()
     {

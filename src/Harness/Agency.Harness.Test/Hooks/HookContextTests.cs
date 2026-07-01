@@ -12,6 +12,7 @@ public sealed class HookContextTests
     private static JsonElement MakeElement() =>
         JsonSerializer.SerializeToElement(new Dictionary<string, object?>());
 
+    /// <summary><see cref="SessionStartedHookContext"/> exposes the session id and agent context it was constructed with.</summary>
     [Fact]
     public void SessionStartedHookContext_Properties()
     {
@@ -21,6 +22,7 @@ public sealed class HookContextTests
         Assert.Same(ctx, sut.AgentContext);
     }
 
+    /// <summary><see cref="PreToolUseHookContext"/> exposes the tool name, input, and agent context it was constructed with.</summary>
     [Fact]
     public void PreToolUseHookContext_Properties()
     {
@@ -32,6 +34,7 @@ public sealed class HookContextTests
         Assert.Same(ctx, sut.AgentContext);
     }
 
+    /// <summary><see cref="PostToolUseHookContext"/> exposes the tool name, input, result, and agent context it was constructed with.</summary>
     [Fact]
     public void PostToolUseHookContext_Properties()
     {
@@ -46,6 +49,7 @@ public sealed class HookContextTests
         Assert.Same(ctx, sut.AgentContext);
     }
 
+    /// <summary><see cref="AssistantTurnHookContext"/> exposes the assistant message and agent context it was constructed with.</summary>
     [Fact]
     public void AssistantTurnHookContext_Properties()
     {
@@ -56,6 +60,7 @@ public sealed class HookContextTests
         Assert.Same(ctx, sut.AgentContext);
     }
 
+    /// <summary><see cref="StopHookContext"/> exposes the run result and agent context it was constructed with.</summary>
     [Fact]
     public void StopHookContext_Properties()
     {
@@ -68,6 +73,7 @@ public sealed class HookContextTests
         Assert.Same(ctx, sut.AgentContext);
     }
 
+    /// <summary><see cref="SessionEndedHookContext"/> exposes the session id and agent context it was constructed with.</summary>
     [Fact]
     public void SessionEndedHookContext_Properties()
     {

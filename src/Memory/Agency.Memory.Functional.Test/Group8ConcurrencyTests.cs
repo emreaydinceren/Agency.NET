@@ -114,7 +114,7 @@ public sealed class Group8ConcurrencyTests : IAsyncLifetime
     /// <para>
     /// The test is deterministic. It uses a <see cref="StubLlmAdapter"/> returning
     /// a canned episode JSON so no LM Studio connection is required. The watermark
-    /// guard inside <see cref="DistillerBackgroundService.ProcessJobAsync"/> is the
+    /// guard inside <c>DistillerBackgroundService.ProcessJobAsync</c> is the
     /// seam under test; the invariant is confirmed via the observable record count and
     /// the watermark value read from <see cref="WatermarkRepository"/>.
     /// </para>
@@ -259,7 +259,7 @@ public sealed class Group8ConcurrencyTests : IAsyncLifetime
     /// </para>
     /// <list type="number">
     ///   <item>Seed one record (record A) for the test user.</item>
-    ///   <item>Start a <see cref="SearchAsync"/> on storeA and capture its result set
+    ///   <item>Start a <see cref="PostgresMemoryStore.SearchAsync"/> on storeA and capture its result set
     ///         before returning (the search begins; its snapshot is established at that
     ///         moment).</item>
     ///   <item>While the search is logically "in flight" but the task has not yet been
@@ -270,7 +270,7 @@ public sealed class Group8ConcurrencyTests : IAsyncLifetime
     ///         connection, then await the search task. Postgres MVCC ensures the search
     ///         snapshot was established when <c>ExecuteReaderAsync</c> was called —
     ///         before the upsert committed — so the search returns only record A.</item>
-    ///   <item>Run a fresh <see cref="SearchAsync"/> after the upsert — this must
+    ///   <item>Run a fresh <see cref="PostgresMemoryStore.SearchAsync"/> after the upsert — this must
     ///         return both A and B.</item>
     /// </list>
     /// <para>

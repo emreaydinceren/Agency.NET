@@ -15,6 +15,7 @@ public interface IIngestionPipeline<TValue>
     /// <param name="store">The vector store for persisting embeddings and metadata.</param>
     /// <param name="userId">The user ID associated with this ingestion operation.</param>
     /// <param name="sessionId">The optional session ID for grouping related ingestions.</param>
+    /// <param name="projectId">The optional project ID for scoping related ingestions.</param>
     /// <param name="ct">Cancellation token for the operation.</param>
     Task<IngestionResult> ExecuteAsync(
         IDocumentLoader loader,

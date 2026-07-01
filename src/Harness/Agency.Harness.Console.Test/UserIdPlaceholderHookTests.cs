@@ -24,6 +24,9 @@ public sealed class UserIdPlaceholderHookTests
         return await UserIdPlaceholderHook.Hooks.OnPreToolUse!(ctx, CancellationToken.None);
     }
 
+    /// <summary>
+    /// A <c>{userId}</c> placeholder in the tool arguments is rewritten with the session's resolved user ID.
+    /// </summary>
     [Fact]
     public async Task PlaceholderPresent_RewritesWithResolvedUserId()
     {
@@ -40,6 +43,9 @@ public sealed class UserIdPlaceholderHookTests
             rewrite.NewInput.GetProperty("memoryScope").GetProperty("UserId").GetString());
     }
 
+    /// <summary>
+    /// Tool calls whose arguments contain no <c>{userId}</c> placeholder are allowed unmodified.
+    /// </summary>
     [Fact]
     public async Task NoPlaceholder_Allows()
     {
@@ -51,6 +57,10 @@ public sealed class UserIdPlaceholderHookTests
         Assert.IsType<PreToolUseDecision.Allow>(decision);
     }
 
+    /// <summary>
+    /// When no user ID has been resolved, the placeholder is left intact and the call proceeds
+    /// rather than being blocked.
+    /// </summary>
     [Fact]
     public async Task EmptyUserId_Allows_WithoutSubstituting()
     {

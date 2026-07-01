@@ -5,6 +5,10 @@ using Agency.Harness.Hooks.Configuration.Handlers;
 
 namespace Agency.Harness.Test.Hooks.Configuration.Handlers;
 
+/// <summary>
+/// Tests for <see cref="HttpHookHandler"/>, covering response-status interpretation (2xx deny/rewrite,
+/// 5xx as a non-blocking error), request timeout handling, and the outgoing payload/headers.
+/// </summary>
 public sealed class HttpHookHandlerTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -55,6 +59,7 @@ public sealed class HttpHookHandlerTests
 
     // ── tests ─────────────────────────────────────────────────────────────────
 
+    /// <summary>A 2xx response body containing deny JSON produces an output with that JSON populated.</summary>
     [Fact]
     public async Task Http_2xxDenyJson_ProducesDeny()
     {
@@ -68,6 +73,7 @@ public sealed class HttpHookHandlerTests
         Assert.True(output.Json.HasValue);
     }
 
+    /// <summary>A 2xx response body containing rewrite JSON (a <c>tool_input</c> object) produces an output with that JSON populated.</summary>
     [Fact]
     public async Task Http_2xxRewriteJson_ProducesRewrite()
     {
@@ -81,6 +87,7 @@ public sealed class HttpHookHandlerTests
         Assert.True(output.Json.HasValue);
     }
 
+    /// <summary>A 5xx server error response maps to <c>HookExitCodes.NonBlockingError</c> rather than throwing.</summary>
     [Fact]
     public async Task Http_5xx_ProducesNonBlockingError()
     {
@@ -92,6 +99,7 @@ public sealed class HttpHookHandlerTests
         Assert.Equal(HookExitCodes.NonBlockingError, output.ExitCode);
     }
 
+    /// <summary>A request that exceeds the configured timeout maps to <c>HookExitCodes.NonBlockingError</c> rather than throwing.</summary>
     [Fact]
     public async Task Http_Timeout_NonBlocking()
     {
@@ -103,6 +111,7 @@ public sealed class HttpHookHandlerTests
         Assert.Equal(HookExitCodes.NonBlockingError, output.ExitCode);
     }
 
+    /// <summary>The handler sends the payload as an HTTP POST and includes each configured custom header on the outgoing request.</summary>
     [Fact]
     public async Task Http_SendsPayloadAndHeaders()
     {

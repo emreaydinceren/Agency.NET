@@ -16,6 +16,7 @@ public sealed class BlockListHooksTests
         return new PreToolUseHookContext(toolName, input, ctx);
     }
 
+    /// <summary>A shell command containing <c>rm -rf</c> is denied by <see cref="BlockListHooks.Dangerous"/>.</summary>
     [Fact]
     public async Task Dangerous_RmRf_ReturnsDeny()
     {
@@ -24,6 +25,7 @@ public sealed class BlockListHooksTests
         Assert.IsType<PreToolUseDecision.Deny>(result);
     }
 
+    /// <summary>Pattern matching against dangerous commands is case-insensitive, so a mixed-case <c>DROP TABLE</c> is still denied.</summary>
     [Fact]
     public async Task Dangerous_DropTable_ReturnsDeny_CaseInsensitive()
     {
@@ -32,6 +34,7 @@ public sealed class BlockListHooksTests
         Assert.IsType<PreToolUseDecision.Deny>(result);
     }
 
+    /// <summary>A benign command such as <c>npm test</c> is allowed through by <see cref="BlockListHooks.Dangerous"/>.</summary>
     [Fact]
     public async Task Dangerous_SafeCommand_ReturnsAllow()
     {
@@ -40,6 +43,7 @@ public sealed class BlockListHooksTests
         Assert.IsType<PreToolUseDecision.Allow>(result);
     }
 
+    /// <summary>The dangerous-command pattern check only applies to shell-executing tools; a non-shell tool with the same text in its input is allowed.</summary>
     [Fact]
     public async Task Dangerous_NonBashTool_ReturnsAllow()
     {
@@ -48,6 +52,7 @@ public sealed class BlockListHooksTests
         Assert.IsType<PreToolUseDecision.Allow>(result);
     }
 
+    /// <summary>When the tool input has no <c>command</c> property to inspect, <see cref="BlockListHooks.Dangerous"/> allows the call.</summary>
     [Fact]
     public async Task Dangerous_MissingCommandProperty_ReturnsAllow()
     {
@@ -56,6 +61,7 @@ public sealed class BlockListHooksTests
         Assert.IsType<PreToolUseDecision.Allow>(result);
     }
 
+    /// <summary>The deny reason returned for a blocked command includes the specific dangerous pattern that matched.</summary>
     [Fact]
     public async Task Dangerous_DenyReasonContainsDangerousPattern()
     {

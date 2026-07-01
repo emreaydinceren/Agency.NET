@@ -14,6 +14,9 @@ public sealed class UserIdConfigurationTests
             .AddInMemoryCollection(pairs.Select(p => new KeyValuePair<string, string?>(p.Key, p.Value)))
             .Build();
 
+    /// <summary>
+    /// When <c>Agent:UserId</c> is already set, that value is returned and the ID factory is never invoked.
+    /// </summary>
     [Fact]
     public void WhenAlreadyConfigured_ReturnsExistingAndDoesNotGenerate()
     {
@@ -27,6 +30,10 @@ public sealed class UserIdConfigurationTests
         Assert.Equal("preset-id", id);
     }
 
+    /// <summary>
+    /// When no user ID is configured, a new one is generated, persisted to <c>appsettings.json</c>
+    /// under <c>Agent:UserId</c> alongside existing settings, and surfaced back into configuration.
+    /// </summary>
     [Fact]
     public void WhenMissing_GeneratesPersistsToFileAndSurfacesToConfig()
     {

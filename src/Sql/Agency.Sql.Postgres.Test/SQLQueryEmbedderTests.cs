@@ -3,7 +3,7 @@ using Agency.Embeddings.Common;
 namespace Agency.Sql.Postgres.Test;
 
 /// <summary>
-/// Tests for <see cref="Agency.Sql.SqlQueryEmbedder"/>.
+/// Tests for <see cref="Agency.Sql.Postgres.SQLQueryEmbedder"/>.
 /// </summary>
 public sealed class SQLQueryEmbedderTests
 {

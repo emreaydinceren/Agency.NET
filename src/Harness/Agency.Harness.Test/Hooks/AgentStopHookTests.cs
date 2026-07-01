@@ -36,6 +36,7 @@ public sealed class AgentStopHookTests
         return events;
     }
 
+    /// <summary>A run that completes normally fires <c>OnStop</c> exactly once.</summary>
     [Fact]
     public async Task OnStop_FiresOnce_ForNormalRun()
     {
@@ -51,6 +52,7 @@ public sealed class AgentStopHookTests
         Assert.Equal(1, count);
     }
 
+    /// <summary>The hook context's <c>Result</c> is populated with the run's <see cref="AgentResultEvent"/>.</summary>
     [Fact]
     public async Task OnStop_ReceivesAgentResultEvent()
     {
@@ -66,6 +68,7 @@ public sealed class AgentStopHookTests
         Assert.NotNull(captured);
     }
 
+    /// <summary>For a run that finishes successfully, the hook context's result status is <see cref="AgentResultStatus.Success"/>.</summary>
     [Fact]
     public async Task OnStop_ReceivesCorrectStatus_ForSuccessRun()
     {
@@ -81,6 +84,7 @@ public sealed class AgentStopHookTests
         Assert.Equal(AgentResultStatus.Success, capturedStatus);
     }
 
+    /// <summary><c>OnStop</c> still fires, with status <see cref="AgentResultStatus.MaxStepsReached"/>, when the run is cut off by the step-count stop condition.</summary>
     [Fact]
     public async Task OnStop_FiresForMaxStepsReached()
     {
@@ -101,6 +105,7 @@ public sealed class AgentStopHookTests
         Assert.Equal(AgentResultStatus.MaxStepsReached, capturedStatus);
     }
 
+    /// <summary>Leaving <c>OnStop</c> unset (<see langword="null"/>) does not throw during a run.</summary>
     [Fact]
     public async Task OnStop_Null_DoesNotThrow()
     {
@@ -111,6 +116,7 @@ public sealed class AgentStopHookTests
         Assert.Null(ex);
     }
 
+    /// <summary>The <c>OnStop</c> hook runs before the terminal <see cref="AgentResultEvent"/> is yielded from the event stream.</summary>
     [Fact]
     public async Task OnStop_FiresBefore_AgentResultEventIsYielded()
     {

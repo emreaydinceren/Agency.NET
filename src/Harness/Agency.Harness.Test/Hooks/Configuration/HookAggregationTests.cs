@@ -19,6 +19,7 @@ public sealed class HookAggregationTests
 
     // ── Test 1 ───────────────────────────────────────────────────────────────
 
+    /// <summary>When outputs mix allow, rewrite, and deny, the aggregated decision is deny — the most restrictive outcome wins.</summary>
     [Fact]
     public void Aggregate_DenyWinsOverRewriteOverAllow()
     {
@@ -36,6 +37,7 @@ public sealed class HookAggregationTests
 
     // ── Test 2 ───────────────────────────────────────────────────────────────
 
+    /// <summary>When multiple outputs deny, the aggregated deny reason is deterministically the first-declared handler's reason.</summary>
     [Fact]
     public void Aggregate_OrderDeterministic_FirstDenyWins()
     {
@@ -53,6 +55,7 @@ public sealed class HookAggregationTests
 
     // ── Test 3 ───────────────────────────────────────────────────────────────
 
+    /// <summary>When a single output carries both a blocking-deny exit code and rewrite JSON, the deny exit code takes precedence over the rewrite payload.</summary>
     [Fact]
     public void Aggregate_Exit2_OverridesRewriteInSameOutput()
     {
@@ -68,6 +71,7 @@ public sealed class HookAggregationTests
 
     // ── Test 4 ───────────────────────────────────────────────────────────────
 
+    /// <summary>An output with <c>HookExitCodes.NonBlockingError</c> fails open, aggregating to allow rather than blocking the tool call.</summary>
     [Fact]
     public void Aggregate_NonBlockingError_FailsOpenAllow()
     {
@@ -83,6 +87,7 @@ public sealed class HookAggregationTests
 
     // ── Test 5 ───────────────────────────────────────────────────────────────
 
+    /// <summary>An output whose JSON carries a <c>tool_input</c> element aggregates to <see cref="PreToolUseDecision.Rewrite"/> with that element attached.</summary>
     [Fact]
     public void Map_RewriteToolInput_ProducesRewriteWithElement()
     {

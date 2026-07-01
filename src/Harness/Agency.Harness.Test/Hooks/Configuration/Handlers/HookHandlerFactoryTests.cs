@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Agency.Harness.Test.Hooks.Configuration.Handlers;
 
+/// <summary>Tests for <see cref="HookHandlerFactory"/>'s mapping from <see cref="HookHandlerKind"/> to concrete <see cref="IHookHandler"/> implementations.</summary>
 public sealed class HookHandlerFactoryTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -16,6 +17,7 @@ public sealed class HookHandlerFactoryTests
 
     // ── tests ─────────────────────────────────────────────────────────────────
 
+    /// <summary><see cref="HookHandlerKind.Command"/> configuration is created as a <see cref="CommandHookHandler"/>.</summary>
     [Fact]
     public void Factory_Command_CreatesCommandHandler()
     {
@@ -32,6 +34,7 @@ public sealed class HookHandlerFactoryTests
         Assert.IsType<CommandHookHandler>(handler);
     }
 
+    /// <summary><see cref="HookHandlerKind.Http"/> configuration is created as an <see cref="HttpHookHandler"/>.</summary>
     [Fact]
     public void Factory_Http_CreatesHttpHandler()
     {

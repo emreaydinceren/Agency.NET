@@ -12,6 +12,10 @@ namespace Agency.Harness.Console.Test;
 /// </summary>
 public sealed class MarkdownRendererTableTests
 {
+    /// <summary>
+    /// A well-formed GFM pipe table parses its header and body rows and reports how many
+    /// lines it consumed.
+    /// </summary>
     [Fact]
     public void TryParseTable_ParsesHeadersRowsAndConsumesBlock()
     {
@@ -33,6 +37,9 @@ public sealed class MarkdownRendererTableTests
         Assert.Equal(4, next);   // header + separator + 2 body rows
     }
 
+    /// <summary>
+    /// A blank line terminates the table block; lines after it are not consumed.
+    /// </summary>
     [Fact]
     public void TryParseTable_StopsAtBlankLine()
     {
@@ -52,6 +59,9 @@ public sealed class MarkdownRendererTableTests
         Assert.Equal(3, next);   // the blank line terminates the table
     }
 
+    /// <summary>
+    /// A pipe table without leading/trailing pipe characters on each row still parses.
+    /// </summary>
     [Fact]
     public void TryParseTable_AcceptsRowsWithoutOuterPipes()
     {
@@ -70,6 +80,12 @@ public sealed class MarkdownRendererTableTests
         Assert.Equal(3, next);
     }
 
+    /// <summary>
+    /// Lines that merely contain a pipe character, or lack a delimiter row, are not
+    /// mistaken for a table.
+    /// </summary>
+    /// <param name="first">The candidate header line.</param>
+    /// <param name="second">The candidate delimiter line.</param>
     [Theory]
     [InlineData("a | pipe in prose", "but the next line is not a delimiter")]
     [InlineData("no pipe at all here", "| --- | --- |")]
@@ -84,6 +100,10 @@ public sealed class MarkdownRendererTableTests
         Assert.Equal(0, next);
     }
 
+    /// <summary>
+    /// A parsed table renders as a genuine Spectre table with box-drawing rules and cell content,
+    /// not literal pipe characters.
+    /// </summary>
     [Fact]
     public void BuildTable_RendersBoxDrawingAndCellContent()
     {
@@ -101,6 +121,9 @@ public sealed class MarkdownRendererTableTests
         Assert.Contains('│', rendered);
     }
 
+    /// <summary>
+    /// Rows with fewer or more cells than the header are normalised to the header's column count.
+    /// </summary>
     [Fact]
     public void BuildTable_PadsAndTruncatesRaggedRows()
     {
@@ -117,6 +140,10 @@ public sealed class MarkdownRendererTableTests
         Assert.DoesNotContain("extra", rendered);   // 4th cell dropped to match 3 columns
     }
 
+    /// <summary>
+    /// Inline markdown emphasis inside a cell (e.g. <c>**bold**</c>) is transformed to Spectre
+    /// markup rather than printed literally.
+    /// </summary>
     [Fact]
     public void BuildTable_AppliesInlineMarkupInCells()
     {

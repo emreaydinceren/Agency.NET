@@ -214,7 +214,7 @@ public sealed class PlaceholderExpanderTests
 
     /// <summary>
     /// Placeholder keys are matched case-insensitively against the lookup
-    /// dictionary, mirroring <see cref="IConfiguration"/> semantics.
+    /// dictionary, mirroring <see cref="Microsoft.Extensions.Configuration.IConfiguration"/> semantics.
     /// </summary>
     [Fact]
     public void Expand_CaseInsensitiveKey_Resolves()

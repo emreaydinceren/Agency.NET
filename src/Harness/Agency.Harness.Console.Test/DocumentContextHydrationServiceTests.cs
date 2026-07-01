@@ -5,11 +5,17 @@ using Moq;
 
 namespace Agency.Harness.Console.Test;
 
+/// <summary>
+/// Unit tests for <see cref="DocumentContextHydrationService"/>.
+/// </summary>
 public sealed class DocumentContextHydrationServiceTests
 {
     private readonly Mock<IVectorStore> _storeMock = new();
     private readonly Mock<IProjectSessionState> _stateMock = new();
 
+    /// <summary>
+    /// Initializes the shared session-state mock used by every test in this fixture.
+    /// </summary>
     public DocumentContextHydrationServiceTests()
     {
         _stateMock.Setup(s => s.UserId).Returns("user1");
@@ -31,6 +37,9 @@ public sealed class DocumentContextHydrationServiceTests
             .ReturnsAsync((IReadOnlyList<DocumentInfo>)docs);
     }
 
+    /// <summary>
+    /// A freshly constructed service starts dirty, so the first refresh must query the store.
+    /// </summary>
     [Fact]
     public async Task RefreshIfDirtyAsync_InitiallyDirty_QueriesStore()
     {
@@ -48,6 +57,9 @@ public sealed class DocumentContextHydrationServiceTests
             Times.Once);
     }
 
+    /// <summary>
+    /// When the store reports no documents, no context fact is produced.
+    /// </summary>
     [Fact]
     public async Task RefreshIfDirtyAsync_NoDocuments_ReturnsNull()
     {
@@ -59,6 +71,9 @@ public sealed class DocumentContextHydrationServiceTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// A document scoped to every session and project is labeled <c>[global]</c> in the resulting fact.
+    /// </summary>
     [Fact]
     public async Task RefreshIfDirtyAsync_WithGlobalDocument_ReturnsFactWithGlobalLabel()
     {
@@ -72,6 +87,9 @@ public sealed class DocumentContextHydrationServiceTests
         Assert.Contains("docs/Home.md", result);
     }
 
+    /// <summary>
+    /// A document scoped to the current session is labeled <c>[session]</c> in the resulting fact.
+    /// </summary>
     [Fact]
     public async Task RefreshIfDirtyAsync_WithSessionDocument_ReturnsFactWithSessionLabel()
     {
@@ -85,6 +103,9 @@ public sealed class DocumentContextHydrationServiceTests
         Assert.Contains("src/README.md", result);
     }
 
+    /// <summary>
+    /// A document scoped to a specific project is labeled <c>[project:&lt;name&gt;]</c> in the resulting fact.
+    /// </summary>
     [Fact]
     public async Task RefreshIfDirtyAsync_WithProjectDocument_ReturnsFactWithProjectLabel()
     {
@@ -98,6 +119,10 @@ public sealed class DocumentContextHydrationServiceTests
         Assert.Contains("docs/Arch.md", result);
     }
 
+    /// <summary>
+    /// The result is cached: calling refresh again without an intervening <see cref="DocumentContextHydrationService.MarkDirty"/>
+    /// must not re-query the store.
+    /// </summary>
     [Fact]
     public async Task RefreshIfDirtyAsync_CalledTwiceWithoutMarkDirty_OnlyQueriesOnce()
     {
@@ -116,6 +141,9 @@ public sealed class DocumentContextHydrationServiceTests
             Times.Once);
     }
 
+    /// <summary>
+    /// Calling <see cref="DocumentContextHydrationService.MarkDirty"/> forces the next refresh to re-query the store.
+    /// </summary>
     [Fact]
     public async Task MarkDirty_CausesNextCallToQueryAgain()
     {

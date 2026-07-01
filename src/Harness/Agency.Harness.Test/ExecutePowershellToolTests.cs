@@ -9,6 +9,11 @@ public sealed class ExecutePowershellToolTests
 {
     private static string Quote(string path) => path.Replace("'", "''");
 
+    /// <summary>
+    /// The tool's <c>Definition</c> exposes the expected name, a description mentioning that it
+    /// executes a PowerShell command, and an input schema requiring a string <c>command</c>
+    /// property.
+    /// </summary>
     [Fact]
     public void Definition_ExposesExpectedMetadataAndSchema()
     {
@@ -23,6 +28,10 @@ public sealed class ExecutePowershellToolTests
         Assert.Equal("string", schema.GetProperty("properties").GetProperty("command").GetProperty("type").GetString());
     }
 
+    /// <summary>
+    /// Invoking with an empty arguments object returns an error result naming the missing
+    /// <c>command</c> argument.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_ReturnsError_WhenCommandIsMissing()
     {
@@ -34,6 +43,10 @@ public sealed class ExecutePowershellToolTests
         Assert.Contains("'command'", result.Content);
     }
 
+    /// <summary>
+    /// When exactly one string argument is supplied under any key (e.g. <c>path</c> instead of
+    /// <c>command</c>), the tool treats it as unambiguous and executes it as the command.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_AcceptsSingleMisnamedStringArg_AsCommand()
     {
@@ -50,6 +63,10 @@ public sealed class ExecutePowershellToolTests
         Assert.Contains(expected, result.Content);
     }
 
+    /// <summary>
+    /// When multiple string arguments are supplied and none is named <c>command</c>, the tool
+    /// cannot disambiguate and returns an error listing all the received argument keys.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_ReturnsError_EchoesReceivedKeys_WhenArgsAreAmbiguous()
     {
@@ -68,6 +85,10 @@ public sealed class ExecutePowershellToolTests
     }
 
 
+    /// <summary>
+    /// Running <c>Get-ChildItem | Select-Object Name, Length</c> against a directory with one
+    /// file renders both the file's name and length in the result.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_UsesGetChildItem_ToList_SingleFile()
     {
@@ -95,6 +116,10 @@ public sealed class ExecutePowershellToolTests
         }
     }
 
+    /// <summary>
+    /// Running <c>Get-ChildItem | Select-Object Name, Length</c> against a directory with
+    /// multiple files renders every file's name and length in the result.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_UsesGetChildItem_ToList_Files()
     {
@@ -124,6 +149,10 @@ public sealed class ExecutePowershellToolTests
         }
     }
 
+    /// <summary>
+    /// Running <c>Get-ChildItem | Select-Object FullName</c> against a directory with one file
+    /// renders that file's full path in the result.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_UsesGetChildItem_ToList_SingleFileFullName()
     {
@@ -150,6 +179,10 @@ public sealed class ExecutePowershellToolTests
         }
     }
 
+    /// <summary>
+    /// Running <c>Get-ChildItem | Select-Object FullName</c> against a directory with multiple
+    /// files renders every file's full path in the result.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_UsesGetChildItem_ToList_FullNames()
     {
@@ -179,6 +212,11 @@ public sealed class ExecutePowershellToolTests
         }
     }
 
+    /// <summary>
+    /// Selecting a single process's <c>ExitCode</c> property does not throw even though reading
+    /// it on a running process raises internally — the renderer must skip the failing property
+    /// and still emit the rest.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_GetProcess_SingleRunningProcess_RendersWithoutThrowing()
     {
@@ -196,6 +234,10 @@ public sealed class ExecutePowershellToolTests
         Assert.Contains("ProcessName", result.Content);
     }
 
+    /// <summary>
+    /// Rendering multiple processes as a markdown table tolerates the same throwing
+    /// <c>ExitCode</c> property per-cell without failing the whole table.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_GetProcess_MultipleRunningProcesses_RendersTableWithoutThrowing()
     {
@@ -213,6 +255,11 @@ public sealed class ExecutePowershellToolTests
         Assert.Contains("ProcessName", result.Content);
     }
 
+    /// <summary>
+    /// A bare <c>Get-Process</c> with no <c>Select-Object</c> projection keeps the type's default
+    /// display property set, so the throwing <c>ExitTime</c>/<c>ExitCode</c> getters are never
+    /// probed and excluded from the output.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_GetProcess_BareSingleObject_RendersDefaultDisplayColumns()
     {
@@ -231,6 +278,11 @@ public sealed class ExecutePowershellToolTests
         Assert.DoesNotContain("ExitTime", result.Content);
     }
 
+    /// <summary>
+    /// <c>Select-Object -First</c> without a property list passes the original process objects
+    /// through, so the table renderer also honours the default display set and omits
+    /// <c>ExitTime</c>/<c>ExitCode</c>.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_GetProcess_BareMultipleObjects_RendersDefaultDisplayColumns()
     {
@@ -248,6 +300,10 @@ public sealed class ExecutePowershellToolTests
         Assert.DoesNotContain("ExitTime", result.Content);
     }
 
+    /// <summary>
+    /// Bare strings emitted like native command output are rendered as their text content, never
+    /// as a table with a spurious <c>Length</c> column.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_NativeCommandStrings_RendersTextNotLengthColumn()
     {
@@ -267,6 +323,10 @@ public sealed class ExecutePowershellToolTests
         Assert.DoesNotContain("Length", result.Content);
     }
 
+    /// <summary>
+    /// A single bare string result is rendered as its text content, not as a bulleted list item
+    /// exposing a <c>Length</c> property.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_SingleNativeCommandString_RendersTextNotLengthBullet()
     {
@@ -283,6 +343,10 @@ public sealed class ExecutePowershellToolTests
         Assert.DoesNotContain("Length", result.Content);
     }
 
+    /// <summary>
+    /// Running <c>Get-Content</c> projected through a calculated property renders the file's
+    /// contents and the projected column name in the result.
+    /// </summary>
     [Fact]
     public async Task InvokeAsync_UsesGetContent_ToReadFileContents()
     {

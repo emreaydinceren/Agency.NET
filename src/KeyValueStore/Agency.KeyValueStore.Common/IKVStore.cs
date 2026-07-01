@@ -23,6 +23,7 @@ public interface IKVStore
     /// <param name="metadata">
     /// An optional collection of metadata to associate with the value. May be null if no metadata is required.
     /// </param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -30,6 +31,7 @@ public interface IKVStore
     /// </summary>
     /// <typeparam name="TValue">The type of the values contained in each search hit result.</typeparam>
     /// <param name="query">The query criteria used to filter and retrieve search results. Cannot be null.</param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous operation. The task result contains a read-only list of search hits
     /// matching the query. The list is empty if no results are found.

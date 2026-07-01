@@ -50,6 +50,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 1 ───────────────────────────────────────────────────────────────
 
+    /// <summary>An output whose JSON sets <c>permissionDecision: "ask"</c> with a reason maps to <see cref="PreToolUseDecision.Ask"/> carrying that reason.</summary>
     [Fact]
     public void Map_AskDecisionWithReason_ProducesAskWithReason()
     {
@@ -65,6 +66,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 2 ───────────────────────────────────────────────────────────────
 
+    /// <summary>An output whose JSON sets <c>permissionDecision: "ask"</c> without a reason field maps to <see cref="PreToolUseDecision.Ask"/> with a <see langword="null"/> reason.</summary>
     [Fact]
     public void Map_AskDecisionWithoutReason_ProducesAskWithNullReason()
     {
@@ -81,6 +83,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 3 ───────────────────────────────────────────────────────────────
 
+    /// <summary>Deny outranks Ask in the aggregation precedence order: when both are present, the aggregated decision is deny.</summary>
     [Fact]
     public void Aggregate_DenyAndAsk_DenyWins()
     {
@@ -98,6 +101,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 4 ───────────────────────────────────────────────────────────────
 
+    /// <summary>Ask outranks Rewrite in the aggregation precedence order: when both are present, the aggregated decision is ask.</summary>
     [Fact]
     public void Aggregate_AskAndRewrite_AskWins()
     {
@@ -115,6 +119,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 5 ───────────────────────────────────────────────────────────────
 
+    /// <summary>Ask outranks a plain Allow in the aggregation precedence order: when both are present, the aggregated decision is ask.</summary>
     [Fact]
     public void Aggregate_AskAndAllow_AskWins()
     {
@@ -132,6 +137,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 6 ───────────────────────────────────────────────────────────────
 
+    /// <summary>When multiple handlers return Ask and the first has a <see langword="null"/> reason, the aggregated Ask keeps the first non-null reason found.</summary>
     [Fact]
     public void Aggregate_TwoAsks_FirstNullReasonSecondHasReason_SecondReasonKept()
     {
@@ -150,6 +156,7 @@ public sealed class PreToolUseAskTests
 
     // ── Test 7 ───────────────────────────────────────────────────────────────
 
+    /// <summary>When multiple handlers return Ask and all have reasons, the aggregated Ask keeps the first-declared handler's reason.</summary>
     [Fact]
     public void Aggregate_TwoAsks_BothHaveReasons_FirstReasonKept()
     {

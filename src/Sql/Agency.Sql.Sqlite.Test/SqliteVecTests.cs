@@ -5,7 +5,7 @@ namespace Agency.Sql.Sqlite.Test;
 /// <summary>
 /// Integration tests for vector operations against an in-memory SQLite database.
 /// Vector distance functions (L2, cosine, dot product) are implemented as SQLite UDFs
-/// registered via <see cref="SqliteConnection.CreateFunction{T}"/> — no native extension required.
+/// registered via <see cref="SqliteConnection.CreateFunction{T1,T2,TResult}(string,Func{T1,T2,TResult},bool)"/> — no native extension required.
 ///
 /// Test vectors are 3-dimensional unit vectors so expected distances are
 /// analytically exact and assertions can be made with tight tolerances.
@@ -23,6 +23,9 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
 
     private readonly VectorFixture _fx;
 
+    /// <summary>
+    /// Creates the test class with its shared vector fixture.
+    /// </summary>
     public SqliteVecTests(VectorFixture fx)
     {
         this._fx = fx;
@@ -521,6 +524,10 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
         private readonly SqliteConnection _keepAlive;
         private readonly string _runId = Guid.NewGuid().ToString("N")[..8];
 
+        /// <summary>
+        /// Opens the keep-alive connection to the named in-memory database, registers the vector UDFs,
+        /// and creates the runner.
+        /// </summary>
         public VectorFixture()
         {
             var dbName = $"vec_tests_{Guid.NewGuid():N}";

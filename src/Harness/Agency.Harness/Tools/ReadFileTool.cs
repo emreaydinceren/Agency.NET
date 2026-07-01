@@ -2,6 +2,7 @@ using System.Text.Json;
 
 namespace Agency.Harness.Tools;
 
+/// <summary><see cref="ITool"/> that reads and returns the full text contents of a file at a given path.</summary>
 public sealed class ReadFileTool : ITool
 {
     static JsonElement InputSchema => JsonDocument.Parse(@"{
@@ -12,13 +13,21 @@ public sealed class ReadFileTool : ITool
         ""required"": [""path""]
     }").RootElement;
 
-    public ToolDefinition Definition { 
+    /// <summary>Gets the <c>read_file</c> definition: JSON schema accepting a single required <c>path</c> string.</summary>
+    public ToolDefinition Definition {
         get
         {
               return new ToolDefinition("read_file", "Reads the contents of a file at the specified path.", InputSchema);
         }
     }
 
+    /// <summary>Reads the file at <c>path</c> and returns its contents as text.</summary>
+    /// <param name="input">JSON object expected to contain a <c>path</c> string field.</param>
+    /// <param name="ct">Cancellation token; not currently observed since file I/O is synchronous.</param>
+    /// <returns>
+    /// A <see cref="ToolResult"/> with the file's contents; <see cref="ToolResult.IsError"/> is
+    /// <see langword="true"/> if <c>path</c> is missing, the file does not exist, or reading fails.
+    /// </returns>
     public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
     {
         dynamic accessor = new JsonDynamicAccessor(input);

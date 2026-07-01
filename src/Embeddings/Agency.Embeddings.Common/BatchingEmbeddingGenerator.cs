@@ -9,7 +9,7 @@ namespace Agency.Embeddings.Common;
 /// <remarks>
 /// Up to <see cref="DefaultMaxBatchSize"/> pending requests are grouped into a single
 /// <see cref="IEmbeddingGenerator.GenerateEmbeddingsAsync"/> call. A batch is flushed when it
-/// reaches <paramref name="maxBatchSize"/> items or after <paramref name="maxDelay"/> has elapsed,
+/// reaches <c>maxBatchSize</c> items or after <c>maxDelay</c> has elapsed,
 /// whichever comes first. <see cref="GenerateEmbeddingsAsync"/> bypasses the buffer and is forwarded
 /// directly to the inner generator.
 /// </remarks>

@@ -56,6 +56,10 @@ public sealed class AgentToolLoggingTests
         return logger;
     }
 
+    /// <summary>
+    /// The tool invocation and its failure are always logged by tool name, regardless of the
+    /// <see cref="AgentOptions.LogToolPayloads"/> setting.
+    /// </summary>
     [Fact]
     public async Task ToolCallAndFailure_AreAlwaysLoggedByName()
     {
@@ -68,6 +72,10 @@ public sealed class AgentToolLoggingTests
             && e.Message.Contains("returned an error result"));
     }
 
+    /// <summary>
+    /// With tool-payload logging disabled, neither the tool's input arguments nor its error
+    /// content appear in the logs — a redaction placeholder is logged instead.
+    /// </summary>
     [Fact]
     public async Task PayloadsRedacted_WhenLoggingDisabled()
     {
@@ -79,6 +87,10 @@ public sealed class AgentToolLoggingTests
         Assert.Contains(logger.Entries, e => e.Message.Contains("redacted"));
     }
 
+    /// <summary>
+    /// With tool-payload logging enabled, both the tool's input arguments and its error content
+    /// appear verbatim in the logs, and no redaction placeholder is logged.
+    /// </summary>
     [Fact]
     public async Task PayloadsLogged_WhenLoggingEnabled()
     {

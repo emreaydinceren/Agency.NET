@@ -12,6 +12,12 @@ using System.Globalization;
 using System.Text.Json;
 
 namespace Agency.VectorStore.Sql.Postgres;
+
+/// <summary>
+/// An <see cref="IVectorStore"/> backed by PostgreSQL that stores embeddings in a pgvector column and uses
+/// the <c>&lt;=&gt;</c> cosine-distance operator together with the JSONB containment operator (<c>@&gt;</c>)
+/// for similarity search and metadata filtering.
+/// </summary>
 public sealed class PostgresKVStore : IVectorStore
 {
     /// <summary>
@@ -32,6 +38,12 @@ public sealed class PostgresKVStore : IVectorStore
 
     private readonly PostgreSqlRunner _postgreSqlRunner;
 
+    /// <summary>
+    /// Creates a new <see cref="PostgresKVStore"/>.
+    /// </summary>
+    /// <param name="embeddingGenerator">Used to generate embedding vectors for stored values and search queries.</param>
+    /// <param name="postgreSqlRunner">Executes SQL commands and queries against the PostgreSQL database.</param>
+    /// <param name="logger">Used for diagnostic logging. If null, a no-op logger is substituted.</param>
     public PostgresKVStore(
         IEmbeddingGenerator embeddingGenerator,
         PostgreSqlRunner postgreSqlRunner,
@@ -87,6 +99,7 @@ public sealed class PostgresKVStore : IVectorStore
             onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error initializing vector store schema after {ElapsedMs}ms", elapsedMs));
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default)
     {
         if (query == null)
@@ -190,6 +203,7 @@ public sealed class PostgresKVStore : IVectorStore
             onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching vector store after {ElapsedMs}ms", elapsedMs));
     }
 
+    /// <inheritdoc/>
     public async Task UpsertAsync<TValue>(string userId, string? sessionId, string key, TValue value, IDictionary<string, object>? metadata = null, string? projectId = null, CancellationToken cancellationToken = default)
     {
         using var activity = _telemetry.StartActivity("vectorstore.upsert");
@@ -262,6 +276,7 @@ public sealed class PostgresKVStore : IVectorStore
             onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", elapsedMs, userId, sessionId ?? "global", key));
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<string>> ListProjectsAsync(string userId, CancellationToken cancellationToken = default)
     {
         const string sql = """
@@ -278,6 +293,7 @@ public sealed class PostgresKVStore : IVectorStore
             cancellationToken);
     }
 
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<DocumentInfo>> ListDocumentsAsync(
         string userId,
         string? sessionId,

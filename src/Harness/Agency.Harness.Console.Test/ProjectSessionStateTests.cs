@@ -4,6 +4,9 @@ using Microsoft.Extensions.Options;
 
 namespace Agency.Harness.Console.Test;
 
+/// <summary>
+/// Unit tests for <see cref="ProjectSessionState"/>.
+/// </summary>
 public sealed class ProjectSessionStateTests
 {
     private static ProjectSessionState CreateState(string? userId = "test-user")
@@ -11,6 +14,9 @@ public sealed class ProjectSessionStateTests
         return new ProjectSessionState(Options.Create(new AgentOptions { UserId = userId }));
     }
 
+    /// <summary>
+    /// When <see cref="AgentOptions.UserId"/> is configured, it is used as the session's user ID.
+    /// </summary>
     [Fact]
     public void Constructor_UsesAgentOptionsUserId_WhenSet()
     {
@@ -19,6 +25,10 @@ public sealed class ProjectSessionStateTests
         Assert.Equal("alice", state.UserId);
     }
 
+    /// <summary>
+    /// When <see cref="AgentOptions.UserId"/> is <see langword="null"/>, the session falls back
+    /// to the OS environment user name.
+    /// </summary>
     [Fact]
     public void Constructor_FallsBackToEnvironmentUserName_WhenUserIdNull()
     {
@@ -27,6 +37,9 @@ public sealed class ProjectSessionStateTests
         Assert.Equal(Environment.UserName, state.UserId);
     }
 
+    /// <summary>
+    /// The session ID generated at construction time does not change across repeated reads.
+    /// </summary>
     [Fact]
     public void Constructor_GeneratesStableSessionId()
     {
@@ -39,6 +52,9 @@ public sealed class ProjectSessionStateTests
         Assert.Equal(first, second);
     }
 
+    /// <summary>
+    /// Each <see cref="ProjectSessionState"/> instance gets its own unique session ID.
+    /// </summary>
     [Fact]
     public void Constructor_TwoInstances_HaveDifferentSessionIds()
     {
@@ -48,6 +64,9 @@ public sealed class ProjectSessionStateTests
         Assert.NotEqual(a.SessionId, b.SessionId);
     }
 
+    /// <summary>
+    /// A freshly constructed session has no loaded projects.
+    /// </summary>
     [Fact]
     public void LoadedProjects_InitiallyEmpty()
     {
@@ -56,6 +75,9 @@ public sealed class ProjectSessionStateTests
         Assert.Empty(state.LoadedProjects);
     }
 
+    /// <summary>
+    /// Loading a project adds it to <see cref="ProjectSessionState.LoadedProjects"/>.
+    /// </summary>
     [Fact]
     public void LoadProject_AddsToLoadedProjects()
     {
@@ -66,6 +88,9 @@ public sealed class ProjectSessionStateTests
         Assert.Contains("my-project", state.LoadedProjects);
     }
 
+    /// <summary>
+    /// Loading the same project name with different casing does not create a duplicate entry.
+    /// </summary>
     [Fact]
     public void LoadProject_IsCaseInsensitiveDuplicate()
     {
@@ -77,6 +102,9 @@ public sealed class ProjectSessionStateTests
         Assert.Single(state.LoadedProjects);
     }
 
+    /// <summary>
+    /// Unloading a loaded project removes it from <see cref="ProjectSessionState.LoadedProjects"/>.
+    /// </summary>
     [Fact]
     public void UnloadProject_RemovesFromLoadedProjects()
     {
@@ -88,6 +116,9 @@ public sealed class ProjectSessionStateTests
         Assert.DoesNotContain("my-project", state.LoadedProjects);
     }
 
+    /// <summary>
+    /// Unloading a project that was never loaded is a no-op rather than an error.
+    /// </summary>
     [Fact]
     public void UnloadProject_NonExistentProject_DoesNotThrow()
     {

@@ -25,6 +25,10 @@ public sealed class PermissionsOptionsTests
 
     // ── Binding: full section ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// Binding a full "Permissions" configuration section with <c>Enabled: false</c> must set
+    /// <see cref="PermissionsOptions.Enabled"/> to <see langword="false"/>.
+    /// </summary>
     [Fact]
     public void Bind_FullSection_EnabledFalse_BindsCorrectly()
     {
@@ -46,6 +50,10 @@ public sealed class PermissionsOptionsTests
         Assert.False(options.Enabled);
     }
 
+    /// <summary>
+    /// Binding must populate <see cref="PermissionsOptions.Allow"/> with every entry from the
+    /// configured "Allow" array, in order.
+    /// </summary>
     [Fact]
     public void Bind_FullSection_AllowArray_BindsAllEntries()
     {
@@ -65,6 +73,10 @@ public sealed class PermissionsOptionsTests
         Assert.Contains("ExecutePowershell(git status*)", options.Allow);
     }
 
+    /// <summary>
+    /// Binding must populate <see cref="PermissionsOptions.Deny"/> with every entry from the
+    /// configured "Deny" array.
+    /// </summary>
     [Fact]
     public void Bind_FullSection_DenyArray_BindsAllEntries()
     {
@@ -83,6 +95,10 @@ public sealed class PermissionsOptionsTests
         Assert.Equal("WriteFile(E:/secrets/**)", options.Deny[0]);
     }
 
+    /// <summary>
+    /// The string <c>"Deny"</c> in the "OnUnresolved" configuration key must bind to
+    /// <see cref="UnresolvedBehavior.Deny"/>.
+    /// </summary>
     [Fact]
     public void Bind_OnUnresolved_Deny_BindsToUnresolvedBehaviorDeny()
     {
@@ -99,6 +115,10 @@ public sealed class PermissionsOptionsTests
         Assert.Equal(UnresolvedBehavior.Deny, options.OnUnresolved);
     }
 
+    /// <summary>
+    /// The string <c>"Ask"</c> in the "OnUnresolved" configuration key must bind to
+    /// <see cref="UnresolvedBehavior.Ask"/>.
+    /// </summary>
     [Fact]
     public void Bind_OnUnresolved_Ask_BindsToUnresolvedBehaviorAsk()
     {
@@ -115,6 +135,10 @@ public sealed class PermissionsOptionsTests
         Assert.Equal(UnresolvedBehavior.Ask, options.OnUnresolved);
     }
 
+    /// <summary>
+    /// Binding must populate <see cref="PermissionsOptions.ToolInputKeys"/> with every
+    /// tool-name/key-field pair from the configured "ToolInputKeys" object.
+    /// </summary>
     [Fact]
     public void Bind_ToolInputKeys_BindsDictionaryEntries()
     {
@@ -135,6 +159,12 @@ public sealed class PermissionsOptionsTests
         Assert.Equal(2, options.ToolInputKeys.Count);
     }
 
+    /// <summary>
+    /// Because <see cref="IConfiguration"/> binding may replace the dictionary instance and
+    /// lose its comparer, <see cref="PermissionsOptions.ToolInputKeys"/> must guarantee
+    /// case-insensitive lookups after binding regardless of the casing used to configure or
+    /// query a key.
+    /// </summary>
     [Fact]
     public void Bind_ToolInputKeys_LookupIsCaseInsensitive()
     {
@@ -164,6 +194,10 @@ public sealed class PermissionsOptionsTests
         Assert.True(options.ToolInputKeys.ContainsKey("mcp__gitea__get_file_contents"));
     }
 
+    /// <summary>
+    /// Binding must populate <see cref="PermissionsOptions.LocalRulesPath"/> from the
+    /// configured "LocalRulesPath" value.
+    /// </summary>
     [Fact]
     public void Bind_FullSection_LocalRulesPath_BindsCorrectly()
     {
@@ -182,6 +216,10 @@ public sealed class PermissionsOptionsTests
 
     // ── Binding: defaults when section is absent or partial ───────────────────
 
+    /// <summary>
+    /// The default value of <see cref="PermissionsOptions.Enabled"/> must be
+    /// <see langword="true"/> when no configuration is bound.
+    /// </summary>
     [Fact]
     public void Bind_AbsentSection_EnabledDefaultsToTrue()
     {
@@ -190,6 +228,10 @@ public sealed class PermissionsOptionsTests
         Assert.True(options.Enabled);
     }
 
+    /// <summary>
+    /// The default value of <see cref="PermissionsOptions.OnUnresolved"/> must be
+    /// <see cref="UnresolvedBehavior.Ask"/> when no configuration is bound.
+    /// </summary>
     [Fact]
     public void Bind_AbsentSection_OnUnresolvedDefaultsToAsk()
     {
@@ -198,6 +240,10 @@ public sealed class PermissionsOptionsTests
         Assert.Equal(UnresolvedBehavior.Ask, options.OnUnresolved);
     }
 
+    /// <summary>
+    /// The default value of <see cref="PermissionsOptions.Allow"/> must be a non-null, empty
+    /// array when no configuration is bound.
+    /// </summary>
     [Fact]
     public void Bind_AbsentSection_AllowIsEmptyNonNull()
     {
@@ -207,6 +253,10 @@ public sealed class PermissionsOptionsTests
         Assert.Empty(options.Allow);
     }
 
+    /// <summary>
+    /// The default value of <see cref="PermissionsOptions.Deny"/> must be a non-null, empty
+    /// array when no configuration is bound.
+    /// </summary>
     [Fact]
     public void Bind_AbsentSection_DenyIsEmptyNonNull()
     {
@@ -216,6 +266,10 @@ public sealed class PermissionsOptionsTests
         Assert.Empty(options.Deny);
     }
 
+    /// <summary>
+    /// The default value of <see cref="PermissionsOptions.LocalRulesPath"/> must be
+    /// <see langword="null"/> when no configuration is bound.
+    /// </summary>
     [Fact]
     public void Bind_AbsentSection_LocalRulesPathIsNull()
     {
@@ -224,6 +278,10 @@ public sealed class PermissionsOptionsTests
         Assert.Null(options.LocalRulesPath);
     }
 
+    /// <summary>
+    /// The default value of <see cref="PermissionsOptions.ToolInputKeys"/> must be a non-null,
+    /// empty dictionary when no configuration is bound.
+    /// </summary>
     [Fact]
     public void Bind_AbsentSection_ToolInputKeysIsEmptyNonNull()
     {
@@ -233,6 +291,10 @@ public sealed class PermissionsOptionsTests
         Assert.Empty(options.ToolInputKeys);
     }
 
+    /// <summary>
+    /// When only one property is specified in configuration, every unspecified property of
+    /// <see cref="PermissionsOptions"/> must retain its default value rather than being reset.
+    /// </summary>
     [Fact]
     public void Bind_PartialSection_UnspecifiedPropertiesRetainDefaults()
     {
@@ -257,6 +319,11 @@ public sealed class PermissionsOptionsTests
 
     // ── Validation: malformed Allow entries ───────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsOptionsValidator.Validate"/> must throw
+    /// <see cref="InvalidOperationException"/> when <see cref="PermissionsOptions.Allow"/>
+    /// contains a malformed rule string.
+    /// </summary>
     [Fact]
     public void Validate_MalformedAllowEntry_ThrowsInvalidOperationException()
     {
@@ -268,6 +335,10 @@ public sealed class PermissionsOptionsTests
         Assert.Throws<InvalidOperationException>(() => PermissionsOptionsValidator.Validate(options));
     }
 
+    /// <summary>
+    /// The exception thrown by <see cref="PermissionsOptionsValidator.Validate"/> for a
+    /// malformed allow rule must include the offending rule text in its message.
+    /// </summary>
     [Fact]
     public void Validate_MalformedAllowEntry_ExceptionMessageContainsOffendingRule()
     {
@@ -284,6 +355,11 @@ public sealed class PermissionsOptionsTests
 
     // ── Validation: malformed Deny entries ────────────────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsOptionsValidator.Validate"/> must throw
+    /// <see cref="InvalidOperationException"/> when <see cref="PermissionsOptions.Deny"/>
+    /// contains a malformed rule string.
+    /// </summary>
     [Fact]
     public void Validate_MalformedDenyEntry_ThrowsInvalidOperationException()
     {
@@ -295,6 +371,10 @@ public sealed class PermissionsOptionsTests
         Assert.Throws<InvalidOperationException>(() => PermissionsOptionsValidator.Validate(options));
     }
 
+    /// <summary>
+    /// The exception thrown by <see cref="PermissionsOptionsValidator.Validate"/> for a
+    /// malformed deny rule must include the offending rule text in its message.
+    /// </summary>
     [Fact]
     public void Validate_MalformedDenyEntry_ExceptionMessageContainsOffendingRule()
     {
@@ -311,6 +391,10 @@ public sealed class PermissionsOptionsTests
 
     // ── Validation: valid rules pass without throwing ─────────────────────────
 
+    /// <summary>
+    /// <see cref="PermissionsOptionsValidator.Validate"/> must not throw for a set of
+    /// spec-valid rules: bare, parameterized, and MCP-wildcard forms in both Allow and Deny.
+    /// </summary>
     [Fact]
     public void Validate_ValidRules_DoesNotThrow()
     {
@@ -333,6 +417,11 @@ public sealed class PermissionsOptionsTests
         PermissionsOptionsValidator.Validate(options);
     }
 
+    /// <summary>
+    /// <see cref="PermissionsOptionsValidator.Validate"/> must not throw when both
+    /// <see cref="PermissionsOptions.Allow"/> and <see cref="PermissionsOptions.Deny"/> are
+    /// empty — an empty rule set is always valid.
+    /// </summary>
     [Fact]
     public void Validate_EmptyAllowAndDeny_DoesNotThrow()
     {

@@ -13,7 +13,7 @@
 /// A numeric value representing the distance metric for the entry. The interpretation of this value depends on the
 /// context in which the entry is used.
 /// </param>
-public record class SearchHit<TValue>(string UserId, string? SessionId, string Key, TValue Value, Dictionary<string, object>? Metadata, double Distance, DateTimeOffset UpdatedOn)
+public sealed record class SearchHit<TValue>(string UserId, string? SessionId, string Key, TValue Value, Dictionary<string, object>? Metadata, double Distance, DateTimeOffset UpdatedOn)
 {
     /// <summary>
     /// Converts Cosine distance (0 to 2) into a 0-100 score.

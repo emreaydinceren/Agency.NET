@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Agency.Harness.Tools;
 
-internal class JsonDynamicAccessor(JsonElement element) : DynamicObject
+internal sealed class JsonDynamicAccessor(JsonElement element) : DynamicObject
 {
     public string? this[string propertyName]
     {

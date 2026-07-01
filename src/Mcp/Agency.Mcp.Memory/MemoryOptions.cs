@@ -3,7 +3,7 @@ namespace Agency.Mcp.Memory;
 /// <summary>
 /// Configuration options for the memory MCP server.
 /// </summary>
-public class MemoryOptions
+public sealed class MemoryOptions
 {
     /// <summary>
     /// Gets or sets the provider to use for memory operations. Supported values are <c>sqlite</c> and <c>postgres</c>.

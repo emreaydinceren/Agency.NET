@@ -9,7 +9,7 @@ namespace Agency.Mcp.Memory;
 /// MCP server tool class that exposes memory operations (memorize, forget, recall) backed by an <see cref="IKVStore"/>.
 /// </summary>
 [McpServerToolType, Description(ToolDescription.Text)]
-public class MemoryTool(IKVStore kvStore)
+public sealed class MemoryTool(IKVStore kvStore)
 {
     private readonly IKVStore _kvStore = kvStore;
 

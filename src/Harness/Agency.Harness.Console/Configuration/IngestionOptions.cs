@@ -1,6 +1,6 @@
 namespace Agency.Harness.Console.Configuration;
 
-public sealed class IngestionOptions
+internal sealed class IngestionOptions
 {
     public const string SectionName = "Ingestion";
 

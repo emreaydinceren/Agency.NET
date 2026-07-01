@@ -5,7 +5,7 @@ using Agency.Harness;
 
 namespace Agency.Harness.Tools;
 
-public class SemanticSearchTool(IVectorStore vectorStore, IProjectSessionState sessionState, int topK = 5) : ITool
+public sealed class SemanticSearchTool(IVectorStore vectorStore, IProjectSessionState sessionState, int topK = 5) : ITool
 {
     static JsonElement InputSchema => JsonDocument.Parse(@"{
         ""type"": ""object"",

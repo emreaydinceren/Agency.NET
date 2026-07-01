@@ -5,7 +5,7 @@ namespace Agency.Mcp.Memory;
 /// <summary>
 /// Represents a record to be stored in memory, including its scope, domain, key, value, and optional tags.
 /// </summary>
-public record class MemoryRecord
+public sealed record class MemoryRecord
 {
     /// <summary>Gets or sets the scope (user and session) under which this record is stored.</summary>
     [Description("Ownership boundary for the record. Set UserId to the literal placeholder \"{userId}\"; omit SessionId for user-wide (global) memory.")]

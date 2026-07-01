@@ -3,7 +3,7 @@ namespace Agency.Llm.Common;
 /// <summary>
 /// Options for configuring LlmClient client.
 /// </summary>
-public record class LlmClientOptions
+public sealed record class LlmClientOptions
 {
     /// <summary>
     /// Gets or sets the name associated with this instance.

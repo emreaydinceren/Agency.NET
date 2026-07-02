@@ -3,6 +3,7 @@ name: CI (Main)
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths-ignore:
       - 'docs/**'
 

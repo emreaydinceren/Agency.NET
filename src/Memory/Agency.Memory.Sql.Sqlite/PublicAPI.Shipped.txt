@@ -1,0 +1,55 @@
+#nullable enable
+Agency.Memory.Sql.Sqlite.DeadLetterEntry
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.<Clone>$() -> Agency.Memory.Sql.Sqlite.DeadLetterEntry!
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.CreatedAt.get -> System.DateTimeOffset
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.CreatedAt.init -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.DeadLetterEntry(string! Id, string! UserId, string? SessionId, string! JobKind, string! JobPayloadJson, string! Error, System.DateTimeOffset CreatedAt) -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.Deconstruct(out string! Id, out string! UserId, out string? SessionId, out string! JobKind, out string! JobPayloadJson, out string! Error, out System.DateTimeOffset CreatedAt) -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.Equals(Agency.Memory.Sql.Sqlite.DeadLetterEntry? other) -> bool
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.Error.get -> string!
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.Error.init -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.Id.get -> string!
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.Id.init -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.JobKind.get -> string!
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.JobKind.init -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.JobPayloadJson.get -> string!
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.JobPayloadJson.init -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.SessionId.get -> string?
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.SessionId.init -> void
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.UserId.get -> string!
+Agency.Memory.Sql.Sqlite.DeadLetterEntry.UserId.init -> void
+Agency.Memory.Sql.Sqlite.MemorySchemaInitializer
+Agency.Memory.Sql.Sqlite.MemorySchemaInitializer.InitializeAsync(int embeddingDim, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Sqlite.MemorySchemaInitializer.MemorySchemaInitializer(string! connectionString) -> void
+Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository
+Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.ListSinceAsync(System.DateTimeOffset cutoff, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Sql.Sqlite.DeadLetterEntry!>!>!
+Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.SqliteDeadLetterRepository(string! connectionString) -> void
+Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! error, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Sqlite.SqliteMemoryServiceCollectionExtensions
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.DeleteByIdAsync(string! recordId, string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.DeleteWhereLowImportanceStaleAsync(double importanceThreshold, System.TimeSpan staleAge, System.DateTimeOffset now, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.DeleteWhereTtlExceededAsync(Agency.Memory.Common.Records.ContentType contentType, System.TimeSpan ttl, System.DateTimeOffset now, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.ForgetAsync(string! userId, string! domain, string! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.ForgetMeAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.GetAllForUserAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Common.Records.Record!>!>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.GetByKeyAsync(string! userId, string? sessionId, string! domain, string! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record?>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.LastWrittenAtAsync(string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.DateTimeOffset?>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.MergeAsync(System.Collections.Generic.IReadOnlyList<string!>! idsToDelete, Agency.Memory.Common.Records.Record! newRecord, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record!>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.SearchAsync(Agency.Memory.Common.Storage.SearchQuery! query, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Common.Storage.SearchHit!>!>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.SqliteMemoryStore(string! connectionString, Agency.Embeddings.Common.IEmbeddingGenerator! embedder, Microsoft.Extensions.Options.IOptions<Agency.Memory.Common.Options.MemoryOptions!>! options, Microsoft.Extensions.Logging.ILogger<Agency.Memory.Sql.Sqlite.SqliteMemoryStore!>! logger) -> void
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.UpdateRecordAsync(string! recordId, string! userId, string? newValue, double? newImportance, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record?>!
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.UpsertAsync(Agency.Memory.Common.Records.Record! record, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Memory.Common.Records.Record!>!
+Agency.Memory.Sql.Sqlite.SqliteWatermarkRepository
+Agency.Memory.Sql.Sqlite.SqliteWatermarkRepository.AdvanceAsync(string! userId, string! sessionId, int candidate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Sqlite.SqliteWatermarkRepository.DeleteAsync(string! userId, string! sessionId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Sqlite.SqliteWatermarkRepository.GetAsync(string! userId, string! sessionId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Memory.Sql.Sqlite.SqliteWatermarkRepository.SqliteWatermarkRepository(string! connectionString) -> void
+const Agency.Memory.Sql.Sqlite.SqliteMemoryStore.ActivitySourceName = "Agency.Memory.Sql.Sqlite" -> string!
+const Agency.Memory.Sql.Sqlite.SqliteMemoryStore.MeterName = "Agency.Memory.Sql.Sqlite" -> string!
+override Agency.Memory.Sql.Sqlite.DeadLetterEntry.Equals(object? obj) -> bool
+override Agency.Memory.Sql.Sqlite.DeadLetterEntry.GetHashCode() -> int
+override Agency.Memory.Sql.Sqlite.DeadLetterEntry.ToString() -> string!
+static Agency.Memory.Sql.Sqlite.DeadLetterEntry.operator !=(Agency.Memory.Sql.Sqlite.DeadLetterEntry? left, Agency.Memory.Sql.Sqlite.DeadLetterEntry? right) -> bool
+static Agency.Memory.Sql.Sqlite.DeadLetterEntry.operator ==(Agency.Memory.Sql.Sqlite.DeadLetterEntry? left, Agency.Memory.Sql.Sqlite.DeadLetterEntry? right) -> bool
+static Agency.Memory.Sql.Sqlite.SqliteMemoryServiceCollectionExtensions.AddAgencyMemorySqlite(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! connectionString) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

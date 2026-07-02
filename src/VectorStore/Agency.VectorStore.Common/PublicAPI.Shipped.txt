@@ -1,0 +1,89 @@
+#nullable enable
+Agency.VectorStore.Common.DocumentInfo
+Agency.VectorStore.Common.DocumentInfo.<Clone>$() -> Agency.VectorStore.Common.DocumentInfo!
+Agency.VectorStore.Common.DocumentInfo.Deconstruct(out string! SourceFile, out string! SessionId, out string! ProjectId) -> void
+Agency.VectorStore.Common.DocumentInfo.DocumentInfo(string! SourceFile, string! SessionId, string! ProjectId) -> void
+Agency.VectorStore.Common.DocumentInfo.Equals(Agency.VectorStore.Common.DocumentInfo? other) -> bool
+Agency.VectorStore.Common.DocumentInfo.ProjectId.get -> string!
+Agency.VectorStore.Common.DocumentInfo.ProjectId.init -> void
+Agency.VectorStore.Common.DocumentInfo.SessionId.get -> string!
+Agency.VectorStore.Common.DocumentInfo.SessionId.init -> void
+Agency.VectorStore.Common.DocumentInfo.SourceFile.get -> string!
+Agency.VectorStore.Common.DocumentInfo.SourceFile.init -> void
+Agency.VectorStore.Common.IVectorStore
+Agency.VectorStore.Common.IVectorStore.DeleteAsync(string! userId, string? sessionId, string! key, string? projectId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.VectorStore.Common.IVectorStore.ListDocumentsAsync(string! userId, string? sessionId, System.Collections.Generic.IReadOnlyList<string!>? projectIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.DocumentInfo!>!>!
+Agency.VectorStore.Common.IVectorStore.ListProjectsAsync(string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
+Agency.VectorStore.Common.IVectorStore.SearchAsync<TValue>(Agency.VectorStore.Common.Query! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.SearchHit<TValue>!>!>!
+Agency.VectorStore.Common.IVectorStore.UpsertAsync<TValue>(string! userId, string? sessionId, string! key, TValue value, System.Collections.Generic.IDictionary<string!, object!>? metadata = null, string? projectId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.VectorStore.Common.JsonMetadataHelpers
+Agency.VectorStore.Common.Query
+Agency.VectorStore.Common.Query.<Clone>$() -> Agency.VectorStore.Common.Query!
+Agency.VectorStore.Common.Query.Deconstruct(out string! UserId, out string? SessionId, out string? Key, out string? Value, out System.Collections.Generic.IDictionary<string!, object!>? MetadataFilter, out int? Limit, out bool? IncludeMetadataInResults, out System.Collections.Generic.IReadOnlyList<string!>? ProjectIds) -> void
+Agency.VectorStore.Common.Query.Equals(Agency.VectorStore.Common.Query? other) -> bool
+Agency.VectorStore.Common.Query.IncludeMetadataInResults.get -> bool?
+Agency.VectorStore.Common.Query.IncludeMetadataInResults.init -> void
+Agency.VectorStore.Common.Query.Key.get -> string?
+Agency.VectorStore.Common.Query.Key.init -> void
+Agency.VectorStore.Common.Query.Limit.get -> int?
+Agency.VectorStore.Common.Query.Limit.init -> void
+Agency.VectorStore.Common.Query.MetadataFilter.get -> System.Collections.Generic.IDictionary<string!, object!>?
+Agency.VectorStore.Common.Query.MetadataFilter.init -> void
+Agency.VectorStore.Common.Query.ProjectIds.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Agency.VectorStore.Common.Query.ProjectIds.init -> void
+Agency.VectorStore.Common.Query.Query(string! UserId, string? SessionId, string? Key, string? Value, System.Collections.Generic.IDictionary<string!, object!>? MetadataFilter = null, int? Limit = 10, bool? IncludeMetadataInResults = false, System.Collections.Generic.IReadOnlyList<string!>? ProjectIds = null) -> void
+Agency.VectorStore.Common.Query.SessionId.get -> string?
+Agency.VectorStore.Common.Query.SessionId.init -> void
+Agency.VectorStore.Common.Query.UserId.get -> string!
+Agency.VectorStore.Common.Query.UserId.init -> void
+Agency.VectorStore.Common.Query.Value.get -> string?
+Agency.VectorStore.Common.Query.Value.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>
+Agency.VectorStore.Common.SearchHit<TValue>.<Clone>$() -> Agency.VectorStore.Common.SearchHit<TValue>!
+Agency.VectorStore.Common.SearchHit<TValue>.Deconstruct(out string! UserId, out string? SessionId, out string! Key, out TValue Value, out System.Collections.Generic.Dictionary<string!, object!>? Metadata, out double Distance, out System.DateTimeOffset UpdatedOn) -> void
+Agency.VectorStore.Common.SearchHit<TValue>.Distance.get -> double
+Agency.VectorStore.Common.SearchHit<TValue>.Distance.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>.Equals(Agency.VectorStore.Common.SearchHit<TValue>? other) -> bool
+Agency.VectorStore.Common.SearchHit<TValue>.Key.get -> string!
+Agency.VectorStore.Common.SearchHit<TValue>.Key.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>.Metadata.get -> System.Collections.Generic.Dictionary<string!, object!>?
+Agency.VectorStore.Common.SearchHit<TValue>.Metadata.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>.RecencyHours.get -> double
+Agency.VectorStore.Common.SearchHit<TValue>.RecencyMinutes.get -> double
+Agency.VectorStore.Common.SearchHit<TValue>.SearchHit(string! UserId, string? SessionId, string! Key, TValue Value, System.Collections.Generic.Dictionary<string!, object!>? Metadata, double Distance, System.DateTimeOffset UpdatedOn) -> void
+Agency.VectorStore.Common.SearchHit<TValue>.SessionId.get -> string?
+Agency.VectorStore.Common.SearchHit<TValue>.SessionId.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>.SimilarityPercentage.get -> double
+Agency.VectorStore.Common.SearchHit<TValue>.UpdatedOn.get -> System.DateTimeOffset
+Agency.VectorStore.Common.SearchHit<TValue>.UpdatedOn.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>.UserId.get -> string!
+Agency.VectorStore.Common.SearchHit<TValue>.UserId.init -> void
+Agency.VectorStore.Common.SearchHit<TValue>.Value.get -> TValue
+Agency.VectorStore.Common.SearchHit<TValue>.Value.init -> void
+Agency.VectorStore.Common.SearchHitExtensions
+Agency.VectorStore.Common.VectorStoreTelemetry
+Agency.VectorStore.Common.VectorStoreTelemetry.ExecuteAsync<T>(string! operation, System.Diagnostics.Activity? activity, System.Func<System.Threading.Tasks.Task<T>!>! body, System.Action<T, double>? onSuccess = null, System.Action<System.Exception!, double>? onError = null) -> System.Threading.Tasks.Task<T>!
+Agency.VectorStore.Common.VectorStoreTelemetry.StartActivity(string! spanName) -> System.Diagnostics.Activity?
+Agency.VectorStore.Common.VectorStoreTelemetry.VectorStoreTelemetry(string! activitySourceName, string! meterName) -> void
+const Agency.VectorStore.Common.VectorStoreTelemetry.GlobalProject = "*" -> string!
+const Agency.VectorStore.Common.VectorStoreTelemetry.GlobalSession = "*" -> string!
+override Agency.VectorStore.Common.DocumentInfo.Equals(object? obj) -> bool
+override Agency.VectorStore.Common.DocumentInfo.GetHashCode() -> int
+override Agency.VectorStore.Common.DocumentInfo.ToString() -> string!
+override Agency.VectorStore.Common.Query.Equals(object? obj) -> bool
+override Agency.VectorStore.Common.Query.GetHashCode() -> int
+override Agency.VectorStore.Common.Query.ToString() -> string!
+override Agency.VectorStore.Common.SearchHit<TValue>.Equals(object? obj) -> bool
+override Agency.VectorStore.Common.SearchHit<TValue>.GetHashCode() -> int
+override Agency.VectorStore.Common.SearchHit<TValue>.ToString() -> string!
+static Agency.VectorStore.Common.DocumentInfo.operator !=(Agency.VectorStore.Common.DocumentInfo? left, Agency.VectorStore.Common.DocumentInfo? right) -> bool
+static Agency.VectorStore.Common.DocumentInfo.operator ==(Agency.VectorStore.Common.DocumentInfo? left, Agency.VectorStore.Common.DocumentInfo? right) -> bool
+static Agency.VectorStore.Common.JsonMetadataHelpers.ConvertJsonElementToObject(System.Text.Json.JsonElement element) -> object!
+static Agency.VectorStore.Common.JsonMetadataHelpers.DeserializeMetadata(string? metadataJson) -> System.Collections.Generic.Dictionary<string!, object!>?
+static Agency.VectorStore.Common.Query.operator !=(Agency.VectorStore.Common.Query? left, Agency.VectorStore.Common.Query? right) -> bool
+static Agency.VectorStore.Common.Query.operator ==(Agency.VectorStore.Common.Query? left, Agency.VectorStore.Common.Query? right) -> bool
+static Agency.VectorStore.Common.SearchHit<TValue>.operator !=(Agency.VectorStore.Common.SearchHit<TValue>? left, Agency.VectorStore.Common.SearchHit<TValue>? right) -> bool
+static Agency.VectorStore.Common.SearchHit<TValue>.operator ==(Agency.VectorStore.Common.SearchHit<TValue>? left, Agency.VectorStore.Common.SearchHit<TValue>? right) -> bool
+static Agency.VectorStore.Common.SearchHitExtensions.ToDataset<TValue>(this System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.SearchHit<TValue>!>! hits) -> Agency.Common.Dataset!
+static Agency.VectorStore.Common.VectorStoreTelemetry.ResolveProjectId(string? projectId) -> string!
+static Agency.VectorStore.Common.VectorStoreTelemetry.ResolveSessionId(string? sessionId) -> string!

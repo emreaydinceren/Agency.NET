@@ -1,0 +1,4 @@
+#nullable enable
+Microsoft.Extensions.Configuration.AgencyConfigurationBuilderExtensions
+static Microsoft.Extensions.Configuration.AgencyConfigurationBuilderExtensions.AddPlaceholderResolver(this Microsoft.Extensions.Configuration.IConfigurationBuilder! builder) -> Microsoft.Extensions.Configuration.IConfigurationBuilder!
+static Microsoft.Extensions.Configuration.AgencyConfigurationBuilderExtensions.AddSharedConfiguration(this Microsoft.Extensions.Configuration.IConfigurationBuilder! builder, string! path = "shared-appsettings.json", bool optional = true) -> Microsoft.Extensions.Configuration.IConfigurationBuilder!

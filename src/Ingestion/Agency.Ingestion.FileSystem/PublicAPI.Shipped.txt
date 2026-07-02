@@ -1,0 +1,7 @@
+#nullable enable
+Agency.Ingestion.FileSystem.DirectoryLoader
+Agency.Ingestion.FileSystem.DirectoryLoader.DirectoryLoader(string! directoryPath, string! searchPattern = "*.md") -> void
+Agency.Ingestion.FileSystem.DirectoryLoader.LoadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Ingestion.Document!>!
+Agency.Ingestion.FileSystem.FileLoader
+Agency.Ingestion.FileSystem.FileLoader.FileLoader(string! filePath) -> void
+Agency.Ingestion.FileSystem.FileLoader.LoadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Ingestion.Document!>!

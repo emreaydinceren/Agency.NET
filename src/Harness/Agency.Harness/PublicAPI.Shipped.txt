@@ -1,0 +1,880 @@
+#nullable enable
+abstract Agency.Harness.AgentEvent.<Clone>$() -> Agency.Harness.AgentEvent!
+abstract Agency.Harness.Hooks.PreToolUseDecision.<Clone>$() -> Agency.Harness.Hooks.PreToolUseDecision!
+abstract Agency.Harness.Loop.Verdict.<Clone>$() -> Agency.Harness.Loop.Verdict!
+abstract Agency.Harness.Permissions.PermissionDecision.<Clone>$() -> Agency.Harness.Permissions.PermissionDecision!
+Agency.Harness.Agent
+Agency.Harness.Agent.Agent(Microsoft.Extensions.AI.IChatClient! llm, string! model, string? clientType = null, Agency.Harness.StopCondition? stopWhen = null, Agency.Harness.Hooks.AgentHooks? hooks = null, Agency.Harness.Permissions.IPermissionEvaluator? permissions = null, Microsoft.Extensions.Logging.ILogger<Agency.Harness.Agent!>? logger = null, System.TimeProvider? timeProvider = null, bool logToolPayloads = false) -> void
+Agency.Harness.Agent.ChatAsync(string! userMessage, Agency.Harness.Contexts.Context! ctx, Agency.Harness.AgentOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Harness.AgentEvent!>!
+Agency.Harness.Agent.ClientType.get -> string!
+Agency.Harness.Agent.Model.get -> string!
+Agency.Harness.Agent.RaiseSessionEndAsync(Agency.Harness.Contexts.Context! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Harness.AgentEvent
+Agency.Harness.AgentEvent.AgentEvent() -> void
+Agency.Harness.AgentEvent.AgentEvent(Agency.Harness.AgentEvent! original) -> void
+Agency.Harness.AgentFactory
+Agency.Harness.AgentFactory.AgentFactory(Agency.Harness.Models! models, Microsoft.Extensions.Logging.ILogger<Agency.Harness.Agent!>! logger, Microsoft.Extensions.Options.IOptions<Agency.Harness.AgentOptions!>! optionsAccessor, Agency.Harness.Permissions.IPermissionEvaluator? permissions = null, System.TimeProvider? timeProvider = null) -> void
+Agency.Harness.AgentFactory.CreateAgent(string? clientName, string? modelName) -> Agency.Harness.Agent!
+Agency.Harness.AgentOptions
+Agency.Harness.AgentOptions.AgentOptions() -> void
+Agency.Harness.AgentOptions.BaselineHooks.get -> Agency.Harness.Hooks.AgentHooks?
+Agency.Harness.AgentOptions.BaselineHooks.set -> void
+Agency.Harness.AgentOptions.ConfiguredHooks.get -> Agency.Harness.Hooks.AgentHooks?
+Agency.Harness.AgentOptions.ConfiguredHooks.set -> void
+Agency.Harness.AgentOptions.ContextWindowSize.get -> int?
+Agency.Harness.AgentOptions.ContextWindowSize.set -> void
+Agency.Harness.AgentOptions.DefaultClientName.get -> string!
+Agency.Harness.AgentOptions.DefaultClientName.set -> void
+Agency.Harness.AgentOptions.DefaultModel.get -> string?
+Agency.Harness.AgentOptions.DefaultModel.set -> void
+Agency.Harness.AgentOptions.LLmClients.get -> Agency.Llm.Common.LlmClientOptions![]!
+Agency.Harness.AgentOptions.LLmClients.set -> void
+Agency.Harness.AgentOptions.LogToolPayloads.get -> bool
+Agency.Harness.AgentOptions.LogToolPayloads.set -> void
+Agency.Harness.AgentOptions.ProgressiveDiscovery.get -> bool
+Agency.Harness.AgentOptions.ProgressiveDiscovery.set -> void
+Agency.Harness.AgentOptions.TurnTimeoutSeconds.get -> int?
+Agency.Harness.AgentOptions.TurnTimeoutSeconds.set -> void
+Agency.Harness.AgentOptions.UserHooks.get -> Agency.Harness.Hooks.AgentHooks?
+Agency.Harness.AgentOptions.UserHooks.set -> void
+Agency.Harness.AgentOptions.UserId.get -> string?
+Agency.Harness.AgentOptions.UserId.set -> void
+Agency.Harness.AgentResultEvent
+Agency.Harness.AgentResultEvent.AgentResultEvent(Agency.Harness.AgentResultStatus Status, string? FinalText, Agency.Harness.LlmTokenUsage! TotalUsage, decimal TotalCostUsd) -> void
+Agency.Harness.AgentResultEvent.Deconstruct(out Agency.Harness.AgentResultStatus Status, out string? FinalText, out Agency.Harness.LlmTokenUsage! TotalUsage, out decimal TotalCostUsd) -> void
+Agency.Harness.AgentResultEvent.Equals(Agency.Harness.AgentResultEvent? other) -> bool
+Agency.Harness.AgentResultEvent.FinalText.get -> string?
+Agency.Harness.AgentResultEvent.FinalText.init -> void
+Agency.Harness.AgentResultEvent.Status.get -> Agency.Harness.AgentResultStatus
+Agency.Harness.AgentResultEvent.Status.init -> void
+Agency.Harness.AgentResultEvent.TotalCostUsd.get -> decimal
+Agency.Harness.AgentResultEvent.TotalCostUsd.init -> void
+Agency.Harness.AgentResultEvent.TotalUsage.get -> Agency.Harness.LlmTokenUsage!
+Agency.Harness.AgentResultEvent.TotalUsage.init -> void
+Agency.Harness.AgentResultStatus
+Agency.Harness.AgentResultStatus.AwaitingPermission = 4 -> Agency.Harness.AgentResultStatus
+Agency.Harness.AgentResultStatus.BudgetExceeded = 2 -> Agency.Harness.AgentResultStatus
+Agency.Harness.AgentResultStatus.Error = 3 -> Agency.Harness.AgentResultStatus
+Agency.Harness.AgentResultStatus.MaxStepsReached = 1 -> Agency.Harness.AgentResultStatus
+Agency.Harness.AgentResultStatus.Success = 0 -> Agency.Harness.AgentResultStatus
+Agency.Harness.AgentServiceCollectionExtensions
+Agency.Harness.AssistantTurnEvent
+Agency.Harness.AssistantTurnEvent.AssistantTurnEvent(Microsoft.Extensions.AI.ChatMessage! Message) -> void
+Agency.Harness.AssistantTurnEvent.Deconstruct(out Microsoft.Extensions.AI.ChatMessage! Message) -> void
+Agency.Harness.AssistantTurnEvent.Equals(Agency.Harness.AssistantTurnEvent? other) -> bool
+Agency.Harness.AssistantTurnEvent.Message.get -> Microsoft.Extensions.AI.ChatMessage!
+Agency.Harness.AssistantTurnEvent.Message.init -> void
+Agency.Harness.ChatSession
+Agency.Harness.ChatSession.ChatSession(Agency.Harness.Agent! agent, Agency.Harness.AgentOptions! options, Agency.Harness.Contexts.ToolContext? toolContext = null, Agency.Harness.Contexts.UserSpecificContext? user = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null) -> void
+Agency.Harness.ChatSession.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Agency.Harness.ChatSession.IsStarted.get -> bool
+Agency.Harness.ChatSession.Reset() -> void
+Agency.Harness.ChatSession.ResumeWithPermissionsAsync(System.Collections.Generic.IReadOnlyList<Agency.Harness.Permissions.PermissionResponse!>! responses, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Harness.AgentEvent!>!
+Agency.Harness.ChatSession.SendAsync(string! userMessage, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Harness.AgentEvent!>!
+Agency.Harness.ChatSession.SetAgent(Agency.Harness.Agent! agent) -> void
+Agency.Harness.ChatSession.SetKnowledge(Agency.Harness.Contexts.KnowledgeContext! knowledge) -> void
+Agency.Harness.ChatSession.TotalCostUsd.get -> decimal
+Agency.Harness.ChatSession.TotalUsage.get -> Agency.Harness.LlmTokenUsage!
+Agency.Harness.ChatSession.TurnCount.get -> int
+Agency.Harness.Contexts.Context
+Agency.Harness.Contexts.Context.<Clone>$() -> Agency.Harness.Contexts.Context!
+Agency.Harness.Contexts.Context.Context() -> void
+Agency.Harness.Contexts.Context.Conversation.get -> Agency.Harness.IConversationManager!
+Agency.Harness.Contexts.Context.Conversation.init -> void
+Agency.Harness.Contexts.Context.Environment.get -> Agency.Harness.Contexts.EnvironmentalContext!
+Agency.Harness.Contexts.Context.Environment.init -> void
+Agency.Harness.Contexts.Context.Equals(Agency.Harness.Contexts.Context? other) -> bool
+Agency.Harness.Contexts.Context.Focus.get -> Agency.Harness.Contexts.FocusContext!
+Agency.Harness.Contexts.Context.Focus.set -> void
+Agency.Harness.Contexts.Context.IterationCount.get -> int
+Agency.Harness.Contexts.Context.Knowledge.get -> Agency.Harness.Contexts.KnowledgeContext!
+Agency.Harness.Contexts.Context.Knowledge.set -> void
+Agency.Harness.Contexts.Context.Memory.get -> Agency.Harness.Contexts.MemoryContext!
+Agency.Harness.Contexts.Context.Memory.set -> void
+Agency.Harness.Contexts.Context.MemoryLastRetrievedAt.get -> System.DateTimeOffset?
+Agency.Harness.Contexts.Context.MemoryLastRetrievedAt.set -> void
+Agency.Harness.Contexts.Context.Query.get -> Agency.Harness.Contexts.QueryContext!
+Agency.Harness.Contexts.Context.Query.init -> void
+Agency.Harness.Contexts.Context.Session.get -> Agency.Harness.Contexts.SessionContext!
+Agency.Harness.Contexts.Context.Session.set -> void
+Agency.Harness.Contexts.Context.Skills.get -> Agency.Harness.Contexts.SkillContext!
+Agency.Harness.Contexts.Context.Skills.init -> void
+Agency.Harness.Contexts.Context.Temporal.get -> Agency.Harness.Contexts.TemporalContext!
+Agency.Harness.Contexts.Context.Temporal.init -> void
+Agency.Harness.Contexts.Context.Tools.get -> Agency.Harness.Contexts.ToolContext!
+Agency.Harness.Contexts.Context.Tools.init -> void
+Agency.Harness.Contexts.Context.TotalCostUsd.get -> decimal
+Agency.Harness.Contexts.Context.TotalUsage.get -> Agency.Harness.LlmTokenUsage!
+Agency.Harness.Contexts.Context.User.get -> Agency.Harness.Contexts.UserSpecificContext!
+Agency.Harness.Contexts.Context.User.init -> void
+Agency.Harness.Contexts.EnvironmentalContext
+Agency.Harness.Contexts.EnvironmentalContext.<Clone>$() -> Agency.Harness.Contexts.EnvironmentalContext!
+Agency.Harness.Contexts.EnvironmentalContext.ContextWindowSize.get -> int?
+Agency.Harness.Contexts.EnvironmentalContext.ContextWindowSize.init -> void
+Agency.Harness.Contexts.EnvironmentalContext.EnvironmentalContext() -> void
+Agency.Harness.Contexts.EnvironmentalContext.Equals(Agency.Harness.Contexts.EnvironmentalContext? other) -> bool
+Agency.Harness.Contexts.EnvironmentalContext.OperatingSystem.get -> string?
+Agency.Harness.Contexts.EnvironmentalContext.OperatingSystem.init -> void
+Agency.Harness.Contexts.FocusContext
+Agency.Harness.Contexts.FocusContext.<Clone>$() -> Agency.Harness.Contexts.FocusContext!
+Agency.Harness.Contexts.FocusContext.Domain.get -> string?
+Agency.Harness.Contexts.FocusContext.Domain.init -> void
+Agency.Harness.Contexts.FocusContext.Equals(Agency.Harness.Contexts.FocusContext? other) -> bool
+Agency.Harness.Contexts.FocusContext.FocusContext() -> void
+Agency.Harness.Contexts.FocusContext.Tags.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Agency.Harness.Contexts.FocusContext.Tags.init -> void
+Agency.Harness.Contexts.FocusContext.Title.get -> string?
+Agency.Harness.Contexts.FocusContext.Title.init -> void
+Agency.Harness.Contexts.KnowledgeContext
+Agency.Harness.Contexts.KnowledgeContext.<Clone>$() -> Agency.Harness.Contexts.KnowledgeContext!
+Agency.Harness.Contexts.KnowledgeContext.Equals(Agency.Harness.Contexts.KnowledgeContext? other) -> bool
+Agency.Harness.Contexts.KnowledgeContext.Facts.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Agency.Harness.Contexts.KnowledgeContext.Facts.init -> void
+Agency.Harness.Contexts.KnowledgeContext.KnowledgeContext() -> void
+Agency.Harness.Contexts.KnowledgeContext.Records.get -> System.Collections.Generic.IReadOnlyList<Agency.Harness.Contexts.MemoryRecord!>!
+Agency.Harness.Contexts.KnowledgeContext.Records.init -> void
+Agency.Harness.Contexts.MemoryContext
+Agency.Harness.Contexts.MemoryContext.<Clone>$() -> Agency.Harness.Contexts.MemoryContext!
+Agency.Harness.Contexts.MemoryContext.Equals(Agency.Harness.Contexts.MemoryContext? other) -> bool
+Agency.Harness.Contexts.MemoryContext.LongTermMemory.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Agency.Harness.Contexts.MemoryContext.LongTermMemory.init -> void
+Agency.Harness.Contexts.MemoryContext.MemoryContext() -> void
+Agency.Harness.Contexts.MemoryContext.Records.get -> System.Collections.Generic.IReadOnlyList<Agency.Harness.Contexts.MemoryRecord!>!
+Agency.Harness.Contexts.MemoryContext.Records.init -> void
+Agency.Harness.Contexts.MemoryRecord
+Agency.Harness.Contexts.MemoryRecord.<Clone>$() -> Agency.Harness.Contexts.MemoryRecord!
+Agency.Harness.Contexts.MemoryRecord.Deconstruct(out string! Title, out string! Value, out System.DateTimeOffset UpdatedAt) -> void
+Agency.Harness.Contexts.MemoryRecord.Equals(Agency.Harness.Contexts.MemoryRecord? other) -> bool
+Agency.Harness.Contexts.MemoryRecord.MemoryRecord(string! Title, string! Value, System.DateTimeOffset UpdatedAt) -> void
+Agency.Harness.Contexts.MemoryRecord.Title.get -> string!
+Agency.Harness.Contexts.MemoryRecord.Title.init -> void
+Agency.Harness.Contexts.MemoryRecord.UpdatedAt.get -> System.DateTimeOffset
+Agency.Harness.Contexts.MemoryRecord.UpdatedAt.init -> void
+Agency.Harness.Contexts.MemoryRecord.Value.get -> string!
+Agency.Harness.Contexts.MemoryRecord.Value.init -> void
+Agency.Harness.Contexts.QueryContext
+Agency.Harness.Contexts.QueryContext.<Clone>$() -> Agency.Harness.Contexts.QueryContext!
+Agency.Harness.Contexts.QueryContext.Equals(Agency.Harness.Contexts.QueryContext? other) -> bool
+Agency.Harness.Contexts.QueryContext.Prompt.get -> string!
+Agency.Harness.Contexts.QueryContext.Prompt.init -> void
+Agency.Harness.Contexts.QueryContext.QueryContext() -> void
+Agency.Harness.Contexts.SessionContext
+Agency.Harness.Contexts.SessionContext.<Clone>$() -> Agency.Harness.Contexts.SessionContext!
+Agency.Harness.Contexts.SessionContext.Equals(Agency.Harness.Contexts.SessionContext? other) -> bool
+Agency.Harness.Contexts.SessionContext.Id.get -> string?
+Agency.Harness.Contexts.SessionContext.Id.init -> void
+Agency.Harness.Contexts.SessionContext.SessionContext() -> void
+Agency.Harness.Contexts.SkillContext
+Agency.Harness.Contexts.SkillContext.<Clone>$() -> Agency.Harness.Contexts.SkillContext!
+Agency.Harness.Contexts.SkillContext.Equals(Agency.Harness.Contexts.SkillContext? other) -> bool
+Agency.Harness.Contexts.SkillContext.SkillContext() -> void
+Agency.Harness.Contexts.TemporalContext
+Agency.Harness.Contexts.TemporalContext.<Clone>$() -> Agency.Harness.Contexts.TemporalContext!
+Agency.Harness.Contexts.TemporalContext.CurrentDateUtc.get -> System.DateTimeOffset?
+Agency.Harness.Contexts.TemporalContext.CurrentDateUtc.init -> void
+Agency.Harness.Contexts.TemporalContext.Equals(Agency.Harness.Contexts.TemporalContext? other) -> bool
+Agency.Harness.Contexts.TemporalContext.TemporalContext() -> void
+Agency.Harness.Contexts.ToolContext
+Agency.Harness.Contexts.ToolContext.<Clone>$() -> Agency.Harness.Contexts.ToolContext!
+Agency.Harness.Contexts.ToolContext.Equals(Agency.Harness.Contexts.ToolContext? other) -> bool
+Agency.Harness.Contexts.ToolContext.Registry.get -> Agency.Llm.Common.Tools.IToolRegistry!
+Agency.Harness.Contexts.ToolContext.Registry.init -> void
+Agency.Harness.Contexts.ToolContext.ToolContext() -> void
+Agency.Harness.Contexts.UserSpecificContext
+Agency.Harness.Contexts.UserSpecificContext.<Clone>$() -> Agency.Harness.Contexts.UserSpecificContext!
+Agency.Harness.Contexts.UserSpecificContext.Equals(Agency.Harness.Contexts.UserSpecificContext? other) -> bool
+Agency.Harness.Contexts.UserSpecificContext.Id.get -> string?
+Agency.Harness.Contexts.UserSpecificContext.Id.init -> void
+Agency.Harness.Contexts.UserSpecificContext.Name.get -> string?
+Agency.Harness.Contexts.UserSpecificContext.Name.init -> void
+Agency.Harness.Contexts.UserSpecificContext.UserSpecificContext() -> void
+Agency.Harness.GoalSetEvent
+Agency.Harness.GoalSetEvent.Deconstruct(out Agency.Harness.Loop.GoalSpec! Goal) -> void
+Agency.Harness.GoalSetEvent.Equals(Agency.Harness.GoalSetEvent? other) -> bool
+Agency.Harness.GoalSetEvent.Goal.get -> Agency.Harness.Loop.GoalSpec!
+Agency.Harness.GoalSetEvent.Goal.init -> void
+Agency.Harness.GoalSetEvent.GoalSetEvent(Agency.Harness.Loop.GoalSpec! Goal) -> void
+Agency.Harness.Hooks.AgentHooks
+Agency.Harness.Hooks.AgentHooks.<Clone>$() -> Agency.Harness.Hooks.AgentHooks!
+Agency.Harness.Hooks.AgentHooks.AgentHooks() -> void
+Agency.Harness.Hooks.AgentHooks.Equals(Agency.Harness.Hooks.AgentHooks? other) -> bool
+Agency.Harness.Hooks.AgentHooks.OnAssistantTurn.get -> System.Func<Agency.Harness.Hooks.AssistantTurnHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnAssistantTurn.init -> void
+Agency.Harness.Hooks.AgentHooks.OnPostToolBatch.get -> System.Func<System.Collections.Generic.IReadOnlyList<Agency.Harness.ToolInvokedEvent!>!, Agency.Harness.Contexts.Context!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnPostToolBatch.init -> void
+Agency.Harness.Hooks.AgentHooks.OnPostToolUse.get -> System.Func<Agency.Harness.Hooks.PostToolUseHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnPostToolUse.init -> void
+Agency.Harness.Hooks.AgentHooks.OnPreIteration.get -> System.Func<Agency.Harness.Contexts.Context!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnPreIteration.init -> void
+Agency.Harness.Hooks.AgentHooks.OnPreToolUse.get -> System.Func<Agency.Harness.Hooks.PreToolUseHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task<Agency.Harness.Hooks.PreToolUseDecision!>!>?
+Agency.Harness.Hooks.AgentHooks.OnPreToolUse.init -> void
+Agency.Harness.Hooks.AgentHooks.OnSessionEnd.get -> System.Func<Agency.Harness.Hooks.SessionEndedHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnSessionEnd.init -> void
+Agency.Harness.Hooks.AgentHooks.OnSessionStarted.get -> System.Func<Agency.Harness.Hooks.SessionStartedHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnSessionStarted.init -> void
+Agency.Harness.Hooks.AgentHooks.OnStop.get -> System.Func<Agency.Harness.Hooks.StopHookContext!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnStop.init -> void
+Agency.Harness.Hooks.AgentHooks.OnUserPromptSubmit.get -> System.Func<Agency.Harness.Contexts.Context!, System.Threading.CancellationToken, System.Threading.Tasks.Task!>?
+Agency.Harness.Hooks.AgentHooks.OnUserPromptSubmit.init -> void
+Agency.Harness.Hooks.AgentHooksExtensions
+Agency.Harness.Hooks.AssistantTurnHookContext
+Agency.Harness.Hooks.AssistantTurnHookContext.<Clone>$() -> Agency.Harness.Hooks.AssistantTurnHookContext!
+Agency.Harness.Hooks.AssistantTurnHookContext.AgentContext.get -> Agency.Harness.Contexts.Context!
+Agency.Harness.Hooks.AssistantTurnHookContext.AgentContext.init -> void
+Agency.Harness.Hooks.AssistantTurnHookContext.AssistantTurnHookContext(Microsoft.Extensions.AI.ChatMessage! Message, Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.AssistantTurnHookContext.Deconstruct(out Microsoft.Extensions.AI.ChatMessage! Message, out Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.AssistantTurnHookContext.Equals(Agency.Harness.Hooks.AssistantTurnHookContext? other) -> bool
+Agency.Harness.Hooks.AssistantTurnHookContext.Message.get -> Microsoft.Extensions.AI.ChatMessage!
+Agency.Harness.Hooks.AssistantTurnHookContext.Message.init -> void
+Agency.Harness.Hooks.AuditHooks
+Agency.Harness.Hooks.BlockListHooks
+Agency.Harness.Hooks.Configuration.HookServiceCollectionExtensions
+Agency.Harness.Hooks.PostToolUseHookContext
+Agency.Harness.Hooks.PostToolUseHookContext.<Clone>$() -> Agency.Harness.Hooks.PostToolUseHookContext!
+Agency.Harness.Hooks.PostToolUseHookContext.AgentContext.get -> Agency.Harness.Contexts.Context!
+Agency.Harness.Hooks.PostToolUseHookContext.AgentContext.init -> void
+Agency.Harness.Hooks.PostToolUseHookContext.Deconstruct(out string! ToolName, out System.Text.Json.JsonElement Input, out Agency.Llm.Common.Tools.ToolResult! Result, out Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.PostToolUseHookContext.Equals(Agency.Harness.Hooks.PostToolUseHookContext? other) -> bool
+Agency.Harness.Hooks.PostToolUseHookContext.Input.get -> System.Text.Json.JsonElement
+Agency.Harness.Hooks.PostToolUseHookContext.Input.init -> void
+Agency.Harness.Hooks.PostToolUseHookContext.PostToolUseHookContext(string! ToolName, System.Text.Json.JsonElement Input, Agency.Llm.Common.Tools.ToolResult! Result, Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.PostToolUseHookContext.Result.get -> Agency.Llm.Common.Tools.ToolResult!
+Agency.Harness.Hooks.PostToolUseHookContext.Result.init -> void
+Agency.Harness.Hooks.PostToolUseHookContext.ToolName.get -> string!
+Agency.Harness.Hooks.PostToolUseHookContext.ToolName.init -> void
+Agency.Harness.Hooks.PreToolUseDecision
+Agency.Harness.Hooks.PreToolUseDecision.Allow
+Agency.Harness.Hooks.PreToolUseDecision.Allow.Allow() -> void
+Agency.Harness.Hooks.PreToolUseDecision.Allow.Equals(Agency.Harness.Hooks.PreToolUseDecision.Allow? other) -> bool
+Agency.Harness.Hooks.PreToolUseDecision.Ask
+Agency.Harness.Hooks.PreToolUseDecision.Ask.Ask(string? Reason) -> void
+Agency.Harness.Hooks.PreToolUseDecision.Ask.Deconstruct(out string? Reason) -> void
+Agency.Harness.Hooks.PreToolUseDecision.Ask.Equals(Agency.Harness.Hooks.PreToolUseDecision.Ask? other) -> bool
+Agency.Harness.Hooks.PreToolUseDecision.Ask.Reason.get -> string?
+Agency.Harness.Hooks.PreToolUseDecision.Ask.Reason.init -> void
+Agency.Harness.Hooks.PreToolUseDecision.Deny
+Agency.Harness.Hooks.PreToolUseDecision.Deny.Deconstruct(out string! Reason) -> void
+Agency.Harness.Hooks.PreToolUseDecision.Deny.Deny(string! Reason) -> void
+Agency.Harness.Hooks.PreToolUseDecision.Deny.Equals(Agency.Harness.Hooks.PreToolUseDecision.Deny? other) -> bool
+Agency.Harness.Hooks.PreToolUseDecision.Deny.Reason.get -> string!
+Agency.Harness.Hooks.PreToolUseDecision.Deny.Reason.init -> void
+Agency.Harness.Hooks.PreToolUseDecision.PreToolUseDecision(Agency.Harness.Hooks.PreToolUseDecision! original) -> void
+Agency.Harness.Hooks.PreToolUseDecision.Rewrite
+Agency.Harness.Hooks.PreToolUseDecision.Rewrite.Deconstruct(out System.Text.Json.JsonElement NewInput) -> void
+Agency.Harness.Hooks.PreToolUseDecision.Rewrite.Equals(Agency.Harness.Hooks.PreToolUseDecision.Rewrite? other) -> bool
+Agency.Harness.Hooks.PreToolUseDecision.Rewrite.NewInput.get -> System.Text.Json.JsonElement
+Agency.Harness.Hooks.PreToolUseDecision.Rewrite.NewInput.init -> void
+Agency.Harness.Hooks.PreToolUseDecision.Rewrite.Rewrite(System.Text.Json.JsonElement NewInput) -> void
+Agency.Harness.Hooks.PreToolUseHookContext
+Agency.Harness.Hooks.PreToolUseHookContext.<Clone>$() -> Agency.Harness.Hooks.PreToolUseHookContext!
+Agency.Harness.Hooks.PreToolUseHookContext.AgentContext.get -> Agency.Harness.Contexts.Context!
+Agency.Harness.Hooks.PreToolUseHookContext.AgentContext.init -> void
+Agency.Harness.Hooks.PreToolUseHookContext.Deconstruct(out string! ToolName, out System.Text.Json.JsonElement Input, out Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.PreToolUseHookContext.Equals(Agency.Harness.Hooks.PreToolUseHookContext? other) -> bool
+Agency.Harness.Hooks.PreToolUseHookContext.Input.get -> System.Text.Json.JsonElement
+Agency.Harness.Hooks.PreToolUseHookContext.Input.init -> void
+Agency.Harness.Hooks.PreToolUseHookContext.PreToolUseHookContext(string! ToolName, System.Text.Json.JsonElement Input, Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.PreToolUseHookContext.ToolName.get -> string!
+Agency.Harness.Hooks.PreToolUseHookContext.ToolName.init -> void
+Agency.Harness.Hooks.SessionEndedHookContext
+Agency.Harness.Hooks.SessionEndedHookContext.<Clone>$() -> Agency.Harness.Hooks.SessionEndedHookContext!
+Agency.Harness.Hooks.SessionEndedHookContext.AgentContext.get -> Agency.Harness.Contexts.Context!
+Agency.Harness.Hooks.SessionEndedHookContext.AgentContext.init -> void
+Agency.Harness.Hooks.SessionEndedHookContext.Deconstruct(out string! SessionId, out Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.SessionEndedHookContext.Equals(Agency.Harness.Hooks.SessionEndedHookContext? other) -> bool
+Agency.Harness.Hooks.SessionEndedHookContext.SessionEndedHookContext(string! SessionId, Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.SessionEndedHookContext.SessionId.get -> string!
+Agency.Harness.Hooks.SessionEndedHookContext.SessionId.init -> void
+Agency.Harness.Hooks.SessionStartedHookContext
+Agency.Harness.Hooks.SessionStartedHookContext.<Clone>$() -> Agency.Harness.Hooks.SessionStartedHookContext!
+Agency.Harness.Hooks.SessionStartedHookContext.AgentContext.get -> Agency.Harness.Contexts.Context!
+Agency.Harness.Hooks.SessionStartedHookContext.AgentContext.init -> void
+Agency.Harness.Hooks.SessionStartedHookContext.Deconstruct(out string! SessionId, out Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.SessionStartedHookContext.Equals(Agency.Harness.Hooks.SessionStartedHookContext? other) -> bool
+Agency.Harness.Hooks.SessionStartedHookContext.SessionId.get -> string!
+Agency.Harness.Hooks.SessionStartedHookContext.SessionId.init -> void
+Agency.Harness.Hooks.SessionStartedHookContext.SessionStartedHookContext(string! SessionId, Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.StopHookContext
+Agency.Harness.Hooks.StopHookContext.<Clone>$() -> Agency.Harness.Hooks.StopHookContext!
+Agency.Harness.Hooks.StopHookContext.AgentContext.get -> Agency.Harness.Contexts.Context!
+Agency.Harness.Hooks.StopHookContext.AgentContext.init -> void
+Agency.Harness.Hooks.StopHookContext.Deconstruct(out Agency.Harness.AgentResultEvent! Result, out Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.Hooks.StopHookContext.Equals(Agency.Harness.Hooks.StopHookContext? other) -> bool
+Agency.Harness.Hooks.StopHookContext.Result.get -> Agency.Harness.AgentResultEvent!
+Agency.Harness.Hooks.StopHookContext.Result.init -> void
+Agency.Harness.Hooks.StopHookContext.StopHookContext(Agency.Harness.AgentResultEvent! Result, Agency.Harness.Contexts.Context! AgentContext) -> void
+Agency.Harness.IAgentFactory
+Agency.Harness.IAgentFactory.CreateAgent(string? clientName, string? modelName) -> Agency.Harness.Agent!
+Agency.Harness.IConversationManager
+Agency.Harness.IConversationManager.Append(Microsoft.Extensions.AI.ChatMessage! message) -> void
+Agency.Harness.IConversationManager.Messages.get -> System.Collections.Generic.IReadOnlyList<Microsoft.Extensions.AI.ChatMessage!>!
+Agency.Harness.InMemoryConversationManager
+Agency.Harness.InMemoryConversationManager.Append(Microsoft.Extensions.AI.ChatMessage! message) -> void
+Agency.Harness.InMemoryConversationManager.InMemoryConversationManager() -> void
+Agency.Harness.InMemoryConversationManager.Messages.get -> System.Collections.Generic.IReadOnlyList<Microsoft.Extensions.AI.ChatMessage!>!
+Agency.Harness.IProjectSessionState
+Agency.Harness.IProjectSessionState.LoadedProjects.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Agency.Harness.IProjectSessionState.LoadProject(string! projectName) -> void
+Agency.Harness.IProjectSessionState.SessionId.get -> string!
+Agency.Harness.IProjectSessionState.UnloadProject(string! projectName) -> void
+Agency.Harness.IProjectSessionState.UserId.get -> string!
+Agency.Harness.IterationCompletedEvent
+Agency.Harness.IterationCompletedEvent.Deconstruct(out int Iteration, out Agency.Harness.LlmTokenUsage! TurnUsage, out System.TimeSpan LlmDuration) -> void
+Agency.Harness.IterationCompletedEvent.Equals(Agency.Harness.IterationCompletedEvent? other) -> bool
+Agency.Harness.IterationCompletedEvent.Iteration.get -> int
+Agency.Harness.IterationCompletedEvent.Iteration.init -> void
+Agency.Harness.IterationCompletedEvent.IterationCompletedEvent(int Iteration, Agency.Harness.LlmTokenUsage! TurnUsage, System.TimeSpan LlmDuration) -> void
+Agency.Harness.IterationCompletedEvent.LlmDuration.get -> System.TimeSpan
+Agency.Harness.IterationCompletedEvent.LlmDuration.init -> void
+Agency.Harness.IterationCompletedEvent.TurnUsage.get -> Agency.Harness.LlmTokenUsage!
+Agency.Harness.IterationCompletedEvent.TurnUsage.init -> void
+Agency.Harness.LlmTokenUsage
+Agency.Harness.LlmTokenUsage.<Clone>$() -> Agency.Harness.LlmTokenUsage!
+Agency.Harness.LlmTokenUsage.Deconstruct(out long InputTokens, out long OutputTokens) -> void
+Agency.Harness.LlmTokenUsage.Equals(Agency.Harness.LlmTokenUsage? other) -> bool
+Agency.Harness.LlmTokenUsage.InputTokens.get -> long
+Agency.Harness.LlmTokenUsage.InputTokens.init -> void
+Agency.Harness.LlmTokenUsage.LlmTokenUsage(long InputTokens, long OutputTokens) -> void
+Agency.Harness.LlmTokenUsage.OutputTokens.get -> long
+Agency.Harness.LlmTokenUsage.OutputTokens.init -> void
+Agency.Harness.LlmTokenUsage.TotalTokens.get -> long
+Agency.Harness.Loop.GoalSpec
+Agency.Harness.Loop.GoalSpec.<Clone>$() -> Agency.Harness.Loop.GoalSpec!
+Agency.Harness.Loop.GoalSpec.Budget.get -> decimal?
+Agency.Harness.Loop.GoalSpec.Budget.init -> void
+Agency.Harness.Loop.GoalSpec.Condition.get -> string!
+Agency.Harness.Loop.GoalSpec.Condition.init -> void
+Agency.Harness.Loop.GoalSpec.Equals(Agency.Harness.Loop.GoalSpec? other) -> bool
+Agency.Harness.Loop.GoalSpec.GoalSpec() -> void
+Agency.Harness.Loop.GoalSpec.MaxTurns.get -> int
+Agency.Harness.Loop.GoalSpec.MaxTurns.init -> void
+Agency.Harness.Loop.GoalSpec.TokenBudget.get -> long?
+Agency.Harness.Loop.GoalSpec.TokenBudget.init -> void
+Agency.Harness.Loop.GoalSpec.WallClockSeconds.get -> int?
+Agency.Harness.Loop.GoalSpec.WallClockSeconds.init -> void
+Agency.Harness.Loop.LoopOptions
+Agency.Harness.Loop.LoopOptions.Budget.get -> decimal?
+Agency.Harness.Loop.LoopOptions.Budget.init -> void
+Agency.Harness.Loop.LoopOptions.GoalkeeperClientName.get -> string?
+Agency.Harness.Loop.LoopOptions.GoalkeeperClientName.init -> void
+Agency.Harness.Loop.LoopOptions.GoalkeeperModel.get -> string?
+Agency.Harness.Loop.LoopOptions.GoalkeeperModel.init -> void
+Agency.Harness.Loop.LoopOptions.GoalkeeperRubric.get -> string?
+Agency.Harness.Loop.LoopOptions.GoalkeeperRubric.init -> void
+Agency.Harness.Loop.LoopOptions.LoopOptions() -> void
+Agency.Harness.Loop.LoopOptions.MaxTurns.get -> int
+Agency.Harness.Loop.LoopOptions.MaxTurns.init -> void
+Agency.Harness.Loop.LoopOptions.TokenBudget.get -> long?
+Agency.Harness.Loop.LoopOptions.TokenBudget.init -> void
+Agency.Harness.Loop.LoopOptions.WallClockSeconds.get -> int?
+Agency.Harness.Loop.LoopOptions.WallClockSeconds.init -> void
+Agency.Harness.Loop.LoopOutcome
+Agency.Harness.Loop.LoopOutcome.Achieved = 0 -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.Loop.LoopOutcome.BudgetExceeded = 2 -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.Loop.LoopOutcome.Cancelled = 4 -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.Loop.LoopOutcome.CapReached = 1 -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.Loop.LoopOutcome.Error = 3 -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.Loop.LoopServiceCollectionExtensions
+Agency.Harness.Loop.Verdict
+Agency.Harness.Loop.Verdict.Continue
+Agency.Harness.Loop.Verdict.Continue.Continue(string! Reason) -> void
+Agency.Harness.Loop.Verdict.Continue.Deconstruct(out string! Reason) -> void
+Agency.Harness.Loop.Verdict.Continue.Equals(Agency.Harness.Loop.Verdict.Continue? other) -> bool
+Agency.Harness.Loop.Verdict.Continue.Reason.get -> string!
+Agency.Harness.Loop.Verdict.Continue.Reason.init -> void
+Agency.Harness.Loop.Verdict.Done
+Agency.Harness.Loop.Verdict.Done.Deconstruct(out string! Reason) -> void
+Agency.Harness.Loop.Verdict.Done.Done(string! Reason) -> void
+Agency.Harness.Loop.Verdict.Done.Equals(Agency.Harness.Loop.Verdict.Done? other) -> bool
+Agency.Harness.Loop.Verdict.Done.Reason.get -> string!
+Agency.Harness.Loop.Verdict.Done.Reason.init -> void
+Agency.Harness.Loop.Verdict.Verdict() -> void
+Agency.Harness.Loop.Verdict.Verdict(Agency.Harness.Loop.Verdict! original) -> void
+Agency.Harness.LoopResultEvent
+Agency.Harness.LoopResultEvent.Deconstruct(out Agency.Harness.Loop.LoopOutcome Outcome, out string? FinalText, out Agency.Harness.LlmTokenUsage! TotalUsage, out decimal TotalCostUsd) -> void
+Agency.Harness.LoopResultEvent.Equals(Agency.Harness.LoopResultEvent? other) -> bool
+Agency.Harness.LoopResultEvent.FinalText.get -> string?
+Agency.Harness.LoopResultEvent.FinalText.init -> void
+Agency.Harness.LoopResultEvent.LoopResultEvent(Agency.Harness.Loop.LoopOutcome Outcome, string? FinalText, Agency.Harness.LlmTokenUsage! TotalUsage, decimal TotalCostUsd) -> void
+Agency.Harness.LoopResultEvent.Outcome.get -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.LoopResultEvent.Outcome.init -> void
+Agency.Harness.LoopResultEvent.TotalCostUsd.get -> decimal
+Agency.Harness.LoopResultEvent.TotalCostUsd.init -> void
+Agency.Harness.LoopResultEvent.TotalUsage.get -> Agency.Harness.LlmTokenUsage!
+Agency.Harness.LoopResultEvent.TotalUsage.init -> void
+Agency.Harness.Models
+Agency.Harness.Models.CreateChatClient(string! clientName) -> (Microsoft.Extensions.AI.IChatClient! Client, string! ClientType)
+Agency.Harness.Models.GetAllAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<System.Linq.IGrouping<Agency.Llm.Common.LlmClientOptions!, Agency.Llm.Common.Model!>!>!>!
+Agency.Harness.Models.Models(Microsoft.Extensions.Options.IOptions<Agency.Harness.AgentOptions!>! agentOptions, Microsoft.Extensions.Logging.ILogger<Agency.Harness.Models!>? logger = null) -> void
+Agency.Harness.PermissionRequestedEvent
+Agency.Harness.PermissionRequestedEvent.Deconstruct(out System.Guid RequestId, out string! ToolName, out System.Text.Json.JsonElement Input, out string? KeyValue, out string! ProposedRule, out Agency.Harness.PermissionRequestSource Source, out string? Reason) -> void
+Agency.Harness.PermissionRequestedEvent.Equals(Agency.Harness.PermissionRequestedEvent? other) -> bool
+Agency.Harness.PermissionRequestedEvent.Input.get -> System.Text.Json.JsonElement
+Agency.Harness.PermissionRequestedEvent.Input.init -> void
+Agency.Harness.PermissionRequestedEvent.KeyValue.get -> string?
+Agency.Harness.PermissionRequestedEvent.KeyValue.init -> void
+Agency.Harness.PermissionRequestedEvent.PermissionRequestedEvent(System.Guid RequestId, string! ToolName, System.Text.Json.JsonElement Input, string? KeyValue, string! ProposedRule, Agency.Harness.PermissionRequestSource Source, string? Reason) -> void
+Agency.Harness.PermissionRequestedEvent.ProposedRule.get -> string!
+Agency.Harness.PermissionRequestedEvent.ProposedRule.init -> void
+Agency.Harness.PermissionRequestedEvent.Reason.get -> string?
+Agency.Harness.PermissionRequestedEvent.Reason.init -> void
+Agency.Harness.PermissionRequestedEvent.RequestId.get -> System.Guid
+Agency.Harness.PermissionRequestedEvent.RequestId.init -> void
+Agency.Harness.PermissionRequestedEvent.Source.get -> Agency.Harness.PermissionRequestSource
+Agency.Harness.PermissionRequestedEvent.Source.init -> void
+Agency.Harness.PermissionRequestedEvent.ToolName.get -> string!
+Agency.Harness.PermissionRequestedEvent.ToolName.init -> void
+Agency.Harness.PermissionRequestSource
+Agency.Harness.PermissionRequestSource.Hook = 1 -> Agency.Harness.PermissionRequestSource
+Agency.Harness.PermissionRequestSource.UnresolvedRule = 0 -> Agency.Harness.PermissionRequestSource
+Agency.Harness.Permissions.IPermissionEvaluator
+Agency.Harness.Permissions.IPermissionEvaluator.Evaluate(string! toolName, System.Text.Json.JsonElement input) -> Agency.Harness.Permissions.PermissionDecision!
+Agency.Harness.Permissions.IPermissionEvaluator.RecordAlwaysAsync(string! proposedRule, bool deny, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
+Agency.Harness.Permissions.PermissionDecision
+Agency.Harness.Permissions.PermissionDecision.Allow
+Agency.Harness.Permissions.PermissionDecision.Allow.Allow() -> void
+Agency.Harness.Permissions.PermissionDecision.Allow.Equals(Agency.Harness.Permissions.PermissionDecision.Allow? other) -> bool
+Agency.Harness.Permissions.PermissionDecision.Ask
+Agency.Harness.Permissions.PermissionDecision.Ask.Ask(string? KeyValue, string! ProposedRule) -> void
+Agency.Harness.Permissions.PermissionDecision.Ask.Deconstruct(out string? KeyValue, out string! ProposedRule) -> void
+Agency.Harness.Permissions.PermissionDecision.Ask.Equals(Agency.Harness.Permissions.PermissionDecision.Ask? other) -> bool
+Agency.Harness.Permissions.PermissionDecision.Ask.KeyValue.get -> string?
+Agency.Harness.Permissions.PermissionDecision.Ask.KeyValue.init -> void
+Agency.Harness.Permissions.PermissionDecision.Ask.ProposedRule.get -> string!
+Agency.Harness.Permissions.PermissionDecision.Ask.ProposedRule.init -> void
+Agency.Harness.Permissions.PermissionDecision.Deny
+Agency.Harness.Permissions.PermissionDecision.Deny.Deconstruct(out string! Reason) -> void
+Agency.Harness.Permissions.PermissionDecision.Deny.Deny(string! Reason) -> void
+Agency.Harness.Permissions.PermissionDecision.Deny.Equals(Agency.Harness.Permissions.PermissionDecision.Deny? other) -> bool
+Agency.Harness.Permissions.PermissionDecision.Deny.Reason.get -> string!
+Agency.Harness.Permissions.PermissionDecision.Deny.Reason.init -> void
+Agency.Harness.Permissions.PermissionDecision.PermissionDecision(Agency.Harness.Permissions.PermissionDecision! original) -> void
+Agency.Harness.Permissions.PermissionResponse
+Agency.Harness.Permissions.PermissionResponse.<Clone>$() -> Agency.Harness.Permissions.PermissionResponse!
+Agency.Harness.Permissions.PermissionResponse.Deconstruct(out System.Guid RequestId, out Agency.Harness.Permissions.PermissionResponseKind Kind, out string? Message) -> void
+Agency.Harness.Permissions.PermissionResponse.Equals(Agency.Harness.Permissions.PermissionResponse? other) -> bool
+Agency.Harness.Permissions.PermissionResponse.Kind.get -> Agency.Harness.Permissions.PermissionResponseKind
+Agency.Harness.Permissions.PermissionResponse.Kind.init -> void
+Agency.Harness.Permissions.PermissionResponse.Message.get -> string?
+Agency.Harness.Permissions.PermissionResponse.Message.init -> void
+Agency.Harness.Permissions.PermissionResponse.PermissionResponse(System.Guid RequestId, Agency.Harness.Permissions.PermissionResponseKind Kind, string? Message = null) -> void
+Agency.Harness.Permissions.PermissionResponse.RequestId.get -> System.Guid
+Agency.Harness.Permissions.PermissionResponse.RequestId.init -> void
+Agency.Harness.Permissions.PermissionResponseKind
+Agency.Harness.Permissions.PermissionResponseKind.AllowAlways = 1 -> Agency.Harness.Permissions.PermissionResponseKind
+Agency.Harness.Permissions.PermissionResponseKind.AllowOnce = 0 -> Agency.Harness.Permissions.PermissionResponseKind
+Agency.Harness.Permissions.PermissionResponseKind.DenyAlways = 3 -> Agency.Harness.Permissions.PermissionResponseKind
+Agency.Harness.Permissions.PermissionResponseKind.DenyOnce = 2 -> Agency.Harness.Permissions.PermissionResponseKind
+Agency.Harness.Permissions.PermissionServiceCollectionExtensions
+Agency.Harness.SessionStartedEvent
+Agency.Harness.SessionStartedEvent.Deconstruct(out string! SessionId) -> void
+Agency.Harness.SessionStartedEvent.Equals(Agency.Harness.SessionStartedEvent? other) -> bool
+Agency.Harness.SessionStartedEvent.SessionId.get -> string!
+Agency.Harness.SessionStartedEvent.SessionId.init -> void
+Agency.Harness.SessionStartedEvent.SessionStartedEvent(string! SessionId) -> void
+Agency.Harness.StopCondition
+Agency.Harness.StopConditions
+Agency.Harness.SystemPromptBuilder
+Agency.Harness.ToolInvokedEvent
+Agency.Harness.ToolInvokedEvent.Deconstruct(out string! ToolName, out System.Text.Json.JsonElement Input, out Agency.Llm.Common.Tools.ToolResult! Result) -> void
+Agency.Harness.ToolInvokedEvent.Equals(Agency.Harness.ToolInvokedEvent? other) -> bool
+Agency.Harness.ToolInvokedEvent.Input.get -> System.Text.Json.JsonElement
+Agency.Harness.ToolInvokedEvent.Input.init -> void
+Agency.Harness.ToolInvokedEvent.Result.get -> Agency.Llm.Common.Tools.ToolResult!
+Agency.Harness.ToolInvokedEvent.Result.init -> void
+Agency.Harness.ToolInvokedEvent.ToolInvokedEvent(string! ToolName, System.Text.Json.JsonElement Input, Agency.Llm.Common.Tools.ToolResult! Result) -> void
+Agency.Harness.ToolInvokedEvent.ToolName.get -> string!
+Agency.Harness.ToolInvokedEvent.ToolName.init -> void
+Agency.Harness.Tools.AgentTool
+Agency.Harness.Tools.AgentTool.AgentTool(System.Func<string?, string?, (Agency.Harness.AgentOptions!, Agency.Harness.Agent!, Agency.Llm.Common.Tools.IToolRegistry!)>! agentFactory) -> void
+Agency.Harness.Tools.AgentTool.Definition.get -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Harness.Tools.AgentTool.InvokeAsync(System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.ExecutePowershellTool
+Agency.Harness.Tools.ExecutePowershellTool.Definition.get -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Harness.Tools.ExecutePowershellTool.ExecutePowershellTool() -> void
+Agency.Harness.Tools.ExecutePowershellTool.InvokeAsync(System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.IProgressiveDiscovery
+Agency.Harness.Tools.McpClientOptions
+Agency.Harness.Tools.McpClientOptions.McpClientOptions() -> void
+Agency.Harness.Tools.McpClientOptions.Servers.get -> Agency.Harness.Tools.McpServerConfig![]!
+Agency.Harness.Tools.McpClientOptions.Servers.set -> void
+Agency.Harness.Tools.McpClientPool
+Agency.Harness.Tools.McpClientPool.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Agency.Harness.Tools.McpClientPool.ToolNamesByServer.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Collections.Generic.IReadOnlyList<string!>!>!
+Agency.Harness.Tools.McpClientPool.Tools.get -> System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ITool!>!
+Agency.Harness.Tools.McpServerConfig
+Agency.Harness.Tools.McpServerConfig.Arguments.get -> string![]?
+Agency.Harness.Tools.McpServerConfig.Arguments.set -> void
+Agency.Harness.Tools.McpServerConfig.Command.get -> string?
+Agency.Harness.Tools.McpServerConfig.Command.set -> void
+Agency.Harness.Tools.McpServerConfig.EnvironmentVariables.get -> System.Collections.Generic.Dictionary<string!, string?>?
+Agency.Harness.Tools.McpServerConfig.EnvironmentVariables.set -> void
+Agency.Harness.Tools.McpServerConfig.McpServerConfig() -> void
+Agency.Harness.Tools.McpServerConfig.Name.get -> string!
+Agency.Harness.Tools.McpServerConfig.Name.set -> void
+Agency.Harness.Tools.McpServerConfig.Transport.get -> Agency.Harness.Tools.McpTransportKind
+Agency.Harness.Tools.McpServerConfig.Transport.set -> void
+Agency.Harness.Tools.McpServerConfig.Url.get -> string?
+Agency.Harness.Tools.McpServerConfig.Url.set -> void
+Agency.Harness.Tools.McpTransportKind
+Agency.Harness.Tools.McpTransportKind.Http = 1 -> Agency.Harness.Tools.McpTransportKind
+Agency.Harness.Tools.McpTransportKind.Stdio = 0 -> Agency.Harness.Tools.McpTransportKind
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.DisabledToolBySystem(string! name) -> void
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.DisableToolByUser(string! name) -> void
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.EnableToolBySystem(string! name) -> void
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.EnableToolByUser(string! name) -> void
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.InvokeAsync(string! name, System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.ListAllDefinitions() -> System.Collections.Generic.IReadOnlyList<(bool Enabled, Agency.Llm.Common.Tools.ToolDefinition! Definition)>!
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.ListDefinitions() -> System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ToolDefinition!>!
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.ProgressiveDiscoveryToolRegistry(Agency.Llm.Common.Tools.IToolRegistry! inner, System.Collections.Generic.IReadOnlySet<string!>! mcpToolNames) -> void
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.Register(Agency.Llm.Common.Tools.ITool! tool) -> void
+Agency.Harness.Tools.ProgressiveDiscoveryToolRegistry.RegisterAsync(Agency.Llm.Common.Tools.ITool! tool, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Agency.Harness.Tools.ReadFileTool
+Agency.Harness.Tools.ReadFileTool.Definition.get -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Harness.Tools.ReadFileTool.InvokeAsync(System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.ReadFileTool.ReadFileTool() -> void
+Agency.Harness.Tools.SemanticSearchTool
+Agency.Harness.Tools.SemanticSearchTool.Definition.get -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Harness.Tools.SemanticSearchTool.InvokeAsync(System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.SemanticSearchTool.SemanticSearchTool(Agency.VectorStore.Common.IVectorStore! vectorStore, Agency.Harness.IProjectSessionState! sessionState, int topK = 5) -> void
+Agency.Harness.Tools.ToolRegistry
+Agency.Harness.Tools.ToolRegistry.DisabledToolBySystem(string! name) -> void
+Agency.Harness.Tools.ToolRegistry.DisableToolByUser(string! name) -> void
+Agency.Harness.Tools.ToolRegistry.EnableToolBySystem(string! name) -> void
+Agency.Harness.Tools.ToolRegistry.EnableToolByUser(string! name) -> void
+Agency.Harness.Tools.ToolRegistry.InvokeAsync(string! name, System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.ToolRegistry.ListAllDefinitions() -> System.Collections.Generic.IReadOnlyList<(bool Enabled, Agency.Llm.Common.Tools.ToolDefinition! Definition)>!
+Agency.Harness.Tools.ToolRegistry.ListDefinitions() -> System.Collections.Generic.IReadOnlyList<Agency.Llm.Common.Tools.ToolDefinition!>!
+Agency.Harness.Tools.ToolRegistry.Register(Agency.Llm.Common.Tools.ITool! tool) -> void
+Agency.Harness.Tools.ToolRegistry.RegisterAsync(Agency.Llm.Common.Tools.ITool! tool, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Agency.Harness.Tools.ToolRegistry.ToolRegistry() -> void
+Agency.Harness.Tools.ToolRegistry.ToolRegistry(System.Collections.Generic.IEnumerable<Agency.Llm.Common.Tools.ITool!>! tools) -> void
+Agency.Harness.Tools.WriteFileTool
+Agency.Harness.Tools.WriteFileTool.Definition.get -> Agency.Llm.Common.Tools.ToolDefinition!
+Agency.Harness.Tools.WriteFileTool.InvokeAsync(System.Text.Json.JsonElement input, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<Agency.Llm.Common.Tools.ToolResult!>!
+Agency.Harness.Tools.WriteFileTool.WriteFileTool() -> void
+Agency.Harness.TurnStartedEvent
+Agency.Harness.TurnStartedEvent.Deconstruct(out int TurnIndex, out string! Directive) -> void
+Agency.Harness.TurnStartedEvent.Directive.get -> string!
+Agency.Harness.TurnStartedEvent.Directive.init -> void
+Agency.Harness.TurnStartedEvent.Equals(Agency.Harness.TurnStartedEvent? other) -> bool
+Agency.Harness.TurnStartedEvent.TurnIndex.get -> int
+Agency.Harness.TurnStartedEvent.TurnIndex.init -> void
+Agency.Harness.TurnStartedEvent.TurnStartedEvent(int TurnIndex, string! Directive) -> void
+Agency.Harness.VerdictEvent
+Agency.Harness.VerdictEvent.Deconstruct(out int TurnIndex, out Agency.Harness.Loop.Verdict! Verdict) -> void
+Agency.Harness.VerdictEvent.Equals(Agency.Harness.VerdictEvent? other) -> bool
+Agency.Harness.VerdictEvent.TurnIndex.get -> int
+Agency.Harness.VerdictEvent.TurnIndex.init -> void
+Agency.Harness.VerdictEvent.Verdict.get -> Agency.Harness.Loop.Verdict!
+Agency.Harness.VerdictEvent.Verdict.init -> void
+Agency.Harness.VerdictEvent.VerdictEvent(int TurnIndex, Agency.Harness.Loop.Verdict! Verdict) -> void
+const Agency.Harness.Agent.ActivitySourceName = "Agency.Harness.Agent" -> string!
+const Agency.Harness.Agent.MeterName = "Agency.Harness.Agent" -> string!
+const Agency.Harness.Models.ActivitySourceName = "Agency.Harness.Models" -> string!
+const Agency.Harness.Models.MeterName = "Agency.Harness.Models" -> string!
+override Agency.Harness.AgentEvent.Equals(object? obj) -> bool
+override Agency.Harness.AgentEvent.GetHashCode() -> int
+override Agency.Harness.AgentEvent.ToString() -> string!
+override Agency.Harness.AgentResultEvent.<Clone>$() -> Agency.Harness.AgentResultEvent!
+override Agency.Harness.AgentResultEvent.Equals(object? obj) -> bool
+override Agency.Harness.AgentResultEvent.GetHashCode() -> int
+override Agency.Harness.AgentResultEvent.ToString() -> string!
+override Agency.Harness.AssistantTurnEvent.<Clone>$() -> Agency.Harness.AssistantTurnEvent!
+override Agency.Harness.AssistantTurnEvent.Equals(object? obj) -> bool
+override Agency.Harness.AssistantTurnEvent.GetHashCode() -> int
+override Agency.Harness.AssistantTurnEvent.ToString() -> string!
+override Agency.Harness.Contexts.Context.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.Context.GetHashCode() -> int
+override Agency.Harness.Contexts.Context.ToString() -> string!
+override Agency.Harness.Contexts.EnvironmentalContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.EnvironmentalContext.GetHashCode() -> int
+override Agency.Harness.Contexts.EnvironmentalContext.ToString() -> string!
+override Agency.Harness.Contexts.FocusContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.FocusContext.GetHashCode() -> int
+override Agency.Harness.Contexts.FocusContext.ToString() -> string!
+override Agency.Harness.Contexts.KnowledgeContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.KnowledgeContext.GetHashCode() -> int
+override Agency.Harness.Contexts.KnowledgeContext.ToString() -> string!
+override Agency.Harness.Contexts.MemoryContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.MemoryContext.GetHashCode() -> int
+override Agency.Harness.Contexts.MemoryContext.ToString() -> string!
+override Agency.Harness.Contexts.MemoryRecord.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.MemoryRecord.GetHashCode() -> int
+override Agency.Harness.Contexts.MemoryRecord.ToString() -> string!
+override Agency.Harness.Contexts.QueryContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.QueryContext.GetHashCode() -> int
+override Agency.Harness.Contexts.QueryContext.ToString() -> string!
+override Agency.Harness.Contexts.SessionContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.SessionContext.GetHashCode() -> int
+override Agency.Harness.Contexts.SessionContext.ToString() -> string!
+override Agency.Harness.Contexts.SkillContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.SkillContext.GetHashCode() -> int
+override Agency.Harness.Contexts.SkillContext.ToString() -> string!
+override Agency.Harness.Contexts.TemporalContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.TemporalContext.GetHashCode() -> int
+override Agency.Harness.Contexts.TemporalContext.ToString() -> string!
+override Agency.Harness.Contexts.ToolContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.ToolContext.GetHashCode() -> int
+override Agency.Harness.Contexts.ToolContext.ToString() -> string!
+override Agency.Harness.Contexts.UserSpecificContext.Equals(object? obj) -> bool
+override Agency.Harness.Contexts.UserSpecificContext.GetHashCode() -> int
+override Agency.Harness.Contexts.UserSpecificContext.ToString() -> string!
+override Agency.Harness.GoalSetEvent.<Clone>$() -> Agency.Harness.GoalSetEvent!
+override Agency.Harness.GoalSetEvent.Equals(object? obj) -> bool
+override Agency.Harness.GoalSetEvent.GetHashCode() -> int
+override Agency.Harness.GoalSetEvent.ToString() -> string!
+override Agency.Harness.Hooks.AgentHooks.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.AgentHooks.GetHashCode() -> int
+override Agency.Harness.Hooks.AgentHooks.ToString() -> string!
+override Agency.Harness.Hooks.AssistantTurnHookContext.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.AssistantTurnHookContext.GetHashCode() -> int
+override Agency.Harness.Hooks.AssistantTurnHookContext.ToString() -> string!
+override Agency.Harness.Hooks.PostToolUseHookContext.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PostToolUseHookContext.GetHashCode() -> int
+override Agency.Harness.Hooks.PostToolUseHookContext.ToString() -> string!
+override Agency.Harness.Hooks.PreToolUseDecision.Allow.<Clone>$() -> Agency.Harness.Hooks.PreToolUseDecision.Allow!
+override Agency.Harness.Hooks.PreToolUseDecision.Allow.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PreToolUseDecision.Allow.GetHashCode() -> int
+override Agency.Harness.Hooks.PreToolUseDecision.Allow.ToString() -> string!
+override Agency.Harness.Hooks.PreToolUseDecision.Ask.<Clone>$() -> Agency.Harness.Hooks.PreToolUseDecision.Ask!
+override Agency.Harness.Hooks.PreToolUseDecision.Ask.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PreToolUseDecision.Ask.GetHashCode() -> int
+override Agency.Harness.Hooks.PreToolUseDecision.Ask.ToString() -> string!
+override Agency.Harness.Hooks.PreToolUseDecision.Deny.<Clone>$() -> Agency.Harness.Hooks.PreToolUseDecision.Deny!
+override Agency.Harness.Hooks.PreToolUseDecision.Deny.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PreToolUseDecision.Deny.GetHashCode() -> int
+override Agency.Harness.Hooks.PreToolUseDecision.Deny.ToString() -> string!
+override Agency.Harness.Hooks.PreToolUseDecision.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PreToolUseDecision.GetHashCode() -> int
+override Agency.Harness.Hooks.PreToolUseDecision.Rewrite.<Clone>$() -> Agency.Harness.Hooks.PreToolUseDecision.Rewrite!
+override Agency.Harness.Hooks.PreToolUseDecision.Rewrite.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PreToolUseDecision.Rewrite.GetHashCode() -> int
+override Agency.Harness.Hooks.PreToolUseDecision.Rewrite.ToString() -> string!
+override Agency.Harness.Hooks.PreToolUseDecision.ToString() -> string!
+override Agency.Harness.Hooks.PreToolUseHookContext.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.PreToolUseHookContext.GetHashCode() -> int
+override Agency.Harness.Hooks.PreToolUseHookContext.ToString() -> string!
+override Agency.Harness.Hooks.SessionEndedHookContext.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.SessionEndedHookContext.GetHashCode() -> int
+override Agency.Harness.Hooks.SessionEndedHookContext.ToString() -> string!
+override Agency.Harness.Hooks.SessionStartedHookContext.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.SessionStartedHookContext.GetHashCode() -> int
+override Agency.Harness.Hooks.SessionStartedHookContext.ToString() -> string!
+override Agency.Harness.Hooks.StopHookContext.Equals(object? obj) -> bool
+override Agency.Harness.Hooks.StopHookContext.GetHashCode() -> int
+override Agency.Harness.Hooks.StopHookContext.ToString() -> string!
+override Agency.Harness.IterationCompletedEvent.<Clone>$() -> Agency.Harness.IterationCompletedEvent!
+override Agency.Harness.IterationCompletedEvent.Equals(object? obj) -> bool
+override Agency.Harness.IterationCompletedEvent.GetHashCode() -> int
+override Agency.Harness.IterationCompletedEvent.ToString() -> string!
+override Agency.Harness.LlmTokenUsage.Equals(object? obj) -> bool
+override Agency.Harness.LlmTokenUsage.GetHashCode() -> int
+override Agency.Harness.LlmTokenUsage.ToString() -> string!
+override Agency.Harness.Loop.GoalSpec.Equals(object? obj) -> bool
+override Agency.Harness.Loop.GoalSpec.GetHashCode() -> int
+override Agency.Harness.Loop.GoalSpec.ToString() -> string!
+override Agency.Harness.Loop.Verdict.Continue.<Clone>$() -> Agency.Harness.Loop.Verdict.Continue!
+override Agency.Harness.Loop.Verdict.Continue.Equals(object? obj) -> bool
+override Agency.Harness.Loop.Verdict.Continue.GetHashCode() -> int
+override Agency.Harness.Loop.Verdict.Continue.ToString() -> string!
+override Agency.Harness.Loop.Verdict.Done.<Clone>$() -> Agency.Harness.Loop.Verdict.Done!
+override Agency.Harness.Loop.Verdict.Done.Equals(object? obj) -> bool
+override Agency.Harness.Loop.Verdict.Done.GetHashCode() -> int
+override Agency.Harness.Loop.Verdict.Done.ToString() -> string!
+override Agency.Harness.Loop.Verdict.Equals(object? obj) -> bool
+override Agency.Harness.Loop.Verdict.GetHashCode() -> int
+override Agency.Harness.Loop.Verdict.ToString() -> string!
+override Agency.Harness.LoopResultEvent.<Clone>$() -> Agency.Harness.LoopResultEvent!
+override Agency.Harness.LoopResultEvent.Equals(object? obj) -> bool
+override Agency.Harness.LoopResultEvent.GetHashCode() -> int
+override Agency.Harness.LoopResultEvent.ToString() -> string!
+override Agency.Harness.PermissionRequestedEvent.<Clone>$() -> Agency.Harness.PermissionRequestedEvent!
+override Agency.Harness.PermissionRequestedEvent.Equals(object? obj) -> bool
+override Agency.Harness.PermissionRequestedEvent.GetHashCode() -> int
+override Agency.Harness.PermissionRequestedEvent.ToString() -> string!
+override Agency.Harness.Permissions.PermissionDecision.Allow.<Clone>$() -> Agency.Harness.Permissions.PermissionDecision.Allow!
+override Agency.Harness.Permissions.PermissionDecision.Allow.Equals(object? obj) -> bool
+override Agency.Harness.Permissions.PermissionDecision.Allow.GetHashCode() -> int
+override Agency.Harness.Permissions.PermissionDecision.Allow.ToString() -> string!
+override Agency.Harness.Permissions.PermissionDecision.Ask.<Clone>$() -> Agency.Harness.Permissions.PermissionDecision.Ask!
+override Agency.Harness.Permissions.PermissionDecision.Ask.Equals(object? obj) -> bool
+override Agency.Harness.Permissions.PermissionDecision.Ask.GetHashCode() -> int
+override Agency.Harness.Permissions.PermissionDecision.Ask.ToString() -> string!
+override Agency.Harness.Permissions.PermissionDecision.Deny.<Clone>$() -> Agency.Harness.Permissions.PermissionDecision.Deny!
+override Agency.Harness.Permissions.PermissionDecision.Deny.Equals(object? obj) -> bool
+override Agency.Harness.Permissions.PermissionDecision.Deny.GetHashCode() -> int
+override Agency.Harness.Permissions.PermissionDecision.Deny.ToString() -> string!
+override Agency.Harness.Permissions.PermissionDecision.Equals(object? obj) -> bool
+override Agency.Harness.Permissions.PermissionDecision.GetHashCode() -> int
+override Agency.Harness.Permissions.PermissionDecision.ToString() -> string!
+override Agency.Harness.Permissions.PermissionResponse.Equals(object? obj) -> bool
+override Agency.Harness.Permissions.PermissionResponse.GetHashCode() -> int
+override Agency.Harness.Permissions.PermissionResponse.ToString() -> string!
+override Agency.Harness.SessionStartedEvent.<Clone>$() -> Agency.Harness.SessionStartedEvent!
+override Agency.Harness.SessionStartedEvent.Equals(object? obj) -> bool
+override Agency.Harness.SessionStartedEvent.GetHashCode() -> int
+override Agency.Harness.SessionStartedEvent.ToString() -> string!
+override Agency.Harness.ToolInvokedEvent.<Clone>$() -> Agency.Harness.ToolInvokedEvent!
+override Agency.Harness.ToolInvokedEvent.Equals(object? obj) -> bool
+override Agency.Harness.ToolInvokedEvent.GetHashCode() -> int
+override Agency.Harness.ToolInvokedEvent.ToString() -> string!
+override Agency.Harness.TurnStartedEvent.<Clone>$() -> Agency.Harness.TurnStartedEvent!
+override Agency.Harness.TurnStartedEvent.Equals(object? obj) -> bool
+override Agency.Harness.TurnStartedEvent.GetHashCode() -> int
+override Agency.Harness.TurnStartedEvent.ToString() -> string!
+override Agency.Harness.VerdictEvent.<Clone>$() -> Agency.Harness.VerdictEvent!
+override Agency.Harness.VerdictEvent.Equals(object? obj) -> bool
+override Agency.Harness.VerdictEvent.GetHashCode() -> int
+override Agency.Harness.VerdictEvent.ToString() -> string!
+override sealed Agency.Harness.AgentResultEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.AssistantTurnEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.GoalSetEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.Hooks.PreToolUseDecision.Allow.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
+override sealed Agency.Harness.Hooks.PreToolUseDecision.Ask.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
+override sealed Agency.Harness.Hooks.PreToolUseDecision.Deny.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
+override sealed Agency.Harness.Hooks.PreToolUseDecision.Rewrite.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
+override sealed Agency.Harness.IterationCompletedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.Loop.Verdict.Continue.Equals(Agency.Harness.Loop.Verdict? other) -> bool
+override sealed Agency.Harness.Loop.Verdict.Done.Equals(Agency.Harness.Loop.Verdict? other) -> bool
+override sealed Agency.Harness.LoopResultEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.PermissionRequestedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.Permissions.PermissionDecision.Allow.Equals(Agency.Harness.Permissions.PermissionDecision? other) -> bool
+override sealed Agency.Harness.Permissions.PermissionDecision.Ask.Equals(Agency.Harness.Permissions.PermissionDecision? other) -> bool
+override sealed Agency.Harness.Permissions.PermissionDecision.Deny.Equals(Agency.Harness.Permissions.PermissionDecision? other) -> bool
+override sealed Agency.Harness.SessionStartedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.ToolInvokedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.TurnStartedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+override sealed Agency.Harness.VerdictEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+static Agency.Harness.Agent.CreateContext(string! initialPrompt, Agency.Harness.Contexts.ToolContext? tools = null, Agency.Harness.Contexts.EnvironmentalContext? environment = null, Agency.Harness.Contexts.UserSpecificContext? user = null, System.TimeProvider? timeProvider = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null) -> Agency.Harness.Contexts.Context!
+static Agency.Harness.AgentEvent.operator !=(Agency.Harness.AgentEvent? left, Agency.Harness.AgentEvent? right) -> bool
+static Agency.Harness.AgentEvent.operator ==(Agency.Harness.AgentEvent? left, Agency.Harness.AgentEvent? right) -> bool
+static Agency.Harness.AgentResultEvent.operator !=(Agency.Harness.AgentResultEvent? left, Agency.Harness.AgentResultEvent? right) -> bool
+static Agency.Harness.AgentResultEvent.operator ==(Agency.Harness.AgentResultEvent? left, Agency.Harness.AgentResultEvent? right) -> bool
+static Agency.Harness.AgentServiceCollectionExtensions.AddAgencyAgent(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Agency.Harness.AssistantTurnEvent.operator !=(Agency.Harness.AssistantTurnEvent? left, Agency.Harness.AssistantTurnEvent? right) -> bool
+static Agency.Harness.AssistantTurnEvent.operator ==(Agency.Harness.AssistantTurnEvent? left, Agency.Harness.AssistantTurnEvent? right) -> bool
+static Agency.Harness.Contexts.Context.operator !=(Agency.Harness.Contexts.Context? left, Agency.Harness.Contexts.Context? right) -> bool
+static Agency.Harness.Contexts.Context.operator ==(Agency.Harness.Contexts.Context? left, Agency.Harness.Contexts.Context? right) -> bool
+static Agency.Harness.Contexts.EnvironmentalContext.Empty.get -> Agency.Harness.Contexts.EnvironmentalContext!
+static Agency.Harness.Contexts.EnvironmentalContext.operator !=(Agency.Harness.Contexts.EnvironmentalContext? left, Agency.Harness.Contexts.EnvironmentalContext? right) -> bool
+static Agency.Harness.Contexts.EnvironmentalContext.operator ==(Agency.Harness.Contexts.EnvironmentalContext? left, Agency.Harness.Contexts.EnvironmentalContext? right) -> bool
+static Agency.Harness.Contexts.FocusContext.Empty.get -> Agency.Harness.Contexts.FocusContext!
+static Agency.Harness.Contexts.FocusContext.operator !=(Agency.Harness.Contexts.FocusContext? left, Agency.Harness.Contexts.FocusContext? right) -> bool
+static Agency.Harness.Contexts.FocusContext.operator ==(Agency.Harness.Contexts.FocusContext? left, Agency.Harness.Contexts.FocusContext? right) -> bool
+static Agency.Harness.Contexts.KnowledgeContext.Empty.get -> Agency.Harness.Contexts.KnowledgeContext!
+static Agency.Harness.Contexts.KnowledgeContext.operator !=(Agency.Harness.Contexts.KnowledgeContext? left, Agency.Harness.Contexts.KnowledgeContext? right) -> bool
+static Agency.Harness.Contexts.KnowledgeContext.operator ==(Agency.Harness.Contexts.KnowledgeContext? left, Agency.Harness.Contexts.KnowledgeContext? right) -> bool
+static Agency.Harness.Contexts.MemoryContext.Empty.get -> Agency.Harness.Contexts.MemoryContext!
+static Agency.Harness.Contexts.MemoryContext.operator !=(Agency.Harness.Contexts.MemoryContext? left, Agency.Harness.Contexts.MemoryContext? right) -> bool
+static Agency.Harness.Contexts.MemoryContext.operator ==(Agency.Harness.Contexts.MemoryContext? left, Agency.Harness.Contexts.MemoryContext? right) -> bool
+static Agency.Harness.Contexts.MemoryRecord.operator !=(Agency.Harness.Contexts.MemoryRecord? left, Agency.Harness.Contexts.MemoryRecord? right) -> bool
+static Agency.Harness.Contexts.MemoryRecord.operator ==(Agency.Harness.Contexts.MemoryRecord? left, Agency.Harness.Contexts.MemoryRecord? right) -> bool
+static Agency.Harness.Contexts.QueryContext.operator !=(Agency.Harness.Contexts.QueryContext? left, Agency.Harness.Contexts.QueryContext? right) -> bool
+static Agency.Harness.Contexts.QueryContext.operator ==(Agency.Harness.Contexts.QueryContext? left, Agency.Harness.Contexts.QueryContext? right) -> bool
+static Agency.Harness.Contexts.SessionContext.Empty.get -> Agency.Harness.Contexts.SessionContext!
+static Agency.Harness.Contexts.SessionContext.operator !=(Agency.Harness.Contexts.SessionContext? left, Agency.Harness.Contexts.SessionContext? right) -> bool
+static Agency.Harness.Contexts.SessionContext.operator ==(Agency.Harness.Contexts.SessionContext? left, Agency.Harness.Contexts.SessionContext? right) -> bool
+static Agency.Harness.Contexts.SkillContext.operator !=(Agency.Harness.Contexts.SkillContext? left, Agency.Harness.Contexts.SkillContext? right) -> bool
+static Agency.Harness.Contexts.SkillContext.operator ==(Agency.Harness.Contexts.SkillContext? left, Agency.Harness.Contexts.SkillContext? right) -> bool
+static Agency.Harness.Contexts.TemporalContext.Empty.get -> Agency.Harness.Contexts.TemporalContext!
+static Agency.Harness.Contexts.TemporalContext.operator !=(Agency.Harness.Contexts.TemporalContext? left, Agency.Harness.Contexts.TemporalContext? right) -> bool
+static Agency.Harness.Contexts.TemporalContext.operator ==(Agency.Harness.Contexts.TemporalContext? left, Agency.Harness.Contexts.TemporalContext? right) -> bool
+static Agency.Harness.Contexts.ToolContext.Empty.get -> Agency.Harness.Contexts.ToolContext!
+static Agency.Harness.Contexts.ToolContext.operator !=(Agency.Harness.Contexts.ToolContext? left, Agency.Harness.Contexts.ToolContext? right) -> bool
+static Agency.Harness.Contexts.ToolContext.operator ==(Agency.Harness.Contexts.ToolContext? left, Agency.Harness.Contexts.ToolContext? right) -> bool
+static Agency.Harness.Contexts.UserSpecificContext.Empty.get -> Agency.Harness.Contexts.UserSpecificContext!
+static Agency.Harness.Contexts.UserSpecificContext.operator !=(Agency.Harness.Contexts.UserSpecificContext? left, Agency.Harness.Contexts.UserSpecificContext? right) -> bool
+static Agency.Harness.Contexts.UserSpecificContext.operator ==(Agency.Harness.Contexts.UserSpecificContext? left, Agency.Harness.Contexts.UserSpecificContext? right) -> bool
+static Agency.Harness.GoalSetEvent.operator !=(Agency.Harness.GoalSetEvent? left, Agency.Harness.GoalSetEvent? right) -> bool
+static Agency.Harness.GoalSetEvent.operator ==(Agency.Harness.GoalSetEvent? left, Agency.Harness.GoalSetEvent? right) -> bool
+static Agency.Harness.Hooks.AgentHooks.None.get -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Harness.Hooks.AgentHooks.operator !=(Agency.Harness.Hooks.AgentHooks? left, Agency.Harness.Hooks.AgentHooks? right) -> bool
+static Agency.Harness.Hooks.AgentHooks.operator ==(Agency.Harness.Hooks.AgentHooks? left, Agency.Harness.Hooks.AgentHooks? right) -> bool
+static Agency.Harness.Hooks.AgentHooksExtensions.Compose(this Agency.Harness.Hooks.AgentHooks! first, Agency.Harness.Hooks.AgentHooks! second) -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Harness.Hooks.AgentHooksExtensions.ComposeBefore(this Agency.Harness.Hooks.AgentHooks! self, Agency.Harness.Hooks.AgentHooks! first) -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Harness.Hooks.AssistantTurnHookContext.operator !=(Agency.Harness.Hooks.AssistantTurnHookContext? left, Agency.Harness.Hooks.AssistantTurnHookContext? right) -> bool
+static Agency.Harness.Hooks.AssistantTurnHookContext.operator ==(Agency.Harness.Hooks.AssistantTurnHookContext? left, Agency.Harness.Hooks.AssistantTurnHookContext? right) -> bool
+static Agency.Harness.Hooks.AuditHooks.ForLogger(Microsoft.Extensions.Logging.ILogger! logger) -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Harness.Hooks.BlockListHooks.Dangerous.get -> Agency.Harness.Hooks.AgentHooks!
+static Agency.Harness.Hooks.Configuration.HookServiceCollectionExtensions.AddAgencyConfiguredHooks(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! config, string! sectionName = "Hooks") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Agency.Harness.Hooks.PostToolUseHookContext.operator !=(Agency.Harness.Hooks.PostToolUseHookContext? left, Agency.Harness.Hooks.PostToolUseHookContext? right) -> bool
+static Agency.Harness.Hooks.PostToolUseHookContext.operator ==(Agency.Harness.Hooks.PostToolUseHookContext? left, Agency.Harness.Hooks.PostToolUseHookContext? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Allow.operator !=(Agency.Harness.Hooks.PreToolUseDecision.Allow? left, Agency.Harness.Hooks.PreToolUseDecision.Allow? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Allow.operator ==(Agency.Harness.Hooks.PreToolUseDecision.Allow? left, Agency.Harness.Hooks.PreToolUseDecision.Allow? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Allowed.get -> Agency.Harness.Hooks.PreToolUseDecision!
+static Agency.Harness.Hooks.PreToolUseDecision.Ask.operator !=(Agency.Harness.Hooks.PreToolUseDecision.Ask? left, Agency.Harness.Hooks.PreToolUseDecision.Ask? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Ask.operator ==(Agency.Harness.Hooks.PreToolUseDecision.Ask? left, Agency.Harness.Hooks.PreToolUseDecision.Ask? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Deny.operator !=(Agency.Harness.Hooks.PreToolUseDecision.Deny? left, Agency.Harness.Hooks.PreToolUseDecision.Deny? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Deny.operator ==(Agency.Harness.Hooks.PreToolUseDecision.Deny? left, Agency.Harness.Hooks.PreToolUseDecision.Deny? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.operator !=(Agency.Harness.Hooks.PreToolUseDecision? left, Agency.Harness.Hooks.PreToolUseDecision? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.operator ==(Agency.Harness.Hooks.PreToolUseDecision? left, Agency.Harness.Hooks.PreToolUseDecision? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Rewrite.operator !=(Agency.Harness.Hooks.PreToolUseDecision.Rewrite? left, Agency.Harness.Hooks.PreToolUseDecision.Rewrite? right) -> bool
+static Agency.Harness.Hooks.PreToolUseDecision.Rewrite.operator ==(Agency.Harness.Hooks.PreToolUseDecision.Rewrite? left, Agency.Harness.Hooks.PreToolUseDecision.Rewrite? right) -> bool
+static Agency.Harness.Hooks.PreToolUseHookContext.operator !=(Agency.Harness.Hooks.PreToolUseHookContext? left, Agency.Harness.Hooks.PreToolUseHookContext? right) -> bool
+static Agency.Harness.Hooks.PreToolUseHookContext.operator ==(Agency.Harness.Hooks.PreToolUseHookContext? left, Agency.Harness.Hooks.PreToolUseHookContext? right) -> bool
+static Agency.Harness.Hooks.SessionEndedHookContext.operator !=(Agency.Harness.Hooks.SessionEndedHookContext? left, Agency.Harness.Hooks.SessionEndedHookContext? right) -> bool
+static Agency.Harness.Hooks.SessionEndedHookContext.operator ==(Agency.Harness.Hooks.SessionEndedHookContext? left, Agency.Harness.Hooks.SessionEndedHookContext? right) -> bool
+static Agency.Harness.Hooks.SessionStartedHookContext.operator !=(Agency.Harness.Hooks.SessionStartedHookContext? left, Agency.Harness.Hooks.SessionStartedHookContext? right) -> bool
+static Agency.Harness.Hooks.SessionStartedHookContext.operator ==(Agency.Harness.Hooks.SessionStartedHookContext? left, Agency.Harness.Hooks.SessionStartedHookContext? right) -> bool
+static Agency.Harness.Hooks.StopHookContext.operator !=(Agency.Harness.Hooks.StopHookContext? left, Agency.Harness.Hooks.StopHookContext? right) -> bool
+static Agency.Harness.Hooks.StopHookContext.operator ==(Agency.Harness.Hooks.StopHookContext? left, Agency.Harness.Hooks.StopHookContext? right) -> bool
+static Agency.Harness.IterationCompletedEvent.operator !=(Agency.Harness.IterationCompletedEvent? left, Agency.Harness.IterationCompletedEvent? right) -> bool
+static Agency.Harness.IterationCompletedEvent.operator ==(Agency.Harness.IterationCompletedEvent? left, Agency.Harness.IterationCompletedEvent? right) -> bool
+static Agency.Harness.LlmTokenUsage.operator !=(Agency.Harness.LlmTokenUsage? left, Agency.Harness.LlmTokenUsage? right) -> bool
+static Agency.Harness.LlmTokenUsage.operator ==(Agency.Harness.LlmTokenUsage? left, Agency.Harness.LlmTokenUsage? right) -> bool
+static Agency.Harness.Loop.GoalSpec.operator !=(Agency.Harness.Loop.GoalSpec? left, Agency.Harness.Loop.GoalSpec? right) -> bool
+static Agency.Harness.Loop.GoalSpec.operator ==(Agency.Harness.Loop.GoalSpec? left, Agency.Harness.Loop.GoalSpec? right) -> bool
+static Agency.Harness.Loop.LoopServiceCollectionExtensions.AddAgencyLoop(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! config, string! sectionName = "Loop") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Agency.Harness.Loop.Verdict.Continue.operator !=(Agency.Harness.Loop.Verdict.Continue? left, Agency.Harness.Loop.Verdict.Continue? right) -> bool
+static Agency.Harness.Loop.Verdict.Continue.operator ==(Agency.Harness.Loop.Verdict.Continue? left, Agency.Harness.Loop.Verdict.Continue? right) -> bool
+static Agency.Harness.Loop.Verdict.Done.operator !=(Agency.Harness.Loop.Verdict.Done? left, Agency.Harness.Loop.Verdict.Done? right) -> bool
+static Agency.Harness.Loop.Verdict.Done.operator ==(Agency.Harness.Loop.Verdict.Done? left, Agency.Harness.Loop.Verdict.Done? right) -> bool
+static Agency.Harness.Loop.Verdict.operator !=(Agency.Harness.Loop.Verdict? left, Agency.Harness.Loop.Verdict? right) -> bool
+static Agency.Harness.Loop.Verdict.operator ==(Agency.Harness.Loop.Verdict? left, Agency.Harness.Loop.Verdict? right) -> bool
+static Agency.Harness.LoopResultEvent.operator !=(Agency.Harness.LoopResultEvent? left, Agency.Harness.LoopResultEvent? right) -> bool
+static Agency.Harness.LoopResultEvent.operator ==(Agency.Harness.LoopResultEvent? left, Agency.Harness.LoopResultEvent? right) -> bool
+static Agency.Harness.PermissionRequestedEvent.operator !=(Agency.Harness.PermissionRequestedEvent? left, Agency.Harness.PermissionRequestedEvent? right) -> bool
+static Agency.Harness.PermissionRequestedEvent.operator ==(Agency.Harness.PermissionRequestedEvent? left, Agency.Harness.PermissionRequestedEvent? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.Allow.operator !=(Agency.Harness.Permissions.PermissionDecision.Allow? left, Agency.Harness.Permissions.PermissionDecision.Allow? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.Allow.operator ==(Agency.Harness.Permissions.PermissionDecision.Allow? left, Agency.Harness.Permissions.PermissionDecision.Allow? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.Allowed.get -> Agency.Harness.Permissions.PermissionDecision!
+static Agency.Harness.Permissions.PermissionDecision.Ask.operator !=(Agency.Harness.Permissions.PermissionDecision.Ask? left, Agency.Harness.Permissions.PermissionDecision.Ask? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.Ask.operator ==(Agency.Harness.Permissions.PermissionDecision.Ask? left, Agency.Harness.Permissions.PermissionDecision.Ask? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.Deny.operator !=(Agency.Harness.Permissions.PermissionDecision.Deny? left, Agency.Harness.Permissions.PermissionDecision.Deny? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.Deny.operator ==(Agency.Harness.Permissions.PermissionDecision.Deny? left, Agency.Harness.Permissions.PermissionDecision.Deny? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.operator !=(Agency.Harness.Permissions.PermissionDecision? left, Agency.Harness.Permissions.PermissionDecision? right) -> bool
+static Agency.Harness.Permissions.PermissionDecision.operator ==(Agency.Harness.Permissions.PermissionDecision? left, Agency.Harness.Permissions.PermissionDecision? right) -> bool
+static Agency.Harness.Permissions.PermissionResponse.operator !=(Agency.Harness.Permissions.PermissionResponse? left, Agency.Harness.Permissions.PermissionResponse? right) -> bool
+static Agency.Harness.Permissions.PermissionResponse.operator ==(Agency.Harness.Permissions.PermissionResponse? left, Agency.Harness.Permissions.PermissionResponse? right) -> bool
+static Agency.Harness.Permissions.PermissionServiceCollectionExtensions.AddAgencyPermissions(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! config, string! sectionName = "Permissions") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Agency.Harness.SessionStartedEvent.operator !=(Agency.Harness.SessionStartedEvent? left, Agency.Harness.SessionStartedEvent? right) -> bool
+static Agency.Harness.SessionStartedEvent.operator ==(Agency.Harness.SessionStartedEvent? left, Agency.Harness.SessionStartedEvent? right) -> bool
+static Agency.Harness.StopConditions.Any(params Agency.Harness.StopCondition![]! conditions) -> Agency.Harness.StopCondition!
+static Agency.Harness.StopConditions.BudgetExceeded(decimal usd) -> Agency.Harness.StopCondition!
+static Agency.Harness.StopConditions.StepCountIs(int n) -> Agency.Harness.StopCondition!
+static Agency.Harness.StopConditions.TokensExceeded(long total) -> Agency.Harness.StopCondition!
+static Agency.Harness.SystemPromptBuilder.Build(Agency.Harness.Contexts.Context! ctx) -> string!
+static Agency.Harness.ToolInvokedEvent.operator !=(Agency.Harness.ToolInvokedEvent? left, Agency.Harness.ToolInvokedEvent? right) -> bool
+static Agency.Harness.ToolInvokedEvent.operator ==(Agency.Harness.ToolInvokedEvent? left, Agency.Harness.ToolInvokedEvent? right) -> bool
+static Agency.Harness.Tools.McpClientPool.CreateAsync(Agency.Harness.Tools.McpClientOptions! options, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Harness.Tools.McpClientPool!>!
+static Agency.Harness.TurnStartedEvent.operator !=(Agency.Harness.TurnStartedEvent? left, Agency.Harness.TurnStartedEvent? right) -> bool
+static Agency.Harness.TurnStartedEvent.operator ==(Agency.Harness.TurnStartedEvent? left, Agency.Harness.TurnStartedEvent? right) -> bool
+static Agency.Harness.VerdictEvent.operator !=(Agency.Harness.VerdictEvent? left, Agency.Harness.VerdictEvent? right) -> bool
+static Agency.Harness.VerdictEvent.operator ==(Agency.Harness.VerdictEvent? left, Agency.Harness.VerdictEvent? right) -> bool
+static readonly Agency.Harness.StopConditions.NoToolCalls -> Agency.Harness.StopCondition!
+static readonly Agency.Harness.Tools.ToolRegistry.Empty -> Agency.Llm.Common.Tools.IToolRegistry!
+virtual Agency.Harness.AgentEvent.EqualityContract.get -> System.Type!
+virtual Agency.Harness.AgentEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+virtual Agency.Harness.AgentEvent.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Agency.Harness.Hooks.PreToolUseDecision.EqualityContract.get -> System.Type!
+virtual Agency.Harness.Hooks.PreToolUseDecision.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
+virtual Agency.Harness.Hooks.PreToolUseDecision.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Agency.Harness.Loop.Verdict.EqualityContract.get -> System.Type!
+virtual Agency.Harness.Loop.Verdict.Equals(Agency.Harness.Loop.Verdict? other) -> bool
+virtual Agency.Harness.Loop.Verdict.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Agency.Harness.Permissions.PermissionDecision.EqualityContract.get -> System.Type!
+virtual Agency.Harness.Permissions.PermissionDecision.Equals(Agency.Harness.Permissions.PermissionDecision? other) -> bool
+virtual Agency.Harness.Permissions.PermissionDecision.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Agency.Harness.StopCondition.Invoke(Agency.Harness.Contexts.Context! ctx, Microsoft.Extensions.AI.ChatMessage! lastResponse) -> bool

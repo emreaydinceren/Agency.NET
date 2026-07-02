@@ -1,0 +1,4 @@
+#nullable enable
+Agency.Ingestion.SemanticKernel.SemanticKernelTextSplitter
+Agency.Ingestion.SemanticKernel.SemanticKernelTextSplitter.SemanticKernelTextSplitter(int maxTokens, int overlapTokens, Microsoft.SemanticKernel.Text.TextChunker.TokenCounter? tokenCounter = null) -> void
+Agency.Ingestion.SemanticKernel.SemanticKernelTextSplitter.Split(Agency.Ingestion.Document! document) -> System.Collections.Generic.IEnumerable<Agency.Ingestion.Document!>!

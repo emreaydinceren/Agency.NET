@@ -1,0 +1,8 @@
+#nullable enable
+Agency.Sql.Sqlite.SqliteRunner
+Agency.Sql.Sqlite.SqliteRunner.SqliteRunner(string! connectionString, System.Action<Microsoft.Data.Sqlite.SqliteConnection!>? onConnectionOpen = null, Microsoft.Extensions.Logging.ILogger<Agency.Sql.Sqlite.SqliteRunner!>? logger = null) -> void
+Agency.Sql.Sqlite.SQLQueryEmbedder
+Agency.Sql.Sqlite.SQLQueryEmbedder.EmbedVectorsInQueryAsync(string! sqlQuery, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Agency.Sql.Sqlite.SQLQueryEmbedder.SQLQueryEmbedder(Agency.Embeddings.Common.IEmbeddingGenerator! embeddingGenerator) -> void
+const Agency.Sql.Sqlite.SqliteRunner.ActivitySourceName = "Agency.Sql.Sqlite" -> string!
+const Agency.Sql.Sqlite.SqliteRunner.MeterName = "Agency.Sql.Sqlite" -> string!

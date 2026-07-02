@@ -1,0 +1,21 @@
+#nullable enable
+Agency.Embeddings.OpenAI.EmbeddingGenerator
+Agency.Embeddings.OpenAI.EmbeddingGenerator.EmbeddingGenerator(Agency.Embeddings.OpenAI.EmbeddingOptions! options, Microsoft.Extensions.Logging.ILogger<Agency.Embeddings.OpenAI.EmbeddingGenerator!>? logger = null) -> void
+Agency.Embeddings.OpenAI.EmbeddingGenerator.EmbeddingGenerator(Microsoft.Extensions.Options.IOptions<Agency.Embeddings.OpenAI.EmbeddingOptions!>! options, Microsoft.Extensions.Logging.ILogger<Agency.Embeddings.OpenAI.EmbeddingGenerator!>? logger = null) -> void
+Agency.Embeddings.OpenAI.EmbeddingGenerator.GenerateEmbeddingAsync(string! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.ReadOnlyMemory<float>>!
+Agency.Embeddings.OpenAI.EmbeddingGenerator.GenerateEmbeddingsAsync(System.Collections.Generic.IEnumerable<string!>! inputs, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.ReadOnlyMemory<float>>!>!
+Agency.Embeddings.OpenAI.EmbeddingOptions
+Agency.Embeddings.OpenAI.EmbeddingOptions.ApiKey.get -> string?
+Agency.Embeddings.OpenAI.EmbeddingOptions.ApiKey.set -> void
+Agency.Embeddings.OpenAI.EmbeddingOptions.BaseUrl.get -> string?
+Agency.Embeddings.OpenAI.EmbeddingOptions.BaseUrl.set -> void
+Agency.Embeddings.OpenAI.EmbeddingOptions.Dimensions.get -> int?
+Agency.Embeddings.OpenAI.EmbeddingOptions.Dimensions.set -> void
+Agency.Embeddings.OpenAI.EmbeddingOptions.EmbeddingOptions() -> void
+Agency.Embeddings.OpenAI.EmbeddingOptions.ModelId.get -> string?
+Agency.Embeddings.OpenAI.EmbeddingOptions.ModelId.set -> void
+Agency.Embeddings.OpenAI.EmbeddingsServiceCollectionExtensions
+const Agency.Embeddings.OpenAI.EmbeddingGenerator.ActivitySourceName = "Agency.Embeddings.OpenAI" -> string!
+const Agency.Embeddings.OpenAI.EmbeddingGenerator.MeterName = "Agency.Embeddings.OpenAI" -> string!
+const Agency.Embeddings.OpenAI.EmbeddingOptions.SectionName = "Embedding" -> string!
+static Agency.Embeddings.OpenAI.EmbeddingsServiceCollectionExtensions.AddAgencyEmbeddingsOpenAI(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Agency.Embeddings.OpenAI.EmbeddingOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

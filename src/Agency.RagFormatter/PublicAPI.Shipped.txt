@@ -1,0 +1,3 @@
+#nullable enable
+Agency.RagFormatter.DatasetExtensions
+static Agency.RagFormatter.DatasetExtensions.ToMarkdownTable(this Agency.Common.Dataset! dataset) -> string!

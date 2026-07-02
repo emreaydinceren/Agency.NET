@@ -1,0 +1,14 @@
+#nullable enable
+Agency.Common.Dataset
+Agency.Common.Dataset.AddRow(object?[]! values) -> void
+Agency.Common.Dataset.Columns.get -> System.Collections.Generic.IReadOnlyCollection<Agency.Common.IColumnMetadata!>!
+Agency.Common.Dataset.Columns.init -> void
+Agency.Common.Dataset.Dataset(System.Collections.Generic.IReadOnlyCollection<Agency.Common.IColumnMetadata!>! columns) -> void
+Agency.Common.Dataset.Dataset(System.Collections.Generic.IReadOnlyCollection<Agency.Common.IColumnMetadata!>! columns, System.Collections.Generic.IReadOnlyList<object?[]!>! rows) -> void
+Agency.Common.Dataset.Rows.get -> System.Collections.Generic.IReadOnlyList<object?[]!>!
+Agency.Common.Dataset.Rows.init -> void
+Agency.Common.Dataset.this[int columnIndex, int rowIndex].get -> object?
+Agency.Common.Dataset.this[string! columnName, int rowIndex].get -> object?
+Agency.Common.IColumnMetadata
+Agency.Common.IColumnMetadata.ColumnName.get -> string?
+Agency.Common.IColumnMetadata.ColumnOrdinal.get -> int?

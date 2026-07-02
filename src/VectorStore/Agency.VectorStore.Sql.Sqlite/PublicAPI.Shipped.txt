@@ -1,0 +1,12 @@
+#nullable enable
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.DeleteAsync(string! userId, string? sessionId, string! key, string? projectId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.InitializeSchemaAsync(int dimensions = 1536, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.ListDocumentsAsync(string! userId, string? sessionId, System.Collections.Generic.IReadOnlyList<string!>? projectIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.DocumentInfo!>!>!
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.ListProjectsAsync(string! userId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.SearchAsync<TValue>(Agency.VectorStore.Common.Query! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.SearchHit<TValue>!>!>!
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.SqliteKVStore(Agency.Embeddings.Common.IEmbeddingGenerator! embeddingGenerator, Agency.Sql.Sqlite.SqliteRunner! sqliteRunner, Microsoft.Extensions.Logging.ILogger<Agency.VectorStore.Sql.Sqlite.SqliteKVStore!>? logger = null) -> void
+Agency.VectorStore.Sql.Sqlite.SqliteKVStore.UpsertAsync<TValue>(string! userId, string? sessionId, string! key, TValue value, System.Collections.Generic.IDictionary<string!, object!>? metadata = null, string? projectId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+const Agency.VectorStore.Sql.Sqlite.SqliteKVStore.ActivitySourceName = "Agency.VectorStore.Sql.Sqlite" -> string!
+const Agency.VectorStore.Sql.Sqlite.SqliteKVStore.MeterName = "Agency.VectorStore.Sql.Sqlite" -> string!
+static Agency.VectorStore.Sql.Sqlite.SqliteKVStore.RegisterVectorFunctions(Microsoft.Data.Sqlite.SqliteConnection! connection) -> void

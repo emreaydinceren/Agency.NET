@@ -1,0 +1,10 @@
+#nullable enable
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.DeleteAsync(string! userId, string? sessionId, string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.GetMetadataAsync(string! userId, string? sessionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit!>!>!
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.InitializeSchemaAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.SearchAsync<TValue>(Agency.KeyValueStore.Common.Query! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.KeyValueStore.Common.SearchHit<TValue>!>!>!
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.SqliteKVStore(Agency.Sql.Sqlite.SqliteRunner! sqliteRunner, Microsoft.Extensions.Logging.ILogger<Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore!>? logger = null) -> void
+Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.UpsertAsync<TValue>(string! userId, string? sessionId, string! key, TValue value, System.Collections.Generic.IDictionary<string!, object!>? metadata = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+const Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.ActivitySourceName = "Agency.KeyValueStore.Sql.Sqlite" -> string!
+const Agency.KeyValueStore.Sql.Sqlite.SqliteKVStore.MeterName = "Agency.KeyValueStore.Sql.Sqlite" -> string!

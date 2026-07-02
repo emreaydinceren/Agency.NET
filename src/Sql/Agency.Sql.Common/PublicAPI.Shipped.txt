@@ -1,0 +1,9 @@
+#nullable enable
+abstract Agency.Sql.Common.SqlRunnerBase.BuildCommand(System.Data.Common.DbConnection! connection, string! sql, System.Collections.Generic.Dictionary<string!, object?>? parameters) -> System.Data.Common.DbCommand!
+abstract Agency.Sql.Common.SqlRunnerBase.OpenConnectionAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Data.Common.DbConnection!>!
+Agency.Sql.Common.SqlRunnerBase
+Agency.Sql.Common.SqlRunnerBase.ExecuteAsync(string! sql, System.Collections.Generic.Dictionary<string!, object?>? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.Sql.Common.SqlRunnerBase.QueryAsync(string! sql, System.Collections.Generic.Dictionary<string!, object?>? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Common.Dataset!>!
+Agency.Sql.Common.SqlRunnerBase.QueryAsync<TResult>(string! sql, System.Func<System.Data.Common.DbDataReader!, System.Threading.Tasks.Task<TResult>!>! predicate, System.Collections.Generic.Dictionary<string!, object?>? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.List<TResult>!>!
+Agency.Sql.Common.SqlRunnerBase.SqlRunnerBase(System.Diagnostics.ActivitySource! activitySource, System.Diagnostics.Metrics.Counter<long>! executionCount, System.Diagnostics.Metrics.Histogram<double>! executionDuration, string! dbSystem, Microsoft.Extensions.Logging.ILogger! logger) -> void
+readonly Agency.Sql.Common.SqlRunnerBase.Logger -> Microsoft.Extensions.Logging.ILogger!

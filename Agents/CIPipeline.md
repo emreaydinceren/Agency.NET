@@ -64,9 +64,10 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 
 - Gated on `if: startsWith(github.ref, 'refs/tags/v')` (tag-based, matching MinVer's own
   release model). Ordinary pushes to `main` build/test but never pack/notice/publish.
-- `ci-main.yaml` currently only triggers on `push: branches: [main]` — it has no `tags:`
-  trigger, so a `v*` tag push doesn't run this workflow at all yet. Publishing a real release
-  needs that trigger added (tracked separately; RT15/RT3).
+- `ci-main.yaml` triggers on both `push: branches: [main]` and `push: tags: ['v*']`, so a
+  `v*` tag push runs the job and hits the publish gate. Verified end-to-end 2026-07-02 with a
+  throwaway tag (`v0.0.1-citest1`): all 30 packages landed on the feed at the MinVer-derived
+  version, then were deleted along with the tag.
 - Third-party notices: packages embed `localhost:3000` as their repo URL; the step runs
   `socat` to forward local `:3000` → `gitea-host.example:3000` so `thirdlicense` can read license
   data from inside the `.nupkg`.

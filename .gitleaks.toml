@@ -6,6 +6,45 @@
 [extend]
 useDefault = true
 
+# Path-based rules (Secrets Scan Task 09): these config/env files are dangerous because of
+# their name/location, not because a value matches a token-format regex, so the default
+# ruleset misses them. A match here flags the file's mere presence — current tree or
+# history — regardless of content.
+[[rules]]
+id = "env-file"
+description = "Dotenv / environment file committed"
+path = '''(^|/)\.env(\..+)?$'''
+
+[[rules]]
+id = "dotnet-secrets-json"
+description = ".NET user-secrets or secrets.json committed"
+path = '''(^|/)secrets\.json$'''
+
+[[rules]]
+id = "registry-auth-file"
+description = "Package/registry auth file committed"
+path = '''(^|/)(\.npmrc|\.pypirc|\.netrc|\.dockercfg)$'''
+
+[[rules]]
+id = "db-cred-file"
+description = "DB credential file committed"
+path = '''(^|/)(\.pgpass|\.my\.cnf)$'''
+
+[[rules]]
+id = "terraform-state-or-vars"
+description = "Terraform vars/state (often live secrets)"
+path = '''(^|/).+\.(tfvars|tfstate)$'''
+
+[[rules]]
+id = "mcp-config"
+description = "MCP config may embed static API tokens"
+path = '''(^|/)\.?mcp\.json$'''
+
+[[rules]]
+id = "docker-registry-auth"
+description = "Docker registry auth config committed"
+path = '''(^|/)\.docker/config\.json$'''
+
 [allowlist]
 description = "Intended placeholders, local dev credentials, and local-only config"
 
@@ -25,4 +64,9 @@ regexes = [
 paths = [
   # Local-only, gitignored MCP config — holds a real token that is never committed.
   '''\.mcp\.json$''',
+  # Dotenv example/template files — placeholders only, safe to commit.
+  '''(^|/)\.env\.(example|sample|template)$''',
+  # Base appsettings.json files — verified 2026-07-07 (Task 09 step 5): every committed
+  # appsettings.json in the repo uses ${...} vault/placeholder references, no inline secrets.
+  '''(^|/)appsettings\.json$''',
 ]

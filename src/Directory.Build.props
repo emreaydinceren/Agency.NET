@@ -32,9 +32,4 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
-
-  <!-- Versioning: derived from git tags via MinVer (tag e.g. v0.1.0 -> package version 0.1.0) -->
-  <PropertyGroup>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
-  </PropertyGroup>
 </Project>

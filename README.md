@@ -3,7 +3,7 @@
 **Build AI agents in C# that remember, finish the job, and stay observable — not amnesiac chatbots that stop the moment they *feel* done.**
 
 [![NuGet](https://img.shields.io/nuget/v/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
-[![License](https://img.shields.io/github/license/YOUR-GH-USERNAME/Agency.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/emreaydinceren/Agency.NET.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 
 Agency is a layered toolkit for building **RAG pipelines and autonomous agents** in idiomatic C#: **embed → store → retrieve → format → chat → loop**. Every component is an interface; every backend is swappable; the agent loop is a `while` loop you can actually read.
@@ -12,7 +12,7 @@ The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thin
 
 > 📚 **New here? Start at the [documentation portal](docs/Home.md).** It maps every subsystem and links the narrative deep-dives (the agent loop, memory, Loop Kit, hooks, permissions) and the per-project reference pages.
 >
-> 🧭 **Want to see the actual code path?** Open the interactive [**Code Walkthrough**](docs/walkthrough/code-walkthrough.html) — a single self-contained HTML page that traces the life of one agent turn through `Agency.Harness.Console`, from `Program.Main` through DI wiring and the REPL wait into the `LoopRunner` → `Agent` ReAct loop and back out as streamed events. Read it top to bottom; every step carries a source excerpt and a `project · class · method` pointer.
+> 🧭 **Want to see the actual code path?** Open the interactive [**Code Walkthrough**](docs/walkthrough/code-walkthrough.html) — a single self-contained HTML page that traces the life of one agent turn through `Agency.Harness.Console`, from `Program.Main` through DI wiring and the REPL wait into the `LoopRunner` → `Agent` ReAct loop and back out as streamed events. Read it top to bottom; every step carries a source excerpt and a `project · class · method` pointer. (GitHub renders this as source, not live HTML — download it or open it locally to view it interactively.)
 
 ## Why Agency
 
@@ -515,6 +515,8 @@ Pre-1.0 and under active development. Interfaces are stabilizing but may still s
 
 ## Roadmap
 
+Agency targets `net10.0` exclusively; older runtimes (.NET 8, .NET 9, .NET Framework) are not supported, and there is no plan to multi-target. .NET 10 is the current LTS release, and single-TFM keeps `Directory.Build.props` free of `#if NET8_0_OR_GREATER`-style branching so every project can use the newest C# language surface — primary constructors, collection expressions, file-scoped namespaces — without a compatibility shim holding it back. It also keeps the dependency graph on its newest footing: `Microsoft.Extensions.AI` and the official Anthropic and OpenAI SDKs move fast, and tracking one current runtime avoids pinning the harness to an older BCL just to preserve support for a version most of the ecosystem has already moved past.
+
 The next increments are the forward problems that actually matter for long-running agents — not provider wrappers:
 
 - [ ] **Persist an armed Loop Kit goal across `--resume`** — the `Verdict` `[JsonDerivedType]` seam is already in place; this lights it up.
@@ -529,8 +531,8 @@ Issues and PRs welcome. For non-trivial changes, open an issue first so we can t
 
 ## License
 
-[Add a LICENSE file. MIT and Apache-2.0 are the standard choices for libraries you want adopted.]
+Apache License 2.0 — see [LICENSE](LICENSE).
 
 ## Author
 
-Built by [Your Name] — [LinkedIn / personal site / GitHub profile].
+Built by [Emre Aydinceren](https://github.com/emreaydinceren).

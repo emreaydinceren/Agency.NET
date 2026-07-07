@@ -20,7 +20,7 @@
 
   <ItemGroup Condition="'$(IsTestProject)' != 'true'">
     <None Include="THIRD-PARTY-NOTICES.TXT" Condition="Exists('$(MSBuildProjectDirectory)\THIRD-PARTY-NOTICES.TXT')" Pack="true" PackagePath="" />
-    <None Include="$(MSBuildThisFileDirectory)..\License.txt" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)..\NOTICE" Pack="true" PackagePath="" />
     <None Include="$(MSBuildThisFileDirectory)..\assets\Agency_128.png" Pack="true" PackagePath="" Visible="false" />
     <None Include="README.md" Pack="true" PackagePath="" />

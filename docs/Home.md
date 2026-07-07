@@ -103,6 +103,7 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 | Build, test, and run infrastructure | [`../Agents/BuildAndTest.md`](../Agents/BuildAndTest.md) |
 | C# conventions and design principles | [`../Agents/CSharpPrinciples.md`](../Agents/CSharpPrinciples.md) |
 | CI pipeline (Gitea Actions, offline functional-test cache) | [`../Agents/CIPipeline.md`](../Agents/CIPipeline.md) |
+| Cutting a release / publishing NuGet packages | [`../Agents/Releasing.md`](../Agents/Releasing.md) |
 | Bug/task trackers | [`../Agents/Trackers.md`](../Agents/Trackers.md) |
 
 ### Infrastructure at a glance

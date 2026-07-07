@@ -152,3 +152,53 @@ jobs:
               -F "package=@$pkg" \
               "http://gitea-host.example:3000/api/packages/emre/nuget/symbolpackage"
           done
+
+      - name: 🔍 Inspect & test-install published packages
+        working-directory: src
+        run: |
+          set -euo pipefail
+          apt-get update -qq && apt-get install -y -q unzip
+
+          dotnet nuget add source "http://gitea-host.example:3000/api/packages/emre/nuget/index.json" \
+            --name gitea-smoketest \
+            --username emre \
+            --password "${{ secrets.NUGETPUBLISHTOKEN }}" \
+            --store-password-in-clear-text
+
+          fail=0
+          for pkg in nupkg/*.nupkg; do
+            [ -f "$pkg" ] || continue
+            nuspec=$(unzip -p "$pkg" '*.nuspec')
+            id=$(echo "$nuspec" | grep -oP '(?<=<id>)[^<]+')
+            version=$(echo "$nuspec" | grep -oP '(?<=<version>)[^<]+')
+            echo "== $id $version =="
+
+            listing=$(unzip -l "$pkg")
+            for required in "lib/net10.0/${id}.dll" "lib/net10.0/${id}.xml" "README.md" "LICENSE" "NOTICE" "Agency_128.png"; do
+              if ! echo "$listing" | grep -qF "$required"; then
+                echo "::error::$pkg missing required entry: $required"
+                fail=1
+              fi
+            done
+            if echo "$listing" | grep -qi '\.pdb$'; then
+              echo "::error::$pkg contains a stray .pdb (symbols must ship in the .snupkg only)"
+              fail=1
+            fi
+            if echo "$listing" | grep -qi '\.cs$'; then
+              echo "::error::$pkg contains loose .cs source (sources should be embedded, not shipped as files)"
+              fail=1
+            fi
+
+            work=$(mktemp -d)
+            cp -r ../PackageSmokeTest "$work/harness"
+            if ! dotnet add "$work/harness/Agency.PackageSmokeTest.csproj" package "$id" --version "$version" --source gitea-smoketest; then
+              echo "::error::$id $version failed to restore from the Gitea feed"
+              fail=1
+            elif ! dotnet run --project "$work/harness/Agency.PackageSmokeTest.csproj" -- "$id"; then
+              echo "::error::$id $version installed but failed to load"
+              fail=1
+            fi
+            rm -rf "$work"
+          done
+
+          exit $fail

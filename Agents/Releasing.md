@@ -4,22 +4,29 @@ How to actually ship packages to the Gitea NuGet feed: why publish is gated the 
 exact chain of components involved, and the runbook for both a real release and a disposable
 dry-run test.
 
-## Why gate publish on a tag
+## Why the Gitea feed publishes on every push
 
-Every push to `main` builds and tests. Only a few of those commits should actually become a
-published package version — publishing is a deliberate, auditable act, not a side effect of
-merging. The gate has to answer one question: *"is this commit a release?"*
+Every push to `main` builds and tests. Historically only tagged commits could become a published
+package version — publishing was treated as a deliberate, auditable act, not a side effect of
+merging.
 
-The original gate answered it with `steps.version.outputs.revision == '0'`, grepped out of a
-hand-maintained `<Revision>` field in `Directory.Build.props`. That's fragile — a stray edit to
-a numeric field silently flips publish behavior, with no audit trail, and it broke outright when
-RT2 migrated versioning to MinVer and removed `<Revision>` entirely (three real CI failures; see
-the reflection in [`CIPipeline.md`](CIPipeline.md)).
+The original gate answered "is this commit a release?" with `steps.version.outputs.revision == '0'`,
+grepped out of a hand-maintained `<Revision>` field in `Directory.Build.props`. That's fragile — a
+stray edit to a numeric field silently flips publish behavior, with no audit trail, and it broke
+outright when RT2 migrated versioning to MinVer and removed `<Revision>` entirely (three real CI
+failures; see the reflection in [`CIPipeline.md`](CIPipeline.md)).
 
-RT16 replaced it with `if: startsWith(github.ref, 'refs/tags/v')` — "is this commit a release" is
-answered independently of "what version is this": *is there a `v*` tag pointing at it?* That tag
-check no longer has to agree with the versioning tool's own logic (RT47 replaced MinVer's
-tag-as-version-source with NBGV's git-height scheme — see below), it's purely a workflow gate.
+RT16 replaced it with `if: startsWith(github.ref, 'refs/tags/v')` — a pure workflow gate,
+independent of the versioning tool's own logic.
+
+**RT49 removed that gate entirely for the Gitea feed.** Once NBGV (RT47) made every commit's
+version a deterministic, monotonic `0.1.<height>-g<sha>`, there was no longer a reason to withhold
+publishing from ordinary `main` pushes — the private Gitea feed is low-risk, so it now publishes
+*everything that passes CI*: a plain push lands a `-g<sha>` prerelease, a `v*` tag lands the
+matching clean stable version (via `version.json`'s `publicReleaseRefSpec`). The tag-gated model
+described above is retained here for history; **it no longer reflects `ci-main.yaml`'s actual
+behavior.** A tag-based gate still applies to the *future* nuget.org publish path (RT15) — that
+one stays deliberate, since a public release is effectively unpublishable.
 
 ## The components in play
 
@@ -29,7 +36,7 @@ In the order they act when you push a `v*` tag:
 |---|---|---|
 | 1 | **The git tag itself** (`v<version>`) | The *trigger* — matched against the workflow's `tags:` filter. Since RT47, it no longer doubles as the version source; NBGV computes the version from `version.json` + git height regardless of tags, and `publicReleaseRefSpec` in `version.json` (`^refs/tags/v\d+\.\d+`) only decides whether that computed version is a clean *public release* build or a `-g<sha>` prerelease. |
 | 2 | **`.gitea/workflows/ci-main.yaml` → `on.push`** | `branches: [main]` (build+test every push) plus `tags: ['v*']` (also run on a version tag). Actions resolves *which* workflow triggers run by reading the workflow file **as it exists at the pushed ref** — a tag can only trigger this job if the commit it points to already contains a `ci-main.yaml` with the `tags:` filter. (This is exactly what was missing until 2026-07-02 — see Known gotchas.) |
-| 3 | **The three gated steps** in `build-and-publish` (📋 notices, 📦 pack, 🚀 publish) | Each has `if: startsWith(github.ref, 'refs/tags/v')`. For a tag push, `github.ref` is `refs/tags/<tagname>`, so this is true only when the ref is a `v`-prefixed tag — never for an ordinary branch push. |
+| 3 | **The three notices/pack/publish steps** in `build-and-publish` (📋 notices, 📦 pack, 🚀 publish) | Unconditional since RT49 (no `if:` gate) — they run on every `main` push and every `v*` tag push alike. NBGV determines whether the resulting package is a `-g<sha>` prerelease or a clean stable version; the workflow no longer distinguishes the two cases itself. |
 | 4 | **Nerdbank.GitVersioning** (`GlobalPackageReference` in `Directory.Packages.props`; `version.json` at the repo root) | At build/pack time, computes `major.minor` from `version.json`'s `version` field and the patch from **git height** — commits since that field last changed. Every commit gets a real, monotonic version (`0.1.<height>-g<sha>`); a tag matching `publicReleaseRefSpec` strips the `-g<sha>` suffix for a clean stable version. Needs full git history to count height, which is exactly what RT48 (un-shallowing CI checkouts) provides. |
 | 5 | **Checkout step** | `git clone --branch "$BRANCH"` (full clone since RT48) then `checkout $GITHUB_SHA`. |
 | 6 | **`dotnet build` / `dotnet pack`** | `IncludeSymbols=true` + `SymbolPackageFormat=snupkg` (in `Directory.Build.props`) means pack also emits a `.snupkg` per project. The vestigial `/p:BuildNumber=${{ github.run_number }}` (a no-op left over from pre-MinVer versioning) was dropped by RT47 — NBGV owns the version now. |
@@ -47,8 +54,8 @@ In the order they act when you push a `v*` tag:
    `git tag -a v<version> -m "<summary>"` (annotated, not lightweight — carries a message).
 4. `git push origin v<version>`.
 5. Watch Gitea Actions for the new tag-triggered `ci-main` run. Confirm `build-and-publish`'s
-   notices/pack/publish steps show `success`, not `skipped` — `skipped` means the tag didn't
-   match the gate (wrong prefix, or the ref wasn't actually a tag push).
+   notices/pack/publish steps show `success` (they run unconditionally now, so `skipped` would
+   mean the job never reached them — e.g. an earlier step failed).
 6. Verify the packages landed: check the Gitea package registry for the new version across all
    packable projects (currently ~30).
 7. There's no public mirror or changelog automation yet — this only reaches the private Gitea

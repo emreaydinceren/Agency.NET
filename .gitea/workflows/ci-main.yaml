@@ -103,7 +103,6 @@ jobs:
           done
 
       - name: 📋 Generate third-party notices
-        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
         run: |
           # Agency packages embed localhost:3000 as repository URL; forward to actual Gitea host
@@ -120,12 +119,10 @@ jobs:
           kill $SOCAT_PID 2>/dev/null || true
 
       - name: 📦 Pack NuGet packages
-        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
         run: dotnet pack --configuration Release --no-build --output ./nupkg
 
       - name: 🚀 Publish NuGet packages
-        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
         run: |
           for pkg in nupkg/*.nupkg; do

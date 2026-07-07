@@ -23,7 +23,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           AUTH_URL="${GITHUB_SERVER_URL/http:\/\//http:\/\/x-access-token:$GIT_TOKEN@}"
           BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          git clone --depth=1 --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
+          git clone --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
       - name: 🔐 Install gitleaks
@@ -70,7 +70,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           AUTH_URL="${GITHUB_SERVER_URL/http:\/\//http:\/\/x-access-token:$GIT_TOKEN@}"
           BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          git clone --depth=1 --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
+          git clone --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
       - name: 📦 Restore dependencies

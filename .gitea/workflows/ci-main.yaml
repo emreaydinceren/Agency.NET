@@ -24,7 +24,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           AUTH_URL="${GITHUB_SERVER_URL/http:\/\//http:\/\/x-access-token:$GIT_TOKEN@}"
           BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          git clone --depth=1 --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
+          git clone --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
       - name: 🔐 Install gitleaks
@@ -71,7 +71,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           AUTH_URL="${GITHUB_SERVER_URL/http:\/\//http:\/\/x-access-token:$GIT_TOKEN@}"
           BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          git clone --depth=1 --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
+          git clone --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
       - name: 📦 Restore dependencies
@@ -80,7 +80,7 @@ jobs:
 
       - name: 🛠️ Build Solution
         working-directory: src
-        run: dotnet build --configuration Release --no-restore /p:BuildNumber=${{ github.run_number }}
+        run: dotnet build --configuration Release --no-restore
 
       - name: 🧪 Run Unit Tests
         working-directory: src
@@ -122,7 +122,7 @@ jobs:
       - name: 📦 Pack NuGet packages
         if: startsWith(github.ref, 'refs/tags/v')
         working-directory: src
-        run: dotnet pack --configuration Release --no-build /p:BuildNumber=${{ github.run_number }} --output ./nupkg
+        run: dotnet pack --configuration Release --no-build --output ./nupkg
 
       - name: 🚀 Publish NuGet packages
         if: startsWith(github.ref, 'refs/tags/v')

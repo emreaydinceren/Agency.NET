@@ -45,6 +45,44 @@ id = "docker-registry-auth"
 description = "Docker registry auth config committed"
 path = '''(^|/)\.docker/config\.json$'''
 
+# PII / operational-infra rules (Secrets Scan Task 10): valid, non-secret strings that
+# still shouldn't be public — personal email, internal LAN hostnames, private IPs, and
+# webhook URLs that embed a token. gitleaks ships no default rules for these.
+[[rules]]
+id = "personal-email"
+description = "Maintainer personal email"
+regex = '''emrea@outlook\.com'''
+
+[[rules]]
+id = "generic-personal-email"
+description = "Any bare email address (triage: real vs example/placeholder via allowlist)"
+regex = '''[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'''
+
+[[rules]]
+id = "internal-mdns-host"
+description = "Personal/internal .local (mDNS) hostname — must be followed by a URL/text delimiter, not another dot, so *.local.json / *.local.xml filenames don't match"
+regex = '''\b[a-z0-9][a-z0-9-]*\.local(?::[0-9]+)?(?:[/'"`:;,)\]}<>|\s]|$)'''
+
+  [rules.allowlist]
+  description = "Known, deliberately-retained real hosts (Secrets Scan Task 10 triage, 2026-07-07): source config keeps the real host on purpose per releaseplan.md WS1 (avoids local-override gymnastics for functional tests); CI workflow host-externalization and the history purge are RT35 scope, not this gate. Scrubbed only via the RT35 git filter-repo rewrite, not the tracked tip."
+  paths = [
+    '''(^|/)\.gitea/workflows/ci-main\.yaml$''',
+    '''(^|/)docker/docker run$''',
+    '''(^|/)src/NuGet\.Config$''',
+    '''(^|/)src/shared-appsettings\.json$''',
+    '''(^|/)src/SetupLocal\.ps1$''',
+  ]
+
+[[rules]]
+id = "private-ipv4"
+description = "Private / RFC1918 IP address committed"
+regex = '''\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b'''
+
+[[rules]]
+id = "chat-webhook-url"
+description = "Slack/Discord/Teams webhook URL (embeds a token)"
+regex = '''https://(hooks\.slack\.com/services/[A-Za-z0-9/_-]+|discord(app)?\.com/api/webhooks/\d+/[A-Za-z0-9._-]+|[a-z0-9.]*webhook\.office\.com/[A-Za-z0-9@/_-]+)'''
+
 [allowlist]
 description = "Intended placeholders, local dev credentials, and local-only config"
 
@@ -59,6 +97,14 @@ regexes = [
   '''dev_db''',
   # LM Studio's placeholder API key (any value works; the local server ignores it)
   '''lm-studio''',
+  # Deliberate neutral test hosts used in docs/tests (Secrets Scan Task 10) — not real leaks
+  '''llm\.test''',
+  '''example\.local''',
+  '''\blocalhost\b''',
+  '''127\.0\.0\.1''',
+  '''example\.(com|org)''',
+  # Bot/commit noreply addresses, incl. the maintainer's chosen public GitHub noreply identity
+  '''noreply@''',
 ]
 
 paths = [

@@ -14,10 +14,10 @@ a red CI run — most failures here are environmental, not code regressions.
   - `ci-main.yaml` — on push to `main`. Same test steps, then version gate → third-party
     notices → NuGet pack → publish.
   - Both `paths-ignore: docs/**`.
-- **Backing services reachable from the runner** (the runner is hosted on the `llm-host.example`
-  machine, so these resolve):
+- **Backing services reachable from the runner** (the runner is hosted on the
+  `runner-host.example` machine, so these resolve):
   - PostgreSQL — via `ConnectionStrings__PostgreSql` secret.
-  - HTTP cache proxy — `http://llm-host.example:12345` (the **standalone `Agency.HttpCacheProxy` repo**).
+  - HTTP cache proxy — `http://runner-host.example:12345` (the **standalone `Agency.HttpCacheProxy` repo**).
   - LM Studio — `http://llm.test:1234` (proxy's upstream on a miss).
 
 ## Checkout is manual
@@ -43,7 +43,7 @@ token-injected URL, then `checkout $GITHUB_SHA`. Implications:
 ### Functional tests run OFFLINE via the cache proxy
 
 CI cannot do live, non-deterministic LLM calls reliably. Instead, functional tests point their
-client base URL at the HTTP cache proxy (`llm-host.example:12345`), which **replays recorded responses**
+client base URL at the HTTP cache proxy (`runner-host.example:12345`), which **replays recorded responses**
 keyed by an exact hash of the request:
 
 ```
@@ -83,13 +83,13 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
    the `E1.x`/`E2.3` lines) print "Distillation failed ..." on purpose and still **pass**. Find
    the line that actually says `Failed: 1` / `[FAIL]` for the *named* test.
 3. **Reproduce locally against the same proxy** (`appsettings.json` already points at
-   `llm-host.example:12345`):
+   `runner-host.example:12345`):
    `dotnet test <proj> -c Release --filter "FullyQualifiedName~<TestClass>" -- RunConfiguration.MaxCpuCount=1`.
    - Passes locally but fails in CI → environment/cache divergence (OS, line endings, env vars),
      **not** a logic bug.
-4. **Confirm cache hits.** Cassettes are in `E:\Repos\Agency.HttpCacheProxy\src\Agency.Utils.HttpCacheProxy\cache`.
-   Decode a blob's base64 `Body` to see the recorded response. The proxy was recorded on
-   **Windows (CRLF)** — see below.
+4. **Confirm cache hits.** Cassettes are in the sibling `Agency.HttpCacheProxy` checkout, under
+   `src/Agency.Utils.HttpCacheProxy/cache`. Decode a blob's base64 `Body` to see the recorded
+   response. The proxy was recorded on **Windows (CRLF)** — see below.
 
 ## Known failure modes (check these first)
 

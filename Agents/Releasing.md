@@ -39,10 +39,11 @@ In the order they act when you push a `v*` tag:
 | 3 | **The three notices/pack/publish steps** in `build-and-publish` (📋 notices, 📦 pack, 🚀 publish) | Unconditional since RT49 (no `if:` gate) — they run on every `main` push and every `v*` tag push alike. NBGV determines whether the resulting package is a `-g<sha>` prerelease or a clean stable version; the workflow no longer distinguishes the two cases itself. |
 | 4 | **Nerdbank.GitVersioning** (`GlobalPackageReference` in `Directory.Packages.props`; `version.json` at the repo root) | At build/pack time, computes `major.minor` from `version.json`'s `version` field and the patch from **git height** — commits since that field last changed. Every commit gets a real, monotonic version (`0.1.<height>-g<sha>`); a tag matching `publicReleaseRefSpec` strips the `-g<sha>` suffix for a clean stable version. Needs full git history to count height, which is exactly what RT48 (un-shallowing CI checkouts) provides. |
 | 5 | **Checkout step** | `git clone --branch "$BRANCH"` (full clone since RT48) then `checkout $GITHUB_SHA`. |
-| 6 | **`dotnet build` / `dotnet pack`** | `IncludeSymbols=true` + `SymbolPackageFormat=snupkg` (in `Directory.Build.props`) means pack also emits a `.snupkg` per project. The vestigial `/p:BuildNumber=${{ github.run_number }}` (a no-op left over from pre-MinVer versioning) was dropped by RT47 — NBGV owns the version now. |
-| 7 | **Third-party notices step** | Installs `socat` to forward local `:3000` → `gitea-host.example:3000` (packages embed `localhost:3000` as their repo URL; `thirdlicense` reads that URL from inside the built `.nupkg`), installs the `thirdlicense` global tool, runs it per packable project. Doesn't affect versioning — purely license-notice generation. |
-| 8 | **Publish step** | Loops `nupkg/*.nupkg` then `nupkg/*.snupkg`, `curl --fail -X PUT -H "Authorization: token $NUGETPUBLISHTOKEN"` to `http://gitea-host.example:3000/api/packages/emre/nuget` (and `/symbolpackage` for `.snupkg`). `NUGETPUBLISHTOKEN` is a Gitea Actions repo secret scoped to `emre`'s package registry. |
-| 9 | **The Gitea NuGet feed** | Where it lands. Browse via `mcp__gitea__package_read` (`type=nuget`, `owner=emre`) or `http://gitea-host.example:3000/emre/-/packages/nuget/<name>/<version>`. |
+| 6 | **Tag-assertion step** (RT50, tag pushes only) | Installs the `nbgv` CLI and compares `nbgv get-version -v NuGetPackageVersion` against the pushed tag name (`$GITHUB_REF_NAME` minus its `v` prefix); fails the job on any mismatch. Guards against the one failure mode NBGV *introduces*: since the tag no longer sets the version, a hand-typed tag can silently disagree with what NBGV actually computes. Always cut releases with `nbgv tag`, never `git tag`, and this step never fires. |
+| 7 | **`dotnet build` / `dotnet pack`** | `IncludeSymbols=true` + `SymbolPackageFormat=snupkg` (in `Directory.Build.props`) means pack also emits a `.snupkg` per project. The vestigial `/p:BuildNumber=${{ github.run_number }}` (a no-op left over from pre-MinVer versioning) was dropped by RT47 — NBGV owns the version now. |
+| 8 | **Third-party notices step** | Installs `socat` to forward local `:3000` → `gitea-host.example:3000` (packages embed `localhost:3000` as their repo URL; `thirdlicense` reads that URL from inside the built `.nupkg`), installs the `thirdlicense` global tool, runs it per packable project. Doesn't affect versioning — purely license-notice generation. |
+| 9 | **Publish step** | Loops `nupkg/*.nupkg` then `nupkg/*.snupkg`, `curl --fail -X PUT -H "Authorization: token $NUGETPUBLISHTOKEN"` to `http://gitea-host.example:3000/api/packages/emre/nuget` (and `/symbolpackage` for `.snupkg`). `NUGETPUBLISHTOKEN` is a Gitea Actions repo secret scoped to `emre`'s package registry. |
+| 10 | **The Gitea NuGet feed** | Where it lands. Browse via `mcp__gitea__package_read` (`type=nuget`, `owner=emre`) or `http://gitea-host.example:3000/emre/-/packages/nuget/<name>/<version>`. |
 
 ## How to cut a real release
 
@@ -50,12 +51,20 @@ In the order they act when you push a `v*` tag:
    tag today as pre-1.0 unless that's been explicitly resolved.
 2. Confirm `main` has everything you want shipped, and that its `ci-main.yaml` already has the
    `tags: ['v*']` trigger (true since PR #124 / 2026-07-02).
-3. From `main`, tag the exact commit you want the version to represent:
-   `git tag -a v<version> -m "<summary>"` (annotated, not lightweight — carries a message).
-4. `git push origin v<version>`.
-5. Watch Gitea Actions for the new tag-triggered `ci-main` run. Confirm `build-and-publish`'s
-   notices/pack/publish steps show `success` (they run unconditionally now, so `skipped` would
-   mean the job never reached them — e.g. an earlier step failed).
+3. From `main`, at the commit you want to ship, run `nbgv tag`. **Never hand-type a release tag**
+   (`git tag v<version>`) — since RT47, the tag no longer *sets* the version (git height does), so
+   a hand-typed tag can silently disagree with what NBGV actually computes: tag `v0.1.99` on a
+   commit NBGV resolves to `0.1.7` would ship a `0.1.7` package under a `99` tag. `nbgv tag` reads
+   NBGV's own computed version for that commit and creates the matching `v<x.y.z>` tag, so tag and
+   package can never drift. (Preview the tag name first with `nbgv tag --what-if`; install the CLI
+   once with `dotnet tool install --global nbgv` if you don't have it.)
+4. `git push origin v<x.y.z>` (the exact tag `nbgv tag` created — check its output or
+   `git describe --tags`).
+5. Watch Gitea Actions for the new tag-triggered `ci-main` run. The first `build-and-publish` step
+   asserts the pushed tag matches NBGV's computed version and fails the job on mismatch — see
+   Known gotchas below if it does. Confirm the notices/pack/publish steps show `success` (they run
+   unconditionally now, so `skipped` would mean the job never reached them — e.g. an earlier step
+   failed).
 6. Verify the packages landed: check the Gitea package registry for the new version across all
    packable projects (currently ~30).
 7. There's no public mirror or changelog automation yet — this only reaches the private Gitea
@@ -64,18 +73,23 @@ In the order they act when you push a `v*` tag:
 
 ## Dry-run testing without a real release
 
-The playbook used to validate RT16 end-to-end, safe to repeat:
+Since RT50, an obviously-fake hand-typed tag (the old way to dry-run this) no longer reaches
+publish at all — it now fails fast at the tag-assertion step, because `nbgv tag` is the only way
+to produce a tag that matches NBGV's computed version. That's the intended behavior, not a bug in
+the dry-run:
 
-1. Pick an obviously-disposable prerelease tag — e.g. `v0.0.1-citestN` — never something that
-   could be mistaken for a real version.
-2. `git tag -a v0.0.1-citestN -m "throwaway, will be deleted"` then
-   `git push origin v0.0.1-citestN`.
-3. Confirm the run and packages as in steps 5–6 above.
-4. Clean up immediately: delete every package at that test version (`mcp__gitea__package_write`
-   `method=delete`, once per package name — there's no bulk delete), then delete the tag both
-   remotely (`git push origin --delete <tag>`) and locally (`git tag -d <tag>`).
-5. This publishes to the *real* feed — there's no separate staging feed. It's low-risk only
-   because the feed is private/internal, not nuget.org.
+1. Hand-type a tag that can't match the current computed version, e.g. `git tag v0.0.1-citestN`
+   (lightweight is fine — this is deliberately wrong, not a release).
+2. `git push origin v0.0.1-citestN`.
+3. Confirm the tag-triggered `ci-main` run **fails** at "Assert tag matches computed version" with
+   a mismatch error, and never reaches restore/build/pack/publish.
+4. Clean up: delete the tag remotely (`git push origin --delete v0.0.1-citestN`) and locally
+   (`git tag -d v0.0.1-citestN`). No packages were published, so there's nothing to delete there.
+
+There's no longer a way to dry-run the *stable publish* path disposably — `nbgv tag` always names
+the tag after the real computed version, so a tag it creates is indistinguishable from cutting an
+actual release. That path was already exercised once during the RT47/RT48 rollout; it doesn't need
+a standing recipe.
 
 ## Known gotchas
 
@@ -84,6 +98,10 @@ The playbook used to validate RT16 end-to-end, safe to repeat:
 - **NBGV needs full history, not just the tagged commit.** Unlike MinVer, NBGV counts git height
   rather than searching for a tag, so a shallow clone always yields height 0 (`0.0.x`). RT48
   removed `--depth=1` from both checkout steps for exactly this reason — don't reintroduce it.
+- **Tag ≠ version drift (RT50).** The tag no longer sets the version, so a hand-typed release tag
+  can silently disagree with what NBGV actually computes. Always use `nbgv tag`; the tag-assertion
+  step in `build-and-publish` fails the build if a pushed `v*` tag doesn't match
+  `nbgv get-version -v NuGetPackageVersion` anyway, so a mismatch is caught, not shipped.
 - **Publishing here ≠ a public release.** This is Emre's private Gitea feed only. Public
   nuget.org publishing is a separate, not-yet-built pipeline (RT15).
 - **No "unpublish" workflow.** Cleanup after a mistaken publish is a manual per-package delete

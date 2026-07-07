@@ -74,6 +74,19 @@ jobs:
           git clone --branch "$BRANCH" "$AUTH_URL/$GITHUB_REPOSITORY.git" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" -c advice.detachedHead=false checkout "$GITHUB_SHA"
 
+      - name: 🔖 Assert tag matches computed version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          dotnet tool install --global nbgv
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          COMPUTED_VERSION=$(nbgv get-version -v NuGetPackageVersion)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$COMPUTED_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match NBGV's computed version $COMPUTED_VERSION — always create release tags with 'nbgv tag', never by hand."
+            exit 1
+          fi
+          echo "Tag v$TAG_VERSION matches computed version $COMPUTED_VERSION"
+
       - name: 📦 Restore dependencies
         working-directory: src
         run: dotnet restore

@@ -63,6 +63,16 @@ id = "internal-mdns-host"
 description = "Personal/internal .local (mDNS) hostname — must be followed by a URL/text delimiter, not another dot, so *.local.json / *.local.xml filenames don't match"
 regex = '''\b[a-z0-9][a-z0-9-]*\.local(?::[0-9]+)?(?:[/'"`:;,)\]}<>|\s]|$)'''
 
+  [rules.allowlist]
+  description = "Known, deliberately-retained real hosts (Secrets Scan Task 10 triage, 2026-07-07): source config keeps the real host on purpose per releaseplan.md WS1 (avoids local-override gymnastics for functional tests); CI workflow host-externalization and the history purge are RT35 scope, not this gate. Scrubbed only via the RT35 git filter-repo rewrite, not the tracked tip."
+  paths = [
+    '''(^|/)\.gitea/workflows/ci-main\.yaml$''',
+    '''(^|/)docker/docker run$''',
+    '''(^|/)src/NuGet\.Config$''',
+    '''(^|/)src/shared-appsettings\.json$''',
+    '''(^|/)src/SetupLocal\.ps1$''',
+  ]
+
 [[rules]]
 id = "private-ipv4"
 description = "Private / RFC1918 IP address committed"

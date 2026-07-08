@@ -44,6 +44,7 @@ In the order they act when you push a `v*` tag:
 | 8 | **Third-party notices step** | Installs `socat` to forward local `:3000` → `gitea-host.example:3000` (packages embed `localhost:3000` as their repo URL; `thirdlicense` reads that URL from inside the built `.nupkg`), installs the `thirdlicense` global tool, runs it per packable project. Doesn't affect versioning — purely license-notice generation. |
 | 9 | **Publish step** | Loops `nupkg/*.nupkg` then `nupkg/*.snupkg`, `curl --fail -X PUT -H "Authorization: token $NUGETPUBLISHTOKEN"` to `http://gitea-host.example:3000/api/packages/emre/nuget` (and `/symbolpackage` for `.snupkg`). `NUGETPUBLISHTOKEN` is a Gitea Actions repo secret scoped to `emre`'s package registry. |
 | 10 | **The Gitea NuGet feed** | Where it lands. Browse via `mcp__gitea__package_read` (`type=nuget`, `owner=emre`) or `http://gitea-host.example:3000/emre/-/packages/nuget/<name>/<version>`. |
+| 11 | **Inspect & test-install step (RT39)** | Runs after the publish step, on every push (same "everything that passes CI" scope as publish, not just tags). For each just-published `.nupkg`: reads its `.nuspec` for id/version, checks `unzip -l` for the DLL, `.xml` doc, `README.md`, `LICENSE`, `NOTICE`, and icon (and fails on a stray `.pdb` or loose `.cs`), then copies `src/PackageSmokeTest` (a small committed console harness — never packed, not in `Agency.slnx`) to a scratch dir, `dotnet add package`s that id/version **from the Gitea feed itself** (proving a consumer's restore actually works, not just that the local build succeeded), and runs it: `Agency.PackageSmokeTest` loads the package's main assembly via reflection and forces type resolution, catching a missing transitive dependency or wrong target framework that content inspection alone would miss. Collects failures across all ~30 packages before failing the job, so one bad package doesn't hide problems in the rest. |
 
 ## How to cut a real release
 
@@ -65,9 +66,13 @@ In the order they act when you push a `v*` tag:
    Known gotchas below if it does. Confirm the notices/pack/publish steps show `success` (they run
    unconditionally now, so `skipped` would mean the job never reached them — e.g. an earlier step
    failed).
-6. Verify the packages landed: check the Gitea package registry for the new version across all
+6. Confirm the **inspect & test-install step (RT39)** is green too — it's the last thing standing
+   between this Gitea-feed publish and any future public push (RT51/RT15). A red run here means a
+   packaging defect (missing README/XML/icon, a stray `.pdb`, or a package that can't actually be
+   restored from the feed) that content inspection alone wouldn't have caught.
+7. Verify the packages landed: check the Gitea package registry for the new version across all
    packable projects (currently ~30).
-7. There's no public mirror or changelog automation yet — this only reaches the private Gitea
+8. There's no public mirror or changelog automation yet — this only reaches the private Gitea
    feed. Publishing to nuget.org needs RT15 (a separate GitHub Actions workflow); changelog
    generation is RT19. Both still backlog.
 
@@ -106,6 +111,11 @@ a standing recipe.
   nuget.org publishing is a separate, not-yet-built pipeline (RT15).
 - **No "unpublish" workflow.** Cleanup after a mistaken publish is a manual per-package delete
   (see Dry-run steps above), not a single revert.
+- **RT39's test-install step assumes `NUGETPUBLISHTOKEN` also works for read.** It registers the
+  Gitea feed as a NuGet source with `--username emre --password $NUGETPUBLISHTOKEN` to restore the
+  just-published package back out. This is the standard Gitea package-registry auth pattern, but it
+  hasn't been exercised against the live feed yet — if the first real run 401s on the restore, the
+  token's scope (or the username) is the first thing to check.
 
 ## Related
 

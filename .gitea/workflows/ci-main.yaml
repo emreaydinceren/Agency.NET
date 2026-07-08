@@ -91,6 +91,15 @@ jobs:
         working-directory: src
         run: dotnet restore
 
+      - name: 🔒 Check for vulnerable dependencies
+        working-directory: src
+        run: |
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee vuln-scan.log
+          if grep -q "has the following vulnerable packages" vuln-scan.log; then
+            echo "::error::Vulnerable dependency detected — see log above. Bump the version in Directory.Packages.props (see the SQLitePCLRaw entry for a transitive-pin example)."
+            exit 1
+          fi
+
       - name: 🛠️ Build Solution
         working-directory: src
         run: dotnet build --configuration Release --no-restore

@@ -32,6 +32,9 @@ permissions.local.json
 # Personal Obsidian vault paths — not meaningful/accessible to public contributors
 Agents/Trackers.md
 
+# Personal/local-only scratch folder
+PRIVATE/
+
 # User-specific files
 *.rsuser
 *.suo

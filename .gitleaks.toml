@@ -105,6 +105,9 @@ regexes = [
   '''example\.(com|org)''',
   # Bot/commit noreply addresses, incl. the maintainer's chosen public GitHub noreply identity
   '''noreply@''',
+  # GitHub's numbered per-user noreply format (id+username@users.noreply.github.com) — "noreply"
+  # lands after the @, not before it, so the rule above doesn't catch it.
+  '''\d+\+[\w-]+@users\.noreply\.github\.com''',
 ]
 
 paths = [

@@ -215,7 +215,7 @@ and masked by the earlier NuGet-source-collision failure (fixed in PR #139); onc
 earlier failure was fixed, execution reached this line for the first time and exposed it.
 
 **Root cause (redaction never landed):** PR #139 was merged at `13:29:38`, but the commit that
-redacted the `gitea-host.example` hostname (`6cb4c6a`) was pushed to the PR's branch at `13:37:57` —
+redacted the real internal hostname (`6cb4c6a`) was pushed to the PR's branch at `13:37:57` —
 **after** the PR was already merged and closed. Pushing to a closed PR's branch does not
 retroactively update `main`; the commit was stranded. `git merge-base --is-ancestor 6cb4c6a
 origin/main` confirmed it was not an ancestor, despite the Gitea API's `pull_request_read`
@@ -227,9 +227,9 @@ matching PR #139's `merge_commit_sha` exactly (via `pull_request_read`). `git lo
 commit), i.e. off to the side of `main`'s history rather than inside it.
 
 **Fix:** created a new branch directly off current `origin/main` (rather than reusing/rebasing
-the now-merged `fix/ci-nuget-smoketest-source` branch) and applied both fixes fresh: the
-`gitea-host.example` → `gitea-host.example` redaction in this file, and `cp -r ../PackageSmokeTest`
-→ `cp -r PackageSmokeTest` in `ci-main.yaml`.
+the now-merged `fix/ci-nuget-smoketest-source` branch) and applied both fixes fresh: re-redacted
+the real hostname to the `gitea-host.example` placeholder in this file, and `cp -r
+../PackageSmokeTest` → `cp -r PackageSmokeTest` in `ci-main.yaml`.
 
 **Lessons for future agents:**
 - Once a PR is merged, further commits pushed to its (now-closed) branch do **not** reach

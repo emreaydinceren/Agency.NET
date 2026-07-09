@@ -16,7 +16,11 @@ a red CI run — most failures here are environmental, not code regressions.
   - Both `paths-ignore: docs/**`.
 - **Backing services reachable from the runner** (the runner is hosted on the
   `runner-host.example` machine, so these resolve):
-  - PostgreSQL — via `ConnectionStrings__PostgreSql` secret.
+  - PostgreSQL — an ephemeral `services:` container (`pgvector/pgvector:pg18-trixie`), same
+    pattern as `.github/workflows/ci.yaml`. `ConnectionStrings__PostgreSql` is hardcoded to
+    `Host=postgres;...` (service name, not `localhost`) — no secret involved. Gitea Actions
+    (act_runner in Docker mode) supports job-level `services:` the same as GitHub Actions; it's
+    only missing a dedicated log section in the UI, not the functionality itself.
   - HTTP cache proxy — `http://runner-host.example:12345` (the **standalone `Agency.HttpCacheProxy` repo**).
   - LM Studio — `http://llm.test:1234` (proxy's upstream on a miss).
 

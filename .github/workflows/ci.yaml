@@ -1,0 +1,64 @@
+name: CI (GitHub)
+
+# Runs a subset of the Gitea CI suite on GitHub-hosted runners: unit tests plus the
+# functional tests that only need PostgreSQL. GitHub-hosted runners have no route to
+# the self-hosted HTTP cache proxy or LM Studio (see Agents/CIPipeline.md), so any
+# functional test with a hard LLM dependency is excluded via `Category!=RequiresLlm`.
+# Tests that only *optionally* touch an LLM (i.e. they probe reachability and call
+# Assert.Skip when it's absent — see Agency.Memory.Functional.Test) are NOT excluded;
+# they run for real against Postgres and self-skip their LLM-gated portions.
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18-trixie
+        env:
+          POSTGRES_USER: dev_user
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: dev_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The job runs inside a container on the same Docker network as the `postgres`
+      # service, so it's reachable by service name — NOT `localhost`.
+      ConnectionStrings__PostgreSql: Host=postgres;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Restore dependencies
+        working-directory: src
+        # src/NuGet.Config also lists baget-local/gitea-local, pointing at a self-hosted feed
+        # unreachable from a GitHub-hosted runner. Every package here resolves from nuget.org,
+        # so downgrade unreachable-source failures to warnings instead of failing restore.
+        run: dotnet restore --ignore-failed-sources
+
+      - name: 🛠️ Build Solution
+        working-directory: src
+        run: dotnet build --configuration Release --no-restore
+
+      - name: 🧪 Run Unit Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional"
+
+      - name: 🧪 Run Postgres-only Functional Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud&Category!=RequiresLlm"

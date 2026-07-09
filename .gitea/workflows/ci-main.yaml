@@ -171,10 +171,15 @@ jobs:
           # src/NuGet.Config already defines "gitea-local" pointing at this same feed URL;
           # `dotnet nuget add source` rejects a second source with a duplicate URL, so update
           # the existing source with credentials instead of adding a new one.
+          # `dotnet nuget update source` rewrites the whole entry and drops any attribute it
+          # doesn't itself manage, silently stripping the checked-in `allowInsecureConnections`
+          # — re-assert it here or the copied NuGet.Config below restores over plain HTTP and
+          # fails with NU1302.
           dotnet nuget update source gitea-local \
             --username emre \
             --password "${{ secrets.NUGETPUBLISHTOKEN }}" \
-            --store-password-in-clear-text
+            --store-password-in-clear-text \
+            --allow-insecure-connections
 
           fail=0
           for pkg in nupkg/*.nupkg; do

@@ -104,6 +104,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | `build-and-publish` fails at a "Read package revision"-style step right after a versioning change | A gate step greps a field that a prior commit removed/renamed; empty grep + `bash -e -o pipefail` → exit 1 | Check what the *previous* merge to `main` changed in versioning/build props before assuming a code regression |
 | "🔍 Inspect & test-install published packages" fails: `error: The source specified has already been added` | `src/NuGet.Config` already registers `gitea-local` at the same feed URL the step tries to add as `gitea-smoketest`; `dotnet nuget add source` dedupes by URL, not name | Use `dotnet nuget update source gitea-local --username … --password … --store-password-in-clear-text` instead of adding a new source, and point `dotnet add package --source` at `gitea-local` |
 | "🔍 Inspect & test-install published packages" fails: `cp: cannot stat '../PackageSmokeTest': No such file or directory` | The step's `working-directory` is already `src`, so `PackageSmokeTest` lives one level below cwd, not two; the `../` was a leftover from writing the command as if run from repo root | Use `cp -r PackageSmokeTest "$work/harness"` (no `../`) |
+| Copied-out `PackageSmokeTest` harness fails every package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''` (restore) or `CS0103: The name 'Console' does not exist` (build) | `Agency.PackageSmokeTest.csproj` had no explicit `TargetFramework`/`ImplicitUsings`; it relied on `src/Directory.Build.props` via MSBuild's directory-props auto-import, which stops working once the project is `cp -r`'d to a `mktemp -d` outside `src/` | Set `TargetFramework`/`ImplicitUsings` explicitly in the harness `.csproj` itself — don't rely on ancestor `Directory.Build.props` for a project designed to be copied out of the tree |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -241,3 +242,44 @@ the real hostname to the `gitea-host.example` placeholder in this file, and `cp 
 - When a `run:` block sets `working-directory:`, sanity-check every relative path in it against
   that directory, not the repo root — `../` is easy to write out of habit when drafting the
   command as if it ran from the top of the repo.
+
+## Reflection — 2026-07-09: a harness project that only works inside its original directory
+
+**Failure:** with the previous two bugs fixed, the smoke-test step got further but failed on
+*every* package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''`
+during `dotnet add package`, immediately after the harness had been `cp -r`'d into a `mktemp -d`.
+
+**Root cause:** `Agency.PackageSmokeTest.csproj` never set `<TargetFramework>` or
+`<ImplicitUsings>` itself — it was always built as a project living under `src/`, so it silently
+inherited both from `src/Directory.Build.props` (MSBuild walks up the directory tree looking for
+`Directory.Build.props`/`.targets` files to auto-import). Once the step copies the project out to
+an unrelated `mktemp -d`, that walk no longer finds `src/Directory.Build.props`, so
+`TargetFramework` resolves to empty — hence "invalid framework identifier ''". This also meant
+the project (explicitly excluded from `Agency.slnx` and never built as part of the normal
+build/test/pack pipeline) had likely never actually been build-verified end-to-end before; two
+earlier bugs in the same step (the NuGet source collision, then the `cp` path bug) each masked
+this one by failing before execution ever reached it.
+
+**Proof:** reproduced locally — `cp -r src/PackageSmokeTest /tmp/pst-test && cd /tmp/pst-test &&
+dotnet build` failed with the same framework error. Adding `<TargetFramework>net10.0</TargetFramework>`
+got past that, but then failed to *compile* with `CS0103: The name 'Console' does not exist`
+(Program.cs uses top-level statements and calls `Console`/`Exception` without a `using System;`,
+relying on the same inherited `ImplicitUsings=enable`). Adding `<ImplicitUsings>enable</ImplicitUsings>`
+made the local standalone build succeed with 0 errors.
+
+**Fix:** added both `<TargetFramework>net10.0</TargetFramework>` and
+`<ImplicitUsings>enable</ImplicitUsings>` directly to `Agency.PackageSmokeTest.csproj`, so it no
+longer depends on ancestor `Directory.Build.props` files it won't have access to once copied out.
+
+**Lessons for future agents:**
+- A project deliberately excluded from the solution and only ever invoked by copying it elsewhere
+  cannot rely on `Directory.Build.props`/`Directory.Packages.props` inheritance — every property
+  those files would normally supply (`TargetFramework`, `ImplicitUsings`, `Nullable`, etc.) must be
+  set explicitly in the project file itself.
+- Before pushing a CI fix that depends on MSBuild/dotnet behavior, reproduce the exact
+  transformation locally (`cp -r <dir> /tmp/x && cd /tmp/x && dotnet build`) rather than pushing
+  and waiting on a full CI round-trip — it's faster and surfaces compile errors the runtime log
+  wouldn't show until a later step.
+- When a step has failed at the same point for multiple unrelated reasons in a row, don't assume
+  the *next* failure after a fix is a flake or unrelated noise — it's often the next bug in the
+  same never-actually-executed code path.

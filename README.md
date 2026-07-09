@@ -527,7 +527,9 @@ The next increments are the forward problems that actually matter for long-runni
 
 ## Contributing
 
-Issues and PRs welcome. For non-trivial changes, open an issue first so we can talk through the design before code gets written.
+Issues and PRs welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for build/test steps, coding
+style, and the PR process — including why functional/LLM tests don't run in public CI. For
+non-trivial changes, open an issue first so we can talk through the design before code gets written.
 
 ## License
 

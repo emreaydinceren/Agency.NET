@@ -102,6 +102,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | `thirdlicense` can't fetch license data | packages embed `localhost:3000` | `socat` forward to `gitea-host.example:3000` (already in ci-main) |
 | Cassette "missing" after clearing `cache/` | Proxy in-memory tier masks the miss | Restart the proxy after clearing `cache/` |
 | `build-and-publish` fails at a "Read package revision"-style step right after a versioning change | A gate step greps a field that a prior commit removed/renamed; empty grep + `bash -e -o pipefail` → exit 1 | Check what the *previous* merge to `main` changed in versioning/build props before assuming a code regression |
+| "🔍 Inspect & test-install published packages" fails: `error: The source specified has already been added` | `src/NuGet.Config` already registers `gitea-local` at the same feed URL the step tries to add as `gitea-smoketest`; `dotnet nuget add source` dedupes by URL, not name | Use `dotnet nuget update source gitea-local --username … --password … --store-password-in-clear-text` instead of adding a new source, and point `dotnet add package --source` at `gitea-local` |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -164,3 +165,35 @@ ordinary `main` push under the new tag-based gate.
   per step, not just whether the job as a whole is red.
 - `bash -e -o pipefail` turns an empty-variable comparison into a hard failure, not a silent
   false — a grep-based gate has no graceful "field doesn't exist" path.
+
+## Reflection — 2026-07-09: the duplicate NuGet source in the smoke-test step
+
+**Failure:** `build-and-publish` job 449 failed at "🔍 Inspect & test-install published packages"
+with `error: The source specified has already been added to the list of available package
+sources. Provide a unique source.`, right after `dotnet nuget remove source gitea-smoketest
+2>/dev/null || true` had already run (and printed `Unable to find any package source(s)
+matching name: gitea-smoketest`, i.e. no source by that name existed yet).
+
+**Root cause:** `src/NuGet.Config` (checked in) already defines a source named `gitea-local`
+pointing at the exact same feed URL (`http://gitea-host.example:3000/api/packages/emre/nuget/index.json`)
+that the step tried to add under the new name `gitea-smoketest`. `dotnet nuget add source`
+rejects the add when the **URL** is already registered, regardless of name — so "remove the
+name I'm about to add" is not sufficient idempotency; the real collision was a *different*
+name mapping to the *same* URL.
+
+**Proof:** `job_id=449` log via `mcp__gitea__actions_run_read` (`get_job_log_preview`) showed
+the remove-by-name step being a no-op (name not found) immediately followed by the add-by-URL
+failure. Reading `src/NuGet.Config` confirmed `gitea-local` already maps to that URL.
+
+**Fix:** replaced add-a-new-source with `dotnet nuget update source gitea-local --username …
+--password … --store-password-in-clear-text` (reuse the existing source, just attach
+credentials), and changed the later `dotnet add package --source` argument from
+`gitea-smoketest` to `gitea-local`. Applied to both `ci-main.yaml` and the in-progress
+`rt39-package-smoke-test` worktree copy of the same step.
+
+**Lessons for future agents:**
+- `dotnet nuget add source` dedupes by **source value (URL)**, not by `--name`. Before adding a
+  source in a CI step, check whether the repo's own `NuGet.Config` (or another workflow step)
+  already registers that URL under a different name — reuse/update it instead of adding.
+- A `remove source <name> || true` guard only protects against a source of that *exact* name;
+  it gives false confidence that the add that follows is idempotent.

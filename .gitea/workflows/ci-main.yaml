@@ -201,7 +201,7 @@ jobs:
             fi
 
             work=$(mktemp -d)
-            cp -r ../PackageSmokeTest "$work/harness"
+            cp -r PackageSmokeTest "$work/harness"
             if ! dotnet add "$work/harness/Agency.PackageSmokeTest.csproj" package "$id" --version "$version" --source gitea-local; then
               echo "::error::$id $version failed to restore from the Gitea feed"
               fail=1

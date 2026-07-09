@@ -57,10 +57,27 @@ jobs:
       run:
         shell: bash
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18-trixie
+        env:
+          POSTGRES_USER: dev_user
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: dev_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       LlmTest__Claude__ApiKey: ${{ secrets.LlmTest__Claude__ApiKey }}
       LlmTest__OpenAI__ApiKey: ${{ secrets.LlmTest__OpenAI__ApiKey }}
-      ConnectionStrings__PostgreSql: ${{ secrets.ConnectionStrings__PostgreSql }}
+      # The job runs inside a container on the same Docker network as the `postgres`
+      # service, so it's reachable by service name — NOT `localhost`.
+      ConnectionStrings__PostgreSql: Host=postgres;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
 
     steps:
       - name: 📥 Checkout

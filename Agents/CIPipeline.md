@@ -106,6 +106,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | "🔍 Inspect & test-install published packages" fails: `cp: cannot stat '../PackageSmokeTest': No such file or directory` | The step's `working-directory` is already `src`, so `PackageSmokeTest` lives one level below cwd, not two; the `../` was a leftover from writing the command as if run from repo root | Use `cp -r PackageSmokeTest "$work/harness"` (no `../`) |
 | Copied-out `PackageSmokeTest` harness fails every package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''` (restore) or `CS0103: The name 'Console' does not exist` (build) | `Agency.PackageSmokeTest.csproj` had no explicit `TargetFramework`/`ImplicitUsings`; it relied on `src/Directory.Build.props` via MSBuild's directory-props auto-import, which stops working once the project is `cp -r`'d to a `mktemp -d` outside `src/` | Set `TargetFramework`/`ImplicitUsings` explicitly in the harness `.csproj` itself — don't rely on ancestor `Directory.Build.props` for a project designed to be copied out of the tree |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1301: The local source '.../src/gitea-local' doesn't exist` | `dotnet add package --source <name>` never resolves a NuGet.Config source *name* — it only accepts a literal URL/path, and silently falls back to treating the name as a relative local directory when it isn't an absolute URI | Ship a NuGet.Config alongside the copied-out harness (`cp NuGet.Config "$work/harness/"`) and drop `--source` entirely, letting restore use the ambient config the normal way |
+| "🔍 Inspect & test-install published packages" fails every package with `NU1302: ... requires HTTPS sources` right after the previous bug's fix | `dotnet nuget update source` rewrites the whole source entry and drops any attribute it doesn't manage itself, silently stripping the checked-in `allowInsecureConnections="true"` off `gitea-local` | Pass `--allow-insecure-connections` on the `dotnet nuget update source` call so the attribute survives the rewrite |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -327,3 +328,36 @@ the normal way, exactly like every other `dotnet restore`/`build` step in this p
 - When reproducing a CI NuGet bug locally, clear `~/.nuget/packages/<id>` for the package under
   test first; otherwise the repro will silently pass via the local cache the same way the bug
   hid in CI.
+
+## Reflection — 2026-07-09: `dotnet nuget update source` silently drops `allowInsecureConnections`
+
+**Failure:** run 388 (job 467), immediately after the `--source <name>` fix above landed, failed
+the same step for *every* package with `NU1302: You are running the 'restore' operation with an
+'HTTP' source ... NuGet requires HTTPS sources.` — a new error at a line that previously got past
+without complaint (the source was HTTP the whole time; this had never been reached before).
+
+**Root cause:** `dotnet nuget update source gitea-local --username … --password …
+--store-password-in-clear-text` rewrites the entire `<add key="gitea-local" .../>` element and
+only reproduces the attributes it knows about (`value`, `protocolVersion`, credentials) —
+`allowInsecureConnections="true"`, present in the checked-in `src/NuGet.Config`, is silently
+dropped from the rewritten entry. The previous fix started copying this same `NuGet.Config` file
+into the harness directory after the `update source` call ran, so the harness now restores using
+a config where `gitea-local` is HTTP with no insecure-connections opt-in.
+
+**Proof:** reproduced locally — writing a `NuGet.Config` with `allowInsecureConnections="true"`,
+running `dotnet nuget update source <name> --username … --password … --store-password-in-clear-text`,
+then `cat`-ing the file back showed the attribute gone. Re-running with `--allow-insecure-connections`
+appended to the same command preserved it (confirmed via `dotnet nuget update source --help`,
+which lists `--allow-insecure-connections` as a boolean flag, no value argument).
+
+**Fix:** added `--allow-insecure-connections` to the `dotnet nuget update source gitea-local`
+call in `ci-main.yaml`.
+
+**Lessons for future agents:**
+- `dotnet nuget update source` (and `add source`) round-trips only the attributes it has explicit
+  CLI flags for — any attribute set by hand-editing the XML (like `allowInsecureConnections`) will
+  be silently dropped the next time the CLI touches that entry, not preserved.
+- This is the 5th distinct bug found in this exact step, each masked by the previous one failing
+  first. Don't assume a fix here is complete just because CI got further than last time — expect
+  the log to show *new* territory (a different error, at a later line) if the step never
+  previously executed that far.

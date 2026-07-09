@@ -34,6 +34,14 @@ This page is the **portal**. It is deliberately not comprehensive — it gives y
 
 Every assembly has a one-page reference under [`Projects/`](Projects/). Start there when you're about to touch a specific project.
 
+## Architecture Decision Records
+
+Short "Context → Decision → Consequences" records for consequential design tradeoffs live under [`adr/`](adr/):
+
+| ADR | Decision |
+|---|---|
+| [0001](adr/0001-no-strong-naming.md) | No assembly strong naming |
+
 ---
 
 ## The layers

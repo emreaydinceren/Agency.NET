@@ -105,6 +105,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | "🔍 Inspect & test-install published packages" fails: `error: The source specified has already been added` | `src/NuGet.Config` already registers `gitea-local` at the same feed URL the step tries to add as `gitea-smoketest`; `dotnet nuget add source` dedupes by URL, not name | Use `dotnet nuget update source gitea-local --username … --password … --store-password-in-clear-text` instead of adding a new source, and point `dotnet add package --source` at `gitea-local` |
 | "🔍 Inspect & test-install published packages" fails: `cp: cannot stat '../PackageSmokeTest': No such file or directory` | The step's `working-directory` is already `src`, so `PackageSmokeTest` lives one level below cwd, not two; the `../` was a leftover from writing the command as if run from repo root | Use `cp -r PackageSmokeTest "$work/harness"` (no `../`) |
 | Copied-out `PackageSmokeTest` harness fails every package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''` (restore) or `CS0103: The name 'Console' does not exist` (build) | `Agency.PackageSmokeTest.csproj` had no explicit `TargetFramework`/`ImplicitUsings`; it relied on `src/Directory.Build.props` via MSBuild's directory-props auto-import, which stops working once the project is `cp -r`'d to a `mktemp -d` outside `src/` | Set `TargetFramework`/`ImplicitUsings` explicitly in the harness `.csproj` itself — don't rely on ancestor `Directory.Build.props` for a project designed to be copied out of the tree |
+| "🔍 Inspect & test-install published packages" fails every package with `NU1301: The local source '.../src/gitea-local' doesn't exist` | `dotnet add package --source <name>` never resolves a NuGet.Config source *name* — it only accepts a literal URL/path, and silently falls back to treating the name as a relative local directory when it isn't an absolute URI | Ship a NuGet.Config alongside the copied-out harness (`cp NuGet.Config "$work/harness/"`) and drop `--source` entirely, letting restore use the ambient config the normal way |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -283,3 +284,46 @@ longer depends on ancestor `Directory.Build.props` files it won't have access to
 - When a step has failed at the same point for multiple unrelated reasons in a row, don't assume
   the *next* failure after a fix is a flake or unrelated noise — it's often the next bug in the
   same never-actually-executed code path.
+
+## Reflection — 2026-07-09: `--source <name>` silently isn't a NuGet.Config lookup
+
+**Failure:** run 386 (job 463), with the `TargetFramework`/`ImplicitUsings` bug fixed, failed
+`build-and-publish` at the same step for *every* package with `error: NU1301: The local source
+'/workspace/emre/Agency/src/gitea-local' doesn't exist.` — right after `dotnet nuget update
+source gitea-local ...` had printed `Package source "gitea-local" was successfully updated.`
+
+**Root cause:** `dotnet add package --source <value>` does not resolve `<value>` against
+NuGet.Config source *names* at all, even though `src/NuGet.Config` defines a `gitea-local`
+source and the ambient config is reachable (the step's `working-directory: src` puts the config
+in the same directory NuGet searches from). `--source` for restore-family commands only accepts
+a literal absolute URI or filesystem path; a bare name that isn't one falls back to being treated
+as a path relative to the current directory. This had looked like it worked in earlier
+iterations of this step only because the packages being restored were already present in the
+runner's persisted global-packages cache (see the runner-state note above) — restore never
+touched the network, so the bogus "source" was never actually dereferenced.
+
+**Proof:** reproduced locally against the *real* Gitea feed (`gitea-host.example:3000`, reachable
+from the dev machine) with `dotnet --version 10.0.301`. `dotnet add package Agency.Common
+--version 0.1.33-... --source gitea-local` from a project copied outside the config's directory
+failed with the exact same `NU1301`/local-source message once the package was cleared from
+`~/.nuget/packages` (forcing a real restore); the same command against a package already cached
+succeeded, confirming the cache was masking the bug. Copying the credentialed `NuGet.Config`
+next to the harness project and dropping `--source` entirely restored `Agency.Common` from
+`http://gitea-host.example:3000/...` successfully (verified via the restore log's `GET`/`OK`
+lines).
+
+**Fix:** `cp NuGet.Config "$work/harness/"` right after copying the harness project, and removed
+`--source gitea-local` from the `dotnet add package` call — restore now uses the ambient config
+the normal way, exactly like every other `dotnet restore`/`build` step in this pipeline.
+
+**Lessons for future agents:**
+- `--source` on `dotnet add package`/`dotnet restore` is **not** a NuGet.Config source-name
+  lookup — pass a real URL, or better, don't pass it at all and let the ambient/copied
+  NuGet.Config supply the (single) source with all its settings (`protocolVersion`,
+  `allowInsecureConnections`, stored credentials) intact.
+- A command that "succeeds" using a name-shaped `--source` value proves nothing — check whether
+  the package was already in the local cache before trusting a green run of this exact call
+  shape.
+- When reproducing a CI NuGet bug locally, clear `~/.nuget/packages/<id>` for the package under
+  test first; otherwise the repro will silently pass via the local cache the same way the bug
+  hid in CI.

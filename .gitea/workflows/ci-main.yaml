@@ -202,7 +202,13 @@ jobs:
 
             work=$(mktemp -d)
             cp -r PackageSmokeTest "$work/harness"
-            if ! dotnet add "$work/harness/Agency.PackageSmokeTest.csproj" package "$id" --version "$version" --source gitea-local; then
+            # `dotnet add package --source <name>` never resolves a NuGet.Config source *name* for the
+            # actual restore — it only accepts a literal URL/path, silently falling back to treating the
+            # name as a relative local directory (masked here whenever the package was already cache-hit
+            # locally). Ship the credentialed NuGet.Config alongside the copied-out harness instead, and
+            # let restore use it the normal way (no --source override).
+            cp NuGet.Config "$work/harness/"
+            if ! dotnet add "$work/harness/Agency.PackageSmokeTest.csproj" package "$id" --version "$version"; then
               echo "::error::$id $version failed to restore from the Gitea feed"
               fail=1
             elif ! dotnet run --project "$work/harness/Agency.PackageSmokeTest.csproj" -- "$id"; then

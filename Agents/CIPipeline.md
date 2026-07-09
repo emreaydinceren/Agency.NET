@@ -103,6 +103,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | Cassette "missing" after clearing `cache/` | Proxy in-memory tier masks the miss | Restart the proxy after clearing `cache/` |
 | `build-and-publish` fails at a "Read package revision"-style step right after a versioning change | A gate step greps a field that a prior commit removed/renamed; empty grep + `bash -e -o pipefail` → exit 1 | Check what the *previous* merge to `main` changed in versioning/build props before assuming a code regression |
 | "🔍 Inspect & test-install published packages" fails: `error: The source specified has already been added` | `src/NuGet.Config` already registers `gitea-local` at the same feed URL the step tries to add as `gitea-smoketest`; `dotnet nuget add source` dedupes by URL, not name | Use `dotnet nuget update source gitea-local --username … --password … --store-password-in-clear-text` instead of adding a new source, and point `dotnet add package --source` at `gitea-local` |
+| "🔍 Inspect & test-install published packages" fails: `cp: cannot stat '../PackageSmokeTest': No such file or directory` | The step's `working-directory` is already `src`, so `PackageSmokeTest` lives one level below cwd, not two; the `../` was a leftover from writing the command as if run from repo root | Use `cp -r PackageSmokeTest "$work/harness"` (no `../`) |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -197,3 +198,46 @@ credentials), and changed the later `dotnet add package --source` argument from
   already registers that URL under a different name — reuse/update it instead of adding.
 - A `remove source <name> || true` guard only protects against a source of that *exact* name;
   it gives false confidence that the add that follows is idempotent.
+
+## Reflection — 2026-07-09: two bugs stacked in the same step, and a fix that never reached `main`
+
+**Failure:** run 381 (push to `main`, after PR #139 merged) failed on the same
+"🔍 Inspect & test-install published packages" step again, but with a different error:
+`cp: cannot stat '../PackageSmokeTest': No such file or directory`. The `secret-scan` job
+also failed again on the same `internal-mdns-host` finding at `Agents/CIPipeline.md:178`
+that PR #139 was supposed to have already redacted.
+
+**Root cause (path bug):** the step's `working-directory` is `src`, so relative paths in its
+`run:` block resolve against `src/`. `PackageSmokeTest` lives at `src/PackageSmokeTest`, i.e.
+just `PackageSmokeTest` from that cwd — but the step wrote `cp -r ../PackageSmokeTest`,
+looking one directory too high (repo root), which has no such folder. This bug was latent
+and masked by the earlier NuGet-source-collision failure (fixed in PR #139); once that
+earlier failure was fixed, execution reached this line for the first time and exposed it.
+
+**Root cause (redaction never landed):** PR #139 was merged at `13:29:38`, but the commit that
+redacted the real internal hostname (`6cb4c6a`) was pushed to the PR's branch at `13:37:57` —
+**after** the PR was already merged and closed. Pushing to a closed PR's branch does not
+retroactively update `main`; the commit was stranded. `git merge-base --is-ancestor 6cb4c6a
+origin/main` confirmed it was not an ancestor, despite the Gitea API's `pull_request_read`
+still showing it as the PR's `head.sha`.
+
+**Proof:** `mcp__gitea__actions_run_read` (`get_run`, `run_id=381`) gave `head_sha=314c003…`,
+matching PR #139's `merge_commit_sha` exactly (via `pull_request_read`). `git log --graph
+--oneline --all` showed `6cb4c6a` on a branch tip that forked *after* `314c003` (the merge
+commit), i.e. off to the side of `main`'s history rather than inside it.
+
+**Fix:** created a new branch directly off current `origin/main` (rather than reusing/rebasing
+the now-merged `fix/ci-nuget-smoketest-source` branch) and applied both fixes fresh: re-redacted
+the real hostname to the `gitea-host.example` placeholder in this file, and `cp -r
+../PackageSmokeTest` → `cp -r PackageSmokeTest` in `ci-main.yaml`.
+
+**Lessons for future agents:**
+- Once a PR is merged, further commits pushed to its (now-closed) branch do **not** reach
+  `main` — verify with `git merge-base --is-ancestor <sha> origin/main` before assuming a
+  post-merge push "landed." If it merged before your fix was ready, open a fresh PR instead.
+- A step failing early can mask a second, independent bug further down the same script. After
+  fixing the first failure, expect (don't be surprised by) a new failure the *next* time the
+  step actually reaches previously-unexecuted lines.
+- When a `run:` block sets `working-directory:`, sanity-check every relative path in it against
+  that directory, not the repo root — `../` is easy to write out of habit when drafting the
+  command as if it ran from the top of the repo.

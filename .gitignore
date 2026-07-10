@@ -521,3 +521,7 @@ $RECYCLE.BIN/
 
 # MCP memory runtime database
 agency-mcp-memory.db
+
+# RunConsole.ps1 quickstart saved answers (non-secret, but personal/local-only)
+src/.quickstart.json
+.quickstart.json

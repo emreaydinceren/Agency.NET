@@ -59,6 +59,17 @@ jobs:
         working-directory: src
         run: dotnet build --configuration Release --no-restore
 
+      # Proves the console boots end-to-end (DI, schema init, and MCP servers degrading
+      # gracefully when Docker is absent in the runner) and exits 0, without needing a
+      # live LLM or interactive input. Run the built binary from its OUTPUT directory:
+      # shared-appsettings.json is a linked file that only sits next to appsettings.json in
+      # the build output, and the host resolves config relative to its working directory.
+      - name: 💨 Console boot smoke test
+        working-directory: src/Harness/Agency.Harness.Console/bin/Release/net10.0
+        env:
+          AGENCY_SMOKE_EXIT: '1'
+        run: dotnet Agency.Harness.Console.dll
+
       - name: 🧪 Run Unit Tests
         working-directory: src
         run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional"

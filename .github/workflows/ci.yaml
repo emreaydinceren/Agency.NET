@@ -76,7 +76,7 @@ jobs:
 
       - name: 🧪 Run Postgres-only Functional Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud&Category!=RequiresLlm"
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud&Category!=RequiresLlm" --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       # ReportGenerator is a plain dotnet global tool (no Node.js), so this same step also
       # runs unmodified in Gitea CI's Node-less dotnet-sdk container (see ci-pr.yaml/ci-main.yaml)
@@ -98,5 +98,5 @@ jobs:
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: src/coverage/**/coverage.cobertura.xml
-          flags: unit
+          flags: unit,postgres-functional
           fail_ci_if_error: false

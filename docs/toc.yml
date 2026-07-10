@@ -1,0 +1,120 @@
+- name: Home
+  href: Home.md
+
+- name: Deep Dives
+  items:
+    - name: Harness Architecture
+      href: Harness%20Architecture.md
+    - name: How the Agent Loop and Context Work Together
+      href: How%20the%20Agent%20Loop%20and%20Context%20Work%20Together.md
+    - name: The Capability Layer — Tools, MCP, and Progressive Disclosure
+      href: The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md
+    - name: How Agency's Skills Model Works
+      href: How%20Agency%27s%20Skills%20Model%20Works.md
+    - name: How Hooks Work
+      href: How%20Hooks%20Work.md
+    - name: Consent at the Tool Boundary — The Permission Model
+      href: Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md
+    - name: How Agency Gives AI Agents Memory
+      href: How%20Agency%20Gives%20AI%20Agents%20Memory.md
+    - name: Ingestion and Semantic Search for Agents
+      href: Projects%20-%20Ingestion%20and%20Semantic%20Search%20for%20Agent.md
+    - name: Ingestion / Harness Integration
+      href: Ingestion-Harness-Integration.md
+    - name: Governance and Actionable Insights through Observability
+      href: Governance%20and%20Actionable%20Insights%20through%20Observability.md
+    - name: Loop Kit — Driving an Agent Until the Job Is Actually Done
+      href: Loop%20Kit%20-%20Driving%20an%20Agent%20Until%20the%20Job%20Is%20Actually%20Done.md
+
+- name: User Guides
+  items:
+    - name: Agent Console User Manual
+      href: Agent%20Console%20User%20Manual.md
+    - name: Configuration Manual
+      href: Configuration%20Manual.md
+
+- name: Project Reference
+  href: Projects/Home.md
+  items:
+    - name: Foundation
+      items:
+        - name: Agency.Common
+          href: Projects/Agency.Common.md
+        - name: Agency.RagFormatter
+          href: Projects/Agency.RagFormatter.md
+        - name: Agency.Configuration
+          href: Projects/Agency.Configuration.md
+    - name: Embeddings
+      items:
+        - name: Agency.Embeddings.Common
+          href: Projects/Agency.Embeddings.Common.md
+        - name: Agency.Embeddings.OpenAI
+          href: Projects/Agency.Embeddings.OpenAI.md
+    - name: Storage
+      items:
+        - name: Agency.Sql.Common
+          href: Projects/Agency.Sql.Common.md
+        - name: Agency.Sql.Postgres
+          href: Projects/Agency.Sql.Postgres.md
+        - name: Agency.Sql.Sqlite
+          href: Projects/Agency.Sql.Sqlite.md
+        - name: Agency.VectorStore.Common
+          href: Projects/Agency.VectorStore.Common.md
+        - name: Agency.VectorStore.Sql.Postgres
+          href: Projects/Agency.VectorStore.Sql.Postgres.md
+        - name: Agency.VectorStore.Sql.Sqlite
+          href: Projects/Agency.VectorStore.Sql.Sqlite.md
+        - name: Agency.KeyValueStore.Common
+          href: Projects/Agency.KeyValueStore.Common.md
+        - name: Agency.KeyValueStore.Sql.Postgres
+          href: Projects/Agency.KeyValueStore.Sql.Postgres.md
+        - name: Agency.KeyValueStore.Sql.Sqlite
+          href: Projects/Agency.KeyValueStore.Sql.Sqlite.md
+    - name: Ingestion
+      items:
+        - name: Agency.Ingestion
+          href: Projects/Agency.Ingestion.md
+        - name: Agency.Ingestion.FileSystem
+          href: Projects/Agency.Ingestion.FileSystem.md
+        - name: Agency.Ingestion.SemanticKernel
+          href: Projects/Agency.Ingestion.SemanticKernel.md
+    - name: LLM
+      items:
+        - name: Agency.Llm.Common
+          href: Projects/Agency.Llm.Common.md
+        - name: Agency.Llm.Claude
+          href: Projects/Agency.Llm.Claude.md
+        - name: Agency.Llm.OpenAI
+          href: Projects/Agency.Llm.OpenAI.md
+    - name: Memory
+      items:
+        - name: Agency.Memory.Common
+          href: Projects/Agency.Memory.Common.md
+        - name: Agency.Memory.Retrieval
+          href: Projects/Agency.Memory.Retrieval.md
+        - name: Agency.Memory.Distiller
+          href: Projects/Agency.Memory.Distiller.md
+        - name: Agency.Memory.Consolidator
+          href: Projects/Agency.Memory.Consolidator.md
+        - name: Agency.Memory.Hygiene
+          href: Projects/Agency.Memory.Hygiene.md
+        - name: Agency.Memory.Sql.Postgres
+          href: Projects/Agency.Memory.Sql.Postgres.md
+        - name: Agency.Memory.Sql.Sqlite
+          href: Projects/Agency.Memory.Sql.Sqlite.md
+    - name: MCP
+      items:
+        - name: Agency.Mcp.Memory
+          href: Projects/Agency.Mcp.Memory.md
+    - name: Harness
+      items:
+        - name: Agency.Harness
+          href: Projects/Agency.Harness.md
+        - name: Agency.Harness.Console
+          href: Projects/Agency.Harness.Console.md
+
+- name: Architecture Decision Records
+  href: adr/0001-no-strong-naming.md
+
+- name: Code Walkthrough
+  href: walkthrough/code-walkthrough.html

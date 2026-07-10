@@ -21,6 +21,11 @@ secrets.json
 # gitleaks scan output (point-in-time report, redacted but not meant to be tracked)
 gitleaks-report.json
 
+# DocFX build output and generated API metadata (api/index.md is hand-authored and stays tracked)
+/_site/
+/api/*.yml
+/api/.manifest
+
 # MCP config (contains access tokens)
 .mcp.json
 

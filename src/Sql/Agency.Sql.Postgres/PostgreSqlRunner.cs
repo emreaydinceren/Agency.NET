@@ -61,7 +61,11 @@ public sealed class PostgreSqlRunner : SqlRunnerBase, IAsyncDisposable
     /// <inheritdoc/>
     protected override DbCommand BuildCommand(DbConnection connection, string sql, Dictionary<string, object?>? parameters)
     {
+        // CA2100: `sql` is never built by concatenating caller input — callers always pass
+        // parameterized text and bind values below via NpgsqlParameter/AddWithValue.
+#pragma warning disable CA2100
         var command = new NpgsqlCommand(sql, (NpgsqlConnection)connection);
+#pragma warning restore CA2100
 
         if (parameters is not null)
         {

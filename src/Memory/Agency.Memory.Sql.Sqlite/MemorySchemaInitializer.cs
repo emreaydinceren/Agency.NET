@@ -200,7 +200,11 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 
         foreach (var sql in indexes)
         {
+            // CA2100: `sql` is a compile-time literal from the fixed `indexes` array above,
+            // never user input.
+#pragma warning disable CA2100
             await using var cmd = new SqliteCommand(sql, conn);
+#pragma warning restore CA2100
             await cmd.ExecuteNonQueryAsync(ct);
         }
     }

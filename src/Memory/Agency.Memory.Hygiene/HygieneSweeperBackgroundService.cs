@@ -69,7 +69,13 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
     /// <returns>The interval with jitter applied.</returns>
     public static TimeSpan ApplyJitter(TimeSpan baseInterval)
     {
+        // CA5394/SCS0005: scheduling jitter, not a security-sensitive value — cryptographic
+        // randomness is not required here.
+#pragma warning disable CA5394
+#pragma warning disable SCS0005
         var jitterMinutes = Random.Shared.Next(-15, 16); // -15 to +15 inclusive
+#pragma warning restore SCS0005
+#pragma warning restore CA5394
         return baseInterval + TimeSpan.FromMinutes(jitterMinutes);
     }
 

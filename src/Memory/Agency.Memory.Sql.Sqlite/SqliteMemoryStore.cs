@@ -190,7 +190,11 @@ public sealed class SqliteMemoryStore : IMemoryStore
             string queryVecText = VectorFunctions.FormatVector(query.QueryEmbedding.ToArray());
 
             await using var conn = await this.OpenConnectionAsync(ct);
+            // CA2100: BuildSearchSql only appends fixed literal clause fragments based on
+            // boolean flags; every value is bound below via AddWithValue.
+#pragma warning disable CA2100
             await using var cmd = new SqliteCommand(sql, conn);
+#pragma warning restore CA2100
             cmd.Parameters.AddWithValue("@user_id", query.UserId);
             cmd.Parameters.AddWithValue("@query_vec", queryVecText);
             cmd.Parameters.AddWithValue("@top_k", query.TopK);
@@ -460,7 +464,11 @@ public sealed class SqliteMemoryStore : IMemoryStore
                     .ToArray();
 
                 string deleteSql = $"DELETE FROM records WHERE id IN ({string.Join(", ", paramNames)}) AND user_id = @user_id;";
+                // CA2100: `paramNames` are generated parameter placeholders (@id0, @id1, ...),
+                // not user-controlled content; values are bound below via AddWithValue.
+#pragma warning disable CA2100
                 await using var deleteCmd = new SqliteCommand(deleteSql, conn, (SqliteTransaction)tx);
+#pragma warning restore CA2100
                 deleteCmd.Parameters.AddWithValue("@user_id", newRecord.UserId);
                 for (int i = 0; i < idsToDelete.Count; i++)
                 {
@@ -604,7 +612,11 @@ public sealed class SqliteMemoryStore : IMemoryStore
                       created_at, updated_at, last_accessed_at;";
 
         await using var conn = await this.OpenConnectionAsync(ct);
+        // CA2100: `setClauses` only ever appends fixed literal column assignments based on
+        // boolean flags; every value is bound below via AddWithValue.
+#pragma warning disable CA2100
         await using var cmd = new SqliteCommand(sql, conn);
+#pragma warning restore CA2100
         cmd.Parameters.AddWithValue("@id", recordId);
         cmd.Parameters.AddWithValue("@user_id", userId);
         cmd.Parameters.AddWithValue("@now", now);
@@ -763,7 +775,11 @@ public sealed class SqliteMemoryStore : IMemoryStore
         string sql = $"UPDATE records SET last_accessed_at = @now WHERE id IN ({string.Join(", ", paramNames)});";
 
         await using var conn = await this.OpenConnectionAsync(ct);
+        // CA2100: `paramNames` are generated parameter placeholders (@id0, @id1, ...),
+        // not user-controlled content; values are bound below via AddWithValue.
+#pragma warning disable CA2100
         await using var cmd = new SqliteCommand(sql, conn);
+#pragma warning restore CA2100
         cmd.Parameters.AddWithValue("@now", now);
         for (int i = 0; i < ids.Length; i++)
         {

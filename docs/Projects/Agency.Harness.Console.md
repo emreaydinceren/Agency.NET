@@ -326,7 +326,11 @@ await Log.CloseAndFlushAsync();   // after the session finishes
         "Arguments": [ "${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll" ],
         "EnvironmentVariables": { "Memory__Provider": "sqlite", "Memory__ConnectionString": "Data Source=agency-mcp-memory.db" }
       },
-      { "Name": "github", "Transport": "Stdio", "Command": "docker", "Arguments": [ "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server" ] }
+      {
+        "Name": "github", "Transport": "Stdio", "Command": "docker",
+        "Arguments": [ "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server" ],
+        "EnvironmentVariables": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GitHubToken}" }
+      }
     ]
   },
   "ConnectionStrings": {
@@ -346,6 +350,8 @@ await Log.CloseAndFlushAsync();   // after the session finishes
 ```
 
 `appsettings.json` deliberately omits the `ConnectionStrings:PostgreSql` key — it is a secret sourced from the shared `AgencySecrets` user-secrets vault. `Program.cs` loads that vault explicitly (via `AddUserSecrets("AgencySecrets")`, front-inserted so env vars / CLI still override) because `Host.CreateApplicationBuilder` only auto-loads user secrets in the Development environment. `VectorStorePostgreSql` then resolves from it through the `${ConnectionStrings:PostgreSql}` placeholder. See [[Agency.Configuration]] and the Configuration Manual.
+
+The `github` MCP server's `GITHUB_PERSONAL_ACCESS_TOKEN` follows a related but distinct path: it's optional, so it can't use the eager `${Section:Key}` placeholder resolver (a missing key there throws at config-build time for everyone, not just GitHub users). Instead `Program.cs` reads `GitHub:PersonalAccessToken` directly from configuration (returns `null` if unset — no throw) and passes it to `McpConfigResolver.Expand`, which substitutes the bare `${GitHubToken}` token in `EnvironmentVariables` or, if no token is configured, removes that entry entirely so an ambient OS environment variable (e.g. one `RunConsole.ps1` sets before launch) still reaches the subprocess via Docker's own `-e GITHUB_PERSONAL_ACCESS_TOKEN` passthrough.
 
 `appsettings.Test.json` overrides values for the functional-test environment, where MCP startup and user-id persistence are skipped and the clock is frozen.
 

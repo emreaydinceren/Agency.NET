@@ -334,9 +334,30 @@ Controls how many results are returned by the `semantic_search` tool.
 
 Declares MCP (Model Context Protocol) servers whose tools are injected into the agent's tool registry. Startup is skipped entirely when `DOTNET_ENVIRONMENT=Test`.
 
-Path values support two portability tokens, expanded by `McpConfigResolver` *after* the host is built (not by the placeholder resolver — both are bare, colon-less tokens, so the [placeholder resolver](#placeholder-notation) passes them through untouched):
+Path values support three portability tokens, expanded by `McpConfigResolver` *after* the host is built (not by the placeholder resolver — all three are bare, colon-less tokens, so the [placeholder resolver](#placeholder-notation) passes them through untouched):
 - `${RepoRoot}` — resolved to the nearest ancestor directory containing `.git`.
 - `${Configuration}` — resolved to `Debug` or `Release` from the output path.
+- `${GitHubToken}` — resolved to the `GitHub:PersonalAccessToken` configuration value (sourced from the `AgencySecrets` vault, same as `ConnectionStrings:PostgreSql`). Read directly via `IConfiguration`, not the placeholder resolver, so a missing secret never fails config build. **Optional:** when absent, `McpConfigResolver` removes the containing `EnvironmentVariables` entry entirely instead of substituting an empty string — this lets an ambient OS environment variable of the same name (e.g. one `RunConsole.ps1` sets before launch) still reach the subprocess, preserving Docker's own `-e GITHUB_PERSONAL_ACCESS_TOKEN` passthrough behavior as a fallback.
+
+The shipped `github` server illustrates the optional-secret pattern:
+
+```json
+{
+  "Name": "github",
+  "Transport": "Stdio",
+  "Command": "docker",
+  "Arguments": [ "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server" ],
+  "EnvironmentVariables": {
+    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GitHubToken}"
+  }
+}
+```
+
+To set the token, add it to the same always-loaded `AgencySecrets` vault used for the Postgres connection string:
+
+```powershell
+dotnet user-secrets set -p src\Sql\Agency.Sql.Postgres.Test "GitHub:PersonalAccessToken" "<token>"
+```
 
 | Key | Type | Notes |
 |---|---|---|
@@ -695,6 +716,7 @@ Projects in this vault: `Agency.Sql.Postgres.Test`, `Agency.Llm.Test`, `Agency.V
 | `ConnectionStrings:PostgreSql` | Production-quality Postgres connection string. |
 | `LlmTest:OpenAI:ApiKey` | OpenAI API key for LLM functional tests. |
 | `LlmTest:Claude:ApiKey` | Anthropic API key for LLM functional tests. |
+| `GitHub:PersonalAccessToken` | GitHub PAT for the `github` MCP server in `Agency.Harness.Console`. **Optional** — see [Mcp](#mcp). |
 
 ### agency-harness-console (Harness.Console vault)
 

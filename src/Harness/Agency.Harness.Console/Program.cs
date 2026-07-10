@@ -264,11 +264,15 @@ internal class Program
                 : builder.Configuration.GetSection("Mcp").Get<McpClientOptions>();
             if (mcpOptions is { Servers.Length: > 0 })
             {
-                // Expand ${RepoRoot}/${Configuration} tokens so committed server paths stay portable
-                // across machines, drives, OSes and build configurations.
+                // Expand ${RepoRoot}/${Configuration}/${GitHubToken} tokens so committed server paths
+                // stay portable across machines, drives, OSes and build configurations. The GitHub
+                // token is optional — read directly from configuration (no placeholder, so a missing
+                // vault secret never fails config build) and left unset when absent, so an ambient
+                // OS environment variable (e.g. set by RunConsole.ps1) still reaches the subprocess.
                 string repoRoot = McpConfigResolver.FindRepoRoot(AppContext.BaseDirectory) ?? AppContext.BaseDirectory;
                 string configuration = McpConfigResolver.ResolveConfiguration(AppContext.BaseDirectory);
-                McpConfigResolver.Expand(mcpOptions, repoRoot, configuration);
+                string? gitHubToken = builder.Configuration["GitHub:PersonalAccessToken"];
+                McpConfigResolver.Expand(mcpOptions, repoRoot, configuration, gitHubToken);
 
                 try
                 {

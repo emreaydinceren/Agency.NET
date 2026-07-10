@@ -121,6 +121,22 @@ if ($logEnabled) {
     Invoke-Secret -ProjectDir "Harness\Agency.Harness.Console" -SecretId "agency-harness-console" -Key "OpenTelemetry:FileExport:Logs:MinimumLevel" -Value $minLevel
 }
 
+# ── 4. GitHub Personal Access Token ─────────────────────────────────────────
+
+Write-Title "GitHub Personal Access Token"
+Write-Info "Used by: Harness.Console's 'github' MCP server (issues, PRs, repos via github-mcp-server)."
+Write-Info "Optional — only needed if you want GitHub tools in the console. Requires Docker."
+Write-Info "This goes into the same AgencySecrets folder."
+Write-Host ""
+Write-Info "You can leave blank to skip (RunConsole.ps1 can still prompt for one per-run instead)."
+
+$githubToken = Read-Host "  GitHub Personal Access Token"
+if ($githubToken) {
+    Invoke-Secret -ProjectDir "Sql\Agency.Sql.Postgres.Test" -SecretId "AgencySecrets" -Key "GitHub:PersonalAccessToken" -Value $githubToken
+} else {
+    Write-Skip "Skipped GitHub token"
+}
+
 # ── Done ─────────────────────────────────────────────────────────────────────
 
 Write-Title "Done!"

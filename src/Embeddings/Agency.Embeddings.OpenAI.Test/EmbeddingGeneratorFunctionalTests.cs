@@ -10,6 +10,7 @@ namespace Agency.Embeddings.OpenAI.Test;
 /// Requires LM Studio running with text-embedding-qwen3-embedding-0.6b loaded. Configure the endpoint in appsettings.json.
 /// </summary>
 [Trait("Category", "Functional")]
+[Trait("Category", "RequiresLlm")]
 public sealed class EmbeddingGeneratorFunctionalTests
 {
     private static readonly EmbeddingGenerator Generator = CreateGenerator();

@@ -13,6 +13,7 @@ namespace Agency.Llm.Test;
 /// Requires a Claude API key in user secrets or environment variables.
 /// </summary>
 [Trait("Category", "Functional")]
+[Trait("Category", "RequiresLlm")]
 public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fixture)
     : IClassFixture<ClaudeFunctionalTests.ClaudeFixture>
 {

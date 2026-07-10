@@ -29,6 +29,7 @@ namespace Agency.Harness.Test.Functional;
 /// </para>
 /// </summary>
 [Trait("Category", "Functional")]
+[Trait("Category", "RequiresLlm")]
 public sealed class LoopRunnerFunctionalTests(LoopRunnerFunctionalTests.LoopRunnerFixture fixture)
     : IClassFixture<LoopRunnerFunctionalTests.LoopRunnerFixture>
 {

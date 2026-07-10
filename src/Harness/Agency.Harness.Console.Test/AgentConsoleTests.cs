@@ -14,6 +14,7 @@ namespace Agency.Harness.Console.Test;
 /// </para>
 /// </summary>
 [Trait("Category", "Functional")]
+[Trait("Category", "RequiresLlm")]
 [Collection("ConsoleProcessTests")]
 public sealed class AgentConsoleTests
 {

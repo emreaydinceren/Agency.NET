@@ -8,6 +8,7 @@
 [![Downloads](https://img.shields.io/nuget/dt/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
 [![License](https://img.shields.io/github/license/emreaydinceren/Agency.NET.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
+[![Docs](https://img.shields.io/badge/docs-site-blue.svg)](https://emreaydinceren.github.io/Agency.NET/)
 
 Agency is the **C#-native answer to the Python-first agent frameworks** (LangChain, LlamaIndex, AutoGen): a layered toolkit for **RAG pipelines and autonomous agents** on .NET 10 — no Python sidecar, no control flow buried under five layers of magic. The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thinking; the harness — prompting, tools, memory, permissions, and the *"is it actually done?"* check — is everything else, and it's what Agency gives you.
 
@@ -67,7 +68,7 @@ Most frameworks give you a loop and a tool registry. Agency is about the 80% tha
 - 🔎 **Semantic search that knows its place** — you curate the documents; the model gets exactly one read-only, scope-locked `semantic_search` tool over them. ([deep dive](docs/Projects%20-%20Ingestion%20and%20Semantic%20Search%20for%20Agent.md))
 - ⚙️ Plus: an allow/deny/rewrite **permission gate** at the tool boundary, **OpenTelemetry on every layer**, **MCP in both directions**, and deterministic tests (`TimeProvider` injected everywhere).
 
-> 📚 **Docs:** start at the [documentation portal](docs/Home.md) · trace one full agent turn in the interactive [Code Walkthrough](docs/walkthrough/code-walkthrough.html) (open it locally — GitHub shows the source, not the page) · new to agents? read the [Console User Manual](docs/Agent%20Console%20User%20Manual.md).
+> 📚 **Docs:** the [published documentation site](https://emreaydinceren.github.io/Agency.NET/) has a searchable API reference generated from the XML doc comments, plus every deep dive below — or browse in-repo starting at the [documentation portal](docs/Home.md) · trace one full agent turn in the interactive [Code Walkthrough](docs/walkthrough/code-walkthrough.html) (open it locally, or [on the site](https://emreaydinceren.github.io/Agency.NET/docs/walkthrough/code-walkthrough.html) — GitHub only shows the source) · new to agents? read the [Console User Manual](docs/Agent%20Console%20User%20Manual.md).
 
 ---
 

@@ -1,0 +1,74 @@
+name: Docs (GitHub Pages)
+
+# Builds the DocFX site (conceptual docs/*.md + API reference generated from XML doc
+# comments — see RT8) and publishes it to GitHub Pages via Pages-from-Actions.
+#
+# One-time manual setup this workflow cannot perform on its own: on GitHub, under
+# Settings → Pages, set Source to "GitHub Actions" for this repository.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**/*.csproj'
+      - 'src/**/*.cs'
+      - 'docfx.json'
+      - 'toc.yml'
+      - 'index.md'
+      - 'api/index.md'
+      - '.github/workflows/docs.yaml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 📦 Restore dependencies
+        working-directory: src
+        # src/NuGet.Config also lists baget-local/gitea-local, pointing at a self-hosted feed
+        # unreachable from a GitHub-hosted runner. Every package here resolves from nuget.org,
+        # so downgrade unreachable-source failures to warnings instead of failing restore.
+        run: dotnet restore --ignore-failed-sources
+
+      - name: 📚 Install DocFX
+        run: dotnet tool install --global docfx
+
+      - name: 🏗️ Build documentation site
+        run: docfx docfx.json
+
+      - name: ⚙️ Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: 📤 Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

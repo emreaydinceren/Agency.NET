@@ -125,11 +125,24 @@ jobs:
         working-directory: src
         run: |
           for i in 1 2 3; do
-            if dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional"; then
+            if dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional" --collect:"XPlat Code Coverage" --results-directory ./coverage; then
               break
             fi
             [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."
           done
+
+      # Mirrors the GitHub CI coverage step (RT44) so a coverlet/package/filter regression
+      # surfaces here first, before the code syncs to the public GitHub mirror. No Codecov
+      # upload here: codecov-action is a Node.js action and this container (mcr.microsoft.com/
+      # dotnet/sdk:10.0) has no Node — see Agents/CIPipeline.md's actions/checkout reflection.
+      - name: 📊 Coverage summary
+        working-directory: src
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;MarkdownSummaryGithub"
+          cat coverage-report/Summary.txt
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: 🧪 Run Functional Tests
         working-directory: src

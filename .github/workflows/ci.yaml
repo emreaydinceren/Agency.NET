@@ -72,8 +72,31 @@ jobs:
 
       - name: 🧪 Run Unit Tests
         working-directory: src
-        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional"
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional" --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       - name: 🧪 Run Postgres-only Functional Tests
         working-directory: src
         run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud&Category!=RequiresLlm"
+
+      # ReportGenerator is a plain dotnet global tool (no Node.js), so this same step also
+      # runs unmodified in Gitea CI's Node-less dotnet-sdk container (see ci-pr.yaml/ci-main.yaml)
+      # — printing to the log guarantees visibility even where GITHUB_STEP_SUMMARY isn't rendered.
+      - name: 📊 Coverage summary
+        working-directory: src
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;MarkdownSummaryGithub"
+          cat coverage-report/Summary.txt
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      # Public-CI-only: this is what visitors/hiring managers see as the README badge (RT44).
+      # GitHub-hosted runners have Node.js preinstalled, unlike Gitea's dotnet-sdk container —
+      # see the reflection in Agents/CIPipeline.md on why actions/checkout had to be dropped
+      # there for the same reason. codecov-action stays GitHub-only for that reason.
+      - name: ☂️ Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: src/coverage/**/coverage.cobertura.xml
+          flags: unit
+          fail_ci_if_error: false

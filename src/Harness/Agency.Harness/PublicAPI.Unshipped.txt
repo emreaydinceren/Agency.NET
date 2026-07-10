@@ -1,1 +1,2 @@
 #nullable enable
+Agency.Harness.Tools.McpClientPool.FailedServers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!

@@ -14,6 +14,24 @@ The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thin
 >
 > 🧭 **Want to see the actual code path?** Open the interactive [**Code Walkthrough**](docs/walkthrough/code-walkthrough.html) — a single self-contained HTML page that traces the life of one agent turn through `Agency.Harness.Console`, from `Program.Main` through DI wiring and the REPL wait into the `LoopRunner` → `Agent` ReAct loop and back out as streamed events. Read it top to bottom; every step carries a source excerpt and a `project · class · method` pointer. (GitHub renders this as source, not live HTML — download it or open it locally to view it interactively.)
 
+---
+
+## ⚡ Try it in 60 seconds
+
+**One command. No Docker, no database, no cloud account.** Point Agency at any OpenAI-compatible model — a local [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/) (no API key needed), or a cloud endpoint — and you're chatting with a real, tool-using agent:
+
+```powershell
+git clone https://github.com/emreaydinceren/Agency.NET
+cd Agency.NET/src
+.\RunConsole.ps1
+```
+
+That's the whole setup. 🤖 `RunConsole.ps1` is a friendly guide: it asks three quick questions — *where your model lives, which model, and an API key if you need one* — then builds the console and drops you straight into the REPL. Just press **Enter** to take the smart defaults; it even **auto-detects** a local LM Studio or Ollama already running on your machine.
+
+> 💡 **All you need is the [.NET 10 SDK](https://dotnet.microsoft.com/download) and an LLM endpoint.** Want the agent to reach GitHub too? The script can wire up the official GitHub MCP server when you have Docker and a token — completely optional, and the console runs great without it.
+
+---
+
 ## Why Agency
 
 AI agents are easy to demo and hard to ship. The 20% that wins a hackathon is the model; the 80% that decides whether a deployed agent is trustworthy is the *harness* around it — and that 80% is what Agency is about. Treat this repository as a worked study in building that harness well: each subsystem is a deliberate answer to a real production problem, and the [deep-dive docs](docs/Home.md) explain every decision in two passes — a plain-English tour and an implementation walkthrough with `file:line` references and the alternatives that were rejected.
@@ -323,6 +341,8 @@ if (builder.Configuration.GetValue<bool>("Memory:Enabled"))
 When the flag is `false`, none of these services register, the baseline hooks stay null, and the harness behaves byte-for-byte as if memory never existed.
 
 ### 9. Try the REPL — and search your own documents
+
+The quickest way in is the **`.\RunConsole.ps1`** quickstart from [Try it in 60 seconds](#-try-it-in-60-seconds) above — it configures your LLM and launches the console for you. Prefer to wire it up yourself? Run the project directly:
 
 ```bash
 dotnet run --project src/Harness/Agency.Harness.Console

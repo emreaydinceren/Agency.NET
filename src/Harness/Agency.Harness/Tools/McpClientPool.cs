@@ -19,14 +19,19 @@ public sealed class McpClientPool : IAsyncDisposable
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> ToolNamesByServer { get; }
 
+    /// <summary>Gets the error message for each server that failed to connect, keyed by server name.</summary>
+    public IReadOnlyDictionary<string, string> FailedServers { get; }
+
     private McpClientPool(
         List<McpClient> clients,
         List<ITool> tools,
-        Dictionary<string, IReadOnlyList<string>> toolNamesByServer)
+        Dictionary<string, IReadOnlyList<string>> toolNamesByServer,
+        Dictionary<string, string> failedServers)
     {
         this._clients = clients;
         this.Tools = tools;
         this.ToolNamesByServer = toolNamesByServer;
+        this.FailedServers = failedServers;
     }
 
     /// <summary>
@@ -41,25 +46,34 @@ public sealed class McpClientPool : IAsyncDisposable
         List<McpClient> clients = [];
         List<ITool> tools = [];
         var toolNamesByServer = new Dictionary<string, IReadOnlyList<string>>();
+        var failedServers = new Dictionary<string, string>();
 
         foreach (McpServerConfig server in options.Servers)
         {
-            IClientTransport transport = CreateTransport(server);
-            McpClient client = await McpClient.CreateAsync(transport, cancellationToken: ct);
-            clients.Add(client);
-
-            IList<McpClientTool> serverTools = await client.ListToolsAsync(cancellationToken: ct);
-            var names = new List<string>(serverTools.Count);
-            foreach (McpClientTool tool in serverTools)
+            try
             {
-                tools.Add(new McpProxyTool(tool));
-                names.Add(tool.Name);
-            }
+                IClientTransport transport = CreateTransport(server);
+                McpClient client = await McpClient.CreateAsync(transport, cancellationToken: ct);
 
-            toolNamesByServer[server.Name] = names;
+                IList<McpClientTool> serverTools = await client.ListToolsAsync(cancellationToken: ct);
+                var names = new List<string>(serverTools.Count);
+                foreach (McpClientTool tool in serverTools)
+                {
+                    tools.Add(new McpProxyTool(tool));
+                    names.Add(tool.Name);
+                }
+
+                clients.Add(client);
+                toolNamesByServer[server.Name] = names;
+            }
+            catch (Exception ex)
+            {
+                failedServers[server.Name] = ex.Message;
+                continue;
+            }
         }
 
-        return new McpClientPool(clients, tools, toolNamesByServer);
+        return new McpClientPool(clients, tools, toolNamesByServer, failedServers);
     }
 
     private static IClientTransport CreateTransport(McpServerConfig server) =>

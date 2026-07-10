@@ -3,6 +3,7 @@
 **Build AI agents in C# that remember, finish the job, and stay observable — not amnesiac chatbots that stop the moment they *feel* done.**
 
 [![CI](https://github.com/emreaydinceren/Agency.NET/actions/workflows/ci.yaml/badge.svg)](https://github.com/emreaydinceren/Agency.NET/actions/workflows/ci.yaml)
+[![Unit-test coverage](https://img.shields.io/codecov/c/github/emreaydinceren/Agency.NET?flag=unit&label=unit-test%20coverage)](https://codecov.io/gh/emreaydinceren/Agency.NET)
 [![NuGet](https://img.shields.io/nuget/v/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
 [![Downloads](https://img.shields.io/nuget/dt/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
 [![License](https://img.shields.io/github/license/emreaydinceren/Agency.NET.svg)](LICENSE)

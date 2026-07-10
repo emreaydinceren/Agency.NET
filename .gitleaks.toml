@@ -71,6 +71,7 @@ regex = '''\b[a-z0-9][a-z0-9-]*\.local(?::[0-9]+)?(?:[/'"`:;,)\]}<>|\s]|$)'''
     '''(^|/)src/NuGet\.Config$''',
     '''(^|/)src/shared-appsettings\.json$''',
     '''(^|/)src/SetupLocal\.ps1$''',
+    '''(^|/)Agents/Releasing\.md$''',
   ]
 
 [[rules]]

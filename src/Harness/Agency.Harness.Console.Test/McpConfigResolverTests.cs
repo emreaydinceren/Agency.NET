@@ -43,6 +43,62 @@ public sealed class McpConfigResolverTests
     }
 
     /// <summary>
+    /// <c>${GitHubToken}</c> is substituted with the supplied token when one is configured.
+    /// </summary>
+    [Fact]
+    public void Expand_SubstitutesGitHubTokenWhenConfigured()
+    {
+        var options = new McpClientOptions
+        {
+            Servers =
+            [
+                new McpServerConfig
+                {
+                    Name = "github",
+                    Command = "docker",
+                    EnvironmentVariables = new Dictionary<string, string?>
+                    {
+                        ["GITHUB_PERSONAL_ACCESS_TOKEN"] = "${GitHubToken}"
+                    }
+                }
+            ]
+        };
+
+        McpConfigResolver.Expand(options, repoRoot: "/work/Agency", configuration: "Release", gitHubToken: "ghp_test123");
+
+        Assert.Equal("ghp_test123", options.Servers[0].EnvironmentVariables!["GITHUB_PERSONAL_ACCESS_TOKEN"]);
+    }
+
+    /// <summary>
+    /// When no GitHub token is configured, the environment variable entry is removed rather than
+    /// set to an empty string, so an ambient OS environment variable of the same name (e.g. set by
+    /// <c>RunConsole.ps1</c>) still reaches the subprocess via inherited environment.
+    /// </summary>
+    [Fact]
+    public void Expand_RemovesGitHubTokenEnvironmentVariableWhenNotConfigured()
+    {
+        var options = new McpClientOptions
+        {
+            Servers =
+            [
+                new McpServerConfig
+                {
+                    Name = "github",
+                    Command = "docker",
+                    EnvironmentVariables = new Dictionary<string, string?>
+                    {
+                        ["GITHUB_PERSONAL_ACCESS_TOKEN"] = "${GitHubToken}"
+                    }
+                }
+            ]
+        };
+
+        McpConfigResolver.Expand(options, repoRoot: "/work/Agency", configuration: "Release", gitHubToken: null);
+
+        Assert.False(options.Servers[0].EnvironmentVariables!.ContainsKey("GITHUB_PERSONAL_ACCESS_TOKEN"));
+    }
+
+    /// <summary>
     /// Command and argument values with no placeholder tokens pass through unmodified.
     /// </summary>
     [Fact]

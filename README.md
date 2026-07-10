@@ -2,17 +2,15 @@
 
 **Build AI agents in C# that remember, finish the job, and stay observable — not amnesiac chatbots that stop the moment they *feel* done.**
 
+[![CI](https://github.com/emreaydinceren/Agency.NET/actions/workflows/ci.yaml/badge.svg)](https://github.com/emreaydinceren/Agency.NET/actions/workflows/ci.yaml)
 [![NuGet](https://img.shields.io/nuget/v/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
+[![Downloads](https://img.shields.io/nuget/dt/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
 [![License](https://img.shields.io/github/license/emreaydinceren/Agency.NET.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 
-Agency is a layered toolkit for building **RAG pipelines and autonomous agents** in idiomatic C#: **embed → store → retrieve → format → chat → loop**. Every component is an interface; every backend is swappable; the agent loop is a `while` loop you can actually read.
+Agency is the **C#-native answer to the Python-first agent frameworks** (LangChain, LlamaIndex, AutoGen): a layered toolkit for **RAG pipelines and autonomous agents** on .NET 10 — no Python sidecar, no control flow buried under five layers of magic. The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thinking; the harness — prompting, tools, memory, permissions, and the *"is it actually done?"* check — is everything else, and it's what Agency gives you.
 
-The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thinking. The *harness* — how it's prompted, what tools it may call, what it remembers, who decides it's finished, and what's fenced off — is everything else, and it's where production agents live or die. Agency is that harness, built for .NET 10.
-
-> 📚 **New here? Start at the [documentation portal](docs/Home.md).** It maps every subsystem and links the narrative deep-dives (the agent loop, memory, Loop Kit, hooks, permissions) and the per-project reference pages.
->
-> 🧭 **Want to see the actual code path?** Open the interactive [**Code Walkthrough**](docs/walkthrough/code-walkthrough.html) — a single self-contained HTML page that traces the life of one agent turn through `Agency.Harness.Console`, from `Program.Main` through DI wiring and the REPL wait into the `LoopRunner` → `Agent` ReAct loop and back out as streamed events. Read it top to bottom; every step carries a source excerpt and a `project · class · method` pointer. (GitHub renders this as source, not live HTML — download it or open it locally to view it interactively.)
+> **Status:** Pre-1.0, under active development. Interfaces are stabilizing but may still shift between minor versions — pin package versions if you depend on this.
 
 ---
 
@@ -29,6 +27,46 @@ cd Agency.NET/src
 That's the whole setup. 🤖 `RunConsole.ps1` is a friendly guide: it asks three quick questions — *where your model lives, which model, and an API key if you need one* — then builds the console and drops you straight into the REPL. Just press **Enter** to take the smart defaults; it even **auto-detects** a local LM Studio or Ollama already running on your machine.
 
 > 💡 **All you need is the [.NET 10 SDK](https://dotnet.microsoft.com/download) and an LLM endpoint.** Want the agent to reach GitHub too? The script can wire up the official GitHub MCP server when you have Docker and a token — completely optional, and the console runs great without it.
+
+---
+
+## 📦 Or drop it into your own app
+
+```bash
+dotnet add package Agency.Harness
+dotnet add package Agency.Llm.Claude   # or Agency.Llm.OpenAI — also covers LM Studio & Ollama
+```
+
+```csharp
+IChatClient chat = new ClaudeClient(new LlmClientOptions { ClientType = "Claude", ApiKey = apiKey }).CreateChatClient();
+var tools = new ToolContext { Registry = new ToolRegistry([new ReadFileTool(), new ExecutePowershellTool()]) };
+var agent = new Agent(chat, model: "claude-sonnet-4-5", clientType: "Claude");
+
+Context ctx = Agent.CreateContext("List the .cs files under ./src", tools);
+await foreach (AgentEvent ev in agent.ChatAsync("List the .cs files under ./src", ctx))
+{
+    if (ev is ToolInvokedEvent t) Console.WriteLine($"[tool] {t.ToolName}");
+    if (ev is AgentResultEvent r) Console.WriteLine($"{r.Status}: {r.FinalText}");
+}
+```
+
+```text
+[tool] execute_powershell
+Success: Agent.cs, ChatSession.cs, LoopRunner.cs, SystemPromptBuilder.cs, …
+```
+
+That's the whole loop: the model thinks, calls a real tool, observes the result, and answers — streamed to you as typed `AgentEvent`s. Full `using` directives, multi-turn `ChatSession`, retrieval grounding, hooks, and MCP wiring are in the [Quick start](#quick-start) below.
+
+## What makes Agency different
+
+Most frameworks give you a loop and a tool registry. Agency is about the 80% that decides whether you can leave an agent running unattended:
+
+- 🛡️ **"Done" means verifiably done** — an independent **Goalkeeper** model checks the transcript against your plain-language goal after every turn, under a hard code-enforced turn/cost/token ceiling. Not "the model went quiet." ([deep dive](docs/Loop%20Kit%20-%20Driving%20an%20Agent%20Until%20the%20Job%20Is%20Actually%20Done.md))
+- 🧠 **Memory that compounds** — crash-safe, user-partitioned CoALA memory attached purely via hooks: recall is near-free on the hot path; distillation and consolidation run in the background. ([deep dive](docs/How%20Agency%20Gives%20AI%20Agents%20Memory.md))
+- 🔎 **Semantic search that knows its place** — you curate the documents; the model gets exactly one read-only, scope-locked `semantic_search` tool over them. ([deep dive](docs/Projects%20-%20Ingestion%20and%20Semantic%20Search%20for%20Agent.md))
+- ⚙️ Plus: an allow/deny/rewrite **permission gate** at the tool boundary, **OpenTelemetry on every layer**, **MCP in both directions**, and deterministic tests (`TimeProvider` injected everywhere).
+
+> 📚 **Docs:** start at the [documentation portal](docs/Home.md) · trace one full agent turn in the interactive [Code Walkthrough](docs/walkthrough/code-walkthrough.html) (open it locally — GitHub shows the source, not the page) · new to agents? read the [Console User Manual](docs/Agent%20Console%20User%20Manual.md).
 
 ---
 
@@ -65,7 +103,7 @@ If you've ever wanted a *readable* reference implementation of a memory-augmente
 
 ## Three headline capabilities
 
-Most agent frameworks give you a loop and a tool registry and call it a day. Agency's three differentiators are the things that turn a demo into something you can leave running.
+The bullets from the top of the page, in full — the things that turn a demo into something you can leave running unattended.
 
 ### 🧠 Memory that compounds
 
@@ -154,7 +192,7 @@ Grouped by what they're for — the production guarantees that are genuinely har
 
 ## Quick start
 
-> The **agent, hooks, and MCP** snippets below (steps 3–6) are verified against the current public API — their constructor signatures and method names match the source. The **ingestion** (step 2), **memory**, and **Loop Kit** wiring snippets show the intended shape only; verify their type names and constructors against the current source before copying them. Runnable examples live in `examples/`.
+> The **agent, hooks, and MCP** snippets below (steps 3–6) are verified against the current public API — their constructor signatures and method names match the source. The **ingestion** (step 2), **memory**, and **Loop Kit** wiring snippets show the intended shape only; verify their type names and constructors against the current source before copying them. The runnable reference host is `src/Harness/Agency.Harness.Console` (launch it with `.\RunConsole.ps1`).
 
 ### 1. Install
 
@@ -376,50 +414,31 @@ The minimal config to switch the whole data plane on (absent `Embedding:BaseUrl`
 
 ## Architecture
 
-```
-Documents
-   └─ Agency.Ingestion.FileSystem     (load files)
-   └─ Agency.Ingestion.SemanticKernel (chunk text)
-   └─ Agency.Ingestion                (orchestrate pipeline)
-          │
-          ▼
-   Agency.Embeddings.Common           (IEmbeddingGenerator)
-   Agency.Embeddings.OpenAI           (OpenAI-compatible)
-          │
-          ▼
-   Agency.VectorStore.Common          (IVectorStore)
-   Agency.VectorStore.Sql.Postgres    (pgvector / HNSW)
-   Agency.VectorStore.Sql.Sqlite      (SQLite + cosine UDF)
-          │
-   Agency.KeyValueStore.Common        (IKVStore)
-       Agency.KeyValueStore.Sql.Postgres
-       Agency.KeyValueStore.Sql.Sqlite
-          │
-          ▼
-   Agency.Sql.Common                  (SqlRunnerBase: OTel + execution)
-   Agency.Sql.Postgres / Agency.Sql.Sqlite
-   Agency.Common                      (Dataset, IColumnMetadata)
-   Agency.RagFormatter                (Dataset → Markdown)
-          │
-          ▼
-   Agency.Llm.Common                  (IModelProvider + tool types)
-   Agency.Llm.Claude                  (Anthropic SDK)
-   Agency.Llm.OpenAI                  (OpenAI SDK)
-          │
-          ▼
-   Agency.Harness                     (agent loop, hooks, stop conditions,
-                                       structured Context, tool registry,
-                                       MCP client pool, Loop Kit / Goalkeeper)
-          │  ▲ attaches via hooks — loop never references memory
-          │  └── Agency.Memory.*      (Retrieval read path + Distiller /
-          │                            Consolidator / Hygiene cold path,
-          │                            over Sql.Postgres / Sql.Sqlite)
-          ▼
-   Agency.Harness.Console             (interactive REPL)
-          │
-          ▼
-   Agency.Mcp.Memory                  (MCP server: Memorize / Recall /
-                                       Forget / ListGlobalKeys)
+Lower layers know nothing about higher ones; every box is a separate NuGet package behind an interface. Memory attaches to the harness **only through hooks** — the agent loop holds no reference to it.
+
+```mermaid
+graph TD
+    subgraph DATA ["Data plane — RAG"]
+        ING["<b>Agency.Ingestion</b> + .FileSystem · .SemanticKernel<br/>load &amp; chunk"]
+        EMB["<b>Agency.Embeddings</b> .Common · .OpenAI<br/>text → vectors"]
+        STORE["<b>Agency.VectorStore.*</b> · <b>Agency.KeyValueStore.*</b> · <b>Agency.Sql.*</b><br/>PostgreSQL + pgvector, or SQLite"]
+        FMT["<b>Agency.RagFormatter</b><br/>query results → Markdown context"]
+        ING --> EMB --> STORE --> FMT
+    end
+
+    subgraph AGENTSIDE ["Agent harness"]
+        LLM["<b>Agency.Llm</b> .Claude · .OpenAI<br/>IChatClient providers"]
+        HARNESS["<b>Agency.Harness</b><br/>agent loop · structured Context · tool registry<br/>hooks · permissions · Loop Kit · MCP client"]
+        MEM["<b>Agency.Memory.*</b><br/>recall + background distill / consolidate / prune"]
+        CONSOLE["<b>Agency.Harness.Console</b><br/>interactive REPL"]
+        LLM --> HARNESS
+        MEM -. "attaches via hooks only" .-> HARNESS
+        HARNESS --> CONSOLE
+    end
+
+    DOCS(["📄 Your documents"]) --> ING
+    FMT --> HARNESS
+    STORE --> MCPSRV["<b>Agency.Mcp.Memory</b><br/>standalone MCP server: Memorize / Recall / Forget"]
 ```
 
 ## Packages
@@ -528,10 +547,6 @@ Example client config (Claude Desktop / Cline format):
 ```
 
 The agent harness can also **consume** any MCP server (including this one) via `McpClientPool` — see step 6 of the Quick start.
-
-## Status
-
-Pre-1.0 and under active development. Interfaces are stabilizing but may still shift between minor versions — pin package versions if you depend on this in anything you care about.
 
 ## Roadmap
 

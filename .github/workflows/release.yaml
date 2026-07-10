@@ -74,9 +74,11 @@ jobs:
       - name: 📦 Restore dependencies
         working-directory: src
         # src/NuGet.Config also lists baget-local/gitea-local, pointing at a self-hosted feed
-        # unreachable from a GitHub-hosted runner. Every package here resolves from nuget.org,
-        # so downgrade unreachable-source failures to warnings instead of failing restore.
-        run: dotnet restore --ignore-failed-sources
+        # unreachable from a GitHub-hosted runner. --ignore-failed-sources alone isn't enough:
+        # TreatWarningsAsErrors (Directory.Build.props) promotes the resulting NU1801 warning
+        # back into a hard error. So GitHub restores from its own nuget.org-only config instead
+        # of trying (and failing) to reach the home-lab feeds at all.
+        run: dotnet restore --configfile NuGet.GitHub.config
 
       - name: 🛠️ Build Solution
         working-directory: src

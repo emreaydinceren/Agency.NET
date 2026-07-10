@@ -44,9 +44,11 @@ jobs:
       - name: 📦 Restore dependencies
         working-directory: src
         # src/NuGet.Config also lists baget-local/gitea-local, pointing at a self-hosted feed
-        # unreachable from a GitHub-hosted runner. Every package here resolves from nuget.org,
-        # so downgrade unreachable-source failures to warnings instead of failing restore.
-        run: dotnet restore --ignore-failed-sources
+        # unreachable from a GitHub-hosted runner. --ignore-failed-sources does not suppress
+        # NU1801 there (it's treated as Warning-As-Error and retries indefinitely), so instead
+        # force restore to use only nuget.org — every package here resolves from it, and it
+        # already has its own packageSourceMapping entry in NuGet.Config.
+        run: dotnet restore --source https://api.nuget.org/v3/index.json
 
       - name: 📚 Install DocFX
         run: dotnet tool install --global docfx

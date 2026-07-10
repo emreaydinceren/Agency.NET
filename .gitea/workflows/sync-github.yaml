@@ -1,0 +1,136 @@
+name: Sync to GitHub (guarded outbound push)
+
+# Publishes a scrubbed export of Gitea `main` to the public GitHub mirror
+# (github.com/emreaydinceren/Agency.NET). Gitea is the source of truth and is NEVER
+# rewritten or force-pushed by this job — see PRIVATE/versioning-release-mirror-plan.md
+# §2 (the inviolable rule) and §6 (why a guarded push, not the built-in mirror).
+#
+# Manual-only on purpose: the "Run workflow" click IS the intent to publish upstream.
+# History is rewritten fresh on every run (git filter-repo rewrites every descendant SHA,
+# so this is always a full-history force-push, never an incremental one) from a disposable
+# clone — Gitea's own history is untouched.
+#
+# One-time manual setup this workflow cannot perform on its own:
+#   1. Create a GitHub PAT (fine-grained, scoped to emreaydinceren/Agency.NET,
+#      Contents: Read and write) and store it as the `SYNC_GITHUB_TOKEN` repo secret.
+#   2. `SYNC_MAILMAP` and `SYNC_REPLACEMENTS` repo secrets hold the git-filter-repo rule
+#      files (author-identity consolidation and hostname/IP/email redaction). These
+#      contain real internal hostnames/IPs, which is why they're secrets, not tracked files.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: dotnet-10
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: 📥 Full clone of Gitea main
+        env:
+          GIT_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory '*'
+          AUTH_URL="${GITHUB_SERVER_URL/http:\/\//http:\/\/x-access-token:$GIT_TOKEN@}"
+          git clone --branch main "$AUTH_URL/$GITHUB_REPOSITORY.git" scrub-clone
+          git -C scrub-clone tag -l | xargs -r -n1 -I{} echo "found tag: {}"
+
+      - name: 🛠️ Install git-filter-repo and gitleaks
+        run: |
+          set -euo pipefail
+          apt-get update -qq && apt-get install -y -q python3
+          curl -sSLf https://raw.githubusercontent.com/newren/git-filter-repo/main/git-filter-repo -o /usr/local/bin/git-filter-repo
+          chmod +x /usr/local/bin/git-filter-repo
+          git-filter-repo --version
+
+          case "$(uname -m)" in
+            x86_64) ARCH=x64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "Unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          VER=$(curl -sSLf https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
+                | grep -oE '"tag_name": *"v[^"]+"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')
+          curl -sSLf "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_${ARCH}.tar.gz" -o /tmp/gitleaks.tgz
+          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: 📝 Write scrub rule files from secrets
+        env:
+          SYNC_MAILMAP: ${{ secrets.SYNC_MAILMAP }}
+          SYNC_REPLACEMENTS: ${{ secrets.SYNC_REPLACEMENTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SYNC_MAILMAP" ] || [ -z "$SYNC_REPLACEMENTS" ]; then
+            echo "::error::SYNC_MAILMAP and/or SYNC_REPLACEMENTS repo secrets are not set."
+            exit 1
+          fi
+          printf '%s\n' "$SYNC_MAILMAP" > mailmap.txt
+          printf '%s\n' "$SYNC_REPLACEMENTS" > replacements.txt
+
+      - name: ✂️ Rewrite history (path strip + text redaction + mailmap)
+        working-directory: scrub-clone
+        run: |
+          set -euo pipefail
+          git-filter-repo --force \
+            --path .claude/settings.local.json --invert-paths \
+            --replace-text ../replacements.txt \
+            --mailmap ../mailmap.txt
+
+      - name: 🔎 Verify the rewrite (fail closed)
+        working-directory: scrub-clone
+        run: |
+          set -euo pipefail
+          fail=0
+
+          if [ -n "$(git log --all --oneline -- .claude/settings.local.json)" ]; then
+            echo "::error::.claude/settings.local.json still present in history after rewrite."
+            fail=1
+          fi
+
+          BAD_AUTHORS=$(git log --all --format='%ae%n%ce' | sort -u | grep -v '^13038027+emreaydinceren@users\.noreply\.github\.com$' || true)
+          if [ -n "$BAD_AUTHORS" ]; then
+            echo "::error::Unexpected author/committer email(s) survived the mailmap rewrite:"
+            echo "$BAD_AUTHORS"
+            fail=1
+          fi
+
+          # Needles come from ../replacements.txt (written from the SYNC_REPLACEMENTS secret in
+          # the previous step) rather than being hardcoded here, so this tracked file never
+          # contains the real hostnames/IP/email itself — only the ephemeral runtime copy does.
+          while IFS= read -r line; do
+            needle="${line%%==>*}"
+            [ -z "$needle" ] && continue
+            if [ -n "$(git log --all -S "$needle" --oneline)" ]; then
+              echo "::error::a redaction needle is still reachable in history after the replace-text rewrite."
+              fail=1
+            fi
+          done < ../replacements.txt
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Verification failed — refusing to push. Nothing was sent to GitHub."
+            exit 1
+          fi
+          echo "All verification checks passed."
+
+      - name: 🔐 Gitleaks scan of the rewritten tree (backstop, not a substitute for the above)
+        working-directory: scrub-clone
+        run: |
+          gitleaks dir . --redact --no-banner --verbose
+
+      - name: 🚀 Force-push the scrubbed export to GitHub
+        working-directory: scrub-clone
+        env:
+          SYNC_GITHUB_TOKEN: ${{ secrets.SYNC_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SYNC_GITHUB_TOKEN" ]; then
+            echo "::error::SYNC_GITHUB_TOKEN repo secret is not set."
+            exit 1
+          fi
+          git remote add github "https://x-access-token:${SYNC_GITHUB_TOKEN}@github.com/emreaydinceren/Agency.NET.git"
+          git push --force github main
+          git push --force github --tags

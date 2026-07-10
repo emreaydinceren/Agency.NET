@@ -78,6 +78,7 @@ jobs:
           git-filter-repo --force \
             --path .claude/settings.local.json --invert-paths \
             --replace-text ../replacements.txt \
+            --replace-message ../replacements.txt \
             --mailmap ../mailmap.txt
 
       - name: 🔎 Verify the rewrite (fail closed)
@@ -101,11 +102,18 @@ jobs:
           # Needles come from ../replacements.txt (written from the SYNC_REPLACEMENTS secret in
           # the previous step) rather than being hardcoded here, so this tracked file never
           # contains the real hostnames/IP/email itself — only the ephemeral runtime copy does.
+          # Checks both blob content (-S, what --replace-text covers) and commit messages
+          # (--grep, what --replace-message covers) — Gitea's auto-generated "Reviewed-on:
+          # <gitea-url>/pulls/<n>" merge-commit trailers only show up in the latter.
           while IFS= read -r line; do
             needle="${line%%==>*}"
             [ -z "$needle" ] && continue
             if [ -n "$(git log --all -S "$needle" --oneline)" ]; then
-              echo "::error::a redaction needle is still reachable in history after the replace-text rewrite."
+              echo "::error::a redaction needle is still reachable in blob content after the replace-text rewrite."
+              fail=1
+            fi
+            if [ -n "$(git log --all --fixed-strings --grep="$needle" --oneline)" ]; then
+              echo "::error::a redaction needle is still reachable in a commit message after the replace-message rewrite."
               fail=1
             fi
           done < ../replacements.txt

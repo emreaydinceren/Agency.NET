@@ -130,7 +130,11 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
                 last_accessed_at TIMESTAMPTZ NULL
             );";
 
+        // CA2100: `sql` is built from a compile-time literal template with only `{dim}`
+        // (an internally-configured int, not user input) interpolated in.
+#pragma warning disable CA2100
         await using var cmd = new NpgsqlCommand(sql, conn);
+#pragma warning restore CA2100
         await cmd.ExecuteNonQueryAsync(ct);
 
         // If the old table-level constraint exists (from a prior schema version), drop it so that
@@ -226,7 +230,11 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 
         foreach (var sql in indexes)
         {
+            // CA2100: `sql` is a compile-time literal from the fixed `indexes` array above,
+            // never user input.
+#pragma warning disable CA2100
             await using var cmd = new NpgsqlCommand(sql, conn);
+#pragma warning restore CA2100
             await cmd.ExecuteNonQueryAsync(ct);
         }
     }

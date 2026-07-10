@@ -183,7 +183,11 @@ public sealed class PostgresMemoryStore : IMemoryStore
             var sql = BuildSearchSql(query);
 
             await using var conn = await this._dataSource.OpenConnectionAsync(ct);
+            // CA2100: BuildSearchSql only appends fixed literal clause fragments based on
+            // boolean flags; every value is bound below via AddWithValue/NpgsqlParameter.
+#pragma warning disable CA2100
             await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);
+#pragma warning restore CA2100
 
             cmd.Parameters.AddWithValue("user_id", query.UserId);
             cmd.Parameters.Add(new NpgsqlParameter("query_vec", new Vector(query.QueryEmbedding.ToArray())));

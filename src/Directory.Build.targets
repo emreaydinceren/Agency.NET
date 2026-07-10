@@ -8,6 +8,10 @@
   <!-- All non-test projects produce NuGet packages -->
   <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
     <IsPackable>true</IsPackable>
+    <!-- Test projects generate their own local test data/fixtures (e.g. Random for deterministic
+         mock embeddings, ad-hoc schema-isolation SQL) that trips CA5394/CA2100 with no real
+         security relevance — only enforce the elevated security rule set for shipped code. -->
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
   </PropertyGroup>
 
   <!-- Symbol and source embedding for NuGet packages -->

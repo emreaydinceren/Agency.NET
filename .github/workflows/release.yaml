@@ -1,0 +1,140 @@
+name: Release (nuget.org)
+
+# Publishes to nuget.org on a `v*` tag push. Deliberately separate from ci.yaml: this is the
+# only workflow that ever holds a nuget.org-scoped credential, so the credential's blast radius
+# is this one gated workflow, not every push/PR build.
+#
+# Versioning is NBGV (Nerdbank.GitVersioning), not the tag itself — `nbgv tag` is the only
+# supported way to cut a release, and the "Assert tag matches computed version" step below fails
+# the build if a tag was hand-typed and disagrees with NBGV's computed version.
+#
+# Publishing uses NuGet Trusted Publishing (OIDC): the `publish` job exchanges a short-lived
+# GitHub OIDC token for a ~1-hour nuget.org API key via `NuGet/login` — no long-lived NuGet
+# secret is stored. This requires a one-time, human, external setup that this workflow file
+# cannot perform on its own:
+#   1. On nuget.org: add a Trusted Publishing policy for repo `emreaydinceren/Agency.NET`,
+#      workflow file `release.yaml`, environment `nuget-release`.
+#   2. On GitHub: create the `nuget-release` environment and add required-reviewer protection.
+#   3. On GitHub: add the `NUGET_USER` secret (your nuget.org username only — not a password
+#      or API key).
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-pack:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18-trixie
+        env:
+          POSTGRES_USER: dev_user
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: dev_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The job runs inside a container on the same Docker network as the `postgres` service, so
+      # it's reachable by service name — NOT `localhost`.
+      ConnectionStrings__PostgreSql: Host=postgres;Port=5432;Username=dev_user;Password=dev_password;Database=dev_db
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # NBGV computes the version from git height since the last version.json bump —
+          # a shallow clone can't count that and silently produces a wrong (0.0.x) version.
+          fetch-depth: 0
+
+      - name: 🔖 Assert tag matches computed version
+        run: |
+          dotnet tool install --global nbgv
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          COMPUTED_VERSION=$(nbgv get-version -v NuGetPackageVersion)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$COMPUTED_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match NBGV's computed version $COMPUTED_VERSION — always create release tags with 'nbgv tag', never by hand."
+            exit 1
+          fi
+          echo "Tag v$TAG_VERSION matches computed version $COMPUTED_VERSION"
+
+      - name: 📦 Restore dependencies
+        working-directory: src
+        # src/NuGet.Config also lists baget-local/gitea-local, pointing at a self-hosted feed
+        # unreachable from a GitHub-hosted runner. Every package here resolves from nuget.org,
+        # so downgrade unreachable-source failures to warnings instead of failing restore.
+        run: dotnet restore --ignore-failed-sources
+
+      - name: 🛠️ Build Solution
+        working-directory: src
+        run: dotnet build --configuration Release --no-restore
+
+      - name: 🧪 Run Unit Tests
+        working-directory: src
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category!=Functional"
+
+      - name: 🧪 Run Postgres-only Functional Tests
+        working-directory: src
+        # Category=RequiresLlm tests need the home-lab LM Studio instance, unreachable from a
+        # GitHub-hosted runner — everything else in Category=Functional only needs Postgres.
+        run: dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud&Category!=RequiresLlm"
+
+      - name: 📦 Pack NuGet packages
+        working-directory: src
+        run: dotnet pack --configuration Release --no-build --output ./nupkg
+
+      - name: 📤 Upload packages
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: nuget-packages
+          path: |
+            src/nupkg/*.nupkg
+            src/nupkg/*.snupkg
+          if-no-files-found: error
+
+  publish:
+    needs: build-test-pack
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10.0
+    # Requires a `nuget-release` environment configured on GitHub with required-reviewer
+    # protection (RT17) — every publish waits on a human approval before this job proceeds.
+    environment: nuget-release
+
+    permissions:
+      # id-token: write is scoped to only this job — everywhere else in the workflow keeps the
+      # workflow-level `contents: read` default, since only this job exchanges an OIDC token.
+      id-token: write
+
+    steps:
+      - name: 📥 Download packages
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: nuget-packages
+          path: nupkg
+
+      - name: 🔑 NuGet login (OIDC → temporary API key)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1 (v1.2.0)
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: 🚀 Publish to nuget.org
+        run: |
+          dotnet nuget push "nupkg/*.nupkg" \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

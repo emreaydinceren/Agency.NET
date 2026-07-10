@@ -4,8 +4,23 @@ How to actually ship packages: why publish is gated the way it is, the exact cha
 involved, and the runbook for both a real release and a disposable dry-run test. Covers both feeds
 — the private Gitea feed (publishes on every push) and the public nuget.org feed (gated by a tag +
 the guarded Gitea→GitHub sync + a human approval) — plus the Gitea/GitHub relationship that makes
-the two-feed, two-forge setup work at all. For the full design rationale behind that split, see
-`PRIVATE/versioning-release-mirror-plan.md`.
+the two-feed, two-forge setup work at all. This doc is self-contained for that purpose; it doesn't
+assume access to any planning notes outside the repo.
+
+## Branch model — one trunk, releases are tags
+
+**`main` is the only long-lived branch.** Feature branches PR into it (on Gitea — see "Contribution
+lifecycle" below); there is no `release`, `prerelease`, or numbered `Release_0x` branch. **A
+release is just a tag on `main`** (`nbgv tag`, see "How to cut a real release"), not a branch.
+
+Long-lived release *branches* solve exactly one problem: maintaining several shipped versions at
+once — e.g. back-porting a fix to `1.x` while `2.x` moves ahead. This is a mostly-solo, pre-1.0
+project shipping a single line, so that problem doesn't exist yet, and a release branch would buy
+nothing while costing real friction — every branch is another ref that has to stay in sync across
+two forges, and another thing the guarded sync (below) has to carry. Git tags already give a
+permanent, named marker for every release, and GitHub renders them as Releases. If a genuine need
+to patch an old shipped version ever comes up, that's the day to cut a `release/0.1` branch — not
+before.
 
 ## Why the Gitea feed publishes on every push
 
@@ -49,6 +64,39 @@ In the order they act when you push a `v*` tag:
 | 9 | **Publish step** | Loops `nupkg/*.nupkg` then `nupkg/*.snupkg`, `curl --fail -X PUT -H "Authorization: token $NUGETPUBLISHTOKEN"` to `http://gitea-host.example:3000/api/packages/emre/nuget` (and `/symbolpackage` for `.snupkg`). `NUGETPUBLISHTOKEN` is a Gitea Actions repo secret scoped to `emre`'s package registry. |
 | 10 | **The Gitea NuGet feed** | Where it lands. Browse via `mcp__gitea__package_read` (`type=nuget`, `owner=emre`) or `http://gitea-host.example:3000/emre/-/packages/nuget/<name>/<version>`. |
 | 11 | **Inspect & test-install step (RT39)** | Runs after the publish step, on every push (same "everything that passes CI" scope as publish, not just tags). For each just-published `.nupkg`: reads its `.nuspec` for id/version, checks `unzip -l` for the DLL, `.xml` doc, `README.md`, `LICENSE`, `NOTICE`, and icon (and fails on a stray `.pdb` or loose `.cs`), then copies `src/PackageSmokeTest` (a small committed console harness — never packed, not in `Agency.slnx`) to a scratch dir, `dotnet add package`s that id/version **from the Gitea feed itself** (proving a consumer's restore actually works, not just that the local build succeeded), and runs it: `Agency.PackageSmokeTest` loads the package's main assembly via reflection and forces type resolution, catching a missing transitive dependency or wrong target framework that content inspection alone would miss. Collects failures across all ~30 packages before failing the job, so one bad package doesn't hide problems in the rest. |
+
+### A worked example — how the version climbs
+
+Suppose `version.json`'s `version` field says `"0.1"`:
+
+```
+commit  ref built        NBGV version         where it can go
+──────  ──────────────   ──────────────────   ─────────────────────────────
+ c1     main             0.1.1-g<c1sha>       Gitea feed (prerelease)
+ c2     main             0.1.2-g<c2sha>       Gitea feed (prerelease)
+ c3     main             0.1.3-g<c3sha>       Gitea feed (prerelease)
+ c3     tag v0.1.3       0.1.3                Gitea feed + nuget.org (stable)
+ c4     main             0.1.4-g<c4sha>       Gitea feed (prerelease)
+ ...
+ c9     edit version.json → "0.2"  ← base bump commit, height resets
+ c9     main             0.2.0-g<c9sha>       Gitea feed (prerelease)
+ c10    main             0.2.1-g<c10sha>      Gitea feed (prerelease)
+ c10    tag v0.2.1       0.2.1                Gitea feed + nuget.org (stable)
+```
+
+**The patch is the git height** — it climbs on its own with every commit; you never choose it
+directly. **You choose `major.minor`** by editing `version.json` — bumping it resets the height so
+the base-bump commit lands exactly on `.0`. So "release `v0.1.7`" means "the commit at height 7" —
+if you ever truly need to pick an arbitrary patch number, you'd bump `version.json` to pin it, but
+under normal flow the patch is a faithful, gap-free counter you don't get to hand-pick.
+
+**Why the ugly `-g<sha>` suffix, not a prettier label like `-alpha`?** NBGV's only way to put a
+pretty label on prerelease builds is to bake it into the base itself (e.g. `"0.1-alpha"` in
+`version.json`) — but that label would then apply to *every* build, tagged ones included, so
+nuget.org releases would ship as `0.1.7-alpha` and never go clean-stable. You can't have both a
+pretty prerelease label and clean stable tags, so this repo keeps the plain `"0.1"` base and
+accepts the automatic `-g<sha>` suffix: uglier, but free, unique per commit, and it keeps public
+releases clean. This is a deliberate, already-made call, not an open question.
 
 ## How to cut a real release
 
@@ -123,11 +171,27 @@ GitHub directly would let GitHub `main` diverge from Gitea `main` with no way to
 short of another force-push — so it's not a style preference, it's what keeps the two histories
 from splitting.
 
+**Why a scripted push (`sync-github.yaml`), not Gitea's built-in push-mirror?** The built-in
+mirror is all-refs, all-or-nothing, with no pre-push guard and no branch filtering. This repo's
+history and tracked files carry internal hostnames/IPs and a personal email that must never reach
+the public remote — an unguarded mirror would be a leak waiting to happen the moment anything
+slipped through review. The scripted job instead rewrites a disposable clone with `git-filter-repo`
+(host/IP/email redaction + mailmap) on every single run, runs a `gitleaks` scan as a backstop, and
+only force-pushes if both the rewrite's own verification checks and the gitleaks scan come back
+clean — see the job's "🔎 Verify the rewrite" and "🔐 Gitleaks scan" steps. Gitea's own history is
+never touched; only the disposable clone is rewritten and pushed.
+
 **One-time setup** (once per clone that does this work):
 
 ```bash
 git remote add github https://github.com/emreaydinceren/Agency.NET.git
 ```
+
+`sync-github.yaml` itself additionally needs three Gitea Actions repo secrets before its first run
+— `SYNC_GITHUB_TOKEN` (a GitHub PAT scoped to this repo, `Contents: Read and write`),
+`SYNC_MAILMAP`, and `SYNC_REPLACEMENTS` (the `git-filter-repo` rule files; kept as secrets, not
+tracked files, precisely because they contain the real hostnames/IPs/email being redacted). See the
+workflow's header comment for the exact one-time setup steps.
 
 ### Act 1 — fetch and validate
 
@@ -203,7 +267,7 @@ default.
   (`Directory.Build.props`) promotes the resulting NU1801 ("unable to load the service index")
   warning back into a hard error, so restore fails outright — first hit on
   [GitHub Actions run 29114671436](https://github.com/emreaydinceren/Agency.NET/actions/runs/29114671436/job/86435020483),
-  2026-07-10, right after the sync job's text-redaction had rewritten `gitea-host.example` to the
+  2026-07-10, right after the sync job's text-redaction had rewritten the real Gitea hostname to the
   placeholder `gitea-host.example` in that file's history. Fixed by giving `.github/workflows/ci.yaml`
   and `release.yaml` their own `nuget.org`-only `src/NuGet.GitHub.config`
   (`dotnet restore --configfile NuGet.GitHub.config`), so there's no unreachable source to warn
@@ -230,6 +294,17 @@ default.
   just-published package back out. This is the standard Gitea package-registry auth pattern, but it
   hasn't been exercised against the live feed yet — if the first real run 401s on the restore, the
   token's scope (or the username) is the first thing to check.
+- **Gitea Actions masquerades as GitHub Actions.** The Gitea runner sets `GITHUB_ACTIONS=true` and
+  `GITHUB_*` env vars, so tools that detect "am I running in GitHub Actions" (including NBGV's own
+  cloud-build detection, and this repo's `ContinuousIntegrationBuild` MSBuild condition) fire on
+  Gitea too. Usually harmless — it mainly affects build-number stamping — but worth knowing when a
+  log mentions GitHub Actions and the run is actually on Gitea.
+- **Leftover throwaway tags are inert, not dangerous.** NBGV ignores git tags entirely when
+  *computing* a version — only git height matters for that. A tag only matters for
+  `publicReleaseRefSpec` matching (does this ref get a clean or a `-g<sha>` build) and as the
+  release-trigger ref itself. So a stray dry-run tag like `v0.0.1-citestN` left undeleted can't
+  silently corrupt a future version number — it's just clutter in the tag list, safe to delete
+  whenever convenient.
 
 ## Related
 

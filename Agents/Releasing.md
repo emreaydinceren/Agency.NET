@@ -1,8 +1,11 @@
 # Releasing — Triggering NuGet Publish from ci-main
 
-How to actually ship packages to the Gitea NuGet feed: why publish is gated the way it is, the
-exact chain of components involved, and the runbook for both a real release and a disposable
-dry-run test.
+How to actually ship packages: why publish is gated the way it is, the exact chain of components
+involved, and the runbook for both a real release and a disposable dry-run test. Covers both feeds
+— the private Gitea feed (publishes on every push) and the public nuget.org feed (gated by a tag +
+the guarded Gitea→GitHub sync + a human approval) — plus the Gitea/GitHub relationship that makes
+the two-feed, two-forge setup work at all. For the full design rationale behind that split, see
+`PRIVATE/versioning-release-mirror-plan.md`.
 
 ## Why the Gitea feed publishes on every push
 
@@ -25,8 +28,9 @@ publishing from ordinary `main` pushes — the private Gitea feed is low-risk, s
 *everything that passes CI*: a plain push lands a `-g<sha>` prerelease, a `v*` tag lands the
 matching clean stable version (via `version.json`'s `publicReleaseRefSpec`). The tag-gated model
 described above is retained here for history; **it no longer reflects `ci-main.yaml`'s actual
-behavior.** A tag-based gate still applies to the *future* nuget.org publish path (RT15) — that
-one stays deliberate, since a public release is effectively unpublishable.
+behavior.** A tag-based gate still applies to the nuget.org publish path (RT15/RT17, see "How to
+cut a real release" step 8 below) — that one stays deliberate, since a public release is
+effectively unpublishable.
 
 ## The components in play
 
@@ -67,14 +71,22 @@ In the order they act when you push a `v*` tag:
    unconditionally now, so `skipped` would mean the job never reached them — e.g. an earlier step
    failed).
 6. Confirm the **inspect & test-install step (RT39)** is green too — it's the last thing standing
-   between this Gitea-feed publish and any future public push (RT51/RT15). A red run here means a
-   packaging defect (missing README/XML/icon, a stray `.pdb`, or a package that can't actually be
-   restored from the feed) that content inspection alone wouldn't have caught.
+   between this Gitea-feed publish and pushing the tag out to GitHub for the public nuget.org
+   release (RT51/RT15, step 8 below). A red run here means a packaging defect (missing
+   README/XML/icon, a stray `.pdb`, or a package that can't actually be restored from the feed)
+   that content inspection alone wouldn't have caught.
 7. Verify the packages landed: check the Gitea package registry for the new version across all
    packable projects (currently ~30).
-8. There's no public mirror or changelog automation yet — this only reaches the private Gitea
-   feed. Publishing to nuget.org needs RT15 (a separate GitHub Actions workflow); changelog
-   generation is RT19. Both still backlog.
+8. The steps above only reach the private Gitea feed. To also reach the public nuget.org feed,
+   run the guarded outbound sync (`sync-github.yaml`, `workflow_dispatch` on Gitea Actions — see
+   "Contribution lifecycle" below) so `main` **and the new tag** reach GitHub. GitHub's
+   `.github/workflows/release.yaml` (RT15/RT17) then triggers automatically on the `v*` tag: it
+   re-asserts the tag matches NBGV's computed version, restores/builds/tests/packs from scratch
+   on GitHub's own runner, then the `publish` job pauses at the `nuget-release` environment for a
+   required human approval before exchanging a short-lived GitHub OIDC token for a nuget.org API
+   key and pushing — no long-lived nuget.org secret is stored anywhere. See that workflow's header
+   comment for the one-time nuget.org/GitHub setup this requires.
+9. Changelog generation (RT19) is still backlog — there's no automated release-notes step yet.
 
 ## Dry-run testing without a real release
 
@@ -96,8 +108,108 @@ the tag after the real computed version, so a tag it creates is indistinguishabl
 actual release. That path was already exercised once during the RT47/RT48 rollout; it doesn't need
 a standing recipe.
 
+## Contribution lifecycle — validating and merging a public PR
+
+Contributions arrive as ordinary GitHub pull requests, but they can only be *validated* on
+Gitea — the functional test suite needs the home-lab LLMs, which aren't reachable from GitHub's
+public CI (see `CONTRIBUTING.md`'s "About functional tests" section, which sets this expectation
+for contributors up front). This is the maintainer-side counterpart to that doc: how a PR gets
+from "opened on GitHub" to "merged and mirrored back," entirely without ever touching GitHub's
+own Merge button.
+
+**The inviolable rule: never click Merge on GitHub.** Gitea `main` is the sole source of truth;
+GitHub `main` is a mirror written only by the guarded outbound push (RT51, below). Merging on
+GitHub directly would let GitHub `main` diverge from Gitea `main` with no way to reconcile them
+short of another force-push — so it's not a style preference, it's what keeps the two histories
+from splitting.
+
+**One-time setup** (once per clone that does this work):
+
+```bash
+git remote add github https://github.com/emreaydinceren/Agency.NET.git
+```
+
+### Act 1 — fetch and validate
+
+1. Fetch the PR at its exact, read-only ref and check it out on a throwaway branch:
+
+   ```bash
+   git fetch github refs/pull/<n>/head
+   git switch -c pr-<n> FETCH_HEAD
+   ```
+
+2. Run the full test suite locally, including the `Category=Functional` tests GitHub's CI
+   couldn't run (see `Agents/BuildAndTest.md`).
+
+### Act 2 — the needs-changes loop
+
+If validation fails, comment on the GitHub PR describing what needs to change. The PR **stays
+open**; there's no local branch to clean up or re-derive. Once the contributor pushes new commits
+to their fork, `refs/pull/<n>/head` updates automatically — re-run step 1 (the `git fetch` +
+`git switch -c` pair) to pick up the new commits and re-test. Repeat until it passes or the PR is
+abandoned.
+
+### Act 3 — merge and publish
+
+3. On pass, merge into Gitea `main` with `--no-ff`:
+
+   ```bash
+   git switch main
+   git merge --no-ff pr-<n>
+   ```
+
+4. Run the guarded outbound push (RT51's `sync-github.yaml`, `workflow_dispatch`-triggered on
+   Gitea Actions) to mirror the merge to GitHub. This closes the loop — see "Known gotchas" below
+   for a caveat on whether it actually auto-closes the PR as merged; the sync mechanics themselves
+   are exercised and working, but that specific auto-close behavior hasn't been tested against a
+   real external contributor PR yet.
+
+**Why `--no-ff`, not squash or rebase:** a fast-forward, squash, or rebase merge rewrites the
+contributor's commits onto new parents, which changes their SHAs. `--no-ff` adds a merge commit on
+top but leaves the contributor's original commits — and their SHAs — untouched. The intent is that
+GitHub's own merge-detection (a PR auto-closes as "merged" when its exact head commit SHA becomes
+reachable from the base branch, not by matching diff content) recognizes the contributor's commits
+once they reach GitHub `main`, crediting them as the PR author rather than leaving the PR to be
+closed by hand with no merge record. See the caveat below on RT51 — this only holds if the
+outbound push actually preserves those SHAs.
+
+**Escape hatch:** for a messy drive-by fix where preserving individual commits isn't worth it,
+squash-merge locally instead and close the PR on GitHub manually with a comment linking the squash
+commit. This forgoes the auto-close/authorship-credit behavior above — use it deliberately, not by
+default.
+
 ## Known gotchas
 
+- **RT51's SHA-preservation claim is verified only for the sync mechanics, not for a real
+  contributor PR.** `sync-github.yaml` has since been triggered against the live feed multiple
+  times (e.g. runs #416/#417/#420 on Gitea Actions) and successfully force-pushes a rewritten
+  history to GitHub — that part works. What's still unverified is the auto-close behavior the
+  contribution lifecycle above depends on: a contributor's PR-head SHA, once merged `--no-ff` into
+  Gitea `main`, would need to survive the guarded outbound push and become reachable on GitHub
+  `main` for GitHub to auto-close the PR as "merged." But `sync-github.yaml` does a **full
+  `git-filter-repo` rewrite of the entire history on every run** (path-strip + text redaction +
+  mailmap), then force-pushes the result — by its own header comment, "this is always a
+  full-history force-push, never an incremental one." Rewriting any commit changes the hash of
+  every descendant commit, even ones whose own content never changed, because a commit hash covers
+  its parent hash. That means a contributor's original SHA is unlikely to reach GitHub `main`
+  intact, which would mean the PR does *not* auto-close as merged despite matching content. No real
+  external contribution has gone through Act 1–3 yet to confirm either way — the sync runs so far
+  have all mirrored Emre's own solo-authored merges. If a real PR sync doesn't auto-close the
+  source PR, this is the first thing to check, and RT51's design (full rewrite vs. an incremental
+  sync that only rewrites new commits) would need revisiting.
+- **GitHub Actions can't restore from `src/NuGet.Config` — it needs its own config.**
+  `src/NuGet.Config` lists two home-lab-only feeds (`baget-local`, `gitea-local`) unreachable from
+  a GitHub-hosted runner. `--ignore-failed-sources` alone doesn't save it: `TreatWarningsAsErrors`
+  (`Directory.Build.props`) promotes the resulting NU1801 ("unable to load the service index")
+  warning back into a hard error, so restore fails outright — first hit on
+  [GitHub Actions run 29114671436](https://github.com/emreaydinceren/Agency.NET/actions/runs/29114671436/job/86435020483),
+  2026-07-10, right after the sync job's text-redaction had rewritten `gitea-host.example` to the
+  placeholder `gitea-host.example` in that file's history. Fixed by giving `.github/workflows/ci.yaml`
+  and `release.yaml` their own `nuget.org`-only `src/NuGet.GitHub.config`
+  (`dotnet restore --configfile NuGet.GitHub.config`), so there's no unreachable source to warn
+  about in the first place. `src/NuGet.Config` (Gitea's config, with all three sources) is
+  untouched — don't try to make one `NuGet.Config` serve both forges; give GitHub CI steps that
+  restore packages their own config file instead.
 - **No `tags:` trigger before 2026-07-02.** A tag pushed before PR #124 merged would never have
   run this workflow — silently, since nothing errors, the run simply never starts.
 - **NBGV needs full history, not just the tagged commit.** Unlike MinVer, NBGV counts git height
@@ -107,8 +219,10 @@ a standing recipe.
   can silently disagree with what NBGV actually computes. Always use `nbgv tag`; the tag-assertion
   step in `build-and-publish` fails the build if a pushed `v*` tag doesn't match
   `nbgv get-version -v NuGetPackageVersion` anyway, so a mismatch is caught, not shipped.
-- **Publishing here ≠ a public release.** This is Emre's private Gitea feed only. Public
-  nuget.org publishing is a separate, not-yet-built pipeline (RT15).
+- **Publishing here ≠ a public release, automatically.** The steps in this doc (through "How to
+  cut a real release" step 7) only reach Emre's private Gitea feed. Public nuget.org publishing
+  (RT15/RT17) is a separate, deliberate step — see step 8 — gated by the guarded outbound sync
+  plus a required human approval, not something that happens as a side effect of a Gitea tag push.
 - **No "unpublish" workflow.** Cleanup after a mistaken publish is a manual per-package delete
   (see Dry-run steps above), not a single revert.
 - **RT39's test-install step assumes `NUGETPUBLISHTOKEN` also works for read.** It registers the
@@ -119,5 +233,8 @@ a standing recipe.
 
 ## Related
 
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — the contributor-facing counterpart to the contribution
+  lifecycle above: how to build/test locally, coding style, and the PR process from the
+  contributor's side.
 - [`CIPipeline.md`](CIPipeline.md) — general CI topology, failure modes, and the RT16 revision-gate reflection.
 - [`Trackers.md`](Trackers.md) — where RT3, RT15, RT16, RT19 live.

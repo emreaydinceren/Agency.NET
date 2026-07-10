@@ -2,8 +2,8 @@ name: Sync to GitHub (guarded outbound push)
 
 # Publishes a scrubbed export of Gitea `main` to the public GitHub mirror
 # (github.com/emreaydinceren/Agency.NET). Gitea is the source of truth and is NEVER
-# rewritten or force-pushed by this job — see PRIVATE/versioning-release-mirror-plan.md
-# §2 (the inviolable rule) and §6 (why a guarded push, not the built-in mirror).
+# rewritten or force-pushed by this job — see Agents/Releasing.md's "Contribution lifecycle"
+# section (the inviolable rule, and why a guarded push, not the built-in mirror).
 #
 # Manual-only on purpose: the "Run workflow" click IS the intent to publish upstream.
 # History is rewritten fresh on every run (git filter-repo rewrites every descendant SHA,

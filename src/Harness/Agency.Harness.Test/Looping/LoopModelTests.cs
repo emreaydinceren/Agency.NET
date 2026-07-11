@@ -1,9 +1,8 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 
-namespace Agency.Harness.Test.Loop;
+namespace Agency.Harness.Test.Looping;
 
 /// <summary>
 /// Phase 0 / T-MODEL-1: verifies that all Loop Kit domain records and enums
@@ -58,16 +57,16 @@ public sealed class LoopModelTests
 
     // ── Verdict ───────────────────────────────────────────────────────────────
 
-    /// <summary>Verdict.Continue round-trips through the source-gen context.</summary>
+    /// <summary>Verdict.ContinueLoop round-trips through the source-gen context.</summary>
     [Fact]
     public void Verdict_Continue_RoundTrip()
     {
-        var original = new Verdict.Continue("needs more work");
+        var original = new Verdict.ContinueLoop("needs more work");
 
-        // STJ source-gen uses the simple class name as the property: Verdict.Continue → .Continue
-        string json = JsonSerializer.Serialize(original, LoopJsonContext.Default.Continue);
-        Verdict.Continue? restored =
-            JsonSerializer.Deserialize(json, LoopJsonContext.Default.Continue);
+        // STJ source-gen uses the simple class name as the property: Verdict.ContinueLoop → .Continue
+        string json = JsonSerializer.Serialize(original, LoopJsonContext.Default.ContinueLoop);
+        Verdict.ContinueLoop? restored =
+            JsonSerializer.Deserialize(json, LoopJsonContext.Default.ContinueLoop);
 
         Assert.NotNull(restored);
         Assert.Equal(original.Reason, restored.Reason);
@@ -139,7 +138,7 @@ public sealed class LoopModelTests
     [Fact]
     public void VerdictEvent_Continue_RoundTrip()
     {
-        var original = new VerdictEvent(TurnIndex: 1, Verdict: new Verdict.Continue("not yet"));
+        var original = new VerdictEvent(TurnIndex: 1, Verdict: new Verdict.ContinueLoop("not yet"));
 
         string json = JsonSerializer.Serialize(original, LoopJsonContext.Default.VerdictEvent);
         VerdictEvent? restored =
@@ -148,7 +147,7 @@ public sealed class LoopModelTests
         Assert.NotNull(restored);
         Assert.Equal(original.TurnIndex, restored.TurnIndex);
 
-        var continuedVerdict = Assert.IsType<Verdict.Continue>(restored.Verdict);
+        var continuedVerdict = Assert.IsType<Verdict.ContinueLoop>(restored.Verdict);
         Assert.Equal("not yet", continuedVerdict.Reason);
     }
 
@@ -203,7 +202,7 @@ public sealed class LoopModelTests
         // Each of these must return a non-null JsonTypeInfo — if the type is not
         // registered in the source-gen context the call throws NotSupportedException.
         Assert.NotNull(LoopJsonContext.Default.GoalSpec);
-        Assert.NotNull(LoopJsonContext.Default.Continue);   // Verdict.Continue
+        Assert.NotNull(LoopJsonContext.Default.ContinueLoop);   // Verdict.ContinueLoop
         Assert.NotNull(LoopJsonContext.Default.Done);       // Verdict.Done
         Assert.NotNull(LoopJsonContext.Default.LoopOutcome);
         Assert.NotNull(LoopJsonContext.Default.GoalSetEvent);

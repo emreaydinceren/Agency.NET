@@ -43,6 +43,8 @@ public sealed class McpClientPool : IAsyncDisposable
     /// <returns>An initialized pool whose <see cref="Tools"/> are ready for registration.</returns>
     public static async Task<McpClientPool> CreateAsync(McpClientOptions options, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         List<McpClient> clients = [];
         List<ITool> tools = [];
         var toolNamesByServer = new Dictionary<string, IReadOnlyList<string>>();

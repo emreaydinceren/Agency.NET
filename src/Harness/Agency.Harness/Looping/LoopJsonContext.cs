@@ -1,8 +1,6 @@
 using System.Text.Json.Serialization;
 
-using Agency.Harness;
-
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Source-generated <see cref="System.Text.Json.Serialization.JsonSerializerContext"/> for all
@@ -11,7 +9,7 @@ namespace Agency.Harness.Loop;
 /// </summary>
 [JsonSerializable(typeof(GoalSpec))]
 [JsonSerializable(typeof(Verdict))]
-[JsonSerializable(typeof(Verdict.Continue))]
+[JsonSerializable(typeof(Verdict.ContinueLoop))]
 [JsonSerializable(typeof(Verdict.Done))]
 [JsonSerializable(typeof(LoopOutcome))]
 [JsonSerializable(typeof(GoalSetEvent))]

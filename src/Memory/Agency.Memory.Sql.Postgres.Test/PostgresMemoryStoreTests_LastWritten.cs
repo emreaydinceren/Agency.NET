@@ -110,7 +110,7 @@ public sealed class PostgresMemoryStoreTests_LastWritten : IAsyncLifetime
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private string UniqueUser() => $"u-{Guid.NewGuid():N}";
+    private static string UniqueUser() => $"u-{Guid.NewGuid():N}";
 
     private PostgresMemoryStore MakeStore()
     {

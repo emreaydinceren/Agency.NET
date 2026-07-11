@@ -19,6 +19,8 @@ public static class DatasetExtensions
     /// <returns>The dataset formatted as a Markdown table.</returns>
     public static string ToMarkdownTable(this Dataset dataset)
     {
+        ArgumentNullException.ThrowIfNull(dataset);
+
         var sb = new StringBuilder();
         // Header
         sb.Append("| ");

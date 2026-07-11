@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Agency.Harness;
 using Agency.VectorStore.Common;
 using Moq;
 

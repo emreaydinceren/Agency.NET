@@ -25,7 +25,7 @@ namespace Agency.Memory.Sql.Sqlite;
 /// <c>user_state</c> table so the retrieval gate (Spec §8.1) always sees a fresh value
 /// even across process restarts (one-turn hydration penalty on cold start).
 /// </remarks>
-public sealed class SqliteMemoryStore : IMemoryStore
+public sealed partial class SqliteMemoryStore : IMemoryStore
 {
     /// <summary>The activity source name used for memory store telemetry.</summary>
     public const string ActivitySourceName = "Agency.Memory.Sql.Sqlite";
@@ -156,7 +156,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
             _upsertCount.Add(1, new TagList { { "status", "success" } });
             _upsertDuration.Record(sw.Elapsed.TotalMilliseconds);
 
-            this._logger.LogDebug("Upserted record {Id} for user {UserId}", assignedId, record.UserId);
+            this.LogUpsertedRecord(assignedId, record.UserId);
 
             return record with
             {
@@ -171,7 +171,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
             sw.Stop();
             _upsertCount.Add(1, new TagList { { "status", "error" } });
             _upsertDuration.Record(sw.Elapsed.TotalMilliseconds);
-            this._logger.LogError(ex, "Error upserting record for user {UserId}", record.UserId);
+            this.LogErrorUpsertingRecord(ex, record.UserId);
             throw;
         }
     }
@@ -238,7 +238,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
                     }
                     catch (Exception ex)
                     {
-                        this._logger.LogWarning(ex, "Failed to bump last_accessed_at for {Count} records", ids.Length);
+                        this.LogFailedToBumpLastAccessedAt(ex, ids.Length);
                     }
                 }, CancellationToken.None);
             }
@@ -250,7 +250,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
             sw.Stop();
             _searchCount.Add(1, new TagList { { "status", "error" } });
             _searchDuration.Record(sw.Elapsed.TotalMilliseconds);
-            this._logger.LogError(ex, "Error searching records for user {UserId}", query.UserId);
+            this.LogErrorSearchingRecords(ex, query.UserId);
             throw;
         }
     }
@@ -541,9 +541,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
             await tx.CommitAsync(ct);
             this._lastWrittenCache[newRecord.UserId] = nowTs;
 
-            this._logger.LogInformation(
-                "MergeAsync: deleted {Count} records and inserted {Id} for user {UserId}",
-                idsToDelete.Count, assignedId, newRecord.UserId);
+            this.LogMergeCompleted(idsToDelete.Count, assignedId, newRecord.UserId);
 
             return newRecord with
             {
@@ -669,6 +667,26 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
         return rows > 0;
     }
+
+    /// <summary>Logs that a record was upserted.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Upserted record {Id} for user {UserId}")]
+    private partial void LogUpsertedRecord(string id, string userId);
+
+    /// <summary>Logs that upserting a record failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error upserting record for user {UserId}")]
+    private partial void LogErrorUpsertingRecord(Exception ex, string userId);
+
+    /// <summary>Logs that the fire-and-forget bump of last_accessed_at for search hits failed.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to bump last_accessed_at for {Count} records")]
+    private partial void LogFailedToBumpLastAccessedAt(Exception ex, int count);
+
+    /// <summary>Logs that searching records failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error searching records for user {UserId}")]
+    private partial void LogErrorSearchingRecords(Exception ex, string userId);
+
+    /// <summary>Logs that a merge operation deleted the superseded records and inserted the merged record.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "MergeAsync: deleted {Count} records and inserted {Id} for user {UserId}")]
+    private partial void LogMergeCompleted(int count, string id, string userId);
 
     // ── private helpers ───────────────────────────────────────────────────────
 

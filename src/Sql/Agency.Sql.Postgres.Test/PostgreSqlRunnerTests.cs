@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 
 namespace Agency.Sql.Postgres.Test;
 
@@ -124,7 +125,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
 
         Assert.Single(ds.Rows);
         Assert.Equal(uniqueName, ds["name", 0]);
-        Assert.Equal(3.3, Convert.ToDouble(ds["score", 0]), precision: 5);
+        Assert.Equal(3.3, Convert.ToDouble(ds["score", 0], CultureInfo.InvariantCulture), precision: 5);
     }
 
     // ── Functional: SELECT with named parameter ─────────────────────────────
@@ -210,7 +211,7 @@ public sealed class PostgreSqlRunnerTests : IClassFixture<PostgreSqlRunnerTests.
             SELECT score FROM {this._fixture.Table} WHERE name = '{uniqueName1}'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(99.9, Convert.ToDouble(ds["score", 0]), precision: 5);
+        Assert.Equal(99.9, Convert.ToDouble(ds["score", 0], CultureInfo.InvariantCulture), precision: 5);
     }
 
     // ── QueryAsync<T> validation ───────────────────────────────────────────

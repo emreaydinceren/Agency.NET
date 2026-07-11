@@ -86,7 +86,7 @@ public sealed class WatermarkRepositoryTests : IAsyncLifetime
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private string UniqueUser() => $"u-{Guid.NewGuid():N}";
+    private static string UniqueUser() => $"u-{Guid.NewGuid():N}";
 
     private async Task TruncateAsync(CancellationToken ct)
     {

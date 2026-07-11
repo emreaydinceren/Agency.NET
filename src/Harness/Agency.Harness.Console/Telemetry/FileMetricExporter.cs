@@ -1,5 +1,6 @@
 
 using System.Diagnostics;
+using System.Globalization;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 
@@ -28,7 +29,7 @@ internal sealed class FileMetricExporter : BaseExporter<Metric>
             foreach (Metric metric in batch)
             {
                 System.Text.StringBuilder sb = new();
-                sb.Append($"  {metric.Name} [{metric.Unit ?? "none"}] {metric.MetricType}:");
+                sb.Append(CultureInfo.InvariantCulture, $"  {metric.Name} [{metric.Unit ?? "none"}] {metric.MetricType}:");
 
                 foreach (ref readonly MetricPoint point in metric.GetMetricPoints())
                 {
@@ -36,26 +37,26 @@ internal sealed class FileMetricExporter : BaseExporter<Metric>
                     {
                         case MetricType.LongSum:
                         case MetricType.LongSumNonMonotonic:
-                            sb.Append($" {point.GetSumLong()}");
+                            sb.Append(CultureInfo.InvariantCulture, $" {point.GetSumLong()}");
                             break;
                         case MetricType.DoubleSum:
                         case MetricType.DoubleSumNonMonotonic:
-                            sb.Append($" {point.GetSumDouble():F2}");
+                            sb.Append(CultureInfo.InvariantCulture, $" {point.GetSumDouble():F2}");
                             break;
                         case MetricType.LongGauge:
-                            sb.Append($" {point.GetGaugeLastValueLong()}");
+                            sb.Append(CultureInfo.InvariantCulture, $" {point.GetGaugeLastValueLong()}");
                             break;
                         case MetricType.DoubleGauge:
-                            sb.Append($" {point.GetGaugeLastValueDouble():F2}");
+                            sb.Append(CultureInfo.InvariantCulture, $" {point.GetGaugeLastValueDouble():F2}");
                             break;
                         case MetricType.Histogram:
-                            sb.Append($" count={point.GetHistogramCount()} sum={point.GetHistogramSum():F2}");
+                            sb.Append(CultureInfo.InvariantCulture, $" count={point.GetHistogramCount()} sum={point.GetHistogramSum():F2}");
                             break;
                     }
 
                     foreach (KeyValuePair<string, object?> tag in point.Tags)
                     {
-                        sb.Append($" {tag.Key}={tag.Value}");
+                        sb.Append(CultureInfo.InvariantCulture, $" {tag.Key}={tag.Value}");
                     }
                 }
 

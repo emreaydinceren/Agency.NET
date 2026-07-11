@@ -551,7 +551,7 @@ internal interface IChatSession
 /// (and therefore its own conversation), so this adapter forwards calls to it while exposing the
 /// externally-provided <c>conversation</c> for registry registration.
 /// </remarks>
-internal sealed class MemoryChatSession : IChatSession
+internal sealed class MemoryChatSession : IChatSession, IAsyncDisposable
 {
     private readonly ChatSession _inner;
 
@@ -584,4 +584,7 @@ internal sealed class MemoryChatSession : IChatSession
         string userMessage,
         CancellationToken ct = default) =>
         this._inner.SendAsync(userMessage, ct);
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => this._inner.DisposeAsync();
 }

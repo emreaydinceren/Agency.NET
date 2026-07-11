@@ -149,7 +149,7 @@ public sealed class Group4HygieneTests : IAsyncLifetime
             memOpts,
             NullLogger<PostgresMemoryStore>.Instance);
 
-        var sweeper = this.BuildSweeper(store, memOpts.Value);
+        var sweeper = BuildSweeper(store, memOpts.Value);
 
         // ── Precondition: record exists before sweep ──────────────────────────
         MemoryRecord? before = await store.GetByKeyAsync(userId, null, Domain, Key, ct);
@@ -253,7 +253,7 @@ public sealed class Group4HygieneTests : IAsyncLifetime
         await Task.Delay(TimeSpan.FromSeconds(1), ct);
 
         // ── Run one sweep ─────────────────────────────────────────────────────
-        var sweeper = this.BuildSweeper(store, memOpts.Value);
+        var sweeper = BuildSweeper(store, memOpts.Value);
         await sweeper.RunOnceAsync(ct);
 
         // ── Acceptance: record must still be present (access reset the clock) ─
@@ -335,7 +335,7 @@ public sealed class Group4HygieneTests : IAsyncLifetime
             memOpts,
             NullLogger<PostgresMemoryStore>.Instance);
 
-        var sweeper = this.BuildSweeper(store, memOpts.Value);
+        var sweeper = BuildSweeper(store, memOpts.Value);
 
         // ── Preconditions: both records exist ────────────────────────────────
         MemoryRecord? lowBefore = await store.GetByKeyAsync(userId, null, Domain, LowKey, ct);
@@ -423,7 +423,7 @@ public sealed class Group4HygieneTests : IAsyncLifetime
             memOpts,
             NullLogger<PostgresMemoryStore>.Instance);
 
-        var sweeper = this.BuildSweeper(store, memOpts.Value);
+        var sweeper = BuildSweeper(store, memOpts.Value);
 
         // ── Precondition: Fact exists ─────────────────────────────────────────
         MemoryRecord? before = await store.GetByKeyAsync(userId, null, Domain, Key, ct);
@@ -515,7 +515,7 @@ public sealed class Group4HygieneTests : IAsyncLifetime
     /// <param name="store">The memory store to sweep.</param>
     /// <param name="options">The memory options governing TTL and importance thresholds.</param>
     /// <returns>A configured <see cref="HygieneSweeperBackgroundService"/> instance.</returns>
-    private HygieneSweeperBackgroundService BuildSweeper(
+    private static HygieneSweeperBackgroundService BuildSweeper(
         IMemoryStore store,
         MemoryOptions options)
     {

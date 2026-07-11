@@ -21,7 +21,7 @@ Agency.Memory.Sql.Postgres.DeadLetterEntry.UserId.init -> void
 Agency.Memory.Sql.Postgres.DeadLetterRepository
 Agency.Memory.Sql.Postgres.DeadLetterRepository.DeadLetterRepository(Npgsql.NpgsqlDataSource! dataSource) -> void
 Agency.Memory.Sql.Postgres.DeadLetterRepository.ListSinceAsync(System.DateTimeOffset cutoff, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Sql.Postgres.DeadLetterEntry!>!>!
-Agency.Memory.Sql.Postgres.DeadLetterRepository.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! error, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Postgres.DeadLetterRepository.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! exception, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Agency.Memory.Sql.Postgres.MemorySchemaInitializer
 Agency.Memory.Sql.Postgres.MemorySchemaInitializer.InitializeAsync(int embeddingDim, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Agency.Memory.Sql.Postgres.MemorySchemaInitializer.MemorySchemaInitializer(Npgsql.NpgsqlDataSource! dataSource) -> void

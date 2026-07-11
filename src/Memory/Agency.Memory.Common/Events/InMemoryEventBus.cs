@@ -11,7 +11,7 @@ namespace Agency.Memory.Common.Events;
 /// Suitable for single-process deployments. Exceptions in individual handlers are
 /// caught, logged, and do not prevent other handlers from running.
 /// </remarks>
-internal sealed class InMemoryEventBus : IAsyncEventBus
+internal sealed partial class InMemoryEventBus : IAsyncEventBus
 {
     /// <summary>
     /// Subscriber lists keyed by the subscribed event type. Each handler is stored as a
@@ -63,7 +63,7 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
             }
             catch (Exception ex)
             {
-                this._logger.LogError(ex, "Event handler threw for event type {EventType}", runtimeType.Name);
+                this.LogEventHandlerThrew(ex, runtimeType.Name);
             }
         }
     }
@@ -96,6 +96,10 @@ internal sealed class InMemoryEventBus : IAsyncEventBus
             }
         });
     }
+
+    /// <summary>Logs that a subscriber's event handler threw during dispatch.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Event handler threw for event type {EventType}")]
+    private partial void LogEventHandlerThrew(Exception ex, string eventType);
 
     private sealed class Subscription : IDisposable
     {

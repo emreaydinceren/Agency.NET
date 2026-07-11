@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Default caps and Goalkeeper-client configuration for a <c>LoopRunner</c>.

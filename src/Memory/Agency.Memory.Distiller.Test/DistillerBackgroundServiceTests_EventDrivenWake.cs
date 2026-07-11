@@ -57,7 +57,7 @@ public sealed class DistillerBackgroundServiceTests_EventDrivenWake
             NullLogger<DistillerBackgroundService>.Instance);
     }
 
-    private static IConversationManager MakeConversation(int messageCount = 2)
+    private static InMemoryConversationManager MakeConversation(int messageCount = 2)
     {
         var mgr = new InMemoryConversationManager();
         for (int i = 0; i < messageCount; i++)
@@ -98,7 +98,7 @@ public sealed class DistillerBackgroundServiceTests_EventDrivenWake
             new DistillationJob(UserId, SessionId, DistillationTrigger.Inactivity, UpToTurnIndex: 2));
 
         // Wait for the completion event — must arrive well under 50 ms.
-        for (int i = 0; i < 200 && !eventBus.Published.Any(); i++)
+        for (int i = 0; i < 200 && eventBus.Published.Count == 0; i++)
         {
             await Task.Delay(1, TestContext.Current.CancellationToken);
         }
@@ -107,7 +107,7 @@ public sealed class DistillerBackgroundServiceTests_EventDrivenWake
         await cts.CancelAsync();
 
         Assert.True(
-            eventBus.Published.Any(),
+            eventBus.Published.Count > 0,
             "Service did not process the job within the timeout.");
 
         // The job must have been picked up well under the old polling cycle (50 ms floor).
@@ -146,7 +146,7 @@ public sealed class DistillerBackgroundServiceTests_EventDrivenWake
         registry.GetOrCreateWriter(UserId, SessionId).TryWrite(
             new DistillationJob(UserId, SessionId, DistillationTrigger.Inactivity, UpToTurnIndex: 2));
 
-        for (int i = 0; i < 200 && !eventBus.Published.Any(); i++)
+        for (int i = 0; i < 200 && eventBus.Published.Count == 0; i++)
         {
             await Task.Delay(1, TestContext.Current.CancellationToken);
         }

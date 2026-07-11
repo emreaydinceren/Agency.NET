@@ -284,7 +284,7 @@ public sealed class AgentInternalsTests
     [Fact]
     public void EmptyToolRegistry_ListDefinitions_ReturnsEmpty()
     {
-        IToolRegistry registry = EmptyToolRegistry.Instance;
+        EmptyToolRegistry registry = EmptyToolRegistry.Instance;
 
         Assert.Empty(registry.ListDefinitions());
     }
@@ -296,7 +296,7 @@ public sealed class AgentInternalsTests
     [Fact]
     public async Task EmptyToolRegistry_InvokeAsync_ReturnsErrorResult()
     {
-        IToolRegistry registry = EmptyToolRegistry.Instance;
+        EmptyToolRegistry registry = EmptyToolRegistry.Instance;
 
         ToolResult result = await registry.InvokeAsync(
             "anything", System.Text.Json.JsonDocument.Parse("{}").RootElement, CancellationToken.None);

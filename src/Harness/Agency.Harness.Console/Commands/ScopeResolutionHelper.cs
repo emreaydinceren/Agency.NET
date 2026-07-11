@@ -1,4 +1,3 @@
-using Agency.Harness;
 using Spectre.Console;
 
 namespace Agency.Harness.Console.Commands;

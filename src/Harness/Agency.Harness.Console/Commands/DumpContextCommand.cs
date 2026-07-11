@@ -1,12 +1,9 @@
-using Agency.Harness;
 using Agency.Harness.Contexts;
 using Agency.Harness.Tools;
 using Agency.Llm.Common.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 

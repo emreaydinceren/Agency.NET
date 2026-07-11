@@ -8,18 +8,24 @@ public static class AgentHooksExtensions
     /// <paramref name="first"/>. For <c>OnPreToolUse</c>, the most restrictive decision wins
     /// (Deny &gt; Ask &gt; Rewrite &gt; Allow). All other delegates run sequentially.
     /// </summary>
-    public static AgentHooks Compose(this AgentHooks first, AgentHooks second) => new()
+    public static AgentHooks Compose(this AgentHooks first, AgentHooks second)
     {
-        OnSessionStarted = Combine(first.OnSessionStarted, second.OnSessionStarted),
-        OnUserPromptSubmit = Combine(first.OnUserPromptSubmit, second.OnUserPromptSubmit),
-        OnPreIteration = Combine(first.OnPreIteration, second.OnPreIteration),
-        OnPreToolUse = CombinePreToolUse(first.OnPreToolUse, second.OnPreToolUse),
-        OnPostToolUse = Combine(first.OnPostToolUse, second.OnPostToolUse),
-        OnPostToolBatch = CombinePostToolBatch(first.OnPostToolBatch, second.OnPostToolBatch),
-        OnAssistantTurn = Combine(first.OnAssistantTurn, second.OnAssistantTurn),
-        OnStop = Combine(first.OnStop, second.OnStop),
-        OnSessionEnd = Combine(first.OnSessionEnd, second.OnSessionEnd),
-    };
+        ArgumentNullException.ThrowIfNull(first);
+        ArgumentNullException.ThrowIfNull(second);
+
+        return new()
+        {
+            OnSessionStarted = Combine(first.OnSessionStarted, second.OnSessionStarted),
+            OnUserPromptSubmit = Combine(first.OnUserPromptSubmit, second.OnUserPromptSubmit),
+            OnPreIteration = Combine(first.OnPreIteration, second.OnPreIteration),
+            OnPreToolUse = CombinePreToolUse(first.OnPreToolUse, second.OnPreToolUse),
+            OnPostToolUse = Combine(first.OnPostToolUse, second.OnPostToolUse),
+            OnPostToolBatch = CombinePostToolBatch(first.OnPostToolBatch, second.OnPostToolBatch),
+            OnAssistantTurn = Combine(first.OnAssistantTurn, second.OnAssistantTurn),
+            OnStop = Combine(first.OnStop, second.OnStop),
+            OnSessionEnd = Combine(first.OnSessionEnd, second.OnSessionEnd),
+        };
+    }
 
     /// <summary>
     /// Returns a new <see cref="AgentHooks"/> where <paramref name="first"/> runs before

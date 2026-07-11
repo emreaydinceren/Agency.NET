@@ -28,7 +28,7 @@ namespace Agency.Memory.Consolidator.Services;
 /// Because <see cref="StopCondition"/> only inspects the <see cref="Context"/>, the flag
 /// is stored on a wrapper that the <see cref="StopCondition"/> delegate captures.
 /// </remarks>
-internal static class ConsolidatorSubAgentFactory
+internal static partial class ConsolidatorSubAgentFactory
 {
     /// <summary>
     /// Creates a <see cref="Func{T1,T2,T3,Task}"/> that, when invoked, runs the consolidator
@@ -137,9 +137,10 @@ internal static class ConsolidatorSubAgentFactory
                 if (evt is ToolInvokedEvent { Result.IsError: false } tool
                     && TryMapMutation(tool.ToolName, out string operation))
                 {
-                    logger?.LogInformation(
-                        "🧠 Memory {Operation} for user {UserId}: {Detail}",
-                        operation, userId, tool.Result.Content);
+                    if (logger is not null)
+                    {
+                        LogMemoryMutation(logger, operation, userId, tool.Result.Content);
+                    }
 
                     // Increment the running tally for this operation type.
                     switch (operation)
@@ -178,4 +179,8 @@ internal static class ConsolidatorSubAgentFactory
 
         return operation.Length > 0;
     }
+
+    /// <summary>Logs a memory mutation (Merge/Update/Delete) performed by the consolidator sub-agent.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "🧠 Memory {Operation} for user {UserId}: {Detail}")]
+    private static partial void LogMemoryMutation(ILogger logger, string operation, string userId, string detail);
 }

@@ -1,5 +1,6 @@
 using Agency.Harness.Contexts;
 using Agency.Harness.Tools;
+using System.Globalization;
 using System.Text;
 
 namespace Agency.Harness;
@@ -16,6 +17,8 @@ public static class SystemPromptBuilder
     /// <returns>The assembled system prompt.</returns>
     public static string Build(Context ctx)
     {
+        ArgumentNullException.ThrowIfNull(ctx);
+
         var sb = new StringBuilder();
 
         // Stable identity / persona.
@@ -34,7 +37,7 @@ public static class SystemPromptBuilder
         }
 
         // Skills catalog: only model-invocable skills are listed (DisableModelInvocation == false).
-        IReadOnlyList<Skills.Skill> modelInvocableSkills = ctx.Skills.List()
+        List<Skills.Skill> modelInvocableSkills = ctx.Skills.List()
             .Where(s => !s.DisableModelInvocation)
             .ToList();
 
@@ -59,7 +62,7 @@ public static class SystemPromptBuilder
             sb.AppendLine("## Knowledge");
             foreach (string fact in ctx.Knowledge.Facts)
             {
-                sb.AppendLine($"- {fact}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {fact}");
             }
         }
 
@@ -70,7 +73,7 @@ public static class SystemPromptBuilder
             sb.AppendLine("## Long-term memory");
             foreach (string item in ctx.Memory.LongTermMemory)
             {
-                sb.AppendLine($"- {item}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {item}");
             }
         }
 
@@ -81,8 +84,8 @@ public static class SystemPromptBuilder
             sb.AppendLine("## Facts");
             foreach (MemoryRecord record in ctx.Knowledge.Records)
             {
-                sb.AppendLine($"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
-                sb.AppendLine($"  {record.Value}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  {record.Value}");
             }
         }
 
@@ -93,8 +96,8 @@ public static class SystemPromptBuilder
             sb.AppendLine("## Memories");
             foreach (MemoryRecord record in ctx.Memory.Records)
             {
-                sb.AppendLine($"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
-                sb.AppendLine($"  {record.Value}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  {record.Value}");
             }
         }
 
@@ -110,13 +113,13 @@ public static class SystemPromptBuilder
         if (ctx.Temporal.CurrentDateUtc is { } date)
         {
             sb.AppendLine();
-            sb.AppendLine($"Current date/time (UTC): {date:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Current date/time (UTC): {date:yyyy-MM-dd HH:mm:ss}");
         }
 
         // Environmental context.
         if (ctx.Environment.OperatingSystem is { } os)
         {
-            sb.AppendLine($"Operating system: {os}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Operating system: {os}");
         }
 
         if (ctx.Environment.ContextWindowSize is { } windowSize)
@@ -124,18 +127,18 @@ public static class SystemPromptBuilder
             long used = ctx.TotalUsage.InputTokens;
             if (used > 0)
             {
-                sb.AppendLine($"Context window: {windowSize:N0} tokens (prior input: {used:N0}, est. remaining: {(windowSize - used):N0})");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Context window: {windowSize:N0} tokens (prior input: {used:N0}, est. remaining: {(windowSize - used):N0})");
             }
             else
             {
-                sb.AppendLine($"Context window: {windowSize:N0} tokens");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Context window: {windowSize:N0} tokens");
             }
         }
 
         // User identity.
         if (ctx.User.Name is { } name)
         {
-            sb.AppendLine($"User: {name}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"User: {name}");
         }
 
         return sb.ToString();

@@ -58,7 +58,7 @@ public sealed class DistillerBackgroundServiceTests_SessionDisposed
             NullLogger<DistillerBackgroundService>.Instance);
     }
 
-    private static IConversationManager MakeConversation(int messageCount = 4)
+    private static InMemoryConversationManager MakeConversation(int messageCount = 4)
     {
         var mgr = new InMemoryConversationManager();
         for (int i = 0; i < messageCount; i++)

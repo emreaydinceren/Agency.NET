@@ -1,1 +1,2 @@
 #nullable enable
+Agency.KeyValueStore.Common.KvStoreTelemetry.Dispose() -> void

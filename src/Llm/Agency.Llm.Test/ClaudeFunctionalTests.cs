@@ -21,7 +21,7 @@ public sealed class ClaudeFunctionalTests(ClaudeFunctionalTests.ClaudeFixture fi
 
     private readonly ClaudeFixture _fixture = fixture;
 
-    private IReadOnlyList<ChatMessage> SimpleMessages(string userPrompt) =>
+    private static IReadOnlyList<ChatMessage> SimpleMessages(string userPrompt) =>
     [
         new ChatMessage(ChatRole.User, userPrompt),
     ];

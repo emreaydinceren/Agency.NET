@@ -1,7 +1,7 @@
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 using Agency.Harness.Test.Fakes;
 
-namespace Agency.Harness.Test.Loop;
+namespace Agency.Harness.Test.Looping;
 
 /// <summary>
 /// Phase 1 / T-GK-*: unit tests for <see cref="Goalkeeper"/> driven by
@@ -71,7 +71,7 @@ public sealed class GoalkeeperTests
             MakeTranscript("Build FAILED. 3 Error(s)."),
             CancellationToken.None);
 
-        var cont = Assert.IsType<Verdict.Continue>(verdict);
+        var cont = Assert.IsType<Verdict.ContinueLoop>(verdict);
         Assert.Equal(expectedReason, cont.Reason);
     }
 
@@ -94,7 +94,7 @@ public sealed class GoalkeeperTests
             MakeTranscript("some output"),
             CancellationToken.None);
 
-        var cont = Assert.IsType<Verdict.Continue>(verdict);
+        var cont = Assert.IsType<Verdict.ContinueLoop>(verdict);
         Assert.Contains("unparseable", cont.Reason, StringComparison.OrdinalIgnoreCase);
     }
 

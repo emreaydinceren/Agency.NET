@@ -19,7 +19,7 @@ public sealed class ClaudeClient : IModelProvider
 
     /// <summary>Creates a factory from configured options.</summary>
     public ClaudeClient(IOptions<LlmClientOptions> options, ILoggerFactory? loggerFactory = null)
-        : this(options.Value, loggerFactory)
+        : this((options ?? throw new ArgumentNullException(nameof(options))).Value, loggerFactory)
     {
     }
 

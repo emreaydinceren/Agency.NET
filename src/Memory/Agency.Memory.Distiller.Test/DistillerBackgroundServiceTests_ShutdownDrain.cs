@@ -58,7 +58,7 @@ public sealed class DistillerBackgroundServiceTests_ShutdownDrain
             NullLogger<DistillerBackgroundService>.Instance);
     }
 
-    private static IConversationManager MakeConversation(int messageCount = 3)
+    private static InMemoryConversationManager MakeConversation(int messageCount = 3)
     {
         var mgr = new InMemoryConversationManager();
         for (int i = 0; i < messageCount; i++)

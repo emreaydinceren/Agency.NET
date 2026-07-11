@@ -41,7 +41,7 @@ internal sealed class HttpHookHandler : IHookHandler
         }
 
         int exit = resp.IsSuccessStatusCode ? HookExitCodes.Ok : HookExitCodes.NonBlockingError;
-        string body = await resp.Content.ReadAsStringAsync();
+        string body = await resp.Content.ReadAsStringAsync(ct);
         JsonElement? json = TryParseLeadingJson(body);
         return new HookHandlerOutput(exit, json, body, null);
     }

@@ -2,8 +2,9 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Thin session-level driver that issues turns against a <see cref="ChatSession"/> until a
@@ -21,7 +22,7 @@ namespace Agency.Harness.Loop;
 /// The host must not call <see cref="RunAsync"/> concurrently.
 /// </para>
 /// </remarks>
-internal sealed class LoopRunner(
+internal sealed partial class LoopRunner(
     ChatSession session,
     IGoalkeeper goalkeeper,
     GoalState goal,
@@ -46,7 +47,7 @@ internal sealed class LoopRunner(
     private readonly GoalState _goal = goal ?? throw new ArgumentNullException(nameof(goal));
     private readonly LoopOptions _caps = caps ?? throw new ArgumentNullException(nameof(caps));
     private readonly TimeProvider _time = time ?? TimeProvider.System;
-    private readonly ILogger<LoopRunner>? _logger = logger;
+    private readonly ILogger<LoopRunner> _logger = logger ?? NullLogger<LoopRunner>.Instance;
 
     /// <summary>
     /// Drives the session toward the armed goal (read from <see cref="GoalState"/>) until Done,
@@ -173,22 +174,15 @@ internal sealed class LoopRunner(
                     goalEverObserved = true;
 
                     // E-4: warn when Goalkeeper model/client equals worker model/client (self-preference risk).
-                    if (this._logger is not null)
+                    string? goalkeeperModel = this._caps.GoalkeeperModel;
+                    string? goalkeeperClient = this._caps.GoalkeeperClientName;
+                    bool sameModel = goalkeeperModel is not null &&
+                        goalkeeperModel.Equals(workerModel, StringComparison.OrdinalIgnoreCase);
+                    bool sameClient = goalkeeperClient is not null &&
+                        goalkeeperClient.Equals(workerClientType, StringComparison.OrdinalIgnoreCase);
+                    if (sameModel || sameClient)
                     {
-                        string? goalkeeperModel = this._caps.GoalkeeperModel;
-                        string? goalkeeperClient = this._caps.GoalkeeperClientName;
-                        bool sameModel = goalkeeperModel is not null &&
-                            goalkeeperModel.Equals(workerModel, StringComparison.OrdinalIgnoreCase);
-                        bool sameClient = goalkeeperClient is not null &&
-                            goalkeeperClient.Equals(workerClientType, StringComparison.OrdinalIgnoreCase);
-                        if (sameModel || sameClient)
-                        {
-                            this._logger.LogWarning(
-                                "Goalkeeper model/client matches the worker model/client — self-preference bias risk (E-4). " +
-                                "WorkerModel={WorkerModel}, GoalkeeperModel={GoalkeeperModel}, " +
-                                "WorkerClient={WorkerClient}, GoalkeeperClient={GoalkeeperClient}",
-                                workerModel, goalkeeperModel, workerClientType, goalkeeperClient);
-                        }
+                        this.LogGoalkeeperSelfPreferenceRisk(workerModel, goalkeeperModel, workerClientType, goalkeeperClient);
                     }
 
                     // Wire wall-clock timeout (goal spec overrides caps default).
@@ -229,7 +223,7 @@ internal sealed class LoopRunner(
                 // Record verdict as span event (on the goalkeeper span, and propagate to turn span).
                 string verdictKind = verdict is Verdict.Done ? "done" : "continue";
                 string verdictReason = verdict is Verdict.Done d ? d.Reason :
-                    verdict is Verdict.Continue c ? c.Reason : string.Empty;
+                    verdict is Verdict.ContinueLoop c ? c.Reason : string.Empty;
 
                 goalkeeperActivity?.AddEvent(new ActivityEvent("loop.verdict",
                     tags: new ActivityTagsCollection
@@ -308,8 +302,8 @@ internal sealed class LoopRunner(
                 }
 
                 // ── Continue: Goalkeeper reason becomes next directive (§8) ────
-                // verdict is Verdict.Continue here (Done was handled above).
-                directive = ((Verdict.Continue)verdict).Reason;
+                // verdict is Verdict.ContinueLoop here (Done was handled above).
+                directive = ((Verdict.ContinueLoop)verdict).Reason;
             }
         }
         finally
@@ -414,4 +408,8 @@ internal sealed class LoopRunner(
         long elapsed = this._time.GetTimestamp() - startTicks;
         return (double)elapsed / this._time.TimestampFrequency * 1000.0;
     }
+
+    /// <summary>Logs that the goalkeeper model/client matches the worker model/client, a self-preference bias risk.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Goalkeeper model/client matches the worker model/client — self-preference bias risk (E-4). WorkerModel={WorkerModel}, GoalkeeperModel={GoalkeeperModel}, WorkerClient={WorkerClient}, GoalkeeperClient={GoalkeeperClient}")]
+    private partial void LogGoalkeeperSelfPreferenceRisk(string workerModel, string? goalkeeperModel, string workerClient, string? goalkeeperClient);
 }

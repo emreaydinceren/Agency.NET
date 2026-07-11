@@ -66,7 +66,7 @@ public sealed class HookOrderingTests
             {
                 OnPreIteration = (ctx, _) =>
                 {
-                    sentinelSeenByUser = ctx.Knowledge.Facts.FirstOrDefault();
+                    sentinelSeenByUser = ctx.Knowledge.Facts.Count > 0 ? ctx.Knowledge.Facts[0] : null;
                     return Task.CompletedTask;
                 },
             },
@@ -219,7 +219,7 @@ public sealed class HookOrderingTests
             OnPreIteration = (ctx, _) =>
             {
                 // Capture BEFORE baseline writes — should be empty.
-                sentinelBeforeBaseline = ctx.Knowledge.Facts.FirstOrDefault();
+                sentinelBeforeBaseline = ctx.Knowledge.Facts.Count > 0 ? ctx.Knowledge.Facts[0] : null;
                 return Task.CompletedTask;
             },
         };

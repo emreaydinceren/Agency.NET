@@ -1,8 +1,6 @@
 using System.Text.Json;
 using Agency.Harness.Contexts;
-using Agency.Harness.Tools;
 using Agency.Harness.Test.Fakes;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
 namespace Agency.Harness.Test;

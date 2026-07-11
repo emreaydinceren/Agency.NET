@@ -129,7 +129,7 @@ public sealed class PostgresMemoryStoreTests_Forget : IAsyncLifetime
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private string UniqueUser() => $"u-{Guid.NewGuid():N}";
+    private static string UniqueUser() => $"u-{Guid.NewGuid():N}";
 
     private static MemoryRecord Make(string userId, string domain, string key)
     {

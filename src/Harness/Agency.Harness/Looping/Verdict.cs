@@ -1,9 +1,9 @@
 using System.Text.Json.Serialization;
 
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>The Goalkeeper's decision after evaluating a turn against the goal condition.</summary>
-[JsonDerivedType(typeof(Continue), typeDiscriminator: "continue")]
+[JsonDerivedType(typeof(ContinueLoop), typeDiscriminator: "continue")]
 [JsonDerivedType(typeof(Done), typeDiscriminator: "done")]
 public abstract record Verdict
 {
@@ -11,7 +11,7 @@ public abstract record Verdict
     /// The goal condition is not yet satisfied.
     /// <paramref name="Reason"/> is fed back as the next turn's directive so the worker self-corrects.
     /// </summary>
-    public sealed record Continue(string Reason) : Verdict;
+    public sealed record ContinueLoop(string Reason) : Verdict;
 
     /// <summary>
     /// The goal condition is satisfied. The loop exits with <see cref="LoopOutcome.Achieved"/>.

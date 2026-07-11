@@ -47,7 +47,7 @@ public sealed class MemoryHookFactoryTests
         {
             OnPreIteration = (ctx, _) =>
             {
-                sentinelSeenByUser = ctx.Knowledge.Facts.FirstOrDefault();
+                sentinelSeenByUser = ctx.Knowledge.Facts.Count > 0 ? ctx.Knowledge.Facts[0] : null;
                 return Task.CompletedTask;
             },
         };

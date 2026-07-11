@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Globalization;
 
 namespace Agency.Sql.Sqlite.Test;
 
@@ -44,7 +45,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             """, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
-        Assert.Equal(0.0, Convert.ToDouble(ds["dist", 0]), Tolerance);
+        Assert.Equal(0.0, Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture), Tolerance);
     }
 
     // ── DDL ─────────────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'apple'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dist, Tolerance);
     }
 
@@ -120,7 +121,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'banana'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(Math.Sqrt(2), dist, Tolerance);
     }
 
@@ -138,7 +139,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'apple'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dist, Tolerance);
     }
 
@@ -155,7 +156,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'banana'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(1.0, dist, Tolerance);
     }
 
@@ -173,7 +174,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'apricot'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(1.0 - (1.0 / Math.Sqrt(2)), dist, Tolerance);
     }
 
@@ -194,7 +195,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'apple'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dot = Convert.ToDouble(ds["dot", 0]);
+        double dot = Convert.ToDouble(ds["dot", 0], CultureInfo.InvariantCulture);
         Assert.Equal(1.0, dot, Tolerance);
     }
 
@@ -210,7 +211,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             WHERE name = 'banana'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dot = Convert.ToDouble(ds["dot", 0]);
+        double dot = Convert.ToDouble(ds["dot", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dot, Tolerance);
     }
 
@@ -378,7 +379,7 @@ public sealed class SqliteVecTests : IClassFixture<SqliteVecTests.VectorFixture>
             TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dist, Tolerance);
     }
 

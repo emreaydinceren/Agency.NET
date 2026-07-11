@@ -24,7 +24,7 @@ Agency.Memory.Sql.Sqlite.MemorySchemaInitializer.MemorySchemaInitializer(string!
 Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository
 Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.ListSinceAsync(System.DateTimeOffset cutoff, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Agency.Memory.Sql.Sqlite.DeadLetterEntry!>!>!
 Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.SqliteDeadLetterRepository(string! connectionString) -> void
-Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! error, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Sql.Sqlite.SqliteDeadLetterRepository.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! exception, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Agency.Memory.Sql.Sqlite.SqliteMemoryServiceCollectionExtensions
 Agency.Memory.Sql.Sqlite.SqliteMemoryStore
 Agency.Memory.Sql.Sqlite.SqliteMemoryStore.DeleteByIdAsync(string! recordId, string! userId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!

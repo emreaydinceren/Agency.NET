@@ -25,7 +25,7 @@ namespace Agency.Memory.Distiller.Services;
 /// Emits <see cref="DistillationCompletedEvent"/> / <see cref="DistillationFailedEvent"/>
 /// after every job.
 /// </remarks>
-internal sealed class DistillerBackgroundService : BackgroundService
+internal sealed partial class DistillerBackgroundService : BackgroundService
 {
     internal const string ActivitySourceName = "Agency.Memory.Distiller";
     internal const string MeterName = "Agency.Memory.Distiller";
@@ -87,7 +87,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        this._logger.LogInformation("DistillerBackgroundService started.");
+        this.LogServiceStarted();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -116,13 +116,12 @@ internal sealed class DistillerBackgroundService : BackgroundService
             }
         }
 
-        this._logger.LogInformation("DistillerBackgroundService draining (timeout={Timeout}).",
-            this._options.Value.ShutdownDrainTimeout);
+        this.LogServiceDraining(this._options.Value.ShutdownDrainTimeout);
 
         // §10.1: Drain queued jobs up to ShutdownDrainTimeout before force-exit.
         await this.DrainAsync(this._options.Value.ShutdownDrainTimeout).ConfigureAwait(false);
 
-        this._logger.LogInformation("DistillerBackgroundService stopped.");
+        this.LogServiceStopped();
     }
 
     /// <summary>
@@ -169,9 +168,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
             var timeoutError = new TimeoutException(
                 "Distiller shutdown drain timeout exceeded; job dead-lettered for watermark recovery.");
 
-            this._logger.LogWarning(
-                "Dead-lettering in-flight job after shutdown drain timeout. UserId={UserId}, SessionId={SessionId}",
-                inFlightJob.UserId, inFlightJob.SessionId);
+            this.LogDeadLetteringInFlightJob(inFlightJob.UserId, inFlightJob.SessionId);
 
             await this.DeadLetterAsync(inFlightJob, timeoutError, CancellationToken.None).ConfigureAwait(false);
             _errorCounter.Add(1);
@@ -193,9 +190,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
         {
             while (channel.Reader.TryRead(out DistillationJob? job))
             {
-                this._logger.LogWarning(
-                    "Dead-lettering job after shutdown drain timeout. UserId={UserId}, SessionId={SessionId}",
-                    job.UserId, job.SessionId);
+                this.LogDeadLetteringJob(job.UserId, job.SessionId);
 
                 await this.DeadLetterAsync(job, timeoutError, CancellationToken.None).ConfigureAwait(false);
                 _errorCounter.Add(1);
@@ -216,9 +211,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
         var sw = Stopwatch.StartNew();
         _jobCounter.Add(1);
 
-        this._logger.LogInformation(
-            "Processing distillation job: UserId={UserId}, SessionId={SessionId}, Trigger={Trigger}, UpToTurnIndex={UpTo}",
-            job.UserId, job.SessionId, job.Trigger, job.UpToTurnIndex);
+        this.LogProcessingDistillationJob(job.UserId, job.SessionId, job.Trigger, job.UpToTurnIndex);
 
         // C.4: Watermark guard — idempotency check before any LLM work.
         int currentWatermark = await this._watermarks.GetAsync(job.UserId, job.SessionId, ct)
@@ -226,9 +219,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
 
         if (job.UpToTurnIndex <= currentWatermark)
         {
-            this._logger.LogInformation(
-                "Skipping job: watermark {Watermark} >= UpToTurnIndex {UpTo}. SessionId={SessionId}",
-                currentWatermark, job.UpToTurnIndex, job.SessionId);
+            this.LogSkippingJobWatermark(currentWatermark, job.UpToTurnIndex, job.SessionId);
 
             await this._eventBus.PublishAsync(new DistillationCompletedEvent(
                 UserId: job.UserId,
@@ -243,8 +234,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
         IConversationManager? convo = this._conversationRegistry.Get(job.SessionId);
         if (convo is null)
         {
-            this._logger.LogWarning(
-                "No conversation found for session {SessionId}. Skipping.", job.SessionId);
+            this.LogNoConversationFound(job.SessionId);
 
             await this._eventBus.PublishAsync(new DistillationCompletedEvent(
                 UserId: job.UserId,
@@ -265,8 +255,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
 
         if (turns.Count == 0)
         {
-            this._logger.LogInformation(
-                "No turns in window for session {SessionId}. Skipping LLM call.", job.SessionId);
+            this.LogNoTurnsInWindow(job.SessionId);
 
             await this._eventBus.PublishAsync(new DistillationCompletedEvent(
                 UserId: job.UserId,
@@ -288,9 +277,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
             if (attempt > 0)
             {
                 TimeSpan delay = TimeSpan.FromTicks(opts.RetryBaseDelay.Ticks * (long)Math.Pow(2, attempt - 1));
-                this._logger.LogWarning(
-                    "Retrying distillation (attempt {Attempt}/{Max}) after {Delay}ms. SessionId={SessionId}",
-                    attempt + 1, maxAttempts, delay.TotalMilliseconds, job.SessionId);
+                this.LogRetryingDistillation(attempt + 1, maxAttempts, delay.TotalMilliseconds, job.SessionId);
 
                 await Task.Delay(delay, this._timeProvider, ct).ConfigureAwait(false);
             }
@@ -312,9 +299,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
                     RecordsWritten: recordsWritten,
                     NewWatermark: newWatermark), ct).ConfigureAwait(false);
 
-                this._logger.LogInformation(
-                    "Distillation complete: {Count} records written, watermark={Watermark}. SessionId={SessionId}",
-                    recordsWritten, newWatermark, job.SessionId);
+                this.LogDistillationComplete(recordsWritten, newWatermark, job.SessionId);
 
                 // Terminal cleanup: after all turns are read and distilled, release the session
                 // resources. Ordering is intentional — cleanup happens only after the successful
@@ -324,9 +309,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
                     this._conversationRegistry.Unregister(job.SessionId);
                     this._channelRegistry.Remove(job.SessionId);
 
-                    this._logger.LogInformation(
-                        "Session {SessionId} resources released after SessionDisposed distillation.",
-                        job.SessionId);
+                    this.LogSessionResourcesReleased(job.SessionId);
                 }
 
                 return; // success
@@ -340,7 +323,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
                 // One parse retry with stricter prompt signal.
                 parseRetried = true;
                 lastException = ex;
-                this._logger.LogWarning(ex, "Parse failure on attempt {Attempt}; will retry once.", attempt + 1);
+                this.LogParseFailureRetry(ex, attempt + 1);
                 // Continue to next attempt — the retry prompt is inherently stricter.
                 continue;
             }
@@ -348,7 +331,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
             {
                 // Second parse failure → permanent.
                 lastException = ex;
-                this._logger.LogError(ex, "Permanent parse failure (second attempt). Dead-lettering job.");
+                this.LogPermanentParseFailure(ex);
                 await this.DeadLetterAsync(job, ex, ct).ConfigureAwait(false);
                 _errorCounter.Add(1);
                 return;
@@ -356,8 +339,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
             catch (Exception ex) when (IsTransient(ex))
             {
                 lastException = ex;
-                this._logger.LogWarning(ex,
-                    "Transient failure on attempt {Attempt}/{Max}.", attempt + 1, maxAttempts);
+                this.LogTransientFailure(ex, attempt + 1, maxAttempts);
 
                 if (attempt == maxAttempts - 1)
                 {
@@ -374,7 +356,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
             {
                 // Permanent failure class.
                 lastException = ex;
-                this._logger.LogError(ex, "Permanent distillation failure. Dead-lettering job.");
+                this.LogPermanentDistillationFailure(ex);
                 await this.DeadLetterAsync(job, ex, ct).ConfigureAwait(false);
                 _errorCounter.Add(1);
                 return;
@@ -461,7 +443,7 @@ internal sealed class DistillerBackgroundService : BackgroundService
         }
         catch (Exception dlEx)
         {
-            this._logger.LogError(dlEx, "Failed to write to dead-letter for session {SessionId}.", job.SessionId);
+            this.LogDeadLetterWriteFailed(dlEx, job.SessionId);
         }
     }
 
@@ -482,4 +464,72 @@ internal sealed class DistillerBackgroundService : BackgroundService
                 || httpEx.StatusCode is null)
         || ex is TaskCanceledException { InnerException: TimeoutException }
         || ex is System.Data.Common.DbException { IsTransient: true };
+
+    /// <summary>Logs that the distiller background service started.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "DistillerBackgroundService started.")]
+    private partial void LogServiceStarted();
+
+    /// <summary>Logs that the distiller background service is draining queued jobs before shutdown.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "DistillerBackgroundService draining (timeout={Timeout}).")]
+    private partial void LogServiceDraining(TimeSpan timeout);
+
+    /// <summary>Logs that the distiller background service stopped.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "DistillerBackgroundService stopped.")]
+    private partial void LogServiceStopped();
+
+    /// <summary>Logs that the job in flight when the shutdown drain timeout expired is being dead-lettered.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dead-lettering in-flight job after shutdown drain timeout. UserId={UserId}, SessionId={SessionId}")]
+    private partial void LogDeadLetteringInFlightJob(string userId, string sessionId);
+
+    /// <summary>Logs that a queued job still pending after the shutdown drain timeout is being dead-lettered.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dead-lettering job after shutdown drain timeout. UserId={UserId}, SessionId={SessionId}")]
+    private partial void LogDeadLetteringJob(string userId, string sessionId);
+
+    /// <summary>Logs that a distillation job is being processed.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Processing distillation job: UserId={UserId}, SessionId={SessionId}, Trigger={Trigger}, UpToTurnIndex={UpTo}")]
+    private partial void LogProcessingDistillationJob(string userId, string sessionId, DistillationTrigger trigger, int upTo);
+
+    /// <summary>Logs that a distillation job was skipped because its target turn index is already covered by the watermark.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Skipping job: watermark {Watermark} >= UpToTurnIndex {UpTo}. SessionId={SessionId}")]
+    private partial void LogSkippingJobWatermark(int watermark, int upTo, string sessionId);
+
+    /// <summary>Logs that no conversation manager was found for a session's distillation job.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No conversation found for session {SessionId}. Skipping.")]
+    private partial void LogNoConversationFound(string sessionId);
+
+    /// <summary>Logs that a distillation job had no turns in its window, so the LLM call was skipped.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "No turns in window for session {SessionId}. Skipping LLM call.")]
+    private partial void LogNoTurnsInWindow(string sessionId);
+
+    /// <summary>Logs that a distillation attempt is being retried after a backoff delay.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Retrying distillation (attempt {Attempt}/{Max}) after {Delay}ms. SessionId={SessionId}")]
+    private partial void LogRetryingDistillation(int attempt, int max, double delay, string sessionId);
+
+    /// <summary>Logs that a distillation job completed successfully.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Distillation complete: {Count} records written, watermark={Watermark}. SessionId={SessionId}")]
+    private partial void LogDistillationComplete(int count, int watermark, string sessionId);
+
+    /// <summary>Logs that a session's channel and conversation resources were released after a SessionDisposed distillation.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Session {SessionId} resources released after SessionDisposed distillation.")]
+    private partial void LogSessionResourcesReleased(string sessionId);
+
+    /// <summary>Logs that a distillation response failed to parse and will be retried once.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Parse failure on attempt {Attempt}; will retry once.")]
+    private partial void LogParseFailureRetry(Exception ex, int attempt);
+
+    /// <summary>Logs that a distillation response failed to parse a second time and the job is being dead-lettered.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Permanent parse failure (second attempt). Dead-lettering job.")]
+    private partial void LogPermanentParseFailure(Exception ex);
+
+    /// <summary>Logs that a distillation attempt hit a transient failure.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Transient failure on attempt {Attempt}/{Max}.")]
+    private partial void LogTransientFailure(Exception ex, int attempt, int max);
+
+    /// <summary>Logs that a distillation job hit a permanent (non-retryable) failure and is being dead-lettered.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Permanent distillation failure. Dead-lettering job.")]
+    private partial void LogPermanentDistillationFailure(Exception ex);
+
+    /// <summary>Logs that writing a job to the dead-letter store failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to write to dead-letter for session {SessionId}.")]
+    private partial void LogDeadLetterWriteFailed(Exception ex, string sessionId);
 }

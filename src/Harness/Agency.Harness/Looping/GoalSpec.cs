@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// What "done" means for a loop run, plus the hard structural ceilings.

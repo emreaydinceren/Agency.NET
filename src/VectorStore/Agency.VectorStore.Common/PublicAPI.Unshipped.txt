@@ -1,1 +1,2 @@
 #nullable enable
+Agency.VectorStore.Common.VectorStoreTelemetry.Dispose() -> void

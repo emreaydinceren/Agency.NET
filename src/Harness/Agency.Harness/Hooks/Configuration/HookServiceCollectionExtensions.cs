@@ -25,6 +25,8 @@ public static class HookServiceCollectionExtensions
         IConfiguration config,
         string sectionName = "Hooks")
     {
+        ArgumentNullException.ThrowIfNull(config);
+
         services.AddOptions<HooksOptions>().Bind(config.GetSection(sectionName));
         services.AddHttpClient();
         services.AddSingleton<IHookHandlerFactory>(sp =>

@@ -11,7 +11,7 @@ public sealed class InMemoryConversationManagerTests
     [Fact]
     public void Messages_IsEmpty_WhenNewlyCreated()
     {
-        IConversationManager manager = new InMemoryConversationManager();
+        InMemoryConversationManager manager = new InMemoryConversationManager();
 
         Assert.Empty(manager.Messages);
     }
@@ -22,7 +22,7 @@ public sealed class InMemoryConversationManagerTests
     [Fact]
     public void Append_AddsMessage_ToMessages()
     {
-        IConversationManager manager = new InMemoryConversationManager();
+        InMemoryConversationManager manager = new InMemoryConversationManager();
         var msg = new ChatMessage(ChatRole.User, [new TextContent("Hello")]);
 
         manager.Append(msg);
@@ -37,7 +37,7 @@ public sealed class InMemoryConversationManagerTests
     [Fact]
     public void Append_PreservesOrder_AcrossMultipleMessages()
     {
-        IConversationManager manager = new InMemoryConversationManager();
+        InMemoryConversationManager manager = new InMemoryConversationManager();
         var user = new ChatMessage(ChatRole.User, [new TextContent("User prompt")]);
         var assistant = new ChatMessage(ChatRole.Assistant, [new TextContent("Assistant reply")]);
         var result = new ChatMessage(ChatRole.User, [new TextContent("Tool result")]);
@@ -59,7 +59,7 @@ public sealed class InMemoryConversationManagerTests
     [Fact]
     public void Messages_ReturnsReadOnlyView()
     {
-        IConversationManager manager = new InMemoryConversationManager();
+        InMemoryConversationManager manager = new InMemoryConversationManager();
         var messages = manager.Messages;
 
         // Adding via Append should be reflected in the existing reference.

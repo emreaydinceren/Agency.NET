@@ -1,5 +1,6 @@
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using OpenTelemetry;
 
@@ -26,23 +27,23 @@ internal sealed class FileSpanExporter : BaseExporter<Activity>
             foreach (Activity activity in batch)
             {
                 StringBuilder sb = new();
-                sb.Append($"[{activity.StartTimeUtc:yyyy-MM-dd HH:mm:ss.fff}] ");
-                sb.Append($"TraceId={activity.TraceId} ");
-                sb.Append($"SpanId={activity.SpanId} ");
-                sb.Append($"Parent={activity.ParentSpanId} ");
-                sb.Append($"Name={activity.DisplayName} ");
-                sb.Append($"Kind={activity.Kind} ");
-                sb.Append($"Status={activity.Status} ");
-                sb.Append($"Duration={activity.Duration.TotalMilliseconds:F1}ms");
+                sb.Append(CultureInfo.InvariantCulture, $"[{activity.StartTimeUtc:yyyy-MM-dd HH:mm:ss.fff}] ");
+                sb.Append(CultureInfo.InvariantCulture, $"TraceId={activity.TraceId} ");
+                sb.Append(CultureInfo.InvariantCulture, $"SpanId={activity.SpanId} ");
+                sb.Append(CultureInfo.InvariantCulture, $"Parent={activity.ParentSpanId} ");
+                sb.Append(CultureInfo.InvariantCulture, $"Name={activity.DisplayName} ");
+                sb.Append(CultureInfo.InvariantCulture, $"Kind={activity.Kind} ");
+                sb.Append(CultureInfo.InvariantCulture, $"Status={activity.Status} ");
+                sb.Append(CultureInfo.InvariantCulture, $"Duration={activity.Duration.TotalMilliseconds:F1}ms");
 
                 foreach (KeyValuePair<string, object?> tag in activity.TagObjects)
                 {
-                    sb.Append($" {tag.Key}={tag.Value}");
+                    sb.Append(CultureInfo.InvariantCulture, $" {tag.Key}={tag.Value}");
                 }
 
                 foreach (ActivityEvent evt in activity.Events)
                 {
-                    sb.Append($" | Event:{evt.Name}@{evt.Timestamp:HH:mm:ss.fff}");
+                    sb.Append(CultureInfo.InvariantCulture, $" | Event:{evt.Name}@{evt.Timestamp:HH:mm:ss.fff}");
                 }
 
                 this._fileWriter.WriteLine(sb.ToString());

@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Management.Automation;
 using System.Text;
 
@@ -28,7 +30,7 @@ internal static class Extensions
     /// declared set — notably the PSCustomObjects that <c>Select-Object Foo, Bar</c> projects — so
     /// callers fall back to enumerating every property.
     /// </summary>
-    private static IReadOnlyList<string>? DefaultDisplayColumns(PSObject obj)
+    private static Collection<string>? DefaultDisplayColumns(PSObject obj)
     {
         // PSObject.Members is the real member collection (equivalent to $o.PSObject.Members in script,
         // not the adapted $o.Members which hides PSStandardMembers). The indexer returns null when a
@@ -221,7 +223,7 @@ internal static class Extensions
             {
                 if (result.Properties[name] is { } prop && TryGetDisplayValue(prop, out object? value))
                 {
-                    sb.AppendLine($"- **{name}**: {value}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- **{name}**: {value}");
                 }
             }
             return sb.ToString();
@@ -236,7 +238,7 @@ internal static class Extensions
 
             if (TryGetDisplayValue(prop, out object? value))
             {
-                sb.AppendLine($"- **{prop.Name}**: {value}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- **{prop.Name}**: {value}");
             }
         }
         return sb.ToString();

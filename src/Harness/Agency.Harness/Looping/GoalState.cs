@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Session-scoped holder for the active goal. The <c>LoopRunner</c> reads it each turn;

@@ -242,12 +242,12 @@ public sealed class EndToEndCrashRecoveryTests : IAsyncLifetime
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static IAsyncEventBus BuildEventBus()
+    private static InMemoryEventBus BuildEventBus()
     {
         // Use the internal InMemoryEventBus via reflection on the logger.
         // The InMemoryEventBus ctor is internal; accessible via InternalsVisibleTo granted to this project.
-        return new Agency.Memory.Common.Events.InMemoryEventBus(
-            NullLogger<Agency.Memory.Common.Events.InMemoryEventBus>.Instance);
+        return new InMemoryEventBus(
+            NullLogger<InMemoryEventBus>.Instance);
     }
 
     private static DistillerBackgroundService BuildDistillerService(

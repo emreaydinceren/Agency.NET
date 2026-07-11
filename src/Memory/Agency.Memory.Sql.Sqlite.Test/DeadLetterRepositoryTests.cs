@@ -60,14 +60,14 @@ public sealed class DeadLetterRepositoryTests : IAsyncLifetime
         string uid = UniqueUser();
         var before = DateTimeOffset.UtcNow.AddMinutes(-1);
 
-        await this._repo.WriteAsync(uid, null, "consolidation", new { }, new Exception("err1"), ct);
+        await this._repo.WriteAsync(uid, null, "consolidation", new { }, new InvalidOperationException("err1"), ct);
 
         var firstRow = (await this._repo.ListSinceAsync(before, ct))
             .Single(e => e.UserId == uid);
         var cutoff = firstRow.CreatedAt;
 
         await Task.Delay(50, ct);
-        await this._repo.WriteAsync(uid, null, "consolidation", new { }, new Exception("err2"), ct);
+        await this._repo.WriteAsync(uid, null, "consolidation", new { }, new InvalidOperationException("err2"), ct);
 
         var sinceStart = (await this._repo.ListSinceAsync(before, ct))
             .Where(e => e.UserId == uid)

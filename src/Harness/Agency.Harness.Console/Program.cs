@@ -9,7 +9,7 @@ using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 using Agency.Harness.Permissions;
 using Agency.Harness.Skills;
 using Agency.Harness.Tools;
@@ -308,7 +308,7 @@ internal class Program
             string[] configuredSkillDirs = builder.Configuration
                 .GetSection("Skills:Directories")
                 .Get<string[]>() ?? [];
-            IReadOnlyList<string> skillRoots = configuredSkillDirs.Length > 0
+            string[] skillRoots = configuredSkillDirs.Length > 0
                 ? configuredSkillDirs
                 :
                 [
@@ -322,7 +322,7 @@ internal class Program
             // when the host shuts down. The watcher fires reloadableCatalog.Reload() on SKILL.md changes.
             builder.Services.AddSingleton(new SkillWatcher(skillRoots, reloadableCatalog.Reload));
             CommandRegistry.RegisterSkillCommands(reloadableCatalog);
-            System.Console.WriteLine($"[Agency] Skills: loaded {reloadableCatalog.List().Count} skill(s) from {skillRoots.Count} root(s).");
+            System.Console.WriteLine($"[Agency] Skills: loaded {reloadableCatalog.List().Count} skill(s) from {skillRoots.Length} root(s).");
 
             // 6. Factory & Agent Registration:
             //    Models + IAgentFactory + the scoped default Agent now live in the Agency.Harness

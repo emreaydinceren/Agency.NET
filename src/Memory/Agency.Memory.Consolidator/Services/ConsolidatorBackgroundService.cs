@@ -25,7 +25,7 @@ namespace Agency.Memory.Consolidator.Services;
 /// a real LLM. In production, <see cref="ConsolidatorSubAgentFactory.CreateRunner"/> provides
 /// the real implementation.
 /// </remarks>
-internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsolidationTrigger
+internal sealed partial class ConsolidatorBackgroundService : BackgroundService, IConsolidationTrigger
 {
     internal const string ActivitySourceName = "Agency.Memory.Consolidator";
     internal const string MeterName = "Agency.Memory.Consolidator";
@@ -110,9 +110,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
                 {
                     var job = new ConsolidationJob(evt.UserId, evt.SessionId);
                     await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
-                    this._logger.LogDebug(
-                        "Enqueued ConsolidationJob for UserId={UserId} from session {SessionId}",
-                        evt.UserId, evt.SessionId);
+                    this.LogEnqueuedConsolidationJob(evt.UserId, evt.SessionId);
                 });
         }
 
@@ -124,7 +122,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
     {
         var job = new ConsolidationJob(userId, string.Empty);
         await this._channel.Writer.WriteAsync(job, ct).ConfigureAwait(false);
-        this._logger.LogDebug("Manual ConsolidationJob enqueued for UserId={UserId}", userId);
+        this.LogManualConsolidationJobEnqueued(userId);
     }
 
     /// <inheritdoc/>
@@ -138,7 +136,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        this._logger.LogInformation("ConsolidatorBackgroundService started.");
+        this.LogServiceStarted();
 
         await foreach (ConsolidationJob job in this._channel.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
         {
@@ -152,8 +150,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
             {
                 // Already in-flight — mark as pending-re-run.
                 this._inFlight[job.UserId] = true;
-                this._logger.LogDebug(
-                    "Consolidation already in-flight for UserId={UserId}; marking pending.", job.UserId);
+                this.LogConsolidationAlreadyInFlight(job.UserId);
                 continue;
             }
 
@@ -178,7 +175,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
             }
         }
 
-        this._logger.LogInformation("ConsolidatorBackgroundService stopping.");
+        this.LogServiceStopping();
     }
 
     /// <summary>
@@ -194,9 +191,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
 
         _jobCounter.Add(1);
 
-        this._logger.LogInformation(
-            "Starting consolidation for UserId={UserId} triggered by session {SessionId}",
-            job.UserId, job.TriggeredBySessionId);
+        this.LogStartingConsolidation(job.UserId, job.TriggeredBySessionId);
 
         IReadOnlyList<Record> records;
         try
@@ -206,14 +201,13 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
         catch (Exception ex)
         {
             _errorCounter.Add(1);
-            this._logger.LogError(ex, "Failed to load records for UserId={UserId}", job.UserId);
+            this.LogFailedToLoadRecords(ex, job.UserId);
             return;
         }
 
         if (records.Count == 0)
         {
-            this._logger.LogInformation(
-                "No records for UserId={UserId}; skipping consolidation.", job.UserId);
+            this.LogNoRecordsSkippingConsolidation(job.UserId);
 
             await this._eventBus.PublishAsync(new ConsolidationCompletedEvent(
                 UserId: job.UserId,
@@ -226,16 +220,12 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
 
         if (records.Count > MaxRecordsPerPass)
         {
-            this._logger.LogWarning(
-                "UserId={UserId} has {Count} records, exceeding MaxRecordsPerPass={Max}. " +
-                "Consolidation will proceed on full corpus (v1 — deferred per-domain batching).",
-                job.UserId, records.Count, MaxRecordsPerPass);
+            this.LogExceedsMaxRecordsPerPass(job.UserId, records.Count, MaxRecordsPerPass);
         }
 
         if (this._agentRunner is null)
         {
-            this._logger.LogWarning(
-                "No agent runner configured; skipping sub-agent for UserId={UserId}.", job.UserId);
+            this.LogNoAgentRunnerConfigured(job.UserId);
 
             await this._eventBus.PublishAsync(new ConsolidationCompletedEvent(
                 UserId: job.UserId,
@@ -258,7 +248,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
         catch (Exception ex)
         {
             _errorCounter.Add(1);
-            this._logger.LogError(ex, "Consolidation sub-agent failed for UserId={UserId}", job.UserId);
+            this.LogConsolidationSubAgentFailed(ex, job.UserId);
         }
 
         await this._eventBus.PublishAsync(new ConsolidationCompletedEvent(
@@ -267,8 +257,7 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
             Updates: updates,
             Deletes: deletes), ct).ConfigureAwait(false);
 
-        this._logger.LogInformation(
-            "Consolidation complete for UserId={UserId}.", job.UserId);
+        this.LogConsolidationComplete(job.UserId);
     }
 
     // ── Test-support helpers (internal) ──────────────────────────────────────
@@ -302,4 +291,52 @@ internal sealed class ConsolidatorBackgroundService : BackgroundService, IConsol
             }
         }
     }
+
+    /// <summary>Logs that a consolidation job was enqueued from a distillation-completed event.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Enqueued ConsolidationJob for UserId={UserId} from session {SessionId}")]
+    private partial void LogEnqueuedConsolidationJob(string userId, string sessionId);
+
+    /// <summary>Logs that a consolidation job was enqueued via an explicit manual request.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Manual ConsolidationJob enqueued for UserId={UserId}")]
+    private partial void LogManualConsolidationJobEnqueued(string userId);
+
+    /// <summary>Logs that the consolidator background service started.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "ConsolidatorBackgroundService started.")]
+    private partial void LogServiceStarted();
+
+    /// <summary>Logs that a consolidation pass for a user was already in-flight and a re-run was marked pending.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Consolidation already in-flight for UserId={UserId}; marking pending.")]
+    private partial void LogConsolidationAlreadyInFlight(string userId);
+
+    /// <summary>Logs that the consolidator background service is stopping.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "ConsolidatorBackgroundService stopping.")]
+    private partial void LogServiceStopping();
+
+    /// <summary>Logs that a consolidation pass is starting for a user.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting consolidation for UserId={UserId} triggered by session {SessionId}")]
+    private partial void LogStartingConsolidation(string userId, string sessionId);
+
+    /// <summary>Logs that loading records for a consolidation pass failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to load records for UserId={UserId}")]
+    private partial void LogFailedToLoadRecords(Exception ex, string userId);
+
+    /// <summary>Logs that a consolidation pass was skipped because the user has no records.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "No records for UserId={UserId}; skipping consolidation.")]
+    private partial void LogNoRecordsSkippingConsolidation(string userId);
+
+    /// <summary>Logs that a user's record count exceeds the max-records-per-pass scale guard.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "UserId={UserId} has {Count} records, exceeding MaxRecordsPerPass={Max}. Consolidation will proceed on full corpus (v1 — deferred per-domain batching).")]
+    private partial void LogExceedsMaxRecordsPerPass(string userId, int count, int max);
+
+    /// <summary>Logs that the consolidation sub-agent was skipped because no agent runner is configured.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No agent runner configured; skipping sub-agent for UserId={UserId}.")]
+    private partial void LogNoAgentRunnerConfigured(string userId);
+
+    /// <summary>Logs that the consolidation sub-agent failed for a user.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Consolidation sub-agent failed for UserId={UserId}")]
+    private partial void LogConsolidationSubAgentFailed(Exception ex, string userId);
+
+    /// <summary>Logs that a consolidation pass completed for a user.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Consolidation complete for UserId={UserId}.")]
+    private partial void LogConsolidationComplete(string userId);
 }

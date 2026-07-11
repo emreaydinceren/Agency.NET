@@ -10,6 +10,8 @@ internal sealed class ToolHelpTool : ITool
 {
     private readonly IToolRegistry _inner;
 
+    private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
+
     private static readonly JsonElement InputSchema = JsonDocument.Parse(@"{
         ""type"": ""object"",
         ""properties"": {
@@ -63,7 +65,7 @@ internal sealed class ToolHelpTool : ITool
                 IsError: true));
         }
 
-        string schemaJson = JsonSerializer.Serialize(found.InputSchema, new JsonSerializerOptions { WriteIndented = true });
+        string schemaJson = JsonSerializer.Serialize(found.InputSchema, IndentedOptions);
         string content = $"{found.Description}\n\n{schemaJson}";
         return Task.FromResult(new ToolResult(content, IsError: false));
     }

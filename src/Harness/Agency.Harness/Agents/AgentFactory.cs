@@ -26,6 +26,8 @@ public sealed class AgentFactory : IAgentFactory
         IPermissionEvaluator? permissions = null,
         TimeProvider? timeProvider = null)
     {
+        ArgumentNullException.ThrowIfNull(optionsAccessor);
+
         this.models = models;
         this.logger = logger;
         this.options = optionsAccessor.Value;

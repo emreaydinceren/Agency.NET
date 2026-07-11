@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Deterministic done-check gate: given the goal condition and the conversation so far,
@@ -19,7 +19,7 @@ internal interface IGoalkeeper
     /// <param name="ct">Propagated cancellation token.</param>
     /// <returns>
     /// <see cref="Verdict.Done"/> when the condition is satisfied;
-    /// <see cref="Verdict.Continue"/> otherwise (with the reason used as the next directive).
+    /// <see cref="Verdict.ContinueLoop"/> otherwise (with the reason used as the next directive).
     /// </returns>
     Task<Verdict> EvaluateAsync(
         string condition,

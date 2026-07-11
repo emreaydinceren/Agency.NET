@@ -11,15 +11,16 @@ namespace Agency.Sql.Common;
 /// Base class for database SQL runners. Provides the shared telemetry, validation, and execution
 /// skeleton; subclasses supply only the connection factory and command builder.
 /// </summary>
-public abstract class SqlRunnerBase
+public abstract partial class SqlRunnerBase
 {
     private readonly ActivitySource _activitySource;
     private readonly Counter<long> _executionCount;
     private readonly Histogram<double> _executionDuration;
     private readonly string _dbSystem;
+    private readonly ILogger _logger;
 
     /// <summary>Logger for this runner instance.</summary>
-    protected readonly ILogger Logger;
+    protected ILogger Logger => this._logger;
 
     /// <summary>
     /// Initialises the shared telemetry state.
@@ -40,7 +41,7 @@ public abstract class SqlRunnerBase
         this._executionCount = executionCount;
         this._executionDuration = executionDuration;
         this._dbSystem = dbSystem;
-        this.Logger = logger;
+        this._logger = logger;
     }
 
     /// <summary>Opens a new database connection.</summary>
@@ -68,7 +69,7 @@ public abstract class SqlRunnerBase
         activity?.SetTag("db.statement", sql);
 
         var stopwatch = Stopwatch.StartNew();
-        this.Logger.LogDebug("Executing non-query SQL: {Sql}", sql);
+        this.LogExecutingNonQuery(sql);
 
         try
         {
@@ -83,7 +84,7 @@ public abstract class SqlRunnerBase
             activity?.SetTag("db.rows_affected", rowsAffected);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this.Logger.LogDebug("Non-query SQL completed in {ElapsedMs}ms. Rows affected: {RowsAffected}", stopwatch.Elapsed.TotalMilliseconds, rowsAffected);
+            this.LogNonQueryCompleted(stopwatch.Elapsed.TotalMilliseconds, rowsAffected);
             return rowsAffected;
         }
         catch (Exception ex)
@@ -100,7 +101,7 @@ public abstract class SqlRunnerBase
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this.Logger.LogError(ex, "Error executing non-query SQL after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
+            this.LogErrorExecutingNonQuery(ex, stopwatch.Elapsed.TotalMilliseconds, sql);
             throw;
         }
     }
@@ -124,7 +125,7 @@ public abstract class SqlRunnerBase
         activity?.SetTag("db.statement", sql);
 
         var stopwatch = Stopwatch.StartNew();
-        this.Logger.LogDebug("Executing query SQL: {Sql}", sql);
+        this.LogExecutingQuery(sql);
 
         try
         {
@@ -152,7 +153,7 @@ public abstract class SqlRunnerBase
             activity?.SetTag("db.row_count", rows.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this.Logger.LogDebug("Query SQL completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, rows.Count);
+            this.LogQueryCompleted(stopwatch.Elapsed.TotalMilliseconds, rows.Count);
 
             var columns = columnSchema.Select(c => (IColumnMetadata)new DbColumnAdapter(c)).ToList();
             return new Dataset(columns, rows);
@@ -171,7 +172,7 @@ public abstract class SqlRunnerBase
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this.Logger.LogError(ex, "Error executing query SQL after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
+            this.LogErrorExecutingQuery(ex, stopwatch.Elapsed.TotalMilliseconds, sql);
             throw;
         }
     }
@@ -190,10 +191,7 @@ public abstract class SqlRunnerBase
             throw new ArgumentException("SQL query cannot be null or whitespace.", nameof(sql));
         }
 
-        if (predicate is null)
-        {
-            throw new ArgumentNullException(nameof(predicate));
-        }
+        ArgumentNullException.ThrowIfNull(predicate);
 
         using var activity = this._activitySource.StartActivity($"{this._dbSystem}.query", ActivityKind.Client);
         activity?.SetTag("db.system", this._dbSystem);
@@ -201,7 +199,7 @@ public abstract class SqlRunnerBase
         activity?.SetTag("db.statement", sql);
 
         var stopwatch = Stopwatch.StartNew();
-        this.Logger.LogDebug("Executing query SQL with predicate: {Sql}", sql);
+        this.LogExecutingQueryWithPredicate(sql);
 
         try
         {
@@ -223,7 +221,7 @@ public abstract class SqlRunnerBase
             activity?.SetTag("db.row_count", results.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this.Logger.LogDebug("Query SQL with predicate completed in {ElapsedMs}ms. Rows returned: {RowCount}", stopwatch.Elapsed.TotalMilliseconds, results.Count);
+            this.LogQueryWithPredicateCompleted(stopwatch.Elapsed.TotalMilliseconds, results.Count);
             return results;
         }
         catch (Exception ex)
@@ -240,10 +238,46 @@ public abstract class SqlRunnerBase
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this.Logger.LogError(ex, "Error executing query SQL with predicate after {ElapsedMs}ms: {Sql}", stopwatch.Elapsed.TotalMilliseconds, sql);
+            this.LogErrorExecutingQueryWithPredicate(ex, stopwatch.Elapsed.TotalMilliseconds, sql);
             throw;
         }
     }
+
+    /// <summary>Logs that a non-query SQL statement is being executed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Executing non-query SQL: {Sql}")]
+    private partial void LogExecutingNonQuery(string sql);
+
+    /// <summary>Logs that a non-query SQL statement completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Non-query SQL completed in {ElapsedMs}ms. Rows affected: {RowsAffected}")]
+    private partial void LogNonQueryCompleted(double elapsedMs, int rowsAffected);
+
+    /// <summary>Logs that a non-query SQL statement failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error executing non-query SQL after {ElapsedMs}ms: {Sql}")]
+    private partial void LogErrorExecutingNonQuery(Exception ex, double elapsedMs, string sql);
+
+    /// <summary>Logs that a SQL query is being executed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Executing query SQL: {Sql}")]
+    private partial void LogExecutingQuery(string sql);
+
+    /// <summary>Logs that a SQL query completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Query SQL completed in {ElapsedMs}ms. Rows returned: {RowCount}")]
+    private partial void LogQueryCompleted(double elapsedMs, int rowCount);
+
+    /// <summary>Logs that a SQL query failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error executing query SQL after {ElapsedMs}ms: {Sql}")]
+    private partial void LogErrorExecutingQuery(Exception ex, double elapsedMs, string sql);
+
+    /// <summary>Logs that a SQL query with a row-mapping predicate is being executed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Executing query SQL with predicate: {Sql}")]
+    private partial void LogExecutingQueryWithPredicate(string sql);
+
+    /// <summary>Logs that a SQL query with a row-mapping predicate completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Query SQL with predicate completed in {ElapsedMs}ms. Rows returned: {RowCount}")]
+    private partial void LogQueryWithPredicateCompleted(double elapsedMs, int rowCount);
+
+    /// <summary>Logs that a SQL query with a row-mapping predicate failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error executing query SQL with predicate after {ElapsedMs}ms: {Sql}")]
+    private partial void LogErrorExecutingQueryWithPredicate(Exception ex, double elapsedMs, string sql);
 
     internal sealed class DbColumnAdapter : IColumnMetadata
     {

@@ -34,16 +34,18 @@ public sealed class SqliteDeadLetterRepository : IDeadLetterStore
     /// <param name="sessionId">The session, or <see langword="null"/> for consolidation jobs.</param>
     /// <param name="jobKind">A short label identifying the job type (e.g. <c>"distillation"</c>).</param>
     /// <param name="payload">The job payload; serialised to JSON.</param>
-    /// <param name="error">The exception that caused the failure.</param>
+    /// <param name="exception">The exception that caused the failure.</param>
     /// <param name="ct">Cancellation token.</param>
     public async Task WriteAsync(
         string userId,
         string? sessionId,
         string jobKind,
         object payload,
-        Exception error,
+        Exception exception,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(exception);
+
         const string sql = @"
             INSERT INTO dead_letter (id, user_id, session_id, job_kind, job_payload, error, stack, created_at)
             VALUES (@id, @user_id, @session_id, @job_kind, @job_payload, @error, @stack, @created_at);";
@@ -59,8 +61,8 @@ public sealed class SqliteDeadLetterRepository : IDeadLetterStore
         cmd.Parameters.AddWithValue("@session_id", (object?)sessionId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@job_kind", jobKind);
         cmd.Parameters.AddWithValue("@job_payload", json);
-        cmd.Parameters.AddWithValue("@error", error.Message);
-        cmd.Parameters.AddWithValue("@stack", (object?)error.StackTrace ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@error", exception.Message);
+        cmd.Parameters.AddWithValue("@stack", (object?)exception.StackTrace ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@created_at", now);
         await cmd.ExecuteNonQueryAsync(ct);
     }

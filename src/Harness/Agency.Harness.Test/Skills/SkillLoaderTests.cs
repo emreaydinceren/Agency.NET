@@ -34,7 +34,7 @@ public sealed class SkillLoaderTests : IDisposable
     }
 
     /// <summary>Creates a skill directory with a minimal SKILL.md under the given root.</summary>
-    private string CreateSkill(string root, string dirName, string description = "A test skill", string? body = null)
+    private static string CreateSkill(string root, string dirName, string description = "A test skill", string? body = null)
     {
         string skillDir = Path.Combine(root, dirName);
         Directory.CreateDirectory(skillDir);
@@ -203,7 +203,7 @@ public sealed class SkillLoaderTests : IDisposable
     [Fact]
     public void Empty_ReturnsEmptyCatalog()
     {
-        ISkillCatalog empty = SkillCatalog.Empty;
+        SkillCatalog empty = SkillCatalog.Empty;
 
         Assert.Empty(empty.List());
         Assert.Null(empty.Find("anything"));

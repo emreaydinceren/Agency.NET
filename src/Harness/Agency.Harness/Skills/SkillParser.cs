@@ -204,7 +204,7 @@ internal static class SkillParser
     ///   <item>Space-separated inline value: <c>a b c</c></item>
     /// </list>
     /// </summary>
-    private static IReadOnlyList<string> GetList(
+    private static List<string> GetList(
         Dictionary<string, string> fields,
         List<string> listKeys,
         string key)

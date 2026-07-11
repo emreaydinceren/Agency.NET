@@ -26,6 +26,8 @@ public static class PermissionServiceCollectionExtensions
     public static IServiceCollection AddAgencyPermissions(
         this IServiceCollection services, IConfiguration config, string sectionName = "Permissions")
     {
+        ArgumentNullException.ThrowIfNull(config);
+
         services.AddOptions<PermissionsOptions>().Bind(config.GetSection(sectionName));
         services.AddSingleton<IPermissionEvaluator>(sp =>
         {

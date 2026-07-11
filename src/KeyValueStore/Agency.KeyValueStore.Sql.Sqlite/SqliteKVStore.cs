@@ -14,7 +14,7 @@ namespace Agency.KeyValueStore.Sql.Sqlite;
 /// after the SQL query because SQLite has no native JSONB containment operator. Results are ordered by recency (newest
 /// first).
 /// </summary>
-public sealed class SqliteKVStore : IKVStore
+public sealed partial class SqliteKVStore : IKVStore
 {
     /// <summary>The activity source name used for KV store telemetry.</summary>
     public const string ActivitySourceName = "Agency.KeyValueStore.Sql.Sqlite";
@@ -48,7 +48,7 @@ public sealed class SqliteKVStore : IKVStore
     {
         using var activity = _telemetry.StartActivity("kvstore.initialize");
         activity?.SetTag("kvstore.operation", "initialize");
-        this._logger.LogDebug("Initializing SQLite KV store schema");
+        KvStoreTelemetry.LogInitializingSchema(this._logger);
 
         await _telemetry.ExecuteAsync<int>(
             "initialize",
@@ -67,23 +67,20 @@ public sealed class SqliteKVStore : IKVStore
                 """,
                 null,
                 cancellationToken),
-            onSuccess: (_, elapsedMs) => this._logger.LogDebug("SQLite KV store schema initialization completed in {ElapsedMs}ms", elapsedMs),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error initializing SQLite KV store schema after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (_, elapsedMs) => KvStoreTelemetry.LogSchemaInitialized(this._logger, elapsedMs),
+            onError: (ex, elapsedMs) => KvStoreTelemetry.LogErrorInitializingSchema(this._logger, ex, elapsedMs));
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default)
     {
-        if (query == null)
-        {
-            throw new ArgumentNullException(nameof(query));
-        }
+        ArgumentNullException.ThrowIfNull(query);
 
         using var activity = _telemetry.StartActivity("kvstore.search");
         activity?.SetTag("kvstore.operation", "search");
         activity?.SetTag("kvstore.limit", query.Limit ?? 10);
         activity?.SetTag("kvstore.has_metadata_filter", query.MetadataFilter != null);
-        this._logger.LogDebug("Searching SQLite KV store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
+        KvStoreTelemetry.LogSearching(this._logger, query.Limit ?? 10, query.MetadataFilter != null);
 
         return await _telemetry.ExecuteAsync<IReadOnlyList<SearchHit<TValue>>>(
             "search",
@@ -159,8 +156,8 @@ public sealed class SqliteKVStore : IKVStore
                 activity?.SetTag("kvstore.result_count", results.Count);
                 return results;
             },
-            onSuccess: (results, elapsedMs) => this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", elapsedMs, results.Count),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (results, elapsedMs) => KvStoreTelemetry.LogSearchCompleted(this._logger, elapsedMs, results.Count),
+            onError: (ex, elapsedMs) => KvStoreTelemetry.LogErrorSearching(this._logger, ex, elapsedMs));
     }
 
     /// <inheritdoc/>
@@ -171,7 +168,7 @@ public sealed class SqliteKVStore : IKVStore
         activity?.SetTag("kvstore.key", key);
         activity?.SetTag("kvstore.has_metadata", metadata != null);
         activity?.SetTag("kvstore.user_id", userId);
-        this._logger.LogDebug("Upserting SQLite KV store entry with key {Key}", key);
+        KvStoreTelemetry.LogUpserting(this._logger, key, metadata != null);
 
         await _telemetry.ExecuteAsync<int>(
             "upsert",
@@ -202,8 +199,8 @@ public sealed class SqliteKVStore : IKVStore
                     },
                     cancellationToken);
             },
-            onSuccess: (_, elapsedMs) => this._logger.LogDebug("SQLite KV store upsert completed in {ElapsedMs}ms for key {Key}", elapsedMs, key),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error upserting SQLite KV store entry after {ElapsedMs}ms for key {Key}", elapsedMs, key));
+            onSuccess: (_, elapsedMs) => KvStoreTelemetry.LogUpserted(this._logger, elapsedMs, key),
+            onError: (ex, elapsedMs) => KvStoreTelemetry.LogErrorUpserting(this._logger, ex, elapsedMs, key));
     }
 
     /// <inheritdoc/>
@@ -212,7 +209,7 @@ public sealed class SqliteKVStore : IKVStore
         using var activity = _telemetry.StartActivity("kvstore.delete");
         activity?.SetTag("kvstore.operation", "delete");
         activity?.SetTag("kvstore.key", key);
-        this._logger.LogDebug("Deleting SQLite KV store entry with key {Key}", key);
+        KvStoreTelemetry.LogDeleting(this._logger, key);
 
         return await _telemetry.ExecuteAsync(
             "delete",
@@ -226,17 +223,14 @@ public sealed class SqliteKVStore : IKVStore
                 activity?.SetTag("kvstore.deleted", rowsAffected > 0);
                 return rowsAffected > 0;
             },
-            onSuccess: (deleted, elapsedMs) => this._logger.LogDebug("SQLite KV store delete completed in {ElapsedMs}ms for key {Key}. Deleted: {Deleted}", elapsedMs, key, deleted),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting SQLite KV store entry after {ElapsedMs}ms for key {Key}", elapsedMs, key));
+            onSuccess: (deleted, elapsedMs) => KvStoreTelemetry.LogDeleted(this._logger, elapsedMs, key, deleted),
+            onError: (ex, elapsedMs) => KvStoreTelemetry.LogErrorDeleting(this._logger, ex, elapsedMs, key));
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit>> GetMetadataAsync(string userId, string? sessionId, CancellationToken cancellationToken = default)
     {
-        if (userId == null)
-        {
-            throw new ArgumentNullException(nameof(userId));
-        }
+        ArgumentNullException.ThrowIfNull(userId);
 
         using var activity = _telemetry.StartActivity("kvstore.getMetadata");
         activity?.SetTag("kvstore.operation", "getMetadata");
@@ -276,8 +270,8 @@ public sealed class SqliteKVStore : IKVStore
                 activity?.SetTag("kvstore.result_count", results.Count);
                 return results;
             },
-            onSuccess: (results, elapsedMs) => this._logger.LogDebug("SQLite KV store search completed in {ElapsedMs}ms. Results: {ResultCount}", elapsedMs, results.Count),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching SQLite KV store after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (results, elapsedMs) => this.LogGetMetadataCompleted(elapsedMs, results.Count),
+            onError: (ex, elapsedMs) => this.LogErrorGettingMetadata(ex, elapsedMs));
     }
 
     private static SearchHit<TValue> HydrateSearchHit<TValue>(DbDataReader reader)
@@ -382,4 +376,12 @@ public sealed class SqliteKVStore : IKVStore
         // Scalar equality
         return string.Equals(metaValue?.ToString(), filterValue?.ToString(), StringComparison.Ordinal);
     }
+
+    /// <summary>Logs that a SQLite KV store metadata lookup completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "SQLite KV store metadata lookup completed in {ElapsedMs}ms. Results: {ResultCount}")]
+    private partial void LogGetMetadataCompleted(double elapsedMs, int resultCount);
+
+    /// <summary>Logs that getting metadata from the SQLite KV store failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error getting metadata from SQLite KV store after {ElapsedMs}ms")]
+    private partial void LogErrorGettingMetadata(Exception ex, double elapsedMs);
 }

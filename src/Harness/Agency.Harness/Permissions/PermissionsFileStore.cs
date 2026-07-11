@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Harness.Permissions;
 
@@ -19,7 +20,7 @@ namespace Agency.Harness.Permissions;
 /// session grant still applies; persistence is best-effort.
 /// </para>
 /// </remarks>
-internal sealed class PermissionsFileStore
+internal sealed partial class PermissionsFileStore
 {
     private const int MaxRetryAttempts = 10;
     private const int RetryDelayMs = 50;
@@ -27,12 +28,12 @@ internal sealed class PermissionsFileStore
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = false };
 
     private readonly string _path;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
 
     internal PermissionsFileStore(string path, ILogger? logger = null)
     {
         _path = path;
-        _logger = logger;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     /// <summary>
@@ -100,9 +101,7 @@ internal sealed class PermissionsFileStore
             {
                 if (attempt == MaxRetryAttempts - 1)
                 {
-                    _logger?.LogWarning(
-                        "PermissionsFileStore: gave up appending rule '{Rule}' to '{Path}' after {Attempts} attempts.",
-                        rule, _path, MaxRetryAttempts);
+                    LogGaveUpAppendingRule(rule, _path, MaxRetryAttempts);
                 }
                 continue;
             }
@@ -228,4 +227,8 @@ internal sealed class PermissionsFileStore
 
         return result;
     }
+
+    /// <summary>Logs that appending a rule to the local permissions file was abandoned after exhausting retries.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "PermissionsFileStore: gave up appending rule '{Rule}' to '{Path}' after {Attempts} attempts.")]
+    private partial void LogGaveUpAppendingRule(string rule, string path, int attempts);
 }

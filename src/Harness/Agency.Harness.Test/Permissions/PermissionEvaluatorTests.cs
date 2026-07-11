@@ -858,7 +858,7 @@ public sealed class PermissionEvaluatorTests
                             PermissionDecision d = evaluator.Evaluate("ReadFile", input);
                             if (d is not PermissionDecision.Allow)
                             {
-                                throw new Exception($"Expected Allow at i={i}, got {d}");
+                                throw new InvalidOperationException($"Expected Allow at i={i}, got {d}");
                             }
 
                             break;
@@ -871,7 +871,7 @@ public sealed class PermissionEvaluatorTests
                             PermissionDecision d = evaluator.Evaluate("WriteFile", input);
                             if (d is not PermissionDecision.Deny)
                             {
-                                throw new Exception($"Expected Deny at i={i}, got {d}");
+                                throw new InvalidOperationException($"Expected Deny at i={i}, got {d}");
                             }
 
                             break;
@@ -884,7 +884,7 @@ public sealed class PermissionEvaluatorTests
                             PermissionDecision d = evaluator.Evaluate("ExecutePowershell", input);
                             if (d is not PermissionDecision.Ask)
                             {
-                                throw new Exception($"Expected Ask at i={i}, got {d}");
+                                throw new InvalidOperationException($"Expected Ask at i={i}, got {d}");
                             }
 
                             break;

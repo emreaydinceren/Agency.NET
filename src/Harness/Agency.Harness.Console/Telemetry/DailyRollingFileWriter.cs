@@ -1,5 +1,6 @@
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 
 namespace Agency.Harness.Console.Telemetry;
@@ -65,7 +66,7 @@ internal sealed class DailyRollingFileWriter : IDisposable
     /// <summary>Opens or rolls the <see cref="StreamWriter"/> when the UTC date changes.</summary>
     private void EnsureWriter()
     {
-        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        string today = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         if (today == this._currentDate && this._writer != null)
         {
             return;

@@ -184,6 +184,8 @@ public sealed class ChatSession : IAsyncDisposable
         IReadOnlyList<PermissionResponse> responses,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(responses);
+
         if (this._ctx is null)
         {
             throw new InvalidOperationException(

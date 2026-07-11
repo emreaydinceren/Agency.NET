@@ -10,7 +10,7 @@ namespace Agency.Ingestion;
 /// <summary>
 /// Default orchestration of the load → split → store ingestion pipeline.
 /// </summary>
-public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue>
+public sealed partial class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue>
 {
     /// <summary>The activity source name used for ingestion telemetry.</summary>
     public const string ActivitySourceName = "Agency.Ingestion";
@@ -72,7 +72,7 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
         int failed = 0;
         var failedKeys = new ConcurrentBag<string>();
 
-        this._logger.LogInformation("Ingestion pipeline started.");
+        this.LogPipelineStarted();
 
         await Parallel.ForEachAsync(
             loader.LoadAsync(ct),
@@ -101,7 +101,7 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
                         Interlocked.Increment(ref failed);
                         failedKeys.Add(key);
                         _documentsCounter.Add(1, new TagList { { "status", "failure" } });
-                        this._logger.LogError(ex, "Failed to upsert chunk. Key={Key}", key);
+                        this.LogChunkUpsertFailed(ex, key);
                     }
                 }
             });
@@ -117,12 +117,10 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
             activity?.SetStatus(ActivityStatusCode.Error, $"{failed} chunk(s) failed to ingest.");
         }
 
-        this._logger.LogInformation(
-            "Ingestion pipeline completed. Succeeded={Succeeded}, Failed={Failed}, DurationMs={DurationMs:F1}",
-            succeeded, failed, sw.Elapsed.TotalMilliseconds);
+        this.LogPipelineCompleted(succeeded, failed, sw.Elapsed.TotalMilliseconds);
 
         return new IngestionResult(succeeded, failed,
-            failedKeys.Count > 0 ? failedKeys.ToList() : null);
+            !failedKeys.IsEmpty ? failedKeys.ToList() : null);
     }
 
     private static Dictionary<string, object> BuildChunkMetadata(
@@ -136,4 +134,16 @@ public sealed class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue
         meta["ingested_at"] = DateTimeOffset.UtcNow;
         return meta;
     }
+
+    /// <summary>Logs that the ingestion pipeline run is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Ingestion pipeline started.")]
+    private partial void LogPipelineStarted();
+
+    /// <summary>Logs that a document chunk failed to upsert.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to upsert chunk. Key={Key}")]
+    private partial void LogChunkUpsertFailed(Exception ex, string key);
+
+    /// <summary>Logs that the ingestion pipeline run completed.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Ingestion pipeline completed. Succeeded={Succeeded}, Failed={Failed}, DurationMs={DurationMs:F1}")]
+    private partial void LogPipelineCompleted(int succeeded, int failed, double durationMs);
 }

@@ -19,7 +19,7 @@ public sealed class OpenAIClient : IModelProvider
 
     /// <summary>Creates a factory from configured options.</summary>
     public OpenAIClient(IOptions<LlmClientOptions> options, ILoggerFactory? loggerFactory = null)
-        : this(options.Value, loggerFactory)
+        : this((options ?? throw new ArgumentNullException(nameof(options))).Value, loggerFactory)
     {
     }
 

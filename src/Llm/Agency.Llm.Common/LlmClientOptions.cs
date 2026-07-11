@@ -31,7 +31,7 @@ public sealed record class LlmClientOptions
     /// <summary>
     /// Gets or sets the retry count.
     /// </summary>
-    public int? MaxRetries { get; set; } = null;
+    public int? MaxRetries { get; set; }
 
     /// <summary>
     /// Sets the maximum time allowed for a complete HTTP call, not including retries. Defaults to null (uses SDK
@@ -40,7 +40,7 @@ public sealed record class LlmClientOptions
     /// <summary>
     /// Gets or sets the request timeout.
     /// </summary>
-    public TimeSpan? Timeout { get; set; } = null;
+    public TimeSpan? Timeout { get; set; }
 
     /// <summary>
     /// When <see langword="true"/>, injects <c>enable_thinking: false</c> and
@@ -48,5 +48,5 @@ public sealed record class LlmClientOptions
     /// Use with reasoning-capable models (e.g. Qwen3) when extended thinking must be
     /// suppressed unconditionally regardless of prompt-level directives.
     /// </summary>
-    public bool SuppressThinking { get; set; } = false;
+    public bool SuppressThinking { get; set; }
 }

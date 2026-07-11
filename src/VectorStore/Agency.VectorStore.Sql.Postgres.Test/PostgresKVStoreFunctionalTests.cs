@@ -186,9 +186,9 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         // All results should have category = important
         foreach (var result in results)
         {
-            if (result.Metadata != null && result.Metadata.ContainsKey("category"))
+            if (result.Metadata != null && result.Metadata.TryGetValue("category", out var category))
             {
-                Assert.Equal("important", result.Metadata["category"]);
+                Assert.Equal("important", category);
             }
         }
     }
@@ -212,7 +212,7 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         if (results.Count > 0)
         {
             // Distance should be between 0 and 2 for cosine distance
-            var firstResult = results.First();
+            var firstResult = results[0];
             Assert.True(firstResult.Distance >= 0, "Distance should be >= 0");
             Assert.True(firstResult.Distance <= 2, "Distance should be <= 2");
 

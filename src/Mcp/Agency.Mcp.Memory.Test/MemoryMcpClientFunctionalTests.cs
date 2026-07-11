@@ -13,6 +13,10 @@ namespace Agency.Mcp.Memory.Test;
 [Trait("Category", "Functional")]
 public sealed class MemoryMcpClientFunctionalTests : IClassFixture<MemoryMcpClientFunctionalTests.McpClientFixture>
 {
+    private static readonly string[] _importantWorkTags = ["important", "work"];
+    private static readonly string[] _personalTags = ["personal"];
+    private static readonly string[] _importantTagFilter = ["important"];
+
     private readonly McpClientFixture _fixture;
 
     /// <summary>
@@ -154,7 +158,7 @@ public sealed class MemoryMcpClientFunctionalTests : IClassFixture<MemoryMcpClie
                     Domain = "notes",
                     Key = $"important-{suffix}",
                     Value = "critical information",
-                    Tags = new[] { "important", "work" }
+                    Tags = _importantWorkTags
                 }
             },
             cancellationToken: ct);
@@ -169,7 +173,7 @@ public sealed class MemoryMcpClientFunctionalTests : IClassFixture<MemoryMcpClie
                     Domain = "notes",
                     Key = $"personal-{suffix}",
                     Value = "personal note",
-                    Tags = new[] { "personal" }
+                    Tags = _personalTags
                 }
             },
             cancellationToken: ct);
@@ -181,7 +185,7 @@ public sealed class MemoryMcpClientFunctionalTests : IClassFixture<MemoryMcpClie
                 ["scope"] = scope,
                 ["domain"] = null,
                 ["key"] = null,
-                ["tags"] = new[] { "important" }
+                ["tags"] = _importantTagFilter
             },
             cancellationToken: ct);
 

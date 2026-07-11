@@ -246,7 +246,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
 
         // ── Build the consolidator service with the real LLM ──────────────────
         (ConsolidatorBackgroundService service, InMemoryEventBus eventBus) =
-            this.BuildConsolidatorService(store);
+            BuildConsolidatorService(store);
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(120));
@@ -370,7 +370,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         (ConsolidatorBackgroundService service, InMemoryEventBus eventBus) =
-            this.BuildConsolidatorService(store);
+            BuildConsolidatorService(store);
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(120));
@@ -511,7 +511,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         (ConsolidatorBackgroundService service, InMemoryEventBus eventBus) =
-            this.BuildConsolidatorService(store);
+            BuildConsolidatorService(store);
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(120));
@@ -666,7 +666,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         // observable of the Memory_Delete tool-call sourced from real product code — no
         // test-only store decorator required.
         (ConsolidatorBackgroundService service, InMemoryEventBus eventBus) =
-            this.BuildConsolidatorService(pgStore);
+            BuildConsolidatorService(pgStore);
 
         var mutations = new System.Collections.Concurrent.ConcurrentBag<MemoryMutatedEvent>();
         using IDisposable mutationSub = eventBus.Subscribe<MemoryMutatedEvent>((evt, _) =>
@@ -880,7 +880,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         (ConsolidatorBackgroundService realService, InMemoryEventBus realEventBus) =
-            this.BuildConsolidatorService(store);
+            BuildConsolidatorService(store);
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(180));
@@ -1068,7 +1068,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         (ConsolidatorBackgroundService realService, InMemoryEventBus realEventBus) =
-            this.BuildConsolidatorService(realStore);
+            BuildConsolidatorService(realStore);
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(180));
@@ -1118,7 +1118,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
     /// <returns>
     /// A tuple of the configured service and the event bus.
     /// </returns>
-    private (ConsolidatorBackgroundService Service, InMemoryEventBus EventBus) BuildConsolidatorService(
+    private static (ConsolidatorBackgroundService Service, InMemoryEventBus EventBus) BuildConsolidatorService(
         IMemoryStore store)
     {
         string baseUrl = _config[LmStudioBaseUrlKey]

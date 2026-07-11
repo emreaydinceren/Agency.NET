@@ -12,6 +12,11 @@
          mock embeddings, ad-hoc schema-isolation SQL) that trips CA5394/CA2100 with no real
          security relevance — only enforce the elevated security rule set for shipped code. -->
     <AnalysisModeSecurity>All</AnalysisModeSecurity>
+    <!-- RT56: public package ID prefix is AgencyDotNet.* (nuget.org rejects the Agency.* prefix
+         outright — see RT55). Namespaces/assembly names/folders stay Agency.* (package-ID-only
+         rename, RT55's Option A) — every project name here is "Agency.X", so swap just the
+         6-char "Agency" prefix for "AgencyDotNet" to derive the packed ID. -->
+    <PackageId>AgencyDotNet$(MSBuildProjectName.Substring(6))</PackageId>
   </PropertyGroup>
 
   <!-- Symbol and source embedding for NuGet packages -->

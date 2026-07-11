@@ -222,7 +222,17 @@ jobs:
             echo "== $id $version =="
 
             listing=$(unzip -l "$pkg")
-            for required in "lib/net10.0/${id}.dll" "lib/net10.0/${id}.xml" "README.md" "LICENSE" "NOTICE" "Agency_128.png"; do
+            # RT56: PackageId (AgencyDotNet.*) and AssemblyName (Agency.*) diverge on purpose —
+            # derive the actual lib dll name from the package contents instead of assuming it
+            # matches $id.
+            dllname=$(echo "$listing" | grep -oP 'lib/net10\.0/\K\S+\.dll' | head -1)
+            assembly="${dllname%.dll}"
+            if [ -z "$assembly" ]; then
+              echo "::error::$pkg has no lib/net10.0/*.dll entry"
+              fail=1
+              continue
+            fi
+            for required in "lib/net10.0/${assembly}.dll" "lib/net10.0/${assembly}.xml" "README.md" "LICENSE" "NOTICE" "Agency_128.png"; do
               if ! echo "$listing" | grep -qF "$required"; then
                 echo "::error::$pkg missing required entry: $required"
                 fail=1
@@ -248,7 +258,7 @@ jobs:
             if ! dotnet add "$work/harness/Agency.PackageSmokeTest.csproj" package "$id" --version "$version"; then
               echo "::error::$id $version failed to restore from the Gitea feed"
               fail=1
-            elif ! dotnet run --project "$work/harness/Agency.PackageSmokeTest.csproj" -- "$id"; then
+            elif ! dotnet run --project "$work/harness/Agency.PackageSmokeTest.csproj" -- "$assembly"; then
               echo "::error::$id $version installed but failed to load"
               fail=1
             fi

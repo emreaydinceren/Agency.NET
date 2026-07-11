@@ -81,6 +81,22 @@ jobs:
             --replace-message ../replacements.txt \
             --mailmap ../mailmap.txt
 
+      - name: 🔧 Use the nuget.org-only NuGet.Config for the public mirror
+        working-directory: scrub-clone
+        run: |
+          set -euo pipefail
+          # src/NuGet.Config still lists the two internal feeds (redacted to non-resolving
+          # hostnames by the replace-text rewrite above, not removed) — anyone cloning this repo
+          # and running `dotnet restore` in src/ would hit the same unreachable-source failure
+          # CI works around via NuGet.GitHub.config. Ship that same nuget.org-only config as the
+          # actual NuGet.Config here so a plain clone-and-restore just works. CI keeps using
+          # NuGet.GitHub.config by explicit name, so that file must stay too.
+          cp src/NuGet.GitHub.config src/NuGet.Config
+          git config user.name "Emre Aydinceren"
+          git config user.email "13038027+emreaydinceren@users.noreply.github.com"
+          git add src/NuGet.Config
+          git commit -m "chore: use nuget.org-only NuGet.Config for the public mirror"
+
       - name: 🔎 Verify the rewrite (fail closed)
         working-directory: scrub-clone
         run: |

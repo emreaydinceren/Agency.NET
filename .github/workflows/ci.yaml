@@ -100,6 +100,9 @@ jobs:
       # GitHub-hosted runners have Node.js preinstalled, unlike Gitea's dotnet-sdk container —
       # see the reflection in Agents/CIPipeline.md on why actions/checkout had to be dropped
       # there for the same reason. codecov-action stays GitHub-only for that reason.
+      - name: 🔐 Install gpg (codecov-action verifies its uploader binary's signature with it)
+        run: apt-get update -qq && apt-get install -y -q gnupg
+
       - name: ☂️ Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:

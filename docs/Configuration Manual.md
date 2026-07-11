@@ -368,6 +368,20 @@ dotnet user-secrets set -p src\Sql\Agency.Sql.Postgres.Test "GitHub:PersonalAcce
 | `Mcp:Servers[].EnvironmentVariables` | object | Stdio only. Extra environment for the child process. |
 | `Mcp:Servers[].Url` | string | Http only. MCP endpoint URL. |
 
+**`Mcp:_examples`** is an inert copy-paste template shipped alongside `Servers` — `McpClientOptions` has no `_examples` property, so it binds to nothing and is silently ignored at startup. It exists only to show the `Http` transport shape:
+
+```json
+"_examples": [
+  {
+    "Name": "remote-example",
+    "Transport": "Http",
+    "Url": "http://localhost:5000/mcp"
+  }
+]
+```
+
+To use it, move an entry into `Servers`.
+
 ```json
 "Mcp": {
   "Servers": [

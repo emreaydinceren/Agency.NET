@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # NBGV computes the version from git height since the last version.json bump —
           # a shallow clone can't count that and silently produces a wrong (0.0.x) version.

@@ -1,9 +1,9 @@
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 using Agency.Harness.Test.Fakes;
 
-namespace Agency.Harness.Test.Loop;
+namespace Agency.Harness.Test.Looping;
 
 /// <summary>
 /// Phase 3 / T-LOOP-*: unit tests for <see cref="LoopRunner"/> driven by a fake
@@ -32,9 +32,9 @@ public sealed class LoopRunnerTests
     private static ChatSession MakeSession(FakeChatClient client) =>
         new(new Agent(client, "worker-model"), new AgentOptions());
 
-    /// <summary>Creates a fake goalkeeper that always returns a <see cref="Verdict.Continue"/>.</summary>
+    /// <summary>Creates a fake goalkeeper that always returns a <see cref="Verdict.ContinueLoop"/>.</summary>
     private static FakeGoalkeeper ContinueGoalkeeper(string reason = "not done yet") =>
-        new(new Verdict.Continue(reason));
+        new(new Verdict.ContinueLoop(reason));
 
     /// <summary>Creates a fake goalkeeper that always returns a <see cref="Verdict.Done"/>.</summary>
     private static FakeGoalkeeper DoneGoalkeeper(string reason = "goal achieved") =>
@@ -93,7 +93,7 @@ public sealed class LoopRunnerTests
     // ── T-LOOP-1: gate runs every turn ───────────────────────────────────────
 
     /// <summary>
-    /// T-LOOP-1: goal armed, worker "stops" but Goalkeeper returns <see cref="Verdict.Continue"/>
+    /// T-LOOP-1: goal armed, worker "stops" but Goalkeeper returns <see cref="Verdict.ContinueLoop"/>
     /// → a second turn is issued; the Goalkeeper must fire after turn 0 and then again after turn 1.
     /// </summary>
     [Fact]
@@ -108,7 +108,7 @@ public sealed class LoopRunnerTests
 
         // First evaluation → Continue, second → Done.
         var goalkeeper = new SequencedFakeGoalkeeper(
-            new Verdict.Continue("keep going"),
+            new Verdict.ContinueLoop("keep going"),
             new Verdict.Done("done now"));
 
         var runner = new LoopRunner(
@@ -189,7 +189,7 @@ public sealed class LoopRunnerTests
     // ── T-LOOP-3: termination — core property ─────────────────────────────────
 
     /// <summary>
-    /// T-LOOP-3: Goalkeeper always returns <see cref="Verdict.Continue"/> → the loop exits
+    /// T-LOOP-3: Goalkeeper always returns <see cref="Verdict.ContinueLoop"/> → the loop exits
     /// at <see cref="GoalSpec.MaxTurns"/> with <see cref="LoopOutcome.CapReached"/>.
     /// Also asserts <see cref="GoalState"/> is cleared afterward (E-14 — bounded by construction).
     /// </summary>
@@ -270,8 +270,8 @@ public sealed class LoopRunnerTests
     // ── T-LOOP-5: feedback — Continue.Reason becomes next directive ───────────
 
     /// <summary>
-    /// T-LOOP-5: when Goalkeeper returns <see cref="Verdict.Continue"/>, its
-    /// <see cref="Verdict.Continue.Reason"/> must become the next turn's directive.
+    /// T-LOOP-5: when Goalkeeper returns <see cref="Verdict.ContinueLoop"/>, its
+    /// <see cref="Verdict.ContinueLoop.Reason"/> must become the next turn's directive.
     /// Assert the worker's second call received the reason as the user message.
     /// </summary>
     [Fact]
@@ -288,7 +288,7 @@ public sealed class LoopRunnerTests
 
         // First → Continue(reason=feedbackReason), second → Done.
         var goalkeeper = new SequencedFakeGoalkeeper(
-            new Verdict.Continue(feedbackReason),
+            new Verdict.ContinueLoop(feedbackReason),
             new Verdict.Done("done"));
 
         var runner = new LoopRunner(
@@ -422,7 +422,7 @@ public sealed class LoopRunnerTests
     // ── T-LOOP-8: disarm mid-run ──────────────────────────────────────────────
 
     /// <summary>
-    /// T-LOOP-8 / E-15: when Goalkeeper returns <see cref="Verdict.Continue"/>, but
+    /// T-LOOP-8 / E-15: when Goalkeeper returns <see cref="Verdict.ContinueLoop"/>, but
     /// <see cref="GoalState.Clear"/> happens before the next turn (model called
     /// <c>disable_goalkeeper</c>), the loop ends as a plain turn with no further Goalkeeper calls.
     /// </summary>
@@ -438,7 +438,7 @@ public sealed class LoopRunnerTests
 
         // Goalkeeper: first call → Continue, then clears the goal (simulating disable_goalkeeper),
         // second call should NEVER happen.
-        var disarmingGoalkeeper = new DisarmingFakeGoalkeeper(goalState, new Verdict.Continue("keep going"));
+        var disarmingGoalkeeper = new DisarmingFakeGoalkeeper(goalState, new Verdict.ContinueLoop("keep going"));
 
         var runner = new LoopRunner(
             MakeSession(workerFake),
@@ -484,7 +484,7 @@ public sealed class LoopRunnerTests
             CancellationToken ct)
         {
             this.EvaluateCallCount++;
-            return Task.FromResult<Verdict>(new Verdict.Continue("not done"));
+            return Task.FromResult<Verdict>(new Verdict.ContinueLoop("not done"));
         }
     }
 
@@ -539,7 +539,7 @@ public sealed class LoopRunnerTests
         {
             cts.Cancel();
             ct.ThrowIfCancellationRequested();
-            return Task.FromResult<Verdict>(new Verdict.Continue("cancelled"));
+            return Task.FromResult<Verdict>(new Verdict.ContinueLoop("cancelled"));
         }
     }
 

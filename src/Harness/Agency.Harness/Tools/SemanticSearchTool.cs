@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Agency.RagFormatter;
 using Agency.VectorStore.Common;
-using Agency.Harness;
 
 namespace Agency.Harness.Tools;
 

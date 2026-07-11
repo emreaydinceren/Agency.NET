@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Tool <c>disable_goalkeeper</c>: disarms the <see cref="GoalState"/>, stopping the loop after

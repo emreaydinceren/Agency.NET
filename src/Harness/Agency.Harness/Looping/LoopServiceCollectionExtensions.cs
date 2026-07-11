@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Extension methods for registering Loop Kit services with <see cref="IServiceCollection"/>.
@@ -25,6 +25,8 @@ public static class LoopServiceCollectionExtensions
         IConfiguration config,
         string sectionName = "Loop")
     {
+        ArgumentNullException.ThrowIfNull(config);
+
         services.AddOptions<LoopOptions>().Bind(config.GetSection(sectionName));
         return services;
     }

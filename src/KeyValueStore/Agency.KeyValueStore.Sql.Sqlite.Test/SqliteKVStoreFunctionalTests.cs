@@ -12,6 +12,9 @@ namespace Agency.KeyValueStore.Sql.Sqlite.Test;
 /// </summary>
 public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFunctionalTests.KVStoreFixture>
 {
+    private static readonly string[] _tagsWithMedical = ["document", "pdf", "medical"];
+    private static readonly string[] _tagsWithoutMedical = ["document", "pdf"];
+
     private readonly KVStoreFixture _fixture;
 
     /// <summary>
@@ -151,9 +154,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         string keyWithoutMedical = this._fixture.UniqueName("tags_no_medical");
 
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = _tagsWithMedical }, TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = _tagsWithoutMedical }, TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };

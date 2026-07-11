@@ -5,7 +5,7 @@ namespace Agency.Harness.Skills;
 /// </summary>
 internal sealed class SkillCatalog : ISkillCatalog
 {
-    private readonly IReadOnlyList<Skill> _skills;
+    private readonly List<Skill> _skills;
     private readonly Dictionary<string, Skill> _byName;
 
     /// <summary>Gets an empty catalog containing no skills.</summary>

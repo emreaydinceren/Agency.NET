@@ -7,4 +7,4 @@ namespace Agency.Memory.Functional.Test;
 /// run in parallel and share the same database.
 /// </summary>
 [CollectionDefinition("memory-db", DisableParallelization = true)]
-public sealed class SequentialDbCollection;
+public sealed class SequentialDbTestGroup;

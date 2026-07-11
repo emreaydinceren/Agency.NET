@@ -1,9 +1,10 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Agency.Harness.Hooks;
 
 /// <summary>Pre-built hooks that log tool invocations for auditing.</summary>
-public static class AuditHooks
+public static partial class AuditHooks
 {
     /// <summary>
     /// Returns an <see cref="AgentHooks"/> that logs <c>OnPreToolUse</c> and
@@ -15,19 +16,21 @@ public static class AuditHooks
     {
         OnPreToolUse = (ctx, _) =>
         {
-            logger.LogInformation(
-                "PreToolUse: tool={Tool} input={Input}",
-                ctx.ToolName,
-                ctx.Input);
+            LogPreToolUse(logger, ctx.ToolName, ctx.Input);
             return Task.FromResult(PreToolUseDecision.Allowed);
         },
         OnPostToolUse = (ctx, _) =>
         {
-            logger.LogInformation(
-                "PostToolUse: tool={Tool} error={IsError}",
-                ctx.ToolName,
-                ctx.Result.IsError);
+            LogPostToolUse(logger, ctx.ToolName, ctx.Result.IsError);
             return Task.CompletedTask;
         },
     };
+
+    /// <summary>Logs a pre-tool-use audit entry.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "PreToolUse: tool={Tool} input={Input}")]
+    private static partial void LogPreToolUse(ILogger logger, string tool, JsonElement input);
+
+    /// <summary>Logs a post-tool-use audit entry.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "PostToolUse: tool={Tool} error={IsError}")]
+    private static partial void LogPostToolUse(ILogger logger, string tool, bool isError);
 }

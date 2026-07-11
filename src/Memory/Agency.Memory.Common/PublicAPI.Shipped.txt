@@ -182,7 +182,7 @@ Agency.Memory.Common.Records.Record.UserId.init -> void
 Agency.Memory.Common.Records.Record.Value.get -> string!
 Agency.Memory.Common.Records.Record.Value.init -> void
 Agency.Memory.Common.Storage.IDeadLetterStore
-Agency.Memory.Common.Storage.IDeadLetterStore.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! error, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Agency.Memory.Common.Storage.IDeadLetterStore.WriteAsync(string! userId, string? sessionId, string! jobKind, object! payload, System.Exception! exception, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Agency.Memory.Common.Storage.IMemorySchemaInitializer
 Agency.Memory.Common.Storage.IMemorySchemaInitializer.InitializeAsync(int embeddingDim, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Agency.Memory.Common.Storage.IMemoryStore

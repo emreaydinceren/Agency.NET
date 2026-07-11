@@ -26,7 +26,7 @@ public sealed class Dataset
     /// </summary>
     public IReadOnlyCollection<IColumnMetadata> Columns { get; init; }
 
-    private readonly IDictionary<string, IColumnMetadata> _columnDict;
+    private readonly Dictionary<string, IColumnMetadata> _columnDict;
 
     private readonly List<object?[]> rows = new();
 
@@ -73,18 +73,23 @@ public sealed class Dataset
     /// <summary>
     /// Gets a value by zero-based column and row index.
     /// </summary>
+    /// <remarks>
+    /// Out-of-range indexes throw <see cref="ArgumentOutOfRangeException"/> rather than
+    /// <see cref="IndexOutOfRangeException"/>, which CA2201 reserves for the runtime's own
+    /// array/string indexers. This choice is deliberate, not an oversight (RT13).
+    /// </remarks>
     public object? this[int columnIndex, int rowIndex]
     {
         get
         {
             if (rowIndex < 0 || rowIndex >= this.Rows.Count)
             {
-                throw new IndexOutOfRangeException($"Row index {rowIndex} is out of range.");
+                throw new ArgumentOutOfRangeException(nameof(rowIndex), rowIndex, $"Row index {rowIndex} is out of range.");
             }
 
             if (columnIndex < 0 || columnIndex >= this.Columns.Count)
             {
-                throw new IndexOutOfRangeException($"Column index {columnIndex} is out of range.");
+                throw new ArgumentOutOfRangeException(nameof(columnIndex), columnIndex, $"Column index {columnIndex} is out of range.");
             }
 
             return this.Rows[rowIndex][columnIndex];

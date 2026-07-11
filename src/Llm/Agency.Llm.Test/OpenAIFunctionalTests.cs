@@ -21,7 +21,7 @@ public sealed class OpenAIFunctionalTests(OpenAIFunctionalTests.OpenAiFixture fi
 
     private readonly OpenAiFixture _fixture = fixture;
 
-    private IReadOnlyList<ChatMessage> SimpleMessages(string userPrompt) =>
+    private static IReadOnlyList<ChatMessage> SimpleMessages(string userPrompt) =>
     [
         new ChatMessage(ChatRole.User, userPrompt),
     ];

@@ -23,7 +23,7 @@ internal static class MarkdownRenderer
             string line = lines[i].TrimEnd('\r');
 
             // ── fenced code block ────────────────────────────────────────────────
-            if (line.StartsWith("```"))
+            if (line.StartsWith("```", StringComparison.Ordinal))
             {
                 if (!inCodeBlock)
                 {
@@ -73,26 +73,26 @@ internal static class MarkdownRenderer
             }
 
             // ── headings ─────────────────────────────────────────────────────────
-            if (line.StartsWith("### "))
+            if (line.StartsWith("### ", StringComparison.Ordinal))
             {
                 AnsiConsole.MarkupLine($"[bold]{ApplyInline(line[4..])}[/]");
                 continue;
             }
 
-            if (line.StartsWith("## "))
+            if (line.StartsWith("## ", StringComparison.Ordinal))
             {
                 AnsiConsole.MarkupLine($"[bold underline]{ApplyInline(line[3..])}[/]");
                 continue;
             }
 
-            if (line.StartsWith("# "))
+            if (line.StartsWith("# ", StringComparison.Ordinal))
             {
                 AnsiConsole.MarkupLine($"[bold underline]{ApplyInline(line[2..])}[/]");
                 continue;
             }
 
             // ── blockquote ───────────────────────────────────────────────────────
-            if (line.StartsWith("> "))
+            if (line.StartsWith("> ", StringComparison.Ordinal))
             {
                 AnsiConsole.MarkupLine($"[dim]│[/] {ApplyInline(line[2..])}");
                 continue;

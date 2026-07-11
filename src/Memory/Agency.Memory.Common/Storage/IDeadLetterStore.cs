@@ -19,13 +19,16 @@ public interface IDeadLetterStore
     /// <param name="sessionId">The session, or <see langword="null"/> for consolidation jobs.</param>
     /// <param name="jobKind">A short label identifying the job type (e.g. <c>"distillation"</c>).</param>
     /// <param name="payload">The job payload; serialised by the provider.</param>
-    /// <param name="error">The exception that caused the failure.</param>
+    /// <param name="exception">
+    /// The exception that caused the failure. Named <c>exception</c> rather than <c>error</c>
+    /// (RT13 analyzer-bar-raising work) to avoid the reserved-keyword collision flagged by CA1716.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     Task WriteAsync(
         string userId,
         string? sessionId,
         string jobKind,
         object payload,
-        Exception error,
+        Exception exception,
         CancellationToken ct = default);
 }

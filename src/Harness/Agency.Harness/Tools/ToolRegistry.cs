@@ -51,6 +51,8 @@ public sealed class ToolRegistry : IToolRegistry
     /// <param name="tools">The tools to register.</param>
     public ToolRegistry(IEnumerable<ITool> tools)
     {
+        ArgumentNullException.ThrowIfNull(tools);
+
         this._tools = [];
         foreach (ITool tool in tools)
         {
@@ -64,6 +66,8 @@ public sealed class ToolRegistry : IToolRegistry
     /// <inheritdoc/>
     public void Register(ITool tool)
     {
+        ArgumentNullException.ThrowIfNull(tool);
+
         ValueTask<ToolDefinition> vt = tool.GetDefinitionAsync();
         if (!vt.IsCompleted)
         {
@@ -77,6 +81,8 @@ public sealed class ToolRegistry : IToolRegistry
     /// <inheritdoc/>
     public async ValueTask RegisterAsync(ITool tool, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(tool);
+
         ToolDefinition def = await tool.GetDefinitionAsync(ct).ConfigureAwait(false);
         this._tools[def.Name] = (tool, def);
     }

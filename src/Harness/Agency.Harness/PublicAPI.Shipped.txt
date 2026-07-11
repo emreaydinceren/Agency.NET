@@ -1,7 +1,7 @@
 #nullable enable
 abstract Agency.Harness.AgentEvent.<Clone>$() -> Agency.Harness.AgentEvent!
 abstract Agency.Harness.Hooks.PreToolUseDecision.<Clone>$() -> Agency.Harness.Hooks.PreToolUseDecision!
-abstract Agency.Harness.Loop.Verdict.<Clone>$() -> Agency.Harness.Loop.Verdict!
+abstract Agency.Harness.Looping.Verdict.<Clone>$() -> Agency.Harness.Looping.Verdict!
 abstract Agency.Harness.Permissions.PermissionDecision.<Clone>$() -> Agency.Harness.Permissions.PermissionDecision!
 Agency.Harness.Agent
 Agency.Harness.Agent.Agent(Microsoft.Extensions.AI.IChatClient! llm, string! model, string? clientType = null, Agency.Harness.StopCondition? stopWhen = null, Agency.Harness.Hooks.AgentHooks? hooks = null, Agency.Harness.Permissions.IPermissionEvaluator? permissions = null, Microsoft.Extensions.Logging.ILogger<Agency.Harness.Agent!>? logger = null, System.TimeProvider? timeProvider = null, bool logToolPayloads = false) -> void
@@ -189,11 +189,11 @@ Agency.Harness.Contexts.UserSpecificContext.Name.get -> string?
 Agency.Harness.Contexts.UserSpecificContext.Name.init -> void
 Agency.Harness.Contexts.UserSpecificContext.UserSpecificContext() -> void
 Agency.Harness.GoalSetEvent
-Agency.Harness.GoalSetEvent.Deconstruct(out Agency.Harness.Loop.GoalSpec! Goal) -> void
+Agency.Harness.GoalSetEvent.Deconstruct(out Agency.Harness.Looping.GoalSpec! Goal) -> void
 Agency.Harness.GoalSetEvent.Equals(Agency.Harness.GoalSetEvent? other) -> bool
-Agency.Harness.GoalSetEvent.Goal.get -> Agency.Harness.Loop.GoalSpec!
+Agency.Harness.GoalSetEvent.Goal.get -> Agency.Harness.Looping.GoalSpec!
 Agency.Harness.GoalSetEvent.Goal.init -> void
-Agency.Harness.GoalSetEvent.GoalSetEvent(Agency.Harness.Loop.GoalSpec! Goal) -> void
+Agency.Harness.GoalSetEvent.GoalSetEvent(Agency.Harness.Looping.GoalSpec! Goal) -> void
 Agency.Harness.Hooks.AgentHooks
 Agency.Harness.Hooks.AgentHooks.<Clone>$() -> Agency.Harness.Hooks.AgentHooks!
 Agency.Harness.Hooks.AgentHooks.AgentHooks() -> void
@@ -338,65 +338,65 @@ Agency.Harness.LlmTokenUsage.LlmTokenUsage(long InputTokens, long OutputTokens) 
 Agency.Harness.LlmTokenUsage.OutputTokens.get -> long
 Agency.Harness.LlmTokenUsage.OutputTokens.init -> void
 Agency.Harness.LlmTokenUsage.TotalTokens.get -> long
-Agency.Harness.Loop.GoalSpec
-Agency.Harness.Loop.GoalSpec.<Clone>$() -> Agency.Harness.Loop.GoalSpec!
-Agency.Harness.Loop.GoalSpec.Budget.get -> decimal?
-Agency.Harness.Loop.GoalSpec.Budget.init -> void
-Agency.Harness.Loop.GoalSpec.Condition.get -> string!
-Agency.Harness.Loop.GoalSpec.Condition.init -> void
-Agency.Harness.Loop.GoalSpec.Equals(Agency.Harness.Loop.GoalSpec? other) -> bool
-Agency.Harness.Loop.GoalSpec.GoalSpec() -> void
-Agency.Harness.Loop.GoalSpec.MaxTurns.get -> int
-Agency.Harness.Loop.GoalSpec.MaxTurns.init -> void
-Agency.Harness.Loop.GoalSpec.TokenBudget.get -> long?
-Agency.Harness.Loop.GoalSpec.TokenBudget.init -> void
-Agency.Harness.Loop.GoalSpec.WallClockSeconds.get -> int?
-Agency.Harness.Loop.GoalSpec.WallClockSeconds.init -> void
-Agency.Harness.Loop.LoopOptions
-Agency.Harness.Loop.LoopOptions.Budget.get -> decimal?
-Agency.Harness.Loop.LoopOptions.Budget.init -> void
-Agency.Harness.Loop.LoopOptions.GoalkeeperClientName.get -> string?
-Agency.Harness.Loop.LoopOptions.GoalkeeperClientName.init -> void
-Agency.Harness.Loop.LoopOptions.GoalkeeperModel.get -> string?
-Agency.Harness.Loop.LoopOptions.GoalkeeperModel.init -> void
-Agency.Harness.Loop.LoopOptions.GoalkeeperRubric.get -> string?
-Agency.Harness.Loop.LoopOptions.GoalkeeperRubric.init -> void
-Agency.Harness.Loop.LoopOptions.LoopOptions() -> void
-Agency.Harness.Loop.LoopOptions.MaxTurns.get -> int
-Agency.Harness.Loop.LoopOptions.MaxTurns.init -> void
-Agency.Harness.Loop.LoopOptions.TokenBudget.get -> long?
-Agency.Harness.Loop.LoopOptions.TokenBudget.init -> void
-Agency.Harness.Loop.LoopOptions.WallClockSeconds.get -> int?
-Agency.Harness.Loop.LoopOptions.WallClockSeconds.init -> void
-Agency.Harness.Loop.LoopOutcome
-Agency.Harness.Loop.LoopOutcome.Achieved = 0 -> Agency.Harness.Loop.LoopOutcome
-Agency.Harness.Loop.LoopOutcome.BudgetExceeded = 2 -> Agency.Harness.Loop.LoopOutcome
-Agency.Harness.Loop.LoopOutcome.Cancelled = 4 -> Agency.Harness.Loop.LoopOutcome
-Agency.Harness.Loop.LoopOutcome.CapReached = 1 -> Agency.Harness.Loop.LoopOutcome
-Agency.Harness.Loop.LoopOutcome.Error = 3 -> Agency.Harness.Loop.LoopOutcome
-Agency.Harness.Loop.LoopServiceCollectionExtensions
-Agency.Harness.Loop.Verdict
-Agency.Harness.Loop.Verdict.Continue
-Agency.Harness.Loop.Verdict.Continue.Continue(string! Reason) -> void
-Agency.Harness.Loop.Verdict.Continue.Deconstruct(out string! Reason) -> void
-Agency.Harness.Loop.Verdict.Continue.Equals(Agency.Harness.Loop.Verdict.Continue? other) -> bool
-Agency.Harness.Loop.Verdict.Continue.Reason.get -> string!
-Agency.Harness.Loop.Verdict.Continue.Reason.init -> void
-Agency.Harness.Loop.Verdict.Done
-Agency.Harness.Loop.Verdict.Done.Deconstruct(out string! Reason) -> void
-Agency.Harness.Loop.Verdict.Done.Done(string! Reason) -> void
-Agency.Harness.Loop.Verdict.Done.Equals(Agency.Harness.Loop.Verdict.Done? other) -> bool
-Agency.Harness.Loop.Verdict.Done.Reason.get -> string!
-Agency.Harness.Loop.Verdict.Done.Reason.init -> void
-Agency.Harness.Loop.Verdict.Verdict() -> void
-Agency.Harness.Loop.Verdict.Verdict(Agency.Harness.Loop.Verdict! original) -> void
+Agency.Harness.Looping.GoalSpec
+Agency.Harness.Looping.GoalSpec.<Clone>$() -> Agency.Harness.Looping.GoalSpec!
+Agency.Harness.Looping.GoalSpec.Budget.get -> decimal?
+Agency.Harness.Looping.GoalSpec.Budget.init -> void
+Agency.Harness.Looping.GoalSpec.Condition.get -> string!
+Agency.Harness.Looping.GoalSpec.Condition.init -> void
+Agency.Harness.Looping.GoalSpec.Equals(Agency.Harness.Looping.GoalSpec? other) -> bool
+Agency.Harness.Looping.GoalSpec.GoalSpec() -> void
+Agency.Harness.Looping.GoalSpec.MaxTurns.get -> int
+Agency.Harness.Looping.GoalSpec.MaxTurns.init -> void
+Agency.Harness.Looping.GoalSpec.TokenBudget.get -> long?
+Agency.Harness.Looping.GoalSpec.TokenBudget.init -> void
+Agency.Harness.Looping.GoalSpec.WallClockSeconds.get -> int?
+Agency.Harness.Looping.GoalSpec.WallClockSeconds.init -> void
+Agency.Harness.Looping.LoopOptions
+Agency.Harness.Looping.LoopOptions.Budget.get -> decimal?
+Agency.Harness.Looping.LoopOptions.Budget.init -> void
+Agency.Harness.Looping.LoopOptions.GoalkeeperClientName.get -> string?
+Agency.Harness.Looping.LoopOptions.GoalkeeperClientName.init -> void
+Agency.Harness.Looping.LoopOptions.GoalkeeperModel.get -> string?
+Agency.Harness.Looping.LoopOptions.GoalkeeperModel.init -> void
+Agency.Harness.Looping.LoopOptions.GoalkeeperRubric.get -> string?
+Agency.Harness.Looping.LoopOptions.GoalkeeperRubric.init -> void
+Agency.Harness.Looping.LoopOptions.LoopOptions() -> void
+Agency.Harness.Looping.LoopOptions.MaxTurns.get -> int
+Agency.Harness.Looping.LoopOptions.MaxTurns.init -> void
+Agency.Harness.Looping.LoopOptions.TokenBudget.get -> long?
+Agency.Harness.Looping.LoopOptions.TokenBudget.init -> void
+Agency.Harness.Looping.LoopOptions.WallClockSeconds.get -> int?
+Agency.Harness.Looping.LoopOptions.WallClockSeconds.init -> void
+Agency.Harness.Looping.LoopOutcome
+Agency.Harness.Looping.LoopOutcome.Achieved = 0 -> Agency.Harness.Looping.LoopOutcome
+Agency.Harness.Looping.LoopOutcome.BudgetExceeded = 2 -> Agency.Harness.Looping.LoopOutcome
+Agency.Harness.Looping.LoopOutcome.Cancelled = 4 -> Agency.Harness.Looping.LoopOutcome
+Agency.Harness.Looping.LoopOutcome.CapReached = 1 -> Agency.Harness.Looping.LoopOutcome
+Agency.Harness.Looping.LoopOutcome.Error = 3 -> Agency.Harness.Looping.LoopOutcome
+Agency.Harness.Looping.LoopServiceCollectionExtensions
+Agency.Harness.Looping.Verdict
+Agency.Harness.Looping.Verdict.ContinueLoop
+Agency.Harness.Looping.Verdict.ContinueLoop.ContinueLoop(string! Reason) -> void
+Agency.Harness.Looping.Verdict.ContinueLoop.Deconstruct(out string! Reason) -> void
+Agency.Harness.Looping.Verdict.ContinueLoop.Equals(Agency.Harness.Looping.Verdict.ContinueLoop? other) -> bool
+Agency.Harness.Looping.Verdict.ContinueLoop.Reason.get -> string!
+Agency.Harness.Looping.Verdict.ContinueLoop.Reason.init -> void
+Agency.Harness.Looping.Verdict.Done
+Agency.Harness.Looping.Verdict.Done.Deconstruct(out string! Reason) -> void
+Agency.Harness.Looping.Verdict.Done.Done(string! Reason) -> void
+Agency.Harness.Looping.Verdict.Done.Equals(Agency.Harness.Looping.Verdict.Done? other) -> bool
+Agency.Harness.Looping.Verdict.Done.Reason.get -> string!
+Agency.Harness.Looping.Verdict.Done.Reason.init -> void
+Agency.Harness.Looping.Verdict.Verdict() -> void
+Agency.Harness.Looping.Verdict.Verdict(Agency.Harness.Looping.Verdict! original) -> void
 Agency.Harness.LoopResultEvent
-Agency.Harness.LoopResultEvent.Deconstruct(out Agency.Harness.Loop.LoopOutcome Outcome, out string? FinalText, out Agency.Harness.LlmTokenUsage! TotalUsage, out decimal TotalCostUsd) -> void
+Agency.Harness.LoopResultEvent.Deconstruct(out Agency.Harness.Looping.LoopOutcome Outcome, out string? FinalText, out Agency.Harness.LlmTokenUsage! TotalUsage, out decimal TotalCostUsd) -> void
 Agency.Harness.LoopResultEvent.Equals(Agency.Harness.LoopResultEvent? other) -> bool
 Agency.Harness.LoopResultEvent.FinalText.get -> string?
 Agency.Harness.LoopResultEvent.FinalText.init -> void
-Agency.Harness.LoopResultEvent.LoopResultEvent(Agency.Harness.Loop.LoopOutcome Outcome, string? FinalText, Agency.Harness.LlmTokenUsage! TotalUsage, decimal TotalCostUsd) -> void
-Agency.Harness.LoopResultEvent.Outcome.get -> Agency.Harness.Loop.LoopOutcome
+Agency.Harness.LoopResultEvent.LoopResultEvent(Agency.Harness.Looping.LoopOutcome Outcome, string? FinalText, Agency.Harness.LlmTokenUsage! TotalUsage, decimal TotalCostUsd) -> void
+Agency.Harness.LoopResultEvent.Outcome.get -> Agency.Harness.Looping.LoopOutcome
 Agency.Harness.LoopResultEvent.Outcome.init -> void
 Agency.Harness.LoopResultEvent.TotalCostUsd.get -> decimal
 Agency.Harness.LoopResultEvent.TotalCostUsd.init -> void
@@ -563,13 +563,13 @@ Agency.Harness.TurnStartedEvent.TurnIndex.get -> int
 Agency.Harness.TurnStartedEvent.TurnIndex.init -> void
 Agency.Harness.TurnStartedEvent.TurnStartedEvent(int TurnIndex, string! Directive) -> void
 Agency.Harness.VerdictEvent
-Agency.Harness.VerdictEvent.Deconstruct(out int TurnIndex, out Agency.Harness.Loop.Verdict! Verdict) -> void
+Agency.Harness.VerdictEvent.Deconstruct(out int TurnIndex, out Agency.Harness.Looping.Verdict! Verdict) -> void
 Agency.Harness.VerdictEvent.Equals(Agency.Harness.VerdictEvent? other) -> bool
 Agency.Harness.VerdictEvent.TurnIndex.get -> int
 Agency.Harness.VerdictEvent.TurnIndex.init -> void
-Agency.Harness.VerdictEvent.Verdict.get -> Agency.Harness.Loop.Verdict!
+Agency.Harness.VerdictEvent.Verdict.get -> Agency.Harness.Looping.Verdict!
 Agency.Harness.VerdictEvent.Verdict.init -> void
-Agency.Harness.VerdictEvent.VerdictEvent(int TurnIndex, Agency.Harness.Loop.Verdict! Verdict) -> void
+Agency.Harness.VerdictEvent.VerdictEvent(int TurnIndex, Agency.Harness.Looping.Verdict! Verdict) -> void
 const Agency.Harness.Agent.ActivitySourceName = "Agency.Harness.Agent" -> string!
 const Agency.Harness.Agent.MeterName = "Agency.Harness.Agent" -> string!
 const Agency.Harness.Models.ActivitySourceName = "Agency.Harness.Models" -> string!
@@ -672,20 +672,20 @@ override Agency.Harness.IterationCompletedEvent.ToString() -> string!
 override Agency.Harness.LlmTokenUsage.Equals(object? obj) -> bool
 override Agency.Harness.LlmTokenUsage.GetHashCode() -> int
 override Agency.Harness.LlmTokenUsage.ToString() -> string!
-override Agency.Harness.Loop.GoalSpec.Equals(object? obj) -> bool
-override Agency.Harness.Loop.GoalSpec.GetHashCode() -> int
-override Agency.Harness.Loop.GoalSpec.ToString() -> string!
-override Agency.Harness.Loop.Verdict.Continue.<Clone>$() -> Agency.Harness.Loop.Verdict.Continue!
-override Agency.Harness.Loop.Verdict.Continue.Equals(object? obj) -> bool
-override Agency.Harness.Loop.Verdict.Continue.GetHashCode() -> int
-override Agency.Harness.Loop.Verdict.Continue.ToString() -> string!
-override Agency.Harness.Loop.Verdict.Done.<Clone>$() -> Agency.Harness.Loop.Verdict.Done!
-override Agency.Harness.Loop.Verdict.Done.Equals(object? obj) -> bool
-override Agency.Harness.Loop.Verdict.Done.GetHashCode() -> int
-override Agency.Harness.Loop.Verdict.Done.ToString() -> string!
-override Agency.Harness.Loop.Verdict.Equals(object? obj) -> bool
-override Agency.Harness.Loop.Verdict.GetHashCode() -> int
-override Agency.Harness.Loop.Verdict.ToString() -> string!
+override Agency.Harness.Looping.GoalSpec.Equals(object? obj) -> bool
+override Agency.Harness.Looping.GoalSpec.GetHashCode() -> int
+override Agency.Harness.Looping.GoalSpec.ToString() -> string!
+override Agency.Harness.Looping.Verdict.ContinueLoop.<Clone>$() -> Agency.Harness.Looping.Verdict.ContinueLoop!
+override Agency.Harness.Looping.Verdict.ContinueLoop.Equals(object? obj) -> bool
+override Agency.Harness.Looping.Verdict.ContinueLoop.GetHashCode() -> int
+override Agency.Harness.Looping.Verdict.ContinueLoop.ToString() -> string!
+override Agency.Harness.Looping.Verdict.Done.<Clone>$() -> Agency.Harness.Looping.Verdict.Done!
+override Agency.Harness.Looping.Verdict.Done.Equals(object? obj) -> bool
+override Agency.Harness.Looping.Verdict.Done.GetHashCode() -> int
+override Agency.Harness.Looping.Verdict.Done.ToString() -> string!
+override Agency.Harness.Looping.Verdict.Equals(object? obj) -> bool
+override Agency.Harness.Looping.Verdict.GetHashCode() -> int
+override Agency.Harness.Looping.Verdict.ToString() -> string!
 override Agency.Harness.LoopResultEvent.<Clone>$() -> Agency.Harness.LoopResultEvent!
 override Agency.Harness.LoopResultEvent.Equals(object? obj) -> bool
 override Agency.Harness.LoopResultEvent.GetHashCode() -> int
@@ -736,8 +736,8 @@ override sealed Agency.Harness.Hooks.PreToolUseDecision.Ask.Equals(Agency.Harnes
 override sealed Agency.Harness.Hooks.PreToolUseDecision.Deny.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
 override sealed Agency.Harness.Hooks.PreToolUseDecision.Rewrite.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
 override sealed Agency.Harness.IterationCompletedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
-override sealed Agency.Harness.Loop.Verdict.Continue.Equals(Agency.Harness.Loop.Verdict? other) -> bool
-override sealed Agency.Harness.Loop.Verdict.Done.Equals(Agency.Harness.Loop.Verdict? other) -> bool
+override sealed Agency.Harness.Looping.Verdict.ContinueLoop.Equals(Agency.Harness.Looping.Verdict? other) -> bool
+override sealed Agency.Harness.Looping.Verdict.Done.Equals(Agency.Harness.Looping.Verdict? other) -> bool
 override sealed Agency.Harness.LoopResultEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
 override sealed Agency.Harness.PermissionRequestedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
 override sealed Agency.Harness.Permissions.PermissionDecision.Allow.Equals(Agency.Harness.Permissions.PermissionDecision? other) -> bool
@@ -824,15 +824,15 @@ static Agency.Harness.IterationCompletedEvent.operator !=(Agency.Harness.Iterati
 static Agency.Harness.IterationCompletedEvent.operator ==(Agency.Harness.IterationCompletedEvent? left, Agency.Harness.IterationCompletedEvent? right) -> bool
 static Agency.Harness.LlmTokenUsage.operator !=(Agency.Harness.LlmTokenUsage? left, Agency.Harness.LlmTokenUsage? right) -> bool
 static Agency.Harness.LlmTokenUsage.operator ==(Agency.Harness.LlmTokenUsage? left, Agency.Harness.LlmTokenUsage? right) -> bool
-static Agency.Harness.Loop.GoalSpec.operator !=(Agency.Harness.Loop.GoalSpec? left, Agency.Harness.Loop.GoalSpec? right) -> bool
-static Agency.Harness.Loop.GoalSpec.operator ==(Agency.Harness.Loop.GoalSpec? left, Agency.Harness.Loop.GoalSpec? right) -> bool
-static Agency.Harness.Loop.LoopServiceCollectionExtensions.AddAgencyLoop(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! config, string! sectionName = "Loop") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static Agency.Harness.Loop.Verdict.Continue.operator !=(Agency.Harness.Loop.Verdict.Continue? left, Agency.Harness.Loop.Verdict.Continue? right) -> bool
-static Agency.Harness.Loop.Verdict.Continue.operator ==(Agency.Harness.Loop.Verdict.Continue? left, Agency.Harness.Loop.Verdict.Continue? right) -> bool
-static Agency.Harness.Loop.Verdict.Done.operator !=(Agency.Harness.Loop.Verdict.Done? left, Agency.Harness.Loop.Verdict.Done? right) -> bool
-static Agency.Harness.Loop.Verdict.Done.operator ==(Agency.Harness.Loop.Verdict.Done? left, Agency.Harness.Loop.Verdict.Done? right) -> bool
-static Agency.Harness.Loop.Verdict.operator !=(Agency.Harness.Loop.Verdict? left, Agency.Harness.Loop.Verdict? right) -> bool
-static Agency.Harness.Loop.Verdict.operator ==(Agency.Harness.Loop.Verdict? left, Agency.Harness.Loop.Verdict? right) -> bool
+static Agency.Harness.Looping.GoalSpec.operator !=(Agency.Harness.Looping.GoalSpec? left, Agency.Harness.Looping.GoalSpec? right) -> bool
+static Agency.Harness.Looping.GoalSpec.operator ==(Agency.Harness.Looping.GoalSpec? left, Agency.Harness.Looping.GoalSpec? right) -> bool
+static Agency.Harness.Looping.LoopServiceCollectionExtensions.AddAgencyLoop(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! config, string! sectionName = "Loop") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Agency.Harness.Looping.Verdict.ContinueLoop.operator !=(Agency.Harness.Looping.Verdict.ContinueLoop? left, Agency.Harness.Looping.Verdict.ContinueLoop? right) -> bool
+static Agency.Harness.Looping.Verdict.ContinueLoop.operator ==(Agency.Harness.Looping.Verdict.ContinueLoop? left, Agency.Harness.Looping.Verdict.ContinueLoop? right) -> bool
+static Agency.Harness.Looping.Verdict.Done.operator !=(Agency.Harness.Looping.Verdict.Done? left, Agency.Harness.Looping.Verdict.Done? right) -> bool
+static Agency.Harness.Looping.Verdict.Done.operator ==(Agency.Harness.Looping.Verdict.Done? left, Agency.Harness.Looping.Verdict.Done? right) -> bool
+static Agency.Harness.Looping.Verdict.operator !=(Agency.Harness.Looping.Verdict? left, Agency.Harness.Looping.Verdict? right) -> bool
+static Agency.Harness.Looping.Verdict.operator ==(Agency.Harness.Looping.Verdict? left, Agency.Harness.Looping.Verdict? right) -> bool
 static Agency.Harness.LoopResultEvent.operator !=(Agency.Harness.LoopResultEvent? left, Agency.Harness.LoopResultEvent? right) -> bool
 static Agency.Harness.LoopResultEvent.operator ==(Agency.Harness.LoopResultEvent? left, Agency.Harness.LoopResultEvent? right) -> bool
 static Agency.Harness.PermissionRequestedEvent.operator !=(Agency.Harness.PermissionRequestedEvent? left, Agency.Harness.PermissionRequestedEvent? right) -> bool
@@ -871,9 +871,9 @@ virtual Agency.Harness.AgentEvent.PrintMembers(System.Text.StringBuilder! builde
 virtual Agency.Harness.Hooks.PreToolUseDecision.EqualityContract.get -> System.Type!
 virtual Agency.Harness.Hooks.PreToolUseDecision.Equals(Agency.Harness.Hooks.PreToolUseDecision? other) -> bool
 virtual Agency.Harness.Hooks.PreToolUseDecision.PrintMembers(System.Text.StringBuilder! builder) -> bool
-virtual Agency.Harness.Loop.Verdict.EqualityContract.get -> System.Type!
-virtual Agency.Harness.Loop.Verdict.Equals(Agency.Harness.Loop.Verdict? other) -> bool
-virtual Agency.Harness.Loop.Verdict.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Agency.Harness.Looping.Verdict.EqualityContract.get -> System.Type!
+virtual Agency.Harness.Looping.Verdict.Equals(Agency.Harness.Looping.Verdict? other) -> bool
+virtual Agency.Harness.Looping.Verdict.PrintMembers(System.Text.StringBuilder! builder) -> bool
 virtual Agency.Harness.Permissions.PermissionDecision.EqualityContract.get -> System.Type!
 virtual Agency.Harness.Permissions.PermissionDecision.Equals(Agency.Harness.Permissions.PermissionDecision? other) -> bool
 virtual Agency.Harness.Permissions.PermissionDecision.PrintMembers(System.Text.StringBuilder! builder) -> bool

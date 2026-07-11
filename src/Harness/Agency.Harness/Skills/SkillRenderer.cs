@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -163,7 +164,7 @@ internal static class SkillRenderer
     /// double-quoted and single-quoted spans so <c>"foo bar" baz</c> yields
     /// <c>["foo bar", "baz"]</c>.
     /// </summary>
-    private static IReadOnlyList<string> TokenizeArguments(string input)
+    private static List<string> TokenizeArguments(string input)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -300,7 +301,7 @@ internal static class SkillRenderer
             // $ARGUMENTS[N] — capture group 1
             if (value.StartsWith("$ARGUMENTS[", StringComparison.Ordinal))
             {
-                int n = int.Parse(match.Groups[1].Value);
+                int n = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
                 return ResolvePositional(n, args, tokens);
             }
 
@@ -313,7 +314,7 @@ internal static class SkillRenderer
             // $N — numeric positional (1-based), capture group 2
             if (match.Groups[2].Success)
             {
-                int n = int.Parse(match.Groups[2].Value);
+                int n = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
                 return ResolvePositional(n, args, tokens);
             }
 

@@ -13,6 +13,9 @@ namespace Agency.VectorStore.Sql.Sqlite.Test;
 /// </summary>
 public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFunctionalTests.VectorStoreFixture>
 {
+    private static readonly string[] _tagsWithMedical = ["document", "pdf", "medical"];
+    private static readonly string[] _tagsWithoutMedical = ["document", "pdf"];
+
     private readonly VectorStoreFixture _fixture;
 
     /// <summary>
@@ -154,9 +157,9 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
         var keyWithoutMedical = this._fixture.UniqueName("tags_no_medical");
 
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithMedical, new { title = "Medical report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf", "medical" } }, cancellationToken: TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = _tagsWithMedical }, cancellationToken: TestContext.Current.CancellationToken);
         await this._fixture.KVStore.UpsertAsync("test-user", "test-session", keyWithoutMedical, new { title = "General report" },
-            new Dictionary<string, object> { ["tags"] = new[] { "document", "pdf" } }, cancellationToken: TestContext.Current.CancellationToken);
+            new Dictionary<string, object> { ["tags"] = _tagsWithoutMedical }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Filter: only entries whose tags array contains "medical"
         var filter = new Dictionary<string, object> { ["tags"] = new[] { "medical" } };

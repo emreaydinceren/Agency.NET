@@ -19,7 +19,7 @@ namespace Agency.Memory.Distiller.Services;
 /// Uses <see cref="TimeProvider"/> for testability with
 /// <c>Microsoft.Extensions.TimeProvider.Testing.FakeTimeProvider</c>.
 /// </remarks>
-internal sealed class InactivityTimerService : IHostedService, IDisposable
+internal sealed partial class InactivityTimerService : IHostedService, IDisposable
 {
     private readonly ConcurrentDictionary<string, SessionTimerState> _timers = new();
     private readonly ChannelSessionRegistry _channelRegistry;
@@ -115,9 +115,7 @@ internal sealed class InactivityTimerService : IHostedService, IDisposable
 
         state.Dispose();
 
-        this._logger.LogInformation(
-            "Inactivity timer expired for session {SessionId}. Enqueuing distillation job.",
-            sessionId);
+        this.LogInactivityTimerExpired(sessionId);
 
         ChannelWriter<DistillationJob> writer = this._channelRegistry.GetOrCreateWriter(
             state.UserId, sessionId);
@@ -131,11 +129,17 @@ internal sealed class InactivityTimerService : IHostedService, IDisposable
 
         if (!writer.TryWrite(job))
         {
-            this._logger.LogWarning(
-                "Inactivity timer: channel full or closed for session {SessionId}. Job dropped.",
-                sessionId);
+            this.LogChannelFullOrClosed(sessionId);
         }
     }
+
+    /// <summary>Logs that a session's inactivity timer expired and a distillation job is being enqueued.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Inactivity timer expired for session {SessionId}. Enqueuing distillation job.")]
+    private partial void LogInactivityTimerExpired(string sessionId);
+
+    /// <summary>Logs that an inactivity-triggered distillation job was dropped because its channel was full or closed.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Inactivity timer: channel full or closed for session {SessionId}. Job dropped.")]
+    private partial void LogChannelFullOrClosed(string sessionId);
 
     private sealed class SessionTimerState : IDisposable
     {

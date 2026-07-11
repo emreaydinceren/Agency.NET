@@ -184,7 +184,7 @@ public sealed class PostgresMemoryStoreTests_Search : IAsyncLifetime
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private string UniqueUser() => $"u-{Guid.NewGuid():N}";
+    private static string UniqueUser() => $"u-{Guid.NewGuid():N}";
 
     private string UniqueKey(string prefix) => $"{prefix}_{this._runId}";
 

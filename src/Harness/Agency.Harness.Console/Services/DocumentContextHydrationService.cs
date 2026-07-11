@@ -1,6 +1,5 @@
-using Agency.Harness;
 using Agency.VectorStore.Common;
-using System.Linq;
+using System.Globalization;
 using System.Text;
 
 namespace Agency.Harness.Console.Services;
@@ -56,7 +55,7 @@ internal sealed class DocumentContextHydrationService(
                 ("*", var pid) => $"project:{pid}",
                 _ => "unknown"
             };
-            sb.AppendLine($"- [{scope}] {doc.SourceFile}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- [{scope}] {doc.SourceFile}");
         }
 
         return sb.ToString().TrimEnd();

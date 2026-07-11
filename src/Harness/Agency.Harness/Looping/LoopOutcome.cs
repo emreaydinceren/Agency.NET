@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>Why a loop run ended.</summary>
 public enum LoopOutcome

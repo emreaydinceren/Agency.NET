@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Tool <c>enable_goalkeeper</c>: arms the <see cref="GoalState"/> with a new <see cref="GoalSpec"/>.

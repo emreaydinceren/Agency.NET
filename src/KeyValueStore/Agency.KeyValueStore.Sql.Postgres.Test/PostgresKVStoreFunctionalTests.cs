@@ -171,9 +171,9 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
 
         foreach (var result in results)
         {
-            if (result.Metadata != null && result.Metadata.ContainsKey("category"))
+            if (result.Metadata != null && result.Metadata.TryGetValue("category", out var category))
             {
-                Assert.Equal("important", result.Metadata["category"]);
+                Assert.Equal("important", category);
             }
         }
     }

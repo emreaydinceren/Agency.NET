@@ -159,7 +159,7 @@ public sealed class DirectoryLoaderTests : IDisposable
         });
     }
 
-    private static async Task<List<Document>> CollectAsync(IDocumentLoader loader)
+    private static async Task<List<Document>> CollectAsync(DirectoryLoader loader)
     {
         var result = new List<Document>();
         await foreach (var doc in loader.LoadAsync())

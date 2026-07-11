@@ -1,4 +1,3 @@
-using Agency.Harness;
 using Agency.Harness.Console.Services;
 using Agency.VectorStore.Common;
 using Moq;

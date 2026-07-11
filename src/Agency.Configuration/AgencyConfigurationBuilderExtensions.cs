@@ -56,6 +56,8 @@ public static class AgencyConfigurationBuilderExtensions
         string path = "shared-appsettings.json",
         bool optional = true)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         var source = new JsonConfigurationSource
         {
             FileProvider = null,
@@ -118,6 +120,8 @@ public static class AgencyConfigurationBuilderExtensions
     /// </exception>
     public static IConfigurationBuilder AddPlaceholderResolver(this IConfigurationBuilder builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         IConfigurationRoot root = builder is IConfigurationRoot existing ? existing : builder.Build();
         var seed = root.AsEnumerable()
                        .Where(kvp => kvp.Value is not null)

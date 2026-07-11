@@ -122,7 +122,12 @@ public sealed class MemoryTool(IKVStore kvStore)
         }
 
         string storageKey = $"{domain}|{key}";
+        // CA1062: ValidateScope above already guards the null case (returning a friendly error
+        // string instead of throwing, matching this MCP tool's error-as-text contract); the
+        // analyzer can't trace that indirection through a helper method.
+#pragma warning disable CA1062
         bool removed = await this._kvStore.DeleteAsync(scope!.UserId, scope.SessionId, storageKey);
+#pragma warning restore CA1062
         return removed ? $"Removed: {storageKey}" : $"Not found: {storageKey}";
     }
 
@@ -139,7 +144,12 @@ public sealed class MemoryTool(IKVStore kvStore)
             return scopeError;
         }
 
+        // CA1062: ValidateScope above already guards the null case (returning a friendly error
+        // string instead of throwing, matching this MCP tool's error-as-text contract); the
+        // analyzer can't trace that indirection through a helper method.
+#pragma warning disable CA1062
         IReadOnlyList<SearchHit> hits = await this._kvStore.GetMetadataAsync(scope!.UserId, scope.SessionId);
+#pragma warning restore CA1062
 
         Dictionary<string, DomainMetadata> items = new();
 
@@ -234,7 +244,12 @@ public sealed class MemoryTool(IKVStore kvStore)
             queryKey = $"{domain}|{key}";
         }
 
+        // CA1062: ValidateScope above already guards the null case (returning a friendly error
+        // string instead of throwing, matching this MCP tool's error-as-text contract); the
+        // analyzer can't trace that indirection through a helper method.
+#pragma warning disable CA1062
         var query = new Query(scope!.UserId, scope.SessionId, queryKey, null, metadataFilter.Count > 0 ? metadataFilter : null, 10, true);
+#pragma warning restore CA1062
         IReadOnlyList<SearchHit<string>> hits = await this._kvStore.SearchAsync<string>(query);
         return JsonSerializer.Serialize(hits);
     }

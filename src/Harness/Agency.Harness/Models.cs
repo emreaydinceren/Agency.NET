@@ -13,7 +13,7 @@ namespace Agency.Harness;
 /// Discovers the models available across the configured LLM clients and creates
 /// <see cref="IChatClient"/> instances for a named client.
 /// </summary>
-public sealed class Models
+public sealed partial class Models
 {
     /// <summary>Name of the <see cref="ActivitySource"/> used for model-discovery tracing spans.</summary>
     public const string ActivitySourceName = "Agency.Harness.Models";
@@ -76,7 +76,7 @@ public sealed class Models
         var modelCount = 0;
         var pairs = new List<(LlmClientOptions, Model)>();
 
-        this._logger.LogInformation("Starting model discovery across {ClientCount} configured LLM clients.", llmClientOptions.Count);
+        this.LogStartingModelDiscovery(llmClientOptions.Count);
 
         try
         {
@@ -87,7 +87,7 @@ public sealed class Models
                     break;
                 }
 
-                this._logger.LogInformation("Fetching models from LLM client {ClientName} ({ClientType}).", option.Name, option.ClientType);
+                this.LogFetchingModelsFromClient(option.Name, option.ClientType);
 
                 IModelProvider provider = CreateModelProvider(option);
 
@@ -108,9 +108,7 @@ public sealed class Models
             activity?.SetTag("agentic.models.returned_models", modelCount);
             activity?.SetTag("agentic.models.client_count", llmClientOptions.Count);
 
-            this._logger.LogInformation(
-                "Completed model discovery across {ClientCount} clients. Models={ModelCount}, DurationMs={DurationMs}",
-                llmClientOptions.Count, modelCount, sw.Elapsed.TotalMilliseconds);
+            this.LogModelDiscoveryCompleted(llmClientOptions.Count, modelCount, sw.Elapsed.TotalMilliseconds);
 
             return pairs.GroupBy(s => s.Item1, s => s.Item2);
         }
@@ -118,7 +116,7 @@ public sealed class Models
         {
             _errorCounter.Add(1, tags);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            this._logger.LogError(ex, "Model discovery failed.");
+            this.LogModelDiscoveryFailed(ex);
             throw;
         }
         finally
@@ -142,13 +140,13 @@ public sealed class Models
             if (options.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase))
             {
                 activity?.SetTag("agentic.models.client_type", options.ClientType);
-                this._logger.LogInformation("Resolved LLM client {ClientName} ({ClientType}).", options.Name, options.ClientType);
+                this.LogResolvedClient(options.Name, options.ClientType);
                 return CreateChatClient(options);
             }
         }
 
         activity?.SetStatus(ActivityStatusCode.Error, "Client configuration not found");
-        this._logger.LogWarning("No LLM client configuration found with name {ClientName}.", clientName);
+        this.LogClientConfigNotFound(clientName);
         throw new InvalidOperationException($"No LLM client configuration found with name '{clientName}'.");
     }
 
@@ -171,4 +169,28 @@ public sealed class Models
             _ => throw new InvalidOperationException($"Unsupported provider '{options.ClientType}'."),
         };
     }
+
+    /// <summary>Logs that model discovery is starting across the configured LLM clients.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting model discovery across {ClientCount} configured LLM clients.")]
+    private partial void LogStartingModelDiscovery(int clientCount);
+
+    /// <summary>Logs that models are being fetched from a specific LLM client.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fetching models from LLM client {ClientName} ({ClientType}).")]
+    private partial void LogFetchingModelsFromClient(string clientName, string clientType);
+
+    /// <summary>Logs that model discovery completed across all configured clients.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Completed model discovery across {ClientCount} clients. Models={ModelCount}, DurationMs={DurationMs}")]
+    private partial void LogModelDiscoveryCompleted(int clientCount, int modelCount, double durationMs);
+
+    /// <summary>Logs that model discovery failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Model discovery failed.")]
+    private partial void LogModelDiscoveryFailed(Exception ex);
+
+    /// <summary>Logs that an LLM client was resolved by name.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Resolved LLM client {ClientName} ({ClientType}).")]
+    private partial void LogResolvedClient(string clientName, string clientType);
+
+    /// <summary>Logs that no LLM client configuration was found with the given name.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No LLM client configuration found with name {ClientName}.")]
+    private partial void LogClientConfigNotFound(string clientName);
 }

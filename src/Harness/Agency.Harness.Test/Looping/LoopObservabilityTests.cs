@@ -1,9 +1,9 @@
 using System.Diagnostics.Metrics;
 
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 using Agency.Harness.Test.Fakes;
 
-namespace Agency.Harness.Test.Loop;
+namespace Agency.Harness.Test.Looping;
 
 /// <summary>
 /// T-OBS-1: verifies that <see cref="LoopRunner.RunAsync"/> emits the expected OpenTelemetry

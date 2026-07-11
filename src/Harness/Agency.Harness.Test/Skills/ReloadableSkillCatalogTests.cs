@@ -33,7 +33,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     }
 
     /// <summary>Creates a minimal SKILL.md file under <paramref name="root"/>/<paramref name="dirName"/>.</summary>
-    private void CreateSkill(string root, string dirName, string description = "A test skill", string? body = null)
+    private static void CreateSkill(string root, string dirName, string description = "A test skill", string? body = null)
     {
         string skillDir = Path.Combine(root, dirName);
         Directory.CreateDirectory(skillDir);
@@ -42,7 +42,7 @@ public sealed class ReloadableSkillCatalogTests : IDisposable
     }
 
     /// <summary>Removes the SKILL.md file from an existing skill directory to simulate deletion.</summary>
-    private void RemoveSkill(string root, string dirName)
+    private static void RemoveSkill(string root, string dirName)
     {
         string skillFile = Path.Combine(root, dirName, "SKILL.md");
         if (File.Exists(skillFile))

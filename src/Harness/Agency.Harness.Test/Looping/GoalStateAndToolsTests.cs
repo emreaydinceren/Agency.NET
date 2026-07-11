@@ -1,8 +1,8 @@
 using System.Text.Json;
 
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 
-namespace Agency.Harness.Test.Loop;
+namespace Agency.Harness.Test.Looping;
 
 /// <summary>
 /// Phase 2 / T-TOOL-*: unit tests for <see cref="GoalState"/>, <see cref="EnableGoalkeeperTool"/>,

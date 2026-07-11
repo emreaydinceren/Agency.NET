@@ -276,7 +276,7 @@ public class ConsolidatorBackgroundServiceTests
             NullLogger<ConsolidatorBackgroundService>.Instance);
 
         // Call the manual entry point — should write a job to the channel without error.
-        IConsolidationTrigger trigger = service;
+        ConsolidatorBackgroundService trigger = service;
         await trigger.RequestAsync("u1", CancellationToken.None);
 
         // Process the job that RequestAsync enqueued (simulates background loop draining).

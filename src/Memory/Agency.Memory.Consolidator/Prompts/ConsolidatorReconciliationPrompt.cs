@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Agency.Memory.Common.Records;
 
@@ -102,10 +103,10 @@ internal static class ConsolidatorReconciliationPrompt
         sb.AppendLine("## Stop condition");
         sb.AppendLine();
         sb.AppendLine($"Call `Memory_Done()` when there is nothing left to consolidate. You should not");
-        sb.AppendLine($"normally need more than {maxIterations} iterations. The system will force");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"normally need more than {maxIterations} iterations. The system will force");
         sb.AppendLine("termination if you exceed this.");
         sb.AppendLine();
-        sb.AppendLine($"## Existing Records for user `{userId}`");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"## Existing Records for user `{userId}`");
         sb.AppendLine();
 
         if (records.Count == 0)
@@ -127,8 +128,8 @@ internal static class ConsolidatorReconciliationPrompt
         sb.AppendLine();
         sb.AppendLine("## Similarity threshold hints (informational)");
         sb.AppendLine();
-        sb.AppendLine($"- Fact:   {factThreshold:F2}    — Records with embedding similarity above this are usually about the same subject.");
-        sb.AppendLine($"- Memory: {memoryThreshold:F2}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Fact:   {factThreshold:F2}    — Records with embedding similarity above this are usually about the same subject.");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Memory: {memoryThreshold:F2}");
         sb.AppendLine();
         sb.AppendLine("These are HINTS, not rules. Apply your own judgment. A high-similarity pair may");
         sb.AppendLine("still be intentionally separate (e.g., progress notes on the same project at");
@@ -148,11 +149,11 @@ internal static class ConsolidatorReconciliationPrompt
             : r.Value;
         string tagsCsv = r.Tags.Count > 0 ? string.Join(", ", r.Tags) : "(none)";
 
-        sb.AppendLine($"### [{r.ContentType}] \"{r.Title}\" (id: {r.Id})");
-        sb.AppendLine($"- **Domain/Key**: {r.Domain} / {r.Key}");
-        sb.AppendLine($"- **Tags**: {tagsCsv}");
-        sb.AppendLine($"- **Importance**: {r.Importance:F1}");
-        sb.AppendLine($"- **Age**: {age}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"### [{r.ContentType}] \"{r.Title}\" (id: {r.Id})");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Domain/Key**: {r.Domain} / {r.Key}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Tags**: {tagsCsv}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Importance**: {r.Importance:F1}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Age**: {age}");
         sb.AppendLine();
         sb.AppendLine(valuePreview);
     }

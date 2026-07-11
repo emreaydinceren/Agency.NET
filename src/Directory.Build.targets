@@ -34,6 +34,9 @@
   <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
+    <!-- CA1707 (no underscores in identifiers) fights the Method_Scenario_Expectation test-naming
+         convention used throughout the test suite; suppressed for test projects only. -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsTestProject)' == 'true'">

@@ -1,8 +1,7 @@
-using Agency.Harness;
 using Agency.Harness.Console.Commands;
 using Agency.Harness.Console.Services;
 using Agency.Harness.Contexts;
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 using Agency.Harness.Permissions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,10 +11,11 @@ using Microsoft.Extensions.Options;
 using Spectre.Console;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using System.Text;
 
 namespace Agency.Harness.Console;
-internal sealed class ConsoleChatSession
+internal sealed partial class ConsoleChatSession : IDisposable
 {
     private const string PromptMarkup= "[blue]❯ [/]";
     private const string AssistantMarkup = "[green]● [/]";
@@ -174,9 +174,7 @@ internal sealed class ConsoleChatSession
 
         int chatTurns = 0;
 
-        this._logger.LogInformation(
-            "Starting console chat session. ClientType={ClientType}, Model={Model}",
-            this._agent.ClientType, this._agent.Model);
+        this.LogSessionStarting(this._agent.ClientType, this._agent.Model);
 
         try
         {
@@ -350,10 +348,7 @@ internal sealed class ConsoleChatSession
             failed = true;
             _sessionErrorCounter.Add(1, tags);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            this._logger.LogError(
-                ex,
-                "Console chat session failed. ClientType={ClientType}, Model={Model}",
-                this._agent.ClientType, this._agent.Model);
+            this.LogSessionFailed(ex, this._agent.ClientType, this._agent.Model);
             throw;
         }
         finally
@@ -390,9 +385,7 @@ internal sealed class ConsoleChatSession
 
             if (!failed)
             {
-                this._logger.LogInformation(
-                    "Console chat session completed. Turns={Turns}, DurationMs={DurationMs}",
-                    chatTurns, sw.Elapsed.TotalMilliseconds);
+                this.LogSessionCompleted(chatTurns, sw.Elapsed.TotalMilliseconds);
             }
         }
     }
@@ -514,6 +507,10 @@ internal sealed class ConsoleChatSession
     /// must not resume in that case and should fall back to the REPL; the next
     /// <see cref="ChatSession.SendAsync"/> call will auto-abandon the parked turn.
     /// </summary>
+    // CA1859 wants a concrete List<T> return type here, but the only call sites assign the
+    // result into an IReadOnlyList<PermissionResponse>? local and never consume it concretely,
+    // so the suggested devirtualization would buy nothing.
+#pragma warning disable CA1859
     private IReadOnlyList<PermissionResponse>? CollectPermissionResponses(
         List<PermissionRequestedEvent> pending)
     {
@@ -523,11 +520,11 @@ internal sealed class ConsoleChatSession
         {
             // ── Panel content ────────────────────────────────────────────────
             var sb = new StringBuilder();
-            sb.AppendLine($"Tool: [bold]{Markup.Escape(req.ToolName)}[/]");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Tool: [bold]{Markup.Escape(req.ToolName)}[/]");
 
             if (req.KeyValue is not null)
             {
-                sb.AppendLine($"Input: [gray]{Markup.Escape(req.KeyValue)}[/]");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Input: [gray]{Markup.Escape(req.KeyValue)}[/]");
             }
             else
             {
@@ -537,14 +534,14 @@ internal sealed class ConsoleChatSession
                 {
                     rawJson = string.Concat(rawJson.AsSpan(0, 200), "…");
                 }
-                sb.AppendLine($"Input: [gray]{Markup.Escape(rawJson)}[/]");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Input: [gray]{Markup.Escape(rawJson)}[/]");
             }
 
-            sb.AppendLine($"Proposed rule: [yellow]{Markup.Escape(req.ProposedRule)}[/]");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Proposed rule: [yellow]{Markup.Escape(req.ProposedRule)}[/]");
 
             if (req.Source == PermissionRequestSource.Hook && req.Reason is not null)
             {
-                sb.AppendLine($"Hook reason: [orange3]{Markup.Escape(req.Reason)}[/]");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"Hook reason: [orange3]{Markup.Escape(req.Reason)}[/]");
             }
 
             this.output.WriteMarkdownInBorderedPanel("Permission required", sb.ToString().TrimEnd());
@@ -601,6 +598,7 @@ internal sealed class ConsoleChatSession
 
         return responses;
     }
+#pragma warning restore CA1859
 
     private void PrintAssistantTurn(ChatMessage message)
     {
@@ -706,7 +704,7 @@ internal sealed class ConsoleChatSession
             {
                 output.WriteLine("green", $"  ✓ Done  (turn {v.TurnIndex}): {doneVerdict.Reason}");
             }
-            else if (v.Verdict is Verdict.Continue continueVerdict)
+            else if (v.Verdict is Verdict.ContinueLoop continueVerdict)
             {
                 output.WriteLine("yellow", $"  ↻ Continue  (turn {v.TurnIndex}): {continueVerdict.Reason}");
             }
@@ -738,5 +736,27 @@ internal sealed class ConsoleChatSession
         this.output.WriteLine("gray", "Type /exit to /quit  ·  Ctrl+C to interrupt a turn");
         this.output.WriteLine();
     }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        // Safe today: ChatSession.DisposeAsync is idempotent (already invoked in RunAsync's finally),
+        // and this console host installs no SynchronizationContext, so GetAwaiter().GetResult() cannot
+        // deadlock here. Revisit if ConsoleChatSession is ever reused in a host with a captured
+        // SynchronizationContext (e.g. ASP.NET classic, WPF/WinForms).
+        this._chatSession?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>Logs that a console chat session is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting console chat session. ClientType={ClientType}, Model={Model}")]
+    private partial void LogSessionStarting(string clientType, string model);
+
+    /// <summary>Logs that a console chat session failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Console chat session failed. ClientType={ClientType}, Model={Model}")]
+    private partial void LogSessionFailed(Exception ex, string clientType, string model);
+
+    /// <summary>Logs that a console chat session completed.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Console chat session completed. Turns={Turns}, DurationMs={DurationMs}")]
+    private partial void LogSessionCompleted(int turns, double durationMs);
 }
 

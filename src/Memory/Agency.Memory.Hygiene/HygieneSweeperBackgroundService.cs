@@ -24,7 +24,7 @@ namespace Agency.Memory.Hygiene;
 /// The sweep interval is <see cref="MemoryOptions.HygieneSchedule"/> with ±15 min jitter
 /// to avoid thundering-herd when multiple processes start simultaneously.
 /// </remarks>
-internal sealed class HygieneSweeperBackgroundService : BackgroundService
+internal sealed partial class HygieneSweeperBackgroundService : BackgroundService
 {
     internal const string ActivitySourceName = "Agency.Memory.Hygiene";
     internal const string MeterName = "Agency.Memory.Hygiene";
@@ -114,7 +114,7 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
 #pragma warning disable CA1031 // catch broad exception to prevent background service crash
             catch (Exception ex)
             {
-                this._logger.LogError(ex, "Hygiene sweep failed unexpectedly.");
+                this.LogHygieneSweepFailed(ex);
             }
 #pragma warning restore CA1031
         }
@@ -144,10 +144,7 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
 
             _ttlCounter.Add(deleted, new KeyValuePair<string, object?>("content_type", contentType.ToString()));
 
-            this._logger.LogInformation(
-                "TTL sweep deleted {Count} {ContentType} records.",
-                deleted,
-                contentType);
+            this.LogTtlSweepDeleted(deleted, contentType);
         }
 
         // Importance-pruning pass.
@@ -159,10 +156,20 @@ internal sealed class HygieneSweeperBackgroundService : BackgroundService
 
         _importanceCounter.Add(importanceDeleted);
 
-        this._logger.LogInformation(
-            "Importance pruning deleted {Count} records.",
-            importanceDeleted);
+        this.LogImportancePruningDeleted(importanceDeleted);
 
         return new SweepResult(ttlDeleted, importanceDeleted);
     }
+
+    /// <summary>Logs that a hygiene sweep pass failed unexpectedly.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Hygiene sweep failed unexpectedly.")]
+    private partial void LogHygieneSweepFailed(Exception ex);
+
+    /// <summary>Logs that the TTL pass deleted records of a given content type.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "TTL sweep deleted {Count} {ContentType} records.")]
+    private partial void LogTtlSweepDeleted(int count, ContentType contentType);
+
+    /// <summary>Logs that the importance-pruning pass deleted stale low-importance records.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Importance pruning deleted {Count} records.")]
+    private partial void LogImportancePruningDeleted(int count);
 }

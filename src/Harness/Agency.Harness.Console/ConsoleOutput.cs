@@ -13,10 +13,10 @@ internal sealed class ConsoleOutput : IChatOutput
     public void WriteMarkup(string text)
     {
         
-        this.Write(new Markup(text));
+        Write(new Markup(text));
     }
 
-    private void Write(IRenderable renderable)
+    private static void Write(IRenderable renderable)
     {
         AnsiConsole.Write(renderable);
     }
@@ -67,7 +67,7 @@ internal sealed class ConsoleOutput : IChatOutput
             Padding = new Padding(1, 0),
             BorderStyle = new Style(Color.Gray)
         };
-        this.Write(panel);
+        Write(panel);
     }
 
     private static string[] Frames = new[] { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };

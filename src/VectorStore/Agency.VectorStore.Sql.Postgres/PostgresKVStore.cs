@@ -62,7 +62,7 @@ public sealed class PostgresKVStore : IVectorStore
         using var activity = _telemetry.StartActivity("vectorstore.initialize");
         activity?.SetTag("vectorstore.operation", "initialize");
         activity?.SetTag("vectorstore.dimensions", dimensions);
-        this._logger.LogDebug("Initializing vector store schema with {Dimensions} dimensions", dimensions);
+        VectorStoreTelemetry.LogInitializingSchema(this._logger, dimensions);
 
         await _telemetry.ExecuteAsync<int>(
             "initialize",
@@ -95,23 +95,20 @@ public sealed class PostgresKVStore : IVectorStore
 
                 return this._postgreSqlRunner.ExecuteAsync(sql, null, cancellationToken);
             },
-            onSuccess: (_, elapsedMs) => this._logger.LogDebug("Vector store schema initialization completed in {ElapsedMs}ms", elapsedMs),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error initializing vector store schema after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (_, elapsedMs) => VectorStoreTelemetry.LogSchemaInitialized(this._logger, elapsedMs),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorInitializingSchema(this._logger, ex, elapsedMs));
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default)
     {
-        if (query == null)
-        {
-            throw new ArgumentNullException(nameof(query));
-        }
+        ArgumentNullException.ThrowIfNull(query);
 
         using var activity = _telemetry.StartActivity("vectorstore.search");
         activity?.SetTag("vectorstore.operation", "search");
         activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
         activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
-        this._logger.LogDebug("Searching vector store with limit {Limit} and metadata filter present: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
+        VectorStoreTelemetry.LogSearching(this._logger, query.Limit ?? 10, query.MetadataFilter != null);
 
         return await _telemetry.ExecuteAsync<IReadOnlyList<SearchHit<TValue>>>(
             "search",
@@ -199,8 +196,8 @@ public sealed class PostgresKVStore : IVectorStore
                 activity?.SetTag("vectorstore.result_count", results.Count);
                 return results;
             },
-            onSuccess: (results, elapsedMs) => this._logger.LogDebug("Vector store search completed in {ElapsedMs}ms. Results returned: {ResultCount}", elapsedMs, results.Count),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching vector store after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (results, elapsedMs) => VectorStoreTelemetry.LogSearchCompleted(this._logger, elapsedMs, results.Count),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorSearching(this._logger, ex, elapsedMs));
     }
 
     /// <inheritdoc/>
@@ -212,7 +209,7 @@ public sealed class PostgresKVStore : IVectorStore
         activity?.SetTag("vectorstore.session_id", sessionId ?? "global");
         activity?.SetTag("vectorstore.key", key);
         activity?.SetTag("vectorstore.has_metadata", metadata != null);
-        this._logger.LogDebug("Upserting vector store entry for user {UserId} session {SessionId} key {Key} with metadata present: {HasMetadata}", userId, sessionId ?? "global", key, metadata != null);
+        VectorStoreTelemetry.LogUpserting(this._logger, userId, sessionId ?? "global", key, metadata != null);
 
         await _telemetry.ExecuteAsync<int>(
             "upsert",
@@ -246,8 +243,8 @@ public sealed class PostgresKVStore : IVectorStore
                     },
                     cancellationToken);
             },
-            onSuccess: (_, elapsedMs) => this._logger.LogDebug("Vector store upsert completed in {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", elapsedMs, userId, sessionId ?? "global", key),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error upserting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", elapsedMs, userId, sessionId ?? "global", key));
+            onSuccess: (_, elapsedMs) => VectorStoreTelemetry.LogUpserted(this._logger, elapsedMs, userId, sessionId ?? "global", key),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorUpserting(this._logger, ex, elapsedMs, userId, sessionId ?? "global", key));
     }
 
     /// <inheritdoc/>
@@ -258,7 +255,7 @@ public sealed class PostgresKVStore : IVectorStore
         activity?.SetTag("vectorstore.user_id", userId);
         activity?.SetTag("vectorstore.session_id", sessionId ?? "global");
         activity?.SetTag("vectorstore.key", key);
-        this._logger.LogDebug("Deleting vector store entry for user {UserId} session {SessionId} key {Key}", userId, sessionId ?? "global", key);
+        VectorStoreTelemetry.LogDeleting(this._logger, userId, sessionId ?? "global", key);
 
         return await _telemetry.ExecuteAsync(
             "delete",
@@ -272,8 +269,8 @@ public sealed class PostgresKVStore : IVectorStore
                 activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
                 return rowsAffected > 0;
             },
-            onSuccess: (deleted, elapsedMs) => this._logger.LogDebug("Vector store delete completed in {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}. Deleted: {Deleted}", elapsedMs, userId, sessionId ?? "global", key, deleted),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}", elapsedMs, userId, sessionId ?? "global", key));
+            onSuccess: (deleted, elapsedMs) => VectorStoreTelemetry.LogDeleted(this._logger, elapsedMs, userId, sessionId ?? "global", key, deleted),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorDeleting(this._logger, ex, elapsedMs, userId, sessionId ?? "global", key));
     }
 
     /// <inheritdoc/>
@@ -374,4 +371,5 @@ public sealed class PostgresKVStore : IVectorStore
             UpdatedOn: reader.IsDBNull(6) ? DateTimeOffset.UtcNow : new DateTimeOffset(reader.GetDateTime(6), TimeSpan.Zero)
         );
     }
+
 }

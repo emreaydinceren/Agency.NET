@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 
 namespace Agency.Sql.Postgres.Test;
 
@@ -67,7 +68,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
 
         Assert.Single(ds.Rows);
         // atttypmod for vector(n) encodes the dimension as the raw value
-        int typmod = Convert.ToInt32(ds["atttypmod", 0]);
+        int typmod = Convert.ToInt32(ds["atttypmod", 0], CultureInfo.InvariantCulture);
         Assert.Equal(3, typmod);
     }
 
@@ -112,7 +113,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'apple'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dist, Tolerance);
     }
 
@@ -129,7 +130,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'banana'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(Math.Sqrt(2), dist, Tolerance);
     }
 
@@ -147,7 +148,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'apple'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dist, Tolerance);
     }
 
@@ -164,7 +165,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'banana'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(1.0, dist, Tolerance);
     }
 
@@ -182,7 +183,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'apricot'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(1.0 - (1.0 / Math.Sqrt(2)), dist, Tolerance);
     }
 
@@ -202,7 +203,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'apple'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double negDot = Convert.ToDouble(ds["neg_dot", 0]);
+        double negDot = Convert.ToDouble(ds["neg_dot", 0], CultureInfo.InvariantCulture);
         Assert.Equal(-1.0, negDot, Tolerance);
     }
 
@@ -218,7 +219,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             WHERE name = 'banana'
             """, cancellationToken: TestContext.Current.CancellationToken);
 
-        double negDot = Convert.ToDouble(ds["neg_dot", 0]);
+        double negDot = Convert.ToDouble(ds["neg_dot", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, negDot, Tolerance);
     }
 
@@ -379,7 +380,7 @@ public sealed class PgVectorTests : IClassFixture<PgVectorTests.VectorFixture>
             new Dictionary<string, object?> { ["name"] = "banana", ["vec"] = "[0,1,0]" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(ds.Rows);
-        double dist = Convert.ToDouble(ds["dist", 0]);
+        double dist = Convert.ToDouble(ds["dist", 0], CultureInfo.InvariantCulture);
         Assert.Equal(0.0, dist, Tolerance);
     }
 

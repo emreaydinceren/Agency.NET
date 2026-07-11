@@ -31,7 +31,7 @@ namespace Agency.Memory.Distiller.Services;
 /// enqueue — so there is no busy-polling delay between enqueue and pickup.
 /// </para>
 /// </remarks>
-internal sealed class ChannelSessionRegistry
+internal sealed partial class ChannelSessionRegistry : IDisposable
 {
     // Released by NotifyingChannelWriter on every successful TryWrite / WriteAsync
     // so the background consumer wakes immediately instead of busy-polling.
@@ -115,12 +115,20 @@ internal sealed class ChannelSessionRegistry
 
         Channel<DistillationJob> ch = Channel.CreateBounded<DistillationJob>(options);
 
-        this._logger.LogDebug(
-            "Created bounded distillation channel for user {UserId} session {SessionId} (capacity={Capacity}).",
-            userId, sessionId, this._capacity);
+        this.LogChannelCreated(userId, sessionId, this._capacity);
 
         return ch;
     }
+
+    /// <summary>Disposes the work-signal semaphore.</summary>
+    public void Dispose()
+    {
+        this._workSignal.Dispose();
+    }
+
+    /// <summary>Logs that a bounded per-session distillation channel was created.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Created bounded distillation channel for user {UserId} session {SessionId} (capacity={Capacity}).")]
+    private partial void LogChannelCreated(string userId, string sessionId, int capacity);
 
     /// <summary>
     /// Wraps a <see cref="ChannelWriter{T}"/> and releases a <see cref="SemaphoreSlim"/>

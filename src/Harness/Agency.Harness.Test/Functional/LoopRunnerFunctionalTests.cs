@@ -1,6 +1,5 @@
 
-using Agency.Harness.Contexts;
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 using Agency.Llm.Common;
 using Agency.Llm.OpenAI;
 using Microsoft.Extensions.Configuration;

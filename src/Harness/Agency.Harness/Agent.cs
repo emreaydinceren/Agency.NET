@@ -17,7 +17,7 @@ namespace Agency.Harness;
 /// Drives the agent loop: build system prompt → call LLM → handle tool calls → repeat until a
 /// <see cref="StopCondition"/> fires. Yields <see cref="AgentEvent"/>s as they happen.
 /// </summary>
-public sealed class Agent
+public sealed partial class Agent
 {
     /// <summary>Name of the <see cref="ActivitySource"/> used for agent tracing spans.</summary>
     public const string ActivitySourceName = "Agency.Harness.Agent";
@@ -135,10 +135,14 @@ public sealed class Agent
     /// Fires the <see cref="AgentHooks.OnSessionEnd"/> hook for the given context, if one is set.
     /// Called by <see cref="ChatSession.DisposeAsync"/> at the end of a session.
     /// </summary>
-    public Task RaiseSessionEndAsync(Context ctx, CancellationToken ct = default) =>
-        this._hooks.OnSessionEnd is { } onSessionEnd
+    public Task RaiseSessionEndAsync(Context ctx, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        return this._hooks.OnSessionEnd is { } onSessionEnd
             ? onSessionEnd(new SessionEndedHookContext(ctx.Session.Id ?? string.Empty, ctx), ct)
             : Task.CompletedTask;
+    }
 
     /// <summary>
     /// Creates a new <see cref="Context"/> for a multi-turn conversation session,
@@ -177,10 +181,22 @@ public sealed class Agent
     /// <paramref name="userMessage"/> before calling <see cref="RunAsync"/>.
     /// Applies a per-turn timeout when <see cref="AgentOptions.TurnTimeoutSeconds"/> is configured.
     /// </summary>
-    public async IAsyncEnumerable<AgentEvent> ChatAsync(
+    public IAsyncEnumerable<AgentEvent> ChatAsync(
         string userMessage,
         Context ctx,
         AgentOptions? options = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        return this.ChatIteratorAsync(userMessage, ctx, options, ct);
+    }
+
+    /// <summary>Iterator implementation backing <see cref="ChatAsync"/>; drives the turn and yields its events.</summary>
+    private async IAsyncEnumerable<AgentEvent> ChatIteratorAsync(
+        string userMessage,
+        Context ctx,
+        AgentOptions? options,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         using var activity = _activitySource.StartActivity("Agent.ChatAsync");
@@ -198,9 +214,7 @@ public sealed class Agent
         long prevInputTokens = ctx.TotalUsage.InputTokens;
         long prevOutputTokens = ctx.TotalUsage.OutputTokens;
 
-        this._logger.LogInformation(
-            "Starting agent chat turn. Model={Model}, ClientType={ClientType}",
-            this._model, this._clientType);
+        this.LogStartingChatTurn(this._model, this._clientType);
 
         if (ctx.Conversation.Messages.Count > 0)
         {
@@ -262,10 +276,7 @@ public sealed class Agent
             {
                 _errorCounter.Add(1, tags);
                 activity?.SetStatus(ActivityStatusCode.Error, turnError.Message);
-                this._logger.LogError(
-                    turnError,
-                    "Agent chat turn failed. Model={Model}, ClientType={ClientType}",
-                    this._model, this._clientType);
+                this.LogChatTurnFailed(turnError, this._model, this._clientType);
             }
             else
             {
@@ -289,9 +300,7 @@ public sealed class Agent
                 activity?.SetTag("agent.usage.input_tokens", deltaIn);
                 activity?.SetTag("agent.usage.output_tokens", deltaOut);
 
-                this._logger.LogInformation(
-                    "Agent chat turn completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}",
-                    this._model, deltaIn, deltaOut, sw.Elapsed.TotalMilliseconds);
+                this.LogChatTurnCompleted(this._model, deltaIn, deltaOut, sw.Elapsed.TotalMilliseconds);
             }
         }
 
@@ -464,8 +473,14 @@ public sealed class Agent
             {
                 // Execute the tool (OnPreToolUse already ran pre-park — do NOT re-run).
                 ToolResult result;
-                this._logger.LogInformation(
-                    "Invoking tool {Tool} (resume). Input={ToolInput}", pendingCall.ToolName, this.ForLog(pendingCall.Input));
+                if (this._logger.IsEnabled(LogLevel.Information))
+                {
+                    // CA1873 false positive: ForLog() is only reached once IsEnabled has already
+                    // gated it above, so this is not an unconditional expensive evaluation.
+#pragma warning disable CA1873
+                    this.LogInvokingToolResume(pendingCall.ToolName, this.ForLog(pendingCall.Input));
+#pragma warning restore CA1873
+                }
 
                 using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
                 toolActivity?.SetTag("agent.tool.name", pendingCall.ToolName);
@@ -479,14 +494,12 @@ public sealed class Agent
 
                     if (result.IsError)
                     {
-                        this._logger.LogWarning(
-                            "Tool {Tool} returned an error result (resume). Input={ToolInput}, Error={ToolError}",
-                            pendingCall.ToolName, this.ForLog(pendingCall.Input), this.ForLog(result.Content));
+                        this.LogToolErrorResultResume(pendingCall.ToolName, this.ForLog(pendingCall.Input), this.ForLog(result.Content));
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    this._logger.LogError(ex, "Tool {Tool} threw during invocation (resume). Input={ToolInput}", pendingCall.ToolName, this.ForLog(pendingCall.Input));
+                    this.LogToolThrewResume(ex, pendingCall.ToolName, this.ForLog(pendingCall.Input));
                     toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     result = new ToolResult($"Tool error: {ex.Message}", IsError: true);
                 }
@@ -629,9 +642,7 @@ public sealed class Agent
             // Detect truncated response — model hit its context/output token limit mid-generation.
             if (response.FinishReason == ChatFinishReason.Length)
             {
-                this._logger.LogWarning(
-                    "LLM response was truncated (finish_reason=length). Model={Model}, InputTokens={InputTokens}",
-                    this._model, turnUsage.InputTokens);
+                this.LogResponseTruncated(this._model, turnUsage.InputTokens);
                 _errorCounter.Add(1, new TagList
                 {
                     { "agent.model", this._model },
@@ -813,8 +824,14 @@ public sealed class Agent
                     }
                 }
 
-                this._logger.LogInformation(
-                    "Invoking tool {Tool}. Input={ToolInput}", call.Name, this.ForLog(input));
+                if (this._logger.IsEnabled(LogLevel.Information))
+                {
+                    // CA1873 false positive: ForLog() is only reached once IsEnabled has already
+                    // gated it above, so this is not an unconditional expensive evaluation.
+#pragma warning disable CA1873
+                    this.LogInvokingTool(call.Name, this.ForLog(input));
+#pragma warning restore CA1873
+                }
 
                 using var toolActivity = _activitySource.StartActivity("agent.tool.invoke", ActivityKind.Internal);
                 toolActivity?.SetTag("agent.tool.name", call.Name);
@@ -831,14 +848,12 @@ public sealed class Agent
                     // sees this, so log it here or the failure is invisible in the logs.
                     if (result.IsError)
                     {
-                        this._logger.LogWarning(
-                            "Tool {Tool} returned an error result. Input={ToolInput}, Error={ToolError}",
-                            call.Name, this.ForLog(input), this.ForLog(result.Content));
+                        this.LogToolErrorResult(call.Name, this.ForLog(input), this.ForLog(result.Content));
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    this._logger.LogError(ex, "Tool {Tool} threw during invocation. Input={ToolInput}", call.Name, this.ForLog(input));
+                    this.LogToolThrew(ex, call.Name, this.ForLog(input));
                     toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     toolActivity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
                     {
@@ -1006,4 +1021,44 @@ public sealed class Agent
 
         return JsonSerializer.SerializeToElement(arguments);
     }
+
+    /// <summary>Logs that an agent chat turn is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting agent chat turn. Model={Model}, ClientType={ClientType}")]
+    private partial void LogStartingChatTurn(string model, string clientType);
+
+    /// <summary>Logs that an agent chat turn failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Agent chat turn failed. Model={Model}, ClientType={ClientType}")]
+    private partial void LogChatTurnFailed(Exception ex, string model, string clientType);
+
+    /// <summary>Logs that an agent chat turn completed.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Agent chat turn completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}")]
+    private partial void LogChatTurnCompleted(string model, long inputTokens, long outputTokens, double durationMs);
+
+    /// <summary>Logs that a resumed tool call is being invoked.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Invoking tool {Tool} (resume). Input={ToolInput}")]
+    private partial void LogInvokingToolResume(string tool, string toolInput);
+
+    /// <summary>Logs that a resumed tool call returned an error result.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {Tool} returned an error result (resume). Input={ToolInput}, Error={ToolError}")]
+    private partial void LogToolErrorResultResume(string tool, string toolInput, string toolError);
+
+    /// <summary>Logs that a resumed tool call threw during invocation.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Tool {Tool} threw during invocation (resume). Input={ToolInput}")]
+    private partial void LogToolThrewResume(Exception ex, string tool, string toolInput);
+
+    /// <summary>Logs that the LLM response was truncated because it hit its token limit.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM response was truncated (finish_reason=length). Model={Model}, InputTokens={InputTokens}")]
+    private partial void LogResponseTruncated(string model, long inputTokens);
+
+    /// <summary>Logs that a tool call is being invoked.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "Invoking tool {Tool}. Input={ToolInput}")]
+    private partial void LogInvokingTool(string tool, string toolInput);
+
+    /// <summary>Logs that a tool call returned an error result.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Tool {Tool} returned an error result. Input={ToolInput}, Error={ToolError}")]
+    private partial void LogToolErrorResult(string tool, string toolInput, string toolError);
+
+    /// <summary>Logs that a tool call threw during invocation.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Tool {Tool} threw during invocation. Input={ToolInput}")]
+    private partial void LogToolThrew(Exception ex, string tool, string toolInput);
 }

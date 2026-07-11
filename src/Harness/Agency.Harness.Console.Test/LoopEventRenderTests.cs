@@ -1,5 +1,4 @@
-using Agency.Harness;
-using Agency.Harness.Loop;
+using Agency.Harness.Looping;
 
 namespace Agency.Harness.Console.Test;
 
@@ -42,14 +41,14 @@ public sealed class LoopEventRenderTests
     // ── VerdictEvent (Continue) ───────────────────────────────────────────────
 
     /// <summary>
-    /// A <see cref="VerdictEvent"/> with a <see cref="Verdict.Continue"/> verdict must
+    /// A <see cref="VerdictEvent"/> with a <see cref="Verdict.ContinueLoop"/> verdict must
     /// render the word "continue" (case-insensitive) and the reason text.
     /// </summary>
     [Fact]
     public void VerdictEvent_Continue_RendersVerdictKindAndReason()
     {
         var (output, sw) = MakeOutput();
-        var evt = new VerdictEvent(TurnIndex: 0, Verdict: new Verdict.Continue("tests still failing"));
+        var evt = new VerdictEvent(TurnIndex: 0, Verdict: new Verdict.ContinueLoop("tests still failing"));
 
         ConsoleChatSession.RenderLoopEvent(output, evt);
 

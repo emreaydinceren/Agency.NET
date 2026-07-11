@@ -1,7 +1,6 @@
 
 using Agency.Harness.Contexts;
 using Agency.Harness.Skills;
-using Agency.Harness.Tools;
 
 namespace Agency.Harness.Test;
 /// <summary>

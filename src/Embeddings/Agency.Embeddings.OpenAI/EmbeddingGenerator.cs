@@ -15,7 +15,7 @@ namespace Agency.Embeddings.OpenAI;
 /// Generates vector embeddings using the model configured in <see cref="EmbeddingOptions"/>,
 /// calling the OpenAI-compatible API exposed by LM Studio.
 /// </summary>
-public sealed class EmbeddingGenerator : IEmbeddingGenerator
+public sealed partial class EmbeddingGenerator : IEmbeddingGenerator
 {
     /// <summary>
     /// The activity source name used for embedding telemetry.
@@ -45,7 +45,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
 
     /// <summary>Initialises the generator from application configuration via the DI options system.</summary>
     public EmbeddingGenerator(IOptions<EmbeddingOptions> options, ILogger<EmbeddingGenerator>? logger = null)
-        : this(options.Value, logger) { }
+        : this((options ?? throw new ArgumentNullException(nameof(options))).Value, logger) { }
 
     /// <summary>Initialises the generator directly from an options instance.</summary>
     public EmbeddingGenerator(EmbeddingOptions options, ILogger<EmbeddingGenerator>? logger = null)
@@ -86,7 +86,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
         activity?.SetTag("input.length", input?.Length ?? 0);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Generating embedding for input of length {InputLength}", input?.Length ?? 0);
+        this.LogGeneratingEmbedding(input?.Length ?? 0);
 
         try
         {
@@ -99,7 +99,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
 
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this._logger.LogDebug("Embedding generated in {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this.LogEmbeddingGenerated(stopwatch.Elapsed.TotalMilliseconds);
 
             return result.Value.ToFloats();
         }
@@ -122,7 +122,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
             _requestDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "single" } });
 
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            this._logger.LogError(ex, "Error generating embedding after {ElapsedMs}ms", stopwatch.Elapsed.TotalMilliseconds);
+            this.LogErrorGeneratingEmbedding(ex, stopwatch.Elapsed.TotalMilliseconds);
             throw;
         }
     }
@@ -141,7 +141,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
         activity?.SetTag("input.count", inputList.Count);
 
         var stopwatch = Stopwatch.StartNew();
-        this._logger.LogDebug("Generating embeddings for batch of {InputCount} inputs", inputList.Count);
+        this.LogGeneratingEmbeddingsBatch(inputList.Count);
 
         try
         {
@@ -158,8 +158,7 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
             activity?.SetTag("gen_ai.response.embedding_count", result.Value.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this._logger.LogDebug("Batch embeddings generated in {ElapsedMs}ms. Count: {Count}, Input tokens: {Tokens}",
-                stopwatch.Elapsed.TotalMilliseconds, result.Value.Count, tokens);
+            this.LogBatchEmbeddingsGenerated(stopwatch.Elapsed.TotalMilliseconds, result.Value.Count, tokens);
 
             return result.Value.Select(static e => e.ToFloats()).ToList();
         }
@@ -177,9 +176,32 @@ public sealed class EmbeddingGenerator : IEmbeddingGenerator
                 { "exception.stacktrace", ex.ToString() },
             }));
 
-            this._logger.LogError(ex, "Error generating batch embeddings after {ElapsedMs}ms. Input count: {InputCount}",
-                stopwatch.Elapsed.TotalMilliseconds, inputList.Count);
+            this.LogErrorGeneratingBatchEmbeddings(ex, stopwatch.Elapsed.TotalMilliseconds, inputList.Count);
             throw;
         }
     }
+
+    /// <summary>Logs that a single-input embedding request is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Generating embedding for input of length {InputLength}")]
+    private partial void LogGeneratingEmbedding(int inputLength);
+
+    /// <summary>Logs that a single-input embedding request completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Embedding generated in {ElapsedMs}ms")]
+    private partial void LogEmbeddingGenerated(double elapsedMs);
+
+    /// <summary>Logs that a single-input embedding request failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating embedding after {ElapsedMs}ms")]
+    private partial void LogErrorGeneratingEmbedding(Exception ex, double elapsedMs);
+
+    /// <summary>Logs that a batch embedding request is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Generating embeddings for batch of {InputCount} inputs")]
+    private partial void LogGeneratingEmbeddingsBatch(int inputCount);
+
+    /// <summary>Logs that a batch embedding request completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Batch embeddings generated in {ElapsedMs}ms. Count: {Count}, Input tokens: {Tokens}")]
+    private partial void LogBatchEmbeddingsGenerated(double elapsedMs, int count, int tokens);
+
+    /// <summary>Logs that a batch embedding request failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error generating batch embeddings after {ElapsedMs}ms. Input count: {InputCount}")]
+    private partial void LogErrorGeneratingBatchEmbeddings(Exception ex, double elapsedMs, int inputCount);
 }

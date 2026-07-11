@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Builds the system-prompt and user-message content for the Goalkeeper's cheap-model call.

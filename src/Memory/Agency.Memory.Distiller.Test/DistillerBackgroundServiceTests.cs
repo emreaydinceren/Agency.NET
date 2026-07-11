@@ -63,7 +63,7 @@ public sealed class DistillerBackgroundServiceTests
             NullLogger<DistillerBackgroundService>.Instance);
     }
 
-    private static IConversationManager MakeConversation(int messageCount = 3)
+    private static InMemoryConversationManager MakeConversation(int messageCount = 3)
     {
         var mgr = new InMemoryConversationManager();
         for (int i = 0; i < messageCount; i++)
@@ -93,7 +93,7 @@ public sealed class DistillerBackgroundServiceTests
             out _,
             out FakeEventBus eventBus);
 
-        IConversationManager convo = MakeConversation(3);
+        InMemoryConversationManager convo = MakeConversation(3);
         convoRegistry.Register(SessionId, convo);
 
         var job = new DistillationJob(UserId, SessionId, DistillationTrigger.Inactivity, UpToTurnIndex: 3);
@@ -106,7 +106,7 @@ public sealed class DistillerBackgroundServiceTests
         registry.GetOrCreateWriter(UserId, SessionId).TryWrite(job);
 
         // Wait for distillation to complete.
-        for (int i = 0; i < 50 && !eventBus.Published.Any(); i++)
+        for (int i = 0; i < 50 && eventBus.Published.Count == 0; i++)
         {
             await Task.Delay(50, TestContext.Current.CancellationToken);
         }
@@ -142,7 +142,7 @@ public sealed class DistillerBackgroundServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         _ = svc.StartAsync(cts.Token);
 
-        for (int i = 0; i < 50 && !eventBus.Published.Any(); i++)
+        for (int i = 0; i < 50 && eventBus.Published.Count == 0; i++)
         {
             await Task.Delay(50, TestContext.Current.CancellationToken);
         }
@@ -178,7 +178,7 @@ public sealed class DistillerBackgroundServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         _ = svc.StartAsync(cts.Token);
 
-        for (int i = 0; i < 50 && !eventBus.Published.Any(); i++)
+        for (int i = 0; i < 50 && eventBus.Published.Count == 0; i++)
         {
             await Task.Delay(50, TestContext.Current.CancellationToken);
         }
@@ -220,7 +220,7 @@ public sealed class DistillerBackgroundServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         _ = svc.StartAsync(cts.Token);
 
-        for (int i = 0; i < 50 && !eventBus.Published.Any(); i++)
+        for (int i = 0; i < 50 && eventBus.Published.Count == 0; i++)
         {
             await Task.Delay(50, TestContext.Current.CancellationToken);
         }

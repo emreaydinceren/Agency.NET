@@ -60,7 +60,7 @@ public sealed class DistillerBackgroundServiceTests_Retry
             NullLogger<DistillerBackgroundService>.Instance);
     }
 
-    private static IConversationManager MakeConversation()
+    private static InMemoryConversationManager MakeConversation()
     {
         var mgr = new InMemoryConversationManager();
         mgr.Append(new ChatMessage(ChatRole.User, "Test message."));

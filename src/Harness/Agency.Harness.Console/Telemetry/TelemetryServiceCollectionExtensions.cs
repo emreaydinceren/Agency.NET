@@ -10,6 +10,7 @@ using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
 using Serilog.Extensions.Logging;
+using System.Globalization;
 
 namespace Agency.Harness.Console.Telemetry;
 /// <summary>
@@ -114,7 +115,7 @@ internal static class TelemetryServiceCollectionExtensions
             ? parsed
             : LogEventLevel.Information;
 
-        string sessionStamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss");
+        string sessionStamp = DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture);
         string logPath = Path.Combine(
             options.FileExport.OutputDirectory,
             $"{options.FileExport.Logs.FilePrefix}-{sessionStamp}.log");
@@ -130,7 +131,8 @@ internal static class TelemetryServiceCollectionExtensions
                 retainedFileCountLimit: 30,
                 fileSizeLimitBytes: 100 * 1024 * 1024,
                 rollOnFileSizeLimit: true,
-                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
+                formatProvider: CultureInfo.InvariantCulture)
             .CreateLogger();
 
         services.AddLogging(b =>

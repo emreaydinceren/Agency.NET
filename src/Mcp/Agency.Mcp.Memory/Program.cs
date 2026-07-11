@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Agency.Mcp.Memory;
 
-internal class Program
+internal sealed class Program
 {
     private async static Task Main(string[] args)
     {

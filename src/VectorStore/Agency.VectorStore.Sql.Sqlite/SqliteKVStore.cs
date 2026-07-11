@@ -56,6 +56,8 @@ public sealed class SqliteKVStore : IVectorStore
     /// </summary>
     public static void RegisterVectorFunctions(SqliteConnection connection)
     {
+        ArgumentNullException.ThrowIfNull(connection);
+
         connection.CreateFunction("vec_distance_cosine", (string v1, string v2) =>
         {
             float[] a = ParseVector(v1);
@@ -80,7 +82,7 @@ public sealed class SqliteKVStore : IVectorStore
         using var activity = _telemetry.StartActivity("vectorstore.initialize");
         activity?.SetTag("vectorstore.operation", "initialize");
         activity?.SetTag("vectorstore.dimensions", dimensions);
-        this._logger.LogDebug("Initializing SQLite vector store schema with {Dimensions} dimensions", dimensions);
+        VectorStoreTelemetry.LogInitializingSchema(this._logger, dimensions);
 
         await _telemetry.ExecuteAsync<int>(
             "initialize",
@@ -109,23 +111,20 @@ public sealed class SqliteKVStore : IVectorStore
                     null,
                     cancellationToken);
             },
-            onSuccess: (_, elapsedMs) => this._logger.LogDebug("SQLite vector store schema initialization completed in {ElapsedMs}ms", elapsedMs),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error initializing SQLite vector store schema after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (_, elapsedMs) => VectorStoreTelemetry.LogSchemaInitialized(this._logger, elapsedMs),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorInitializingSchema(this._logger, ex, elapsedMs));
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default)
     {
-        if (query == null)
-        {
-            throw new ArgumentNullException(nameof(query));
-        }
+        ArgumentNullException.ThrowIfNull(query);
 
         using var activity = _telemetry.StartActivity("vectorstore.search");
         activity?.SetTag("vectorstore.operation", "search");
         activity?.SetTag("vectorstore.limit", query.Limit ?? 10);
         activity?.SetTag("vectorstore.has_metadata_filter", query.MetadataFilter != null);
-        this._logger.LogDebug("Searching SQLite vector store with limit {Limit}, metadata filter: {HasFilter}", query.Limit ?? 10, query.MetadataFilter != null);
+        VectorStoreTelemetry.LogSearching(this._logger, query.Limit ?? 10, query.MetadataFilter != null);
 
         return await _telemetry.ExecuteAsync<IReadOnlyList<SearchHit<TValue>>>(
             "search",
@@ -208,8 +207,8 @@ public sealed class SqliteKVStore : IVectorStore
                 activity?.SetTag("vectorstore.result_count", results.Count);
                 return results;
             },
-            onSuccess: (results, elapsedMs) => this._logger.LogDebug("SQLite vector store search completed in {ElapsedMs}ms. Results: {ResultCount}", elapsedMs, results.Count),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error searching SQLite vector store after {ElapsedMs}ms", elapsedMs));
+            onSuccess: (results, elapsedMs) => VectorStoreTelemetry.LogSearchCompleted(this._logger, elapsedMs, results.Count),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorSearching(this._logger, ex, elapsedMs));
     }
 
     /// <inheritdoc/>
@@ -221,7 +220,7 @@ public sealed class SqliteKVStore : IVectorStore
         activity?.SetTag("vectorstore.sessionId", sessionId);
         activity?.SetTag("vectorstore.key", key);
         activity?.SetTag("vectorstore.has_metadata", metadata != null);
-        this._logger.LogDebug("Upserting SQLite vector store entry with userId {UserId}, sessionId {SessionId}, key {Key}", userId, sessionId, key);
+        VectorStoreTelemetry.LogUpserting(this._logger, userId, sessionId, key, metadata != null);
 
         await _telemetry.ExecuteAsync<int>(
             "upsert",
@@ -257,8 +256,8 @@ public sealed class SqliteKVStore : IVectorStore
                     },
                     cancellationToken);
             },
-            onSuccess: (_, elapsedMs) => this._logger.LogDebug("SQLite vector store upsert completed in {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", elapsedMs, userId, sessionId, key),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error upserting SQLite vector store entry after {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", elapsedMs, userId, sessionId, key));
+            onSuccess: (_, elapsedMs) => VectorStoreTelemetry.LogUpserted(this._logger, elapsedMs, userId, sessionId, key),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorUpserting(this._logger, ex, elapsedMs, userId, sessionId, key));
     }
 
     /// <inheritdoc/>
@@ -269,7 +268,7 @@ public sealed class SqliteKVStore : IVectorStore
         activity?.SetTag("vectorstore.userId", userId);
         activity?.SetTag("vectorstore.sessionId", sessionId);
         activity?.SetTag("vectorstore.key", key);
-        this._logger.LogDebug("Deleting SQLite vector store entry with userId {UserId}, sessionId {SessionId}, key {Key}", userId, sessionId, key);
+        VectorStoreTelemetry.LogDeleting(this._logger, userId, sessionId, key);
 
         return await _telemetry.ExecuteAsync(
             "delete",
@@ -283,8 +282,8 @@ public sealed class SqliteKVStore : IVectorStore
                 activity?.SetTag("vectorstore.deleted", rowsAffected > 0);
                 return rowsAffected > 0;
             },
-            onSuccess: (deleted, elapsedMs) => this._logger.LogDebug("SQLite vector store delete completed in {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}. Deleted: {Deleted}", elapsedMs, userId, sessionId, key, deleted),
-            onError: (ex, elapsedMs) => this._logger.LogError(ex, "Error deleting SQLite vector store entry after {ElapsedMs}ms for userId {UserId}, sessionId {SessionId}, key {Key}", elapsedMs, userId, sessionId, key));
+            onSuccess: (deleted, elapsedMs) => VectorStoreTelemetry.LogDeleted(this._logger, elapsedMs, userId, sessionId, key, deleted),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorDeleting(this._logger, ex, elapsedMs, userId, sessionId, key));
     }
 
     /// <inheritdoc/>
@@ -366,7 +365,7 @@ public sealed class SqliteKVStore : IVectorStore
         string key = reader.GetString(2);
         string valueJson = reader.GetString(3);
         string? metadataJson = reader.IsDBNull(4) ? null : reader.GetString(4);
-        double distance = Convert.ToDouble(reader.GetValue(5));
+        double distance = Convert.ToDouble(reader.GetValue(5), CultureInfo.InvariantCulture);
 
         DateTimeOffset updatedOn = DateTimeOffset.UtcNow;
         if (!reader.IsDBNull(6))
@@ -444,4 +443,5 @@ public sealed class SqliteKVStore : IVectorStore
 
     private static float[] ParseVector(string raw)
         => raw.Trim('[', ']').Split(',').Select(s => float.Parse(s, CultureInfo.InvariantCulture)).ToArray();
+
 }

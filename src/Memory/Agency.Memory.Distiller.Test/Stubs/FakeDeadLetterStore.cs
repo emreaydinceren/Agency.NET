@@ -14,10 +14,10 @@ internal sealed class FakeDeadLetterStore : IDeadLetterStore
         string? sessionId,
         string jobKind,
         object payload,
-        Exception error,
+        Exception exception,
         CancellationToken ct = default)
     {
-        this.Entries.Add((userId, sessionId, jobKind, payload, error));
+        this.Entries.Add((userId, sessionId, jobKind, payload, exception));
         return Task.CompletedTask;
     }
 }

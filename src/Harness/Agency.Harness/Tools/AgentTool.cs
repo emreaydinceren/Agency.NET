@@ -1,4 +1,5 @@
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Agency.Harness.Contexts;
@@ -104,19 +105,19 @@ public sealed class AgentTool : ITool
                 switch (agentEvent)
                 {
                     case SessionStartedEvent ev:
-                        verboseSB.AppendLine($"Session started: {ev.SessionId}");
+                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Session started: {ev.SessionId}");
                         break;
                     case ToolInvokedEvent ev:
-                        verboseSB.AppendLine($"Tool invoked: {ev.ToolName} with input {ev.Input}");
+                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Tool invoked: {ev.ToolName} with input {ev.Input}");
                         break;
                     case IterationCompletedEvent ev:
-                        verboseSB.AppendLine($"Iteration {ev.Iteration} completed.");
+                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Iteration {ev.Iteration} completed.");
                         break;
                     case PermissionRequestedEvent ev:
                         pendingRequests.Add(ev);
                         break;
                     case AgentResultEvent ev:
-                        verboseSB.AppendLine($"Agent result: {ev.Status} with {ev.FinalText}");
+                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Agent result: {ev.Status} with {ev.FinalText}");
                         finalText = ev.FinalText ?? string.Empty;
                         status = ev.Status;
                         if (ev.Status == AgentResultStatus.AwaitingPermission)

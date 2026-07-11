@@ -1,4 +1,4 @@
-namespace Agency.Harness.Loop;
+namespace Agency.Harness.Looping;
 
 /// <summary>
 /// Runs a deterministic, transcript-only done-check on a cheap, independent
@@ -100,7 +100,7 @@ internal sealed class Goalkeeper : IGoalkeeper
 
     /// <summary>
     /// Parses the cheap model's raw text response into a <see cref="Verdict"/>.
-    /// Returns <c>Continue("verdict unparseable")</c> when the response does not
+    /// Returns <c>ContinueLoop("verdict unparseable")</c> when the response does not
     /// match the expected format (E-2).
     /// </summary>
     private static Verdict ParseVerdict(string raw)
@@ -127,14 +127,14 @@ internal sealed class Goalkeeper : IGoalkeeper
 
         if (verdictKeyword is null || reason is null)
         {
-            return new Verdict.Continue("verdict unparseable");
+            return new Verdict.ContinueLoop("verdict unparseable");
         }
 
         return verdictKeyword.Equals("done", StringComparison.OrdinalIgnoreCase)
             ? new Verdict.Done(reason)
             : verdictKeyword.Equals("continue", StringComparison.OrdinalIgnoreCase)
-                ? new Verdict.Continue(reason)
-                : new Verdict.Continue("verdict unparseable");
+                ? new Verdict.ContinueLoop(reason)
+                : new Verdict.ContinueLoop("verdict unparseable");
     }
 
     private static bool StartsWithIgnoreCase(string line, string prefix) =>

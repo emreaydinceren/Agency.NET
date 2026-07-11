@@ -42,6 +42,12 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
         await using var conn = await this._dataSource.OpenConnectionAsync(ct);
 
         await EnsureExtensionAsync(conn, ct);
+
+        // On a fresh database, this data source's first-ever connection (opened just above) already
+        // cached Npgsql's type map before the extension existed, so the 'vector' type is unresolvable
+        // for any Pgvector.Vector parameter until the map is reloaded (see Npgsql + pgvector docs).
+        await this._dataSource.ReloadTypesAsync(ct);
+
         await CheckDimensionMismatchAsync(conn, embeddingDim, ct);
         await CreateRecordsTableAsync(conn, embeddingDim, ct);
         await CreateWatermarksTableAsync(conn, ct);

@@ -150,7 +150,7 @@ jobs:
       - name: 📊 Coverage summary
         working-directory: src
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
+          dotnet tool install --global dotnet-reportgenerator-globaltool --configfile NuGet.GitHub.config
           export PATH="$HOME/.dotnet/tools:$PATH"
           reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coverage-report -reporttypes:"TextSummary;MarkdownSummaryGithub"
           cat coverage-report/Summary.txt

@@ -167,9 +167,10 @@ jobs:
           path: sbom
 
       - name: 📋 Attach SBOM to GitHub Release
-        # Bare-bones release: title/body default to the tag, no generated notes — categorized
-        # release notes are RT19's job, not this workflow's. This step's only purpose is giving
-        # the SBOM somewhere to live, since nuget.org has no field for an arbitrary extra file.
+        # generate_release_notes uses .github/release.yml's PR-label categorization (RT19) to
+        # populate the release body — this step's own job is just giving the SBOM somewhere to
+        # live, since nuget.org has no field for an arbitrary extra file.
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: sbom/sbom.json
+          generate_release_notes: true

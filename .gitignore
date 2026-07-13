@@ -530,3 +530,7 @@ agency-mcp-memory.db
 # RunConsole.ps1 quickstart saved answers (non-secret, but personal/local-only)
 src/.quickstart.json
 .quickstart.json
+
+# git-cliff-generated release notes for the tag being packed (RT19); regenerated per release run,
+# not meant to be tracked — see Agents/Releasing.md
+src/RELEASE_NOTES.txt

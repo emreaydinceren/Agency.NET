@@ -1,0 +1,28 @@
+# Config for GitHub's built-in "Generate release notes" (used from the GitHub UI when drafting a
+# Release, or `gh release create --generate-notes`). Groups PRs by label into sections; PRs with no
+# matching label fall into "Other Changes". Purely declarative — GitHub reads this on demand, there
+# is no CI wiring and nothing to maintain beyond labeling PRs as they're opened (RT19).
+
+changelog:
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking-change
+    - title: Features
+      labels:
+        - feature
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Maintenance
+      labels:
+        - chore
+        - dependencies
+    - title: Other Changes
+      labels:
+        - "*"

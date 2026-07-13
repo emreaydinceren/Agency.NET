@@ -134,9 +134,14 @@ releases clean. This is a deliberate, already-made call, not an open question.
    required human approval before exchanging a short-lived GitHub OIDC token for a nuget.org API
    key and pushing — no long-lived nuget.org secret is stored anywhere. See that workflow's header
    comment for the one-time nuget.org/GitHub setup this requires.
-9. Release notes generate automatically once GitHub's `release.yaml` runs on the synced tag — see
-   "Changelog & release notes (RT19)" below. Regenerating the persisted `CHANGELOG.md` is a
-   separate, optional, manual step (same section) — it doesn't happen as part of steps 1–8.
+9. To publish release notes on the new GitHub Release, use GitHub's built-in generator (RT19):
+   open a Release draft for the tag on GitHub and click "Generate release notes" (or
+   `gh release create v<x.y.z> --generate-notes`). `.github/release.yml` groups the PRs it finds
+   into sections by label; unlabeled PRs land under "Other Changes". This is deliberately manual
+   and declarative, not a CI step — a fuller automated pipeline (git-cliff-generated
+   `CHANGELOG.md`, `<PackageReleaseNotes>` wired into the pack step) was evaluated and built, but
+   dropped as more ongoing upkeep than a solo, pre-1.0, not-yet-widely-used project justifies.
+   Revisit if release cadence or external contributions pick up.
 
 ## Dry-run testing without a real release
 
@@ -157,46 +162,6 @@ There's no longer a way to dry-run the *stable publish* path disposably — `nbg
 the tag after the real computed version, so a tag it creates is indistinguishable from cutting an
 actual release. That path was already exercised once during the RT47/RT48 rollout; it doesn't need
 a standing recipe.
-
-## Changelog & release notes (RT19)
-
-Release notes are generated from [Conventional Commits](https://www.conventionalcommits.org/)
-(`type(scope): subject` — this repo's history already follows it, e.g. `fix(ci):`, `feat(harness):`)
-via [git-cliff](https://git-cliff.org/), configured in `cliff.toml` at the repo root.
-
-**What's automatic — no hand-writing required:** GitHub's `release.yaml` (the workflow described
-above) runs git-cliff against the tag it's building, before the pack step:
-
-1. `git-cliff --latest --strip header -o src/RELEASE_NOTES.txt` produces the categorized section
-   (Features / Bug Fixes / Documentation / etc.) for just the tag being released.
-2. `src/Directory.Build.props` picks that file up automatically — a conditional `PropertyGroup`
-   sets `<PackageReleaseNotes>` from its contents if it exists, so every `.nupkg` packed in that
-   run carries the notes and they show on the nuget.org package page. The condition means this is
-   a no-op everywhere else (local builds, PR CI on `ci.yaml`) since the file is never generated
-   there — it's git-ignored, not a tracked artifact.
-3. After the nuget.org publish succeeds, the `publish` job creates a GitHub Release for the tag
-   (`POST /repos/{owner}/{repo}/releases` via `curl` + `jq`, not a marketplace action — this
-   container has no Node runtime, same constraint as the coverage step in `ci-main.yaml`) with the
-   same notes as its body.
-
-**What's manual — regenerating `CHANGELOG.md`:** the persisted `CHANGELOG.md` at the repo root is
-*not* rewritten by CI. Architecturally it can't be, cleanly: `CHANGELOG.md` needs to live on Gitea
-`main` (the source of truth) to persist, but nothing in `ci-main.yaml` commits back to `main` today
-(the closest existing pattern, `sync-github.yaml`, only ever pushes to the GitHub mirror, and does
-a full-history rewrite every run — see "Why a scripted push" above). Adding a bot-commit-back step
-to `ci-main.yaml` would be a real, standalone architecture change (auth scope, infinite-loop
-guarding, an unfamiliar pattern in this repo), not something this task's scope covers. Instead,
-regenerate it by hand whenever it's worth refreshing (e.g. before/after cutting a release):
-
-```bash
-git-cliff --config cliff.toml -o CHANGELOG.md
-git add CHANGELOG.md
-git commit -m "docs(changelog): update CHANGELOG.md"
-```
-
-`git-cliff` isn't a `dotnet tool` — install it from
-[its GitHub releases](https://github.com/orhun/git-cliff/releases) (or `cargo install git-cliff`
-if you have Rust).
 
 ## Contribution lifecycle — validating and merging a public PR
 

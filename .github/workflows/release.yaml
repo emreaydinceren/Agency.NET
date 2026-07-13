@@ -71,27 +71,6 @@ jobs:
           fi
           echo "Tag v$TAG_VERSION matches computed version $COMPUTED_VERSION"
 
-      - name: 📝 Generate release notes (git-cliff)
-        # git-cliff parses Conventional Commits between the previous and current tag into
-        # categorized notes (RT19). Downloaded as a plain binary, not `cargo install` — this
-        # container has no Rust toolchain, and installing one just for this would be overkill.
-        run: |
-          set -euo pipefail
-          VER=$(curl -sSLf https://api.github.com/repos/orhun/git-cliff/releases/latest \
-                | grep -oE '"tag_name": *"v[^"]+"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')
-          echo "Installing git-cliff $VER (x86_64-unknown-linux-gnu)"
-          curl -sSLf "https://github.com/orhun/git-cliff/releases/download/v${VER}/git-cliff-${VER}-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/git-cliff.tgz
-          mkdir -p /tmp/git-cliff-install
-          tar -xzf /tmp/git-cliff.tgz -C /tmp/git-cliff-install --strip-components=1
-          install /tmp/git-cliff-install/git-cliff /usr/local/bin/git-cliff
-          git-cliff --version
-
-          # --strip header drops the "# Changelog" doc title, leaving the "## [x.y.z] - date"
-          # section plus its grouped bullets — this becomes both the GitHub Release body and,
-          # via src/Directory.Build.props, <PackageReleaseNotes> on every packed .nupkg.
-          git-cliff --config cliff.toml --latest --strip header -o src/RELEASE_NOTES.txt
-          cat src/RELEASE_NOTES.txt
-
       - name: 📦 Restore dependencies
         working-directory: src
         # src/NuGet.Config also lists baget-local/gitea-local, pointing at a self-hosted feed
@@ -128,13 +107,6 @@ jobs:
             src/nupkg/*.snupkg
           if-no-files-found: error
 
-      - name: 📤 Upload release notes
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: release-notes
-          path: src/RELEASE_NOTES.txt
-          if-no-files-found: error
-
   publish:
     needs: build-test-pack
     runs-on: ubuntu-latest
@@ -147,10 +119,7 @@ jobs:
     permissions:
       # id-token: write is scoped to only this job — everywhere else in the workflow keeps the
       # workflow-level `contents: read` default, since only this job exchanges an OIDC token.
-      # contents: write is also scoped to just this job, needed only for the release-creation
-      # step below (RT19).
       id-token: write
-      contents: write
 
     steps:
       - name: 📥 Download packages
@@ -158,11 +127,6 @@ jobs:
         with:
           name: nuget-packages
           path: nupkg
-
-      - name: 📥 Download release notes
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: release-notes
 
       - name: 🔑 NuGet login (OIDC → temporary API key)
         id: login
@@ -176,20 +140,3 @@ jobs:
             --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
-
-      - name: 📣 Create GitHub Release
-        # jq safely JSON-encodes RELEASE_NOTES.txt (arbitrary markdown — newlines, quotes) into
-        # the API request body; curl over the REST API rather than a marketplace action, matching
-        # this workflow's existing no-Node-actions-in-this-container constraint (see the coverage
-        # step comment in ci-main.yaml / Agents/Releasing.md for why).
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          apt-get update -qq && apt-get install -y -q jq
-          BODY=$(jq -Rs . < RELEASE_NOTES.txt)
-          curl -sSLf -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/releases" \
-            -d "{\"tag_name\":\"${GITHUB_REF_NAME}\",\"name\":\"${GITHUB_REF_NAME}\",\"body\":${BODY}}"

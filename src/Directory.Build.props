@@ -33,10 +33,4 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
-
-  <!-- release.yaml generates this from git-cliff before packing a tagged release (RT19); absent
-       everywhere else (local builds, PR CI), so PackageReleaseNotes is simply unset there. -->
-  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory)RELEASE_NOTES.txt')">
-    <PackageReleaseNotes>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)RELEASE_NOTES.txt'))</PackageReleaseNotes>
-  </PropertyGroup>
 </Project>

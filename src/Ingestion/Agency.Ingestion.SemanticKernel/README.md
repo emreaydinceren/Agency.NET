@@ -5,7 +5,7 @@ Semantic Kernel-powered text splitter for the Agency ingestion pipeline.
 ## Install
 
 ```
-dotnet add package Agency.Ingestion.SemanticKernel
+dotnet add package AgencyDotNet.Ingestion.SemanticKernel
 ```
 
 ## Types
@@ -19,4 +19,4 @@ services.AddScoped<ITextSplitter>(_ =>
     new SemanticKernelTextSplitter(maxTokensPerChunk: 512));
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

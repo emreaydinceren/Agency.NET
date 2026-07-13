@@ -5,7 +5,7 @@ OpenAI-compatible LLM provider for the Agency AI Toolkit. Works with OpenAI, Azu
 ## Install
 
 ```
-dotnet add package Agency.Llm.OpenAI
+dotnet add package AgencyDotNet.Llm.OpenAI
 ```
 
 ## Configuration
@@ -29,4 +29,4 @@ services.AddSingleton(sp =>
     sp.GetRequiredService<OpenAIClient>().CreateChatClient());
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

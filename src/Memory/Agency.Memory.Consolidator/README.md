@@ -5,7 +5,7 @@ Consolidator sub-agent background service for the Agency long-term memory system
 ## Install
 
 ```
-dotnet add package Agency.Memory.Consolidator
+dotnet add package AgencyDotNet.Memory.Consolidator
 ```
 
 ## Types

@@ -5,7 +5,7 @@ PostgreSQL SQL runner for the Agency AI Toolkit.
 ## Install
 
 ```
-dotnet add package Agency.Sql.Postgres
+dotnet add package AgencyDotNet.Sql.Postgres
 ```
 
 ## Configuration
@@ -28,4 +28,4 @@ services.AddSingleton(sp =>
 Dataset result = await runner.QueryAsync("SELECT * FROM documents LIMIT 10");
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

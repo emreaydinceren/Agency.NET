@@ -22,7 +22,7 @@ The demo can optionally expose GitHub tools to the agent via the official GitHub
 ## Install
 
 ```
-dotnet add package Agency.Harness.Console
+dotnet add package AgencyDotNet.Harness.Console
 ```
 
 ## Features
@@ -46,4 +46,4 @@ await Host.CreateDefaultBuilder(args)
     .RunConsoleAsync();
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

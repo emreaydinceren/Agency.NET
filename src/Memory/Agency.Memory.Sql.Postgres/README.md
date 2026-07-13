@@ -5,7 +5,7 @@ PostgreSQL + pgvector implementation of `IMemoryStore` for the Agency long-term 
 ## Install
 
 ```
-dotnet add package Agency.Memory.Sql.Postgres
+dotnet add package AgencyDotNet.Memory.Sql.Postgres
 ```
 
 ## Types

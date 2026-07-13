@@ -5,7 +5,7 @@ LLM provider abstractions for the Agency AI Toolkit — shared interfaces for li
 ## Install
 
 ```
-dotnet add package Agency.Llm.Common
+dotnet add package AgencyDotNet.Llm.Common
 ```
 
 ## Types
@@ -23,4 +23,4 @@ services.AddSingleton<IModelProvider, ClaudeClient>();
 var models = await modelProvider.GetModelsAsync();
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

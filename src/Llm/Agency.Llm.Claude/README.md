@@ -5,7 +5,7 @@ Anthropic Claude LLM provider for the Agency AI Toolkit.
 ## Install
 
 ```
-dotnet add package Agency.Llm.Claude
+dotnet add package AgencyDotNet.Llm.Claude
 ```
 
 ## Configuration
@@ -28,4 +28,4 @@ services.AddSingleton(sp =>
     sp.GetRequiredService<ClaudeClient>().CreateChatClient());
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

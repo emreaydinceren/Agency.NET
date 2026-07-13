@@ -5,7 +5,7 @@ SQLite implementation of `IKVStore` for the Agency AI Toolkit. Uses SQLite's `in
 ## Install
 
 ```
-dotnet add package Agency.KeyValueStore.Sql.Sqlite
+dotnet add package AgencyDotNet.KeyValueStore.Sql.Sqlite
 ```
 
 ## Usage
@@ -21,4 +21,4 @@ var hits = await kvStore.SearchAsync<MyType>(new Query { Key = "memory:session" 
 
 Good for development and low-volume scenarios where a PostgreSQL server isn't available.
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

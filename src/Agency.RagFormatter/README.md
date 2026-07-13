@@ -5,7 +5,7 @@ Formats `Dataset` query results as Markdown tables ready to embed in LLM prompts
 ## Install
 
 ```
-dotnet add package Agency.RagFormatter
+dotnet add package AgencyDotNet.RagFormatter
 ```
 
 ## Usage
@@ -22,4 +22,4 @@ string prompt = $"Answer based on this data:\n\n{context}\n\nQuestion: {question
 
 `ToMarkdownTable()` produces a GitHub-flavoured Markdown table with a header row and a separator, making it easy for LLMs to parse column boundaries.
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

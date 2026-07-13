@@ -5,7 +5,7 @@ File system document loaders for the Agency ingestion pipeline.
 ## Install
 
 ```
-dotnet add package Agency.Ingestion.FileSystem
+dotnet add package AgencyDotNet.Ingestion.FileSystem
 ```
 
 ## Types
@@ -25,4 +25,4 @@ services.AddScoped<IDocumentLoader>(_ =>
     new FileLoader("/data/manual.pdf"));
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

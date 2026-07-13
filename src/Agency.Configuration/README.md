@@ -5,7 +5,7 @@ Shared configuration layer and `${Section:Key}` placeholder resolution for the A
 ## Install
 
 ```
-dotnet add package Agency.Configuration
+dotnet add package AgencyDotNet.Configuration
 ```
 
 ## Types
@@ -21,4 +21,4 @@ builder.Configuration.AddSharedConfiguration();      // inserts shared-appsettin
 builder.Configuration.AddPlaceholderResolver();      // LAST — expands ${Section:Key} tokens
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

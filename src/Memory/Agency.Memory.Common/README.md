@@ -5,7 +5,7 @@ Common types, interfaces, and options for the Agency long-term memory system.
 ## Install
 
 ```
-dotnet add package Agency.Memory.Common
+dotnet add package AgencyDotNet.Memory.Common
 ```
 
 ## Types

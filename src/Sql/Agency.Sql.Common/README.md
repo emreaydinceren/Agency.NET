@@ -5,7 +5,7 @@ Abstract SQL runner base for the Agency AI Toolkit — shared query execution lo
 ## Install
 
 ```
-dotnet add package Agency.Sql.Common
+dotnet add package AgencyDotNet.Sql.Common
 ```
 
 ## Types
@@ -16,7 +16,7 @@ dotnet add package Agency.Sql.Common
 
 Use a concrete implementation:
 
-- [`Agency.Sql.Postgres`](https://www.nuget.org/packages/Agency.Sql.Postgres) — PostgreSQL
-- [`Agency.Sql.Sqlite`](https://www.nuget.org/packages/Agency.Sql.Sqlite) — SQLite
+- [`AgencyDotNet.Sql.Postgres`](https://www.nuget.org/packages/AgencyDotNet.Sql.Postgres) — PostgreSQL
+- [`AgencyDotNet.Sql.Sqlite`](https://www.nuget.org/packages/AgencyDotNet.Sql.Sqlite) — SQLite
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

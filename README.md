@@ -4,8 +4,8 @@
 
 [![CI](https://github.com/emreaydinceren/Agency.NET/actions/workflows/ci.yaml/badge.svg)](https://github.com/emreaydinceren/Agency.NET/actions/workflows/ci.yaml)
 [![Unit-test coverage](https://img.shields.io/codecov/c/github/emreaydinceren/Agency.NET?flag=unit&label=unit-test%20coverage)](https://codecov.io/gh/emreaydinceren/Agency.NET)
-[![NuGet](https://img.shields.io/nuget/v/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
-[![Downloads](https://img.shields.io/nuget/dt/Agency.Harness.svg)](https://www.nuget.org/packages/Agency.Harness)
+[![NuGet](https://img.shields.io/nuget/v/AgencyDotNet.Harness.svg)](https://www.nuget.org/packages/AgencyDotNet.Harness)
+[![Downloads](https://img.shields.io/nuget/dt/AgencyDotNet.Harness.svg)](https://www.nuget.org/packages/AgencyDotNet.Harness)
 [![License](https://img.shields.io/github/license/emreaydinceren/Agency.NET.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Docs](https://img.shields.io/badge/docs-site-blue.svg)](https://emreaydinceren.github.io/Agency.NET/)
@@ -35,8 +35,8 @@ That's the whole setup. 🤖 `RunConsole.ps1` is a friendly guide: it asks three
 ## 📦 Or drop it into your own app
 
 ```bash
-dotnet add package Agency.Harness
-dotnet add package Agency.Llm.Claude   # or Agency.Llm.OpenAI — also covers LM Studio & Ollama
+dotnet add package AgencyDotNet.Harness
+dotnet add package AgencyDotNet.Llm.Claude   # or AgencyDotNet.Llm.OpenAI — also covers LM Studio & Ollama
 ```
 
 ```csharp
@@ -199,11 +199,11 @@ Grouped by what they're for — the production guarantees that are genuinely har
 ### 1. Install
 
 ```bash
-dotnet add package Agency.Harness
-dotnet add package Agency.Llm.Claude              # or Agency.Llm.OpenAI
-dotnet add package Agency.Embeddings.OpenAI
-dotnet add package Agency.VectorStore.Sql.Sqlite  # or .Postgres
-dotnet add package Agency.Ingestion.SemanticKernel
+dotnet add package AgencyDotNet.Harness
+dotnet add package AgencyDotNet.Llm.Claude              # or AgencyDotNet.Llm.OpenAI
+dotnet add package AgencyDotNet.Embeddings.OpenAI
+dotnet add package AgencyDotNet.VectorStore.Sql.Sqlite  # or .Postgres
+dotnet add package AgencyDotNet.Ingestion.SemanticKernel
 ```
 
 ### 2. Ingest documents
@@ -447,34 +447,34 @@ graph TD
 
 | Package | Purpose |
 | --- | --- |
-| `Agency.Common` | `Dataset`, `IColumnMetadata`; zero-dependency shared types |
-| `Agency.Embeddings.Common` | `IEmbeddingGenerator` interface |
-| `Agency.Embeddings.OpenAI` | OpenAI-compatible embedding generator |
-| `Agency.VectorStore.Common` | `IVectorStore`, `Query`, `SearchHit<T>` |
-| `Agency.VectorStore.Sql.Postgres` | pgvector + HNSW backend |
-| `Agency.VectorStore.Sql.Sqlite` | SQLite + in-process cosine UDF |
-| `Agency.KeyValueStore.Common` | `IKVStore`, JSON metadata helpers |
-| `Agency.KeyValueStore.Sql.Postgres` | PostgreSQL KV backend |
-| `Agency.KeyValueStore.Sql.Sqlite` | SQLite KV backend |
-| `Agency.Sql.Common` | `SqlRunnerBase`: OTel + execution skeleton |
-| `Agency.Sql.Postgres` | PostgreSQL runner + `vectorize()` macro |
-| `Agency.Sql.Sqlite` | SQLite runner + `vectorize()` macro |
-| `Agency.RagFormatter` | `Dataset.ToMarkdownTable()` for context injection |
-| `Agency.Ingestion` | Abstractions + `DefaultIngestionPipeline<T>` |
-| `Agency.Ingestion.FileSystem` | File and directory loaders |
-| `Agency.Ingestion.SemanticKernel` | SK `TextChunker`-based splitter |
-| `Agency.Llm.Common` | `IModelProvider`, tool types |
-| `Agency.Llm.Claude` | Anthropic Claude provider |
-| `Agency.Llm.OpenAI` | OpenAI / OpenAI-compatible provider |
-| `Agency.Harness` | Agent loop, structured `Context`, `StopConditions`, lifecycle `AgentHooks`, `ToolRegistry` + built-in tools, `McpClientPool` (MCP client), **Loop Kit** (`GoalSpec` / Goalkeeper / `AddAgencyLoop`), `AgentEvent` stream |
-| `Agency.Harness.Console` | Multi-turn interactive REPL |
-| `Agency.Memory.Common` | Memory `Record`, `IMemoryStore`, ranking, events, `MemoryHookFactory` |
-| `Agency.Memory.Retrieval` | Read path: retrieval gate + over-fetch + composite re-rank |
-| `Agency.Memory.Distiller` | Write path + `AddAgencyMemory` DI wiring |
-| `Agency.Memory.Consolidator` | Merge/Update/Delete maintenance sub-agent |
-| `Agency.Memory.Hygiene` | TTL + low-importance garbage collection |
-| `Agency.Memory.Sql.Postgres` · `Agency.Memory.Sql.Sqlite` | Memory persistence backends |
-| `Agency.Mcp.Memory` | MCP server: scoped `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` |
+| `AgencyDotNet.Common` | `Dataset`, `IColumnMetadata`; zero-dependency shared types |
+| `AgencyDotNet.Embeddings.Common` | `IEmbeddingGenerator` interface |
+| `AgencyDotNet.Embeddings.OpenAI` | OpenAI-compatible embedding generator |
+| `AgencyDotNet.VectorStore.Common` | `IVectorStore`, `Query`, `SearchHit<T>` |
+| `AgencyDotNet.VectorStore.Sql.Postgres` | pgvector + HNSW backend |
+| `AgencyDotNet.VectorStore.Sql.Sqlite` | SQLite + in-process cosine UDF |
+| `AgencyDotNet.KeyValueStore.Common` | `IKVStore`, JSON metadata helpers |
+| `AgencyDotNet.KeyValueStore.Sql.Postgres` | PostgreSQL KV backend |
+| `AgencyDotNet.KeyValueStore.Sql.Sqlite` | SQLite KV backend |
+| `AgencyDotNet.Sql.Common` | `SqlRunnerBase`: OTel + execution skeleton |
+| `AgencyDotNet.Sql.Postgres` | PostgreSQL runner + `vectorize()` macro |
+| `AgencyDotNet.Sql.Sqlite` | SQLite runner + `vectorize()` macro |
+| `AgencyDotNet.RagFormatter` | `Dataset.ToMarkdownTable()` for context injection |
+| `AgencyDotNet.Ingestion` | Abstractions + `DefaultIngestionPipeline<T>` |
+| `AgencyDotNet.Ingestion.FileSystem` | File and directory loaders |
+| `AgencyDotNet.Ingestion.SemanticKernel` | SK `TextChunker`-based splitter |
+| `AgencyDotNet.Llm.Common` | `IModelProvider`, tool types |
+| `AgencyDotNet.Llm.Claude` | Anthropic Claude provider |
+| `AgencyDotNet.Llm.OpenAI` | OpenAI / OpenAI-compatible provider |
+| `AgencyDotNet.Harness` | Agent loop, structured `Context`, `StopConditions`, lifecycle `AgentHooks`, `ToolRegistry` + built-in tools, `McpClientPool` (MCP client), **Loop Kit** (`GoalSpec` / Goalkeeper / `AddAgencyLoop`), `AgentEvent` stream |
+| `AgencyDotNet.Harness.Console` | Multi-turn interactive REPL |
+| `AgencyDotNet.Memory.Common` | Memory `Record`, `IMemoryStore`, ranking, events, `MemoryHookFactory` |
+| `AgencyDotNet.Memory.Retrieval` | Read path: retrieval gate + over-fetch + composite re-rank |
+| `AgencyDotNet.Memory.Distiller` | Write path + `AddAgencyMemory` DI wiring |
+| `AgencyDotNet.Memory.Consolidator` | Merge/Update/Delete maintenance sub-agent |
+| `AgencyDotNet.Memory.Hygiene` | TTL + low-importance garbage collection |
+| `AgencyDotNet.Memory.Sql.Postgres` · `AgencyDotNet.Memory.Sql.Sqlite` | Memory persistence backends |
+| `AgencyDotNet.Mcp.Memory` | MCP server: scoped `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` |
 
 ## Observability
 

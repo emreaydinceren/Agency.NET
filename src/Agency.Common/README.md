@@ -5,7 +5,7 @@ Core abstractions for the Agency AI Toolkit — shared data types used across al
 ## Install
 
 ```
-dotnet add package Agency.Common
+dotnet add package AgencyDotNet.Common
 ```
 
 ## Types
@@ -21,4 +21,4 @@ dotnet add package Agency.Common
 string markdownTable = dataset.ToMarkdownTable();
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

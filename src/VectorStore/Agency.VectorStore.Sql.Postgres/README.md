@@ -5,7 +5,7 @@ PostgreSQL + pgvector implementation of `IVectorStore` for the Agency AI Toolkit
 ## Install
 
 ```
-dotnet add package Agency.VectorStore.Sql.Postgres
+dotnet add package AgencyDotNet.VectorStore.Sql.Postgres
 ```
 
 ## Prerequisites
@@ -34,4 +34,4 @@ var hits = await vectorStore.SearchAsync<MyType>(new Query
 });
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

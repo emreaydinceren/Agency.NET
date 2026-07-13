@@ -134,7 +134,14 @@ releases clean. This is a deliberate, already-made call, not an open question.
    required human approval before exchanging a short-lived GitHub OIDC token for a nuget.org API
    key and pushing — no long-lived nuget.org secret is stored anywhere. See that workflow's header
    comment for the one-time nuget.org/GitHub setup this requires.
-9. Changelog generation (RT19) is still backlog — there's no automated release-notes step yet.
+9. To publish release notes on the new GitHub Release, use GitHub's built-in generator (RT19):
+   open a Release draft for the tag on GitHub and click "Generate release notes" (or
+   `gh release create v<x.y.z> --generate-notes`). `.github/release.yml` groups the PRs it finds
+   into sections by label; unlabeled PRs land under "Other Changes". This is deliberately manual
+   and declarative, not a CI step — a fuller automated pipeline (git-cliff-generated
+   `CHANGELOG.md`, `<PackageReleaseNotes>` wired into the pack step) was evaluated and built, but
+   dropped as more ongoing upkeep than a solo, pre-1.0, not-yet-widely-used project justifies.
+   Revisit if release cadence or external contributions pick up.
 
 ## Dry-run testing without a real release
 

@@ -5,7 +5,7 @@ MCP (Model Context Protocol) memory server for the Agency AI Toolkit — exposes
 ## Install
 
 ```
-dotnet add package Agency.Mcp.Memory
+dotnet add package AgencyDotNet.Mcp.Memory
 ```
 
 ## Types
@@ -28,4 +28,4 @@ services.AddMemory(); // registers MemoryTool with IKVStore
 // - forget(scope, key)
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

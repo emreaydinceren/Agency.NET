@@ -5,7 +5,7 @@ Distiller background service for the Agency long-term memory system: episode ext
 ## Install
 
 ```
-dotnet add package Agency.Memory.Distiller
+dotnet add package AgencyDotNet.Memory.Distiller
 ```
 
 ## Types

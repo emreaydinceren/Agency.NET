@@ -5,7 +5,7 @@ PostgreSQL implementation of `IKVStore` for the Agency AI Toolkit. Uses `ILIKE` 
 ## Install
 
 ```
-dotnet add package Agency.KeyValueStore.Sql.Postgres
+dotnet add package AgencyDotNet.KeyValueStore.Sql.Postgres
 ```
 
 ## Usage
@@ -19,4 +19,4 @@ await kvStore.UpsertAsync(key: "memory:session:abc", value: myObject, metadata: 
 var hits = await kvStore.SearchAsync<MyType>(new Query { Key = "memory:session" });
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET agentic AI toolkit.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET agentic AI toolkit.

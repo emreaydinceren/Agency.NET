@@ -5,7 +5,7 @@ Retrieval engine for the Agency long-term memory system. Implements gated vector
 ## Install
 
 ```
-dotnet add package Agency.Memory.Retrieval
+dotnet add package AgencyDotNet.Memory.Retrieval
 ```
 
 ## Types

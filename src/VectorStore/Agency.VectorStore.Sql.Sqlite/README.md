@@ -5,7 +5,7 @@ SQLite implementation of `IVectorStore` for the Agency AI Toolkit. Uses JSON-arr
 ## Install
 
 ```
-dotnet add package Agency.VectorStore.Sql.Sqlite
+dotnet add package AgencyDotNet.VectorStore.Sql.Sqlite
 ```
 
 ## Usage
@@ -25,4 +25,4 @@ var hits = await vectorStore.SearchAsync<MyType>(new Query
 
 Good for development and low-volume scenarios where a PostgreSQL server isn't available.
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

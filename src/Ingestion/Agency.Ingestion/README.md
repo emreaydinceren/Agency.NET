@@ -5,7 +5,7 @@ Document ingestion pipeline abstractions for the Agency AI Toolkit — load, spl
 ## Install
 
 ```
-dotnet add package Agency.Ingestion
+dotnet add package AgencyDotNet.Ingestion
 ```
 
 ## Types
@@ -26,4 +26,4 @@ services.AddScoped(typeof(IIngestionPipeline<>), typeof(DefaultIngestionPipeline
 await pipeline.RunAsync(cancellationToken);
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

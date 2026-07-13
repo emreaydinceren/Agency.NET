@@ -5,7 +5,7 @@ Vector store abstractions for the Agency AI Toolkit — store and search embeddi
 ## Install
 
 ```
-dotnet add package Agency.VectorStore.Common
+dotnet add package AgencyDotNet.VectorStore.Common
 ```
 
 ## Types
@@ -18,7 +18,7 @@ dotnet add package Agency.VectorStore.Common
 
 Use a concrete implementation:
 
-- [`Agency.VectorStore.Sql.Postgres`](https://www.nuget.org/packages/Agency.VectorStore.Sql.Postgres) — PostgreSQL + pgvector
-- [`Agency.VectorStore.Sql.Sqlite`](https://www.nuget.org/packages/Agency.VectorStore.Sql.Sqlite) — SQLite (cosine via UDF)
+- [`AgencyDotNet.VectorStore.Sql.Postgres`](https://www.nuget.org/packages/AgencyDotNet.VectorStore.Sql.Postgres) — PostgreSQL + pgvector
+- [`AgencyDotNet.VectorStore.Sql.Sqlite`](https://www.nuget.org/packages/AgencyDotNet.VectorStore.Sql.Sqlite) — SQLite (cosine via UDF)
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

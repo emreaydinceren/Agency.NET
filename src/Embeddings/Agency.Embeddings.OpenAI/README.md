@@ -5,7 +5,7 @@ OpenAI-compatible embedding implementation for the Agency AI Toolkit. Works with
 ## Install
 
 ```
-dotnet add package Agency.Embeddings.OpenAI
+dotnet add package AgencyDotNet.Embeddings.OpenAI
 ```
 
 ## Configuration
@@ -31,4 +31,4 @@ services.AddSingleton<IEmbeddingGenerator, EmbeddingGenerator>();
 var embedding = await generator.GenerateEmbeddingAsync("search query");
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

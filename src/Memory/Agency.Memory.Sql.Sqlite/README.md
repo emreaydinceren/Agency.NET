@@ -6,7 +6,7 @@ Embedded, zero-server, with an in-process cosine UDF for similarity search.
 ## Install
 
 ```
-dotnet add package Agency.Memory.Sql.Sqlite
+dotnet add package AgencyDotNet.Memory.Sql.Sqlite
 ```
 
 ## Types

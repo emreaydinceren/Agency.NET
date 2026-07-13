@@ -5,7 +5,7 @@ Abstractions for generating text embeddings — provider-agnostic interfaces use
 ## Install
 
 ```
-dotnet add package Agency.Embeddings.Common
+dotnet add package AgencyDotNet.Embeddings.Common
 ```
 
 ## Types
@@ -24,4 +24,4 @@ services.Decorate<IEmbeddingGenerator>(
     (inner, _) => new BatchingEmbeddingGenerator(inner));
 ```
 
-Part of the [Agency AI Toolkit](https://github.com/emre/Agency) — an open-source .NET RAG pipeline.
+Part of the [Agency AI Toolkit](https://github.com/emreaydinceren/Agency.NET) — an open-source .NET RAG pipeline.

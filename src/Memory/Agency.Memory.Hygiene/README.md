@@ -5,7 +5,7 @@ Hygiene sweeper background service for the Agency long-term memory system: TTL p
 ## Install
 
 ```
-dotnet add package Agency.Memory.Hygiene
+dotnet add package AgencyDotNet.Memory.Hygiene
 ```
 
 ## Types

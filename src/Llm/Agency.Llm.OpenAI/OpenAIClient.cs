@@ -37,7 +37,7 @@ public sealed class OpenAIClient : IModelProvider
     /// </summary>
     public IChatClient CreateChatClient()
     {
-        var underlying = BuildOpenAIClient(this._options);
+        var underlying = BuildOpenAIClient(this._options, this._loggerFactory);
 
         // "default" is a placeholder; the actual model is selected per-request via ChatOptions.ModelId.
         var builder = underlying
@@ -53,14 +53,14 @@ public sealed class OpenAIClient : IModelProvider
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Model>> GetModelsAsync(CancellationToken cancellationToken = default)
     {
-        var client = BuildOpenAIClient(this._options);
+        var client = BuildOpenAIClient(this._options, this._loggerFactory);
         var result = await client.GetOpenAIModelClient().GetModelsAsync(cancellationToken);
         return result.Value
             .Select(static m => new Model(m.Id, m.Id))
             .ToList();
     }
 
-    private static global::OpenAI.OpenAIClient BuildOpenAIClient(LlmClientOptions opts)
+    private static global::OpenAI.OpenAIClient BuildOpenAIClient(LlmClientOptions opts, ILoggerFactory? loggerFactory)
     {
         var credential = new ApiKeyCredential(opts.ApiKey);
         var clientOptions = new global::OpenAI.OpenAIClientOptions();
@@ -84,6 +84,9 @@ public sealed class OpenAIClient : IModelProvider
         {
             clientOptions.AddPolicy(new SuppressThinkingPipelinePolicy(), PipelinePosition.PerCall);
         }
+
+        var logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<OpenAIClient>();
+        clientOptions.AddPolicy(new FailedRequestLoggingPipelinePolicy(logger), PipelinePosition.PerCall);
 
         return new global::OpenAI.OpenAIClient(credential, clientOptions);
     }

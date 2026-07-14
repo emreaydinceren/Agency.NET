@@ -120,8 +120,15 @@ Write-Ok "✅ Found .NET SDK v$dotnetVersionRaw - good to go!"
 
 Write-Title "🔌 Where does your LLM live?"
 Write-Info "This is the OpenAI-compatible base URL the agent will send model requests to."
-Write-Info "A local server like LM Studio (port 1234) or Ollama (port 11434) needs no real"
-Write-Info "API key. A cloud provider (any OpenAI-compatible endpoint) will need your real key."
+Write-Info "Examples - match the pattern, not just the port:"
+Write-Info "  LM Studio -> http://localhost:1234/v1"
+Write-Info "  Ollama    -> http://localhost:11434/v1"
+Write-Info "  OpenAI    -> https://api.openai.com/v1"
+Write-Info "A local server (LM Studio/Ollama) needs no real API key; a cloud provider will."
+Write-Info ""
+Write-Info "Careful: LM Studio's own UI shows you a curl example for ITS OWN native API, e.g."
+Write-Info "'http://localhost:1234/api/v1/chat' - that is NOT what goes here. Drop the '/api'"
+Write-Info "and everything after '/v1': use 'http://localhost:1234/v1' (same host and port)."
 
 $defaultBaseUrl = "http://llm.test:1234/v1"
 if (-not $BaseUrl) {
@@ -141,11 +148,20 @@ if (-not $BaseUrl) {
 
 $resolvedBaseUrl = Resolve-Answer -ParamValue $BaseUrl -Default $defaultBaseUrl -PromptText "  Base URL"
 
-if ($resolvedBaseUrl -match '/api/v1/?$') {
-    Write-Warn "⚠️  That URL ends in '/api/v1' - LM Studio and Ollama serve their OpenAI-compatible"
-    Write-Warn "   chat API at '/v1' (e.g. 'http://localhost:1234/v1'), not '/api/v1'. That's a"
-    Write-Warn "   different, non-OpenAI-shaped native API - requests here will 404."
-} elseif ($resolvedBaseUrl -notmatch '/v1/?$') {
+while ($resolvedBaseUrl -match '/api/v1(/.*)?$') {
+    Write-Warn "⚠️  LM Studio does support the OpenAI API - just not at this path. '/api/v1' (and"
+    Write-Warn "   anything under it, like '/api/v1/chat') is LM Studio's own native REST API - the"
+    Write-Warn "   'quick copy curl' snippet in its UI, with a different request/response shape than"
+    Write-Warn "   OpenAI's. Its OpenAI-compatible endpoint lives at '/v1' instead (e.g."
+    Write-Warn "   'http://localhost:1234/v1') - Agency needs that one; '/api/v1...' 404s here."
+
+    if ($NonInteractive) { break }
+
+    $suggestedFix = $resolvedBaseUrl -replace '/api/v1(/.*)?$', '/v1'
+    $resolvedBaseUrl = Resolve-Answer -ParamValue $null -Default $suggestedFix -PromptText "  Base URL (re-enter - suggested fix shown)"
+}
+
+if ($resolvedBaseUrl -notmatch '/v1/?$') {
     Write-Warn "⚠️  That URL doesn't end in '/v1' - LM Studio and Ollama serve their OpenAI-compatible"
     Write-Warn "   chat API there (e.g. 'http://localhost:1234/v1'). Double check this isn't a typo."
 }

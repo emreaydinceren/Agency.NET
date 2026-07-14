@@ -120,8 +120,11 @@ Write-Ok "✅ Found .NET SDK v$dotnetVersionRaw - good to go!"
 
 Write-Title "🔌 Where does your LLM live?"
 Write-Info "This is the OpenAI-compatible base URL the agent will send model requests to."
-Write-Info "A local server like LM Studio (port 1234) or Ollama (port 11434) needs no real"
-Write-Info "API key. A cloud provider (any OpenAI-compatible endpoint) will need your real key."
+Write-Info "Examples - match the pattern, not just the port:"
+Write-Info "  LM Studio -> http://localhost:1234/v1"
+Write-Info "  Ollama    -> http://localhost:11434/v1"
+Write-Info "  OpenAI    -> https://api.openai.com/v1"
+Write-Info "A local server (LM Studio/Ollama) needs no real API key; a cloud provider will."
 
 $defaultBaseUrl = "http://llm.test:1234/v1"
 if (-not $BaseUrl) {

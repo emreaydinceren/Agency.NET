@@ -141,6 +141,15 @@ if (-not $BaseUrl) {
 
 $resolvedBaseUrl = Resolve-Answer -ParamValue $BaseUrl -Default $defaultBaseUrl -PromptText "  Base URL"
 
+if ($resolvedBaseUrl -match '/api/v1/?$') {
+    Write-Warn "⚠️  That URL ends in '/api/v1' - LM Studio and Ollama serve their OpenAI-compatible"
+    Write-Warn "   chat API at '/v1' (e.g. 'http://localhost:1234/v1'), not '/api/v1'. That's a"
+    Write-Warn "   different, non-OpenAI-shaped native API - requests here will 404."
+} elseif ($resolvedBaseUrl -notmatch '/v1/?$') {
+    Write-Warn "⚠️  That URL doesn't end in '/v1' - LM Studio and Ollama serve their OpenAI-compatible"
+    Write-Warn "   chat API there (e.g. 'http://localhost:1234/v1'). Double check this isn't a typo."
+}
+
 # ── Interview: model name ────────────────────────────────────────────────────
 
 Write-Title "🧠 Which model should it use?"
@@ -255,7 +264,12 @@ if (-not $DryRun) {
 
 $consoleProjectRelative = "Harness\Agency.Harness.Console\Agency.Harness.Console.csproj"
 $consoleOutputDir = Join-Path $scriptDir "Harness\Agency.Harness.Console\bin\Release\net10.0"
-$buildCommandDisplay = "dotnet build `"$consoleProjectRelative`" --configuration Release"
+# The console's appsettings.json wires up the 'memory' MCP server against this project's own
+# DLL, resolved to whatever configuration the console itself was built in (see
+# McpConfigResolver.ResolveConfiguration) - it must be built here too, or the console starts
+# with that MCP server unavailable ("could not execute, file not found").
+$mcpMemoryProjectRelative = "Mcp\Agency.Mcp.Memory\Agency.Mcp.Memory.csproj"
+$buildCommandDisplay = "dotnet build `"$consoleProjectRelative`" --configuration Release && dotnet build `"$mcpMemoryProjectRelative`" --configuration Release"
 # Launch from the build-output directory: shared-appsettings.json is a linked file that only lands
 # next to appsettings.json in the output, and the host resolves config relative to its working
 # directory - running from the source project folder would miss the shared file and fail at startup.
@@ -275,6 +289,10 @@ Push-Location $scriptDir
 try {
     dotnet build $consoleProjectRelative --configuration Release
     $buildExitCode = $LASTEXITCODE
+    if ($buildExitCode -eq 0) {
+        dotnet build $mcpMemoryProjectRelative --configuration Release
+        $buildExitCode = $LASTEXITCODE
+    }
 } finally {
     Pop-Location
 }

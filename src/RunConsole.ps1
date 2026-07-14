@@ -142,10 +142,11 @@ if (-not $BaseUrl) {
 $resolvedBaseUrl = Resolve-Answer -ParamValue $BaseUrl -Default $defaultBaseUrl -PromptText "  Base URL"
 
 while ($resolvedBaseUrl -match '/api/v1/?$') {
-    Write-Warn "⚠️  That URL ends in '/api/v1' - that's LM Studio's own native REST API (the 'quick"
-    Write-Warn "   copy curl' snippet LM Studio's UI shows you calls '/api/v1/chat' with a totally"
-    Write-Warn "   different request/response shape than OpenAI's). Agency needs the OpenAI-compatible"
-    Write-Warn "   API instead, served at '/v1' (e.g. 'http://localhost:1234/v1') - '/api/v1' 404s here."
+    Write-Warn "⚠️  LM Studio does support the OpenAI API - just not at this path. '/api/v1' is LM"
+    Write-Warn "   Studio's own native REST API (the 'quick copy curl' snippet in its UI calls"
+    Write-Warn "   '/api/v1/chat', with a different request/response shape than OpenAI's). Its"
+    Write-Warn "   OpenAI-compatible endpoint lives at '/v1' instead (e.g. 'http://localhost:1234/v1')"
+    Write-Warn "   - Agency needs that one; '/api/v1' 404s on the chat/completions call it makes."
 
     if ($NonInteractive) { break }
 

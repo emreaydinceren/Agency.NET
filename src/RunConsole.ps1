@@ -125,6 +125,10 @@ Write-Info "  LM Studio -> http://localhost:1234/v1"
 Write-Info "  Ollama    -> http://localhost:11434/v1"
 Write-Info "  OpenAI    -> https://api.openai.com/v1"
 Write-Info "A local server (LM Studio/Ollama) needs no real API key; a cloud provider will."
+Write-Info ""
+Write-Info "Careful: LM Studio's own UI shows you a curl example for ITS OWN native API, e.g."
+Write-Info "'http://localhost:1234/api/v1/chat' - that is NOT what goes here. Drop the '/api'"
+Write-Info "and everything after '/v1': use 'http://localhost:1234/v1' (same host and port)."
 
 $defaultBaseUrl = "http://llm.test:1234/v1"
 if (-not $BaseUrl) {
@@ -144,16 +148,16 @@ if (-not $BaseUrl) {
 
 $resolvedBaseUrl = Resolve-Answer -ParamValue $BaseUrl -Default $defaultBaseUrl -PromptText "  Base URL"
 
-while ($resolvedBaseUrl -match '/api/v1/?$') {
-    Write-Warn "⚠️  LM Studio does support the OpenAI API - just not at this path. '/api/v1' is LM"
-    Write-Warn "   Studio's own native REST API (the 'quick copy curl' snippet in its UI calls"
-    Write-Warn "   '/api/v1/chat', with a different request/response shape than OpenAI's). Its"
-    Write-Warn "   OpenAI-compatible endpoint lives at '/v1' instead (e.g. 'http://localhost:1234/v1')"
-    Write-Warn "   - Agency needs that one; '/api/v1' 404s on the chat/completions call it makes."
+while ($resolvedBaseUrl -match '/api/v1(/.*)?$') {
+    Write-Warn "⚠️  LM Studio does support the OpenAI API - just not at this path. '/api/v1' (and"
+    Write-Warn "   anything under it, like '/api/v1/chat') is LM Studio's own native REST API - the"
+    Write-Warn "   'quick copy curl' snippet in its UI, with a different request/response shape than"
+    Write-Warn "   OpenAI's. Its OpenAI-compatible endpoint lives at '/v1' instead (e.g."
+    Write-Warn "   'http://localhost:1234/v1') - Agency needs that one; '/api/v1...' 404s here."
 
     if ($NonInteractive) { break }
 
-    $suggestedFix = $resolvedBaseUrl -replace '/api(/v1/?)$', '$1'
+    $suggestedFix = $resolvedBaseUrl -replace '/api/v1(/.*)?$', '/v1'
     $resolvedBaseUrl = Resolve-Answer -ParamValue $null -Default $suggestedFix -PromptText "  Base URL (re-enter - suggested fix shown)"
 }
 

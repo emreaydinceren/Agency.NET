@@ -141,11 +141,19 @@ if (-not $BaseUrl) {
 
 $resolvedBaseUrl = Resolve-Answer -ParamValue $BaseUrl -Default $defaultBaseUrl -PromptText "  Base URL"
 
-if ($resolvedBaseUrl -match '/api/v1/?$') {
-    Write-Warn "⚠️  That URL ends in '/api/v1' - LM Studio and Ollama serve their OpenAI-compatible"
-    Write-Warn "   chat API at '/v1' (e.g. 'http://localhost:1234/v1'), not '/api/v1'. That's a"
-    Write-Warn "   different, non-OpenAI-shaped native API - requests here will 404."
-} elseif ($resolvedBaseUrl -notmatch '/v1/?$') {
+while ($resolvedBaseUrl -match '/api/v1/?$') {
+    Write-Warn "⚠️  That URL ends in '/api/v1' - that's LM Studio's own native REST API (the 'quick"
+    Write-Warn "   copy curl' snippet LM Studio's UI shows you calls '/api/v1/chat' with a totally"
+    Write-Warn "   different request/response shape than OpenAI's). Agency needs the OpenAI-compatible"
+    Write-Warn "   API instead, served at '/v1' (e.g. 'http://localhost:1234/v1') - '/api/v1' 404s here."
+
+    if ($NonInteractive) { break }
+
+    $suggestedFix = $resolvedBaseUrl -replace '/api(/v1/?)$', '$1'
+    $resolvedBaseUrl = Resolve-Answer -ParamValue $null -Default $suggestedFix -PromptText "  Base URL (re-enter - suggested fix shown)"
+}
+
+if ($resolvedBaseUrl -notmatch '/v1/?$') {
     Write-Warn "⚠️  That URL doesn't end in '/v1' - LM Studio and Ollama serve their OpenAI-compatible"
     Write-Warn "   chat API there (e.g. 'http://localhost:1234/v1'). Double check this isn't a typo."
 }

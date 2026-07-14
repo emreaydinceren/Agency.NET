@@ -45,14 +45,18 @@ public sealed partial class Models
 
     private readonly ILogger<Models> _logger;
 
+    private readonly ILoggerFactory? _loggerFactory;
+
     private IEnumerable<LlmClientOptions> _llmClientOptions => this._agentOptions.Value.LLmClients;
 
     /// <param name="agentOptions">Supplies the configured <see cref="LlmClientOptions"/> to discover models from and create clients for.</param>
     /// <param name="logger">Optional structured logger; defaults to <see cref="NullLogger{T}.Instance"/>.</param>
-    public Models(IOptions<AgentOptions> agentOptions, ILogger<Models>? logger = null)
+    /// <param name="loggerFactory">Passed through to created clients (e.g. so <see cref="OpenAIClient"/> can log failed HTTP requests); optional.</param>
+    public Models(IOptions<AgentOptions> agentOptions, ILogger<Models>? logger = null, ILoggerFactory? loggerFactory = null)
     {
         this._agentOptions = agentOptions ?? throw new ArgumentNullException(nameof(agentOptions));
         this._logger = logger ?? NullLogger<Models>.Instance;
+        this._loggerFactory = loggerFactory;
     }
 
     /// <summary>Queries every configured LLM client for its available models.</summary>
@@ -141,7 +145,7 @@ public sealed partial class Models
             {
                 activity?.SetTag("agentic.models.client_type", options.ClientType);
                 this.LogResolvedClient(options.Name, options.ClientType);
-                return CreateChatClient(options);
+                return this.CreateChatClient(options);
             }
         }
 
@@ -150,12 +154,12 @@ public sealed partial class Models
         throw new InvalidOperationException($"No LLM client configuration found with name '{clientName}'.");
     }
 
-    private static (IChatClient Client, string ClientType) CreateChatClient(LlmClientOptions options)
+    private (IChatClient Client, string ClientType) CreateChatClient(LlmClientOptions options)
     {
         return options.ClientType.ToUpperInvariant() switch
         {
             "CLAUDE" => (new ClaudeClient(options).CreateChatClient(), "Claude"),
-            "OPENAI" => (new OpenAIClient(options).CreateChatClient(), "OpenAI"),
+            "OPENAI" => (new OpenAIClient(options, this._loggerFactory).CreateChatClient(), "OpenAI"),
             _ => throw new InvalidOperationException($"Unsupported provider '{options.ClientType}'."),
         };
     }

@@ -51,6 +51,26 @@ internal sealed class ConsoleInputReader(IChatOutput output)
         var buffer = new StringBuilder();
         int historyIndex = this._history.Count;
 
+        // Collapses the rule/input/rule box into a single highlighted echo line and
+        // returns result, as if the user had typed it and pressed Enter. Uses RELATIVE
+        // cursor moves plus an erase-to-end-of-display rather than absolute SetPosition:
+        // absolute row numbers go stale the instant the terminal scrolls (which happens
+        // whenever the prompt is drawn near the bottom of a populated window), leaving
+        // blank gaps and a duplicated prompt behind. Relative moves are unaffected by scrolling.
+        string Submit(string result)
+        {
+            if (!string.IsNullOrWhiteSpace(result))
+            {
+                this._history.Add(result);
+            }
+
+            System.Console.Write('\r');                                  // column 0 of the current input row
+            AnsiConsole.Cursor.MoveUp(result.Split('\n').Length);         // up to the top rule row
+            System.Console.Write("\u001b[0J");                           // erase top rule, input rows, bottom rule
+            output.WriteLineMarkup($"[white on Gray19]{Markup.Remove(markup)}{result}[/]");
+            return result;
+        }
+
         while (true)
         {
             if (ct.IsCancellationRequested)
@@ -98,24 +118,7 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                 break;
 
                 case ConsoleKey.Enter:
-
-                string result = buffer.ToString();
-                if (!string.IsNullOrWhiteSpace(result))
-                {
-                    this._history.Add(result);
-                }
-
-                // Collapse the rule/input/rule box into a single highlighted echo line.
-                // Use RELATIVE cursor moves plus an erase-to-end-of-display rather than
-                // absolute SetPosition: absolute row numbers go stale the instant the
-                // terminal scrolls (which happens whenever the prompt is drawn near the
-                // bottom of a populated window), leaving blank gaps and a duplicated
-                // prompt behind. Relative moves are unaffected by scrolling.
-                System.Console.Write('\r');               // column 0 of the current input row
-                AnsiConsole.Cursor.MoveUp(inputRowCount);  // up to the top rule row
-                System.Console.Write("\u001b[0J");         // erase top rule, input rows, bottom rule
-                output.WriteLineMarkup($"[white on Gray19]{Markup.Remove(markup)}{result}[/]");
-                return result;
+                return Submit(buffer.ToString());
 
                 case ConsoleKey.Backspace when buffer.Length > 0 && inputRowCount > 1 && System.Console.CursorLeft == leftMargin:
                 AnsiConsole.Cursor.Show();
@@ -209,6 +212,20 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                         buffer.Clear();
                         buffer.Append(picked);
                         output.Write(picked);
+
+                        // Commands that take an argument need the buffer left open so the
+                        // user can type it; argument-less commands submit immediately.
+                        bool requiresArgument = CommandRegistry.Commands
+                            .Any(cmd => cmd.CommandText == picked && cmd.ArgumentHint is not null);
+                        if (requiresArgument)
+                        {
+                            buffer.Append(' ');
+                            output.Write(" ");
+                        }
+                        else
+                        {
+                            return Submit(picked);
+                        }
                     }
                 }
                 else if (key.KeyChar >= 32)

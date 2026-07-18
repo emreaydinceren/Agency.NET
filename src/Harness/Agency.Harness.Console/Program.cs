@@ -50,7 +50,16 @@ internal class Program
 
         try
         {
-            var builder = Host.CreateApplicationBuilder(args);
+            // Pin the content root to the assembly's own directory rather than the process's current
+            // working directory (the Generic Host default). Otherwise `dotnet run --project <path>` -
+            // which does not chdir into the target project before launching - silently misses
+            // appsettings.json/shared-appsettings.json (the JSON provider is optional) and the app
+            // starts with an effectively empty configuration.
+            var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+            {
+                Args = args,
+                ContentRootPath = AppContext.BaseDirectory,
+            });
 
             // 1. Configuration:
             // Host.CreateApplicationBuilder automatically handles appsettings,

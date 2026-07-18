@@ -6,7 +6,7 @@ namespace Agency.Harness.Test.Fakes;
 /// </summary>
 internal sealed class FakeChatClient : IChatClient
 {
-    private readonly Queue<ChatResponse> _responses = new();
+    private readonly Queue<object> _responses = new();
 
     /// <summary>Gets the number of times <c>GetResponseAsync</c> was called.</summary>
     public int GetResponseCallCount { get; private set; }
@@ -19,6 +19,9 @@ internal sealed class FakeChatClient : IChatClient
 
     /// <summary>Enqueues a response returned on the next <c>GetResponseAsync</c> call.</summary>
     public void EnqueueResponse(ChatResponse response) => _responses.Enqueue(response);
+
+    /// <summary>Enqueues an exception to be thrown on the next <c>GetResponseAsync</c> call.</summary>
+    public void EnqueueException(Exception exception) => _responses.Enqueue(exception);
 
     /// <inheritdoc/>
     public ChatClientMetadata Metadata { get; } = new("FakeChatClient", null, null);
@@ -46,7 +49,13 @@ internal sealed class FakeChatClient : IChatClient
                 $"FakeChatClient has no more queued responses (call #{GetResponseCallCount}).");
         }
 
-        return Task.FromResult(_responses.Dequeue());
+        object next = _responses.Dequeue();
+        if (next is Exception ex)
+        {
+            throw ex;
+        }
+
+        return Task.FromResult((ChatResponse)next);
     }
 
     /// <inheritdoc/>

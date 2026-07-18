@@ -329,6 +329,15 @@ internal sealed partial class ConsoleChatSession : IDisposable
                     this.output.WriteLine("yellow", "  [interrupted]");
                     interrupted = true;
                 }
+                catch (Exception ex)
+                {
+                    // A single bad turn (e.g. a flaky LLM backend response) should not end the whole
+                    // console session — report it and let the user keep chatting.
+                    this.output.StopSpinner();
+                    this.LogTurnFailed(ex, this._agent.ClientType, this._agent.Model);
+                    this.output.WriteLine("red", $"  [turn failed] {ex.Message}");
+                    interrupted = true;
+                }
 
                 if (!interrupted)
                 {
@@ -754,6 +763,10 @@ internal sealed partial class ConsoleChatSession : IDisposable
     /// <summary>Logs that a console chat session failed.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "Console chat session failed. ClientType={ClientType}, Model={Model}")]
     private partial void LogSessionFailed(Exception ex, string clientType, string model);
+
+    /// <summary>Logs that a single chat turn failed without ending the session.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Console chat turn failed. ClientType={ClientType}, Model={Model}")]
+    private partial void LogTurnFailed(Exception ex, string clientType, string model);
 
     /// <summary>Logs that a console chat session completed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "Console chat session completed. Turns={Turns}, DurationMs={DurationMs}")]

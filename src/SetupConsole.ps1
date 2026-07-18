@@ -172,8 +172,18 @@ while ($resolvedBaseUrl -match '/api/v1(/.*)?$') {
 }
 
 if ($resolvedBaseUrl -notmatch '/v1/?$') {
+    $suggestedFix = "$($resolvedBaseUrl.TrimEnd('/'))/v1"
     Write-Warn "⚠️  That URL doesn't end in '/v1' - LM Studio and Ollama serve their OpenAI-compatible"
-    Write-Warn "   chat API there (e.g. 'http://localhost:1234/v1'). Double check this isn't a typo."
+    Write-Warn "   chat API there (e.g. 'http://localhost:1234/v1'). Without it, requests land on a route"
+    Write-Warn "   these servers don't recognize - and LM Studio, in particular, responds 200 anyway with"
+    Write-Warn "   an empty/garbled result instead of a clear 404, so a missing '/v1' is very easy to miss."
+
+    if ($NonInteractive) {
+        $resolvedBaseUrl = $suggestedFix
+        Write-Warn "   Auto-appending '/v1' -> $resolvedBaseUrl"
+    } else {
+        $resolvedBaseUrl = Resolve-Answer -ParamValue $null -Default $suggestedFix -PromptText "  Base URL (re-enter - suggested fix shown)"
+    }
 }
 
 # ── Interview: model name ────────────────────────────────────────────────────

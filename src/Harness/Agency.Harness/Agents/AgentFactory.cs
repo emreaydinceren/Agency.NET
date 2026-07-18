@@ -52,7 +52,9 @@ public sealed class AgentFactory : IAgentFactory
     {
         clientName = !string.IsNullOrEmpty(clientName)
             ? clientName
-            : this.options.DefaultClientName ?? throw new InvalidOperationException("DefaultClientName must be specified in the configuration.");
+            : !string.IsNullOrEmpty(this.options.DefaultClientName)
+                ? this.options.DefaultClientName
+                : throw new InvalidOperationException("DefaultClientName must be specified in the configuration.");
 
         modelName = !string.IsNullOrEmpty(modelName)
             ? modelName

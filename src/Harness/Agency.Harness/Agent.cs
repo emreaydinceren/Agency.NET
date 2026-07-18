@@ -617,7 +617,21 @@ public sealed partial class Agent
 
             // 4. Call the LLM.
             var llmSw = Stopwatch.StartNew();
-            var response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+            ChatResponse response;
+            try
+            {
+                response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+            }
+            catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "index")
+            {
+                // Known upstream issue: some OpenAI-compatible backends (e.g. LM Studio) occasionally
+                // return a 200 response with an empty `choices` array - typically when grammar-constrained
+                // tool-call generation fails for a given model/tool-schema combination. The OpenAI SDK's
+                // ChatCompletion.Role getter indexes into that empty array and throws instead of the
+                // backend surfacing a proper error. Retry once; most occurrences are transient.
+                this.LogEmptyChoicesRetry(this._model, this._clientType);
+                response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+            }
             llmSw.Stop();
             var lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
                 ?? new ChatMessage(ChatRole.Assistant, []);
@@ -1029,6 +1043,10 @@ public sealed partial class Agent
     /// <summary>Logs that an agent chat turn failed.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "Agent chat turn failed. Model={Model}, ClientType={ClientType}")]
     private partial void LogChatTurnFailed(Exception ex, string model, string clientType);
+
+    /// <summary>Logs that the LLM returned an empty <c>choices</c> array and the call is being retried once.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM response had no choices (likely a malformed backend response). Retrying once. Model={Model}, ClientType={ClientType}")]
+    private partial void LogEmptyChoicesRetry(string model, string clientType);
 
     /// <summary>Logs that an agent chat turn completed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "Agent chat turn completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}")]

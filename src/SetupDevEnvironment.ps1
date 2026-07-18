@@ -4,7 +4,7 @@
 .DESCRIPTION
     Prompts you for each secret with an explanation of what it's for,
     then writes them to the correct user-secrets folder via `dotnet user-secrets set`.
-    Run from src\: .\SetupLocal.ps1
+    Run from src\: .\SetupDevEnvironment.ps1
 #>
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

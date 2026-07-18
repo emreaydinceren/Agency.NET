@@ -70,7 +70,7 @@ regex = '''\b[a-z0-9][a-z0-9-]*\.local(?::[0-9]+)?(?:[/'"`:;,)\]}<>|\s]|$)'''
     '''(^|/)docker/docker run$''',
     '''(^|/)src/NuGet\.Config$''',
     '''(^|/)src/shared-appsettings\.json$''',
-    '''(^|/)src/SetupLocal\.ps1$''',
+    '''(^|/)src/SetupDevEnvironment\.ps1$''',
     '''(^|/)Agents/Releasing\.md$''',
   ]
 

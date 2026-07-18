@@ -2,7 +2,7 @@
 
 This document is the single reference for every configuration key in the Agency solution — where it lives, what it does, and which projects consume it.
 
-Run `src\SetupLocal.ps1` from the repo root to be prompted for secrets interactively. The script writes them into the correct `dotnet user-secrets` vaults automatically.
+Run `src\SetupDevEnvironment.ps1` from the repo root to be prompted for secrets interactively. The script writes them into the correct `dotnet user-secrets` vaults automatically.
 
 ---
 
@@ -518,7 +518,7 @@ Configures file-based traces, metrics, and structured logs exported by Harness.C
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `OpenTelemetry:ServiceName` | string | `"Agency.Harness.Console"` | OTel `service.name` resource attribute. Per-installation preference; set via `SetupLocal.ps1`. |
+| `OpenTelemetry:ServiceName` | string | `"Agency.Harness.Console"` | OTel `service.name` resource attribute. Per-installation preference; set via `SetupDevEnvironment.ps1`. |
 | `OpenTelemetry:FileExport:OutputDirectory` | string | `"./logs"` | Directory created at startup if absent. |
 | `OpenTelemetry:FileExport:Traces:Enabled` | bool | `true` | Exports spans to `traces-yyyy-MM-dd.log`. ON by default; set to `false` via user-secrets to disable. |
 | `OpenTelemetry:FileExport:Traces:FilePrefix` | string | `"traces"` | Log file name prefix. Per-installation preference. |
@@ -611,10 +611,10 @@ Test-only configuration for functional LLM tests in `Agency.Llm.Test`. API keys 
 |---|---|---|
 | `LlmTest:OpenAI:BaseUrl` | string | Endpoint for OpenAI-compatible tests. Default points at the local test proxy. |
 | `LlmTest:OpenAI:Model` | string | Model id used in functional tests. |
-| `LlmTest:OpenAI:ApiKey` | string | **Secret.** Set via `SetupLocal.ps1`. |
+| `LlmTest:OpenAI:ApiKey` | string | **Secret.** Set via `SetupDevEnvironment.ps1`. |
 | `LlmTest:Claude:BaseUrl` | string | Endpoint for Claude API tests. |
 | `LlmTest:Claude:Model` | string | Model id used in functional tests. |
-| `LlmTest:Claude:ApiKey` | string | **Secret.** Set via `SetupLocal.ps1`. |
+| `LlmTest:Claude:ApiKey` | string | **Secret.** Set via `SetupDevEnvironment.ps1`. |
 
 ```json
 "LlmTest": {
@@ -736,7 +736,7 @@ Projects in this vault: `Agency.Sql.Postgres.Test`, `Agency.Llm.Test`, `Agency.V
 
 Used exclusively by `Agency.Harness.Console`. None of these values are sensitive credentials — they are per-installation preferences stored in user-secrets purely to keep them out of the committed `appsettings.json`.
 
-The `SetupLocal.ps1` script prompts for all of the `OpenTelemetry` values interactively and writes them here. You can also set them directly:
+The `SetupDevEnvironment.ps1` script prompts for all of the `OpenTelemetry` values interactively and writes them here. You can also set them directly:
 
 ```powershell
 dotnet user-secrets set -p src\Harness\Agency.Harness.Console "OpenTelemetry:ServiceName" "MyInstallation"

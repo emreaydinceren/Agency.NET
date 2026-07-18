@@ -134,14 +134,71 @@ releases clean. This is a deliberate, already-made call, not an open question.
    required human approval before exchanging a short-lived GitHub OIDC token for a nuget.org API
    key and pushing — no long-lived nuget.org secret is stored anywhere. See that workflow's header
    comment for the one-time nuget.org/GitHub setup this requires.
-9. To publish release notes on the new GitHub Release, use GitHub's built-in generator (RT19):
-   open a Release draft for the tag on GitHub and click "Generate release notes" (or
-   `gh release create v<x.y.z> --generate-notes`). `.github/release.yml` groups the PRs it finds
-   into sections by label; unlabeled PRs land under "Other Changes". This is deliberately manual
-   and declarative, not a CI step — a fuller automated pipeline (git-cliff-generated
-   `CHANGELOG.md`, `<PackageReleaseNotes>` wired into the pack step) was evaluated and built, but
-   dropped as more ongoing upkeep than a solo, pre-1.0, not-yet-widely-used project justifies.
-   Revisit if release cadence or external contributions pick up.
+9. The `publish` job also generates a CycloneDX SBOM (RT46) and creates the GitHub Release for the
+   tag itself, attaching the SBOM to it and filling in the release notes automatically from
+   `.github/release.yml`'s PR-label grouping (RT19) — nothing to do by hand for either. A fuller
+   automated pipeline (git-cliff-generated `CHANGELOG.md`, `<PackageReleaseNotes>` wired into the
+   pack step) was evaluated and built, but dropped as more ongoing upkeep than a solo, pre-1.0,
+   not-yet-widely-used project justifies. Revisit if release cadence or external contributions
+   pick up.
+
+## Cutting the first release — v0.1.0
+
+This is a concrete walkthrough of "How to cut a real release" above, for the one release that
+matters most: the first one (RT3). The steps are the same steps, just spelled out plainly with
+the decisions already made and the current state confirmed.
+
+**Decisions already made, so you don't have to re-litigate them:**
+
+- **Version is `0.1.0`, not `1.0.0`.** SemVer allows breaking changes on minor bumps before 1.0.
+  Shipping `1.0.0` on day one would claim a stability guarantee this project hasn't earned — no
+  adopters yet, API still moving. `0.1.0` is the honest number for "real, but not battle-tested."
+- **Package prefix is `AgencyDotNet.*`, not `Agency.*`.** nuget.org silently blocked the
+  `Agency.*` prefix on an earlier attempt (see RT55/RT56); every package ID has already been
+  renamed to `AgencyDotNet.*` to work around it.
+- **Every dependency RT3 was waiting on is done:** versioning (NBGV), package metadata, the
+  nuget.org publish workflow, the LICENSE, the secret scrub, and the package rename.
+
+**One thing still to decide before you start:** which packages actually ship — all ~30 packable
+projects, or a smaller subset you're confident is stable? Publishing a half-working package is
+worse than not publishing it at all. If you don't have a reason to hold any back, ship all of
+them — none has been flagged as broken.
+
+**Step by step:**
+
+1. Make sure `main` has everything you want in this release. Once the tag is pushed, that commit
+   is permanent — a mistake can be patched forward, not erased.
+2. From `main`, run `nbgv tag`. Don't hand-type the tag — NBGV computes the version from git
+   height, not from the tag text, so a hand-typed tag can silently name the wrong version.
+   `nbgv tag` reads NBGV's own computed version and creates the matching tag for you.
+3. Push it: `git push origin v0.1.0` (or whatever `nbgv tag` actually named it — check with
+   `git describe --tags` if you're not sure).
+4. Watch the Gitea Actions run this triggers. It builds, tests, packs, and publishes to the
+   private Gitea feed, then runs the RT39 install-check. Confirm everything is green, especially
+   the tag-assertion step and the install-check — a problem caught here is cheap to fix; a
+   problem caught after nuget.org has the package is not, since nuget.org has no delete, only
+   unlist.
+5. Once Gitea is green, run the guarded sync (`sync-github.yaml`, triggered by hand on Gitea
+   Actions) to mirror `main` and the new tag to GitHub. This is the only path anything takes to
+   reach GitHub — it's a scripted push, not a plain mirror, because it also strips internal
+   hostnames, IPs, and your personal email out of the mirrored history on every single run.
+6. On GitHub, the tag triggers `release.yaml` automatically. It re-checks the tag against NBGV's
+   computed version, then rebuilds and re-tests everything from scratch — it doesn't trust
+   whatever Gitea already built.
+7. The workflow then stops and waits for you to approve the `nuget-release` environment in the
+   GitHub Actions UI. This is the one deliberate human checkpoint in the whole pipeline — nothing
+   reaches nuget.org without you clicking approve.
+8. Once approved, the workflow pushes every package to nuget.org, creates a GitHub Release for
+   the tag, attaches the generated SBOM to it, and fills in categorized release notes
+   automatically from the PR labels. None of that last part needs a manual step.
+9. Confirm it actually worked, not just that the workflow said "success": in a scratch folder,
+   run `dotnet add package AgencyDotNet.Configuration --version 0.1.0` and check that it restores
+   and the assembly loads. This — "installable from nuget.org" — is RT3's real acceptance bar,
+   not "the workflow turned green."
+10. Update the tracker: mark RT3 done, record the version that actually shipped, and note that
+    this run is also the first real, live exercise of RT15 (nuget.org publish), RT46 (SBOM), and
+    RT19 (release notes) — all three were built and reviewed beforehand, but never run for real
+    until this release.
 
 ## Dry-run testing without a real release
 

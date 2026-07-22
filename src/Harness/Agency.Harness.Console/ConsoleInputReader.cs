@@ -50,6 +50,7 @@ internal sealed class ConsoleInputReader(IChatOutput output)
 
         var buffer = new StringBuilder();
         int historyIndex = this._history.Count;
+        int cursorIndex = 0;
 
         // Collapses the rule/input/rule box into a single highlighted echo line and
         // returns result, as if the user had typed it and pressed Enter. Uses RELATIVE
@@ -110,6 +111,7 @@ internal sealed class ConsoleInputReader(IChatOutput output)
             {
                 case ConsoleKey.Enter when (keyInfo.Value.Modifiers & ConsoleModifiers.Control) != 0:
                 buffer.Append(Environment.NewLine);
+                cursorIndex = buffer.Length;
                 output.WriteLine();
                 output.WriteLine(toClear);
                 AnsiConsole.Console.Write(rule);
@@ -127,43 +129,86 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                 inputRowCount--;
                 var newLineLength = Environment.NewLine.Length;
                 buffer.Remove(buffer.Length - newLineLength, newLineLength);
+                cursorIndex = buffer.Length;
                 var lengthOfLastLine = buffer.ToString().Split('\n').Last().Length;
                 AnsiConsole.Cursor.SetPosition(0, initialCursorTop + inputRowCount + 2);
                 AnsiConsole.Console.Write(rule);
                 AnsiConsole.Cursor.SetPosition(leftMargin + lengthOfLastLine + 1, initialCursorTop + inputRowCount + 1);
                 break;
 
-                case ConsoleKey.Backspace when buffer.Length > 0:
+                case ConsoleKey.Backspace when buffer.Length > 0 && cursorIndex > 0:
                 AnsiConsole.Cursor.Show();
-                buffer.Remove(buffer.Length - 1, 1);
-                output.Write("\b \b");
+                {
+                    string textBeforeBackspace = buffer.ToString();
+                    string tail = textBeforeBackspace.Substring(cursorIndex, RowEndIndex(textBeforeBackspace, cursorIndex) - cursorIndex);
+                    buffer.Remove(cursorIndex - 1, 1);
+                    cursorIndex--;
+                    AnsiConsole.Cursor.MoveLeft();
+                    output.Write(tail + " ");
+                    AnsiConsole.Cursor.MoveLeft(tail.Length + 1);
+                }
+
                 break;
 
-                case ConsoleKey.LeftArrow when System.Console.CursorLeft > leftMargin:
+                case ConsoleKey.Delete when cursorIndex < RowEndIndex(buffer.ToString(), cursorIndex):
+                AnsiConsole.Cursor.Show();
+                {
+                    string textBeforeDelete = buffer.ToString();
+                    string tail = textBeforeDelete.Substring(cursorIndex + 1, RowEndIndex(textBeforeDelete, cursorIndex) - (cursorIndex + 1));
+                    buffer.Remove(cursorIndex, 1);
+                    output.Write(tail + " ");
+                    AnsiConsole.Cursor.MoveLeft(tail.Length + 1);
+                }
+
+                break;
+
+                case ConsoleKey.LeftArrow when cursorIndex > RowStartIndex(buffer.ToString(), cursorIndex):
                 AnsiConsole.Cursor.MoveLeft();
+                cursorIndex--;
                 break;
 
                 case ConsoleKey.Home:
+                cursorIndex = RowStartIndex(buffer.ToString(), cursorIndex);
                 AnsiConsole.Cursor.SetPosition(leftMargin + 1, System.Console.CursorTop + 1);
                 break;
 
                 case ConsoleKey.End:
-                AnsiConsole.Cursor.SetPosition(buffer.Length + leftMargin + 1, System.Console.CursorTop + 1);
+                {
+                    string text = buffer.ToString();
+                    int rowStart = RowStartIndex(text, cursorIndex);
+                    int rowEnd = RowEndIndex(text, cursorIndex);
+                    cursorIndex = rowEnd;
+                    AnsiConsole.Cursor.SetPosition(leftMargin + (rowEnd - rowStart) + 1, System.Console.CursorTop + 1);
+                }
+
                 break;
 
-                case ConsoleKey.RightArrow when System.Console.CursorLeft < buffer.Length + leftMargin:
+                case ConsoleKey.RightArrow when cursorIndex < RowEndIndex(buffer.ToString(), cursorIndex):
                 AnsiConsole.Cursor.MoveRight();
+                cursorIndex++;
                 break;
 
                 case ConsoleKey.Escape:
                 ReplaceBufferLine(buffer, "");
                 buffer.Clear();
+                cursorIndex = 0;
                 break;
 
                 case ConsoleKey.UpArrow:
                 if (inputRowCount > 1 && System.Console.CursorTop > initialCursorTop + 1)
                 {
+                    string text = buffer.ToString();
+                    int col = cursorIndex - RowStartIndex(text, cursorIndex);
+                    int targetRow = System.Console.CursorTop - (initialCursorTop + 1) - 1;
                     AnsiConsole.Cursor.MoveUp();
+                    int newCursorIndex = IndexFromRowCol(text, targetRow, col);
+                    int newCol = newCursorIndex - RowStartIndex(text, newCursorIndex);
+                    if (newCol != col)
+                    {
+                        AnsiConsole.Cursor.MoveLeft(col - newCol);
+                    }
+
+                    cursorIndex = newCursorIndex;
                 }
                 else if (historyIndex > 0)
                 {
@@ -171,6 +216,7 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                     ReplaceBufferLine(buffer, this._history[historyIndex]);
                     buffer.Clear();
                     buffer.Append(this._history[historyIndex]);
+                    cursorIndex = buffer.Length;
                 }
 
                 break;
@@ -178,7 +224,18 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                 case ConsoleKey.DownArrow:
                 if (inputRowCount > 1 && System.Console.CursorTop < initialCursorTop + inputRowCount)
                 {
+                    string text = buffer.ToString();
+                    int col = cursorIndex - RowStartIndex(text, cursorIndex);
+                    int targetRow = System.Console.CursorTop - (initialCursorTop + 1) + 1;
                     AnsiConsole.Cursor.MoveDown();
+                    int newCursorIndex = IndexFromRowCol(text, targetRow, col);
+                    int newCol = newCursorIndex - RowStartIndex(text, newCursorIndex);
+                    if (newCol != col)
+                    {
+                        AnsiConsole.Cursor.MoveLeft(col - newCol);
+                    }
+
+                    cursorIndex = newCursorIndex;
                 }
                 else if (historyIndex < this._history.Count - 1)
                 {
@@ -186,12 +243,14 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                     ReplaceBufferLine(buffer, this._history[historyIndex]);
                     buffer.Clear();
                     buffer.Append(this._history[historyIndex]);
+                    cursorIndex = buffer.Length;
                 }
                 else
                 {
                     historyIndex = this._history.Count;
                     ReplaceBufferLine(buffer, "");
                     buffer.Clear();
+                    cursorIndex = 0;
                 }
 
                 break;
@@ -226,17 +285,75 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                         {
                             return Submit(picked);
                         }
+
+                        cursorIndex = buffer.Length;
                     }
                 }
                 else if (key.KeyChar >= 32)
                 {
-                    buffer.Append(key.KeyChar);
-                    output.Write(key.KeyChar.ToString());
+                    string text = buffer.ToString();
+                    string tail = text.Substring(cursorIndex, RowEndIndex(text, cursorIndex) - cursorIndex);
+                    buffer.Insert(cursorIndex, key.KeyChar);
+                    cursorIndex++;
+                    output.Write(key.KeyChar + tail);
+                    if (tail.Length > 0)
+                    {
+                        AnsiConsole.Cursor.MoveLeft(tail.Length);
+                    }
                 }
 
                 break;
             }
         }
+    }
+
+    /// <summary>Index of the start of the row (delimited by <see cref="Environment.NewLine"/>) containing <paramref name="cursor"/>.</summary>
+    private static int RowStartIndex(string text, int cursor)
+    {
+        string newLine = Environment.NewLine;
+        int start = 0;
+        int i = 0;
+        while (i <= cursor - newLine.Length)
+        {
+            if (string.CompareOrdinal(text, i, newLine, 0, newLine.Length) == 0)
+            {
+                start = i + newLine.Length;
+                i += newLine.Length;
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        return start;
+    }
+
+    /// <summary>Index of the end of the row (delimited by <see cref="Environment.NewLine"/>) containing <paramref name="cursor"/>.</summary>
+    private static int RowEndIndex(string text, int cursor)
+    {
+        int idx = text.IndexOf(Environment.NewLine, cursor, StringComparison.Ordinal);
+        return idx < 0 ? text.Length : idx;
+    }
+
+    /// <summary>Maps a (row, column) pair back to a buffer index, clamping <paramref name="col"/> to the target row's length.</summary>
+    private static int IndexFromRowCol(string text, int row, int col)
+    {
+        string newLine = Environment.NewLine;
+        int i = 0;
+        for (int r = 0; r < row; r++)
+        {
+            int found = text.IndexOf(newLine, i, StringComparison.Ordinal);
+            if (found < 0)
+            {
+                return text.Length;
+            }
+
+            i = found + newLine.Length;
+        }
+
+        int rowEnd = RowEndIndex(text, i);
+        return i + Math.Min(col, rowEnd - i);
     }
 
     private void ReplaceBufferLine(StringBuilder current, string replacement)

@@ -14,7 +14,7 @@ namespace Agency.Harness.Console;
 /// </summary>
 internal static class McpConfigResolver
 {
-    private const string RepoRootToken = "${RepoRoot}";
+    internal const string RepoRootToken = "${RepoRoot}";
     private const string ConfigurationToken = "${Configuration}";
     private const string GitHubTokenToken = "${GitHubToken}";
 

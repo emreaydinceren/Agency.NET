@@ -44,6 +44,7 @@ public sealed class OpenAIClient : IModelProvider
             .GetChatClient("default")
             .AsIChatClient()
             .AsBuilder()
+            .Use(inner => new DescriptiveErrorChatClient(inner))
             .UseOpenTelemetry()
             .UseLogging(this._loggerFactory ?? NullLoggerFactory.Instance);
 

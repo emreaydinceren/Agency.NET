@@ -36,6 +36,14 @@ internal static class TelemetryServiceCollectionExtensions
         TelemetryOptions options = new();
         configuration.GetSection("OpenTelemetry").Bind(options);
 
+        // Resolve the ${RepoRoot} token (same convention as MCP server paths in appsettings.json) so
+        // log/trace/metric files land in a stable location regardless of the process's working
+        // directory at launch, which varies with how the console is started (RunConsole.ps1, `dotnet
+        // run`, an IDE debugger, etc.).
+        string repoRoot = McpConfigResolver.FindRepoRoot(AppContext.BaseDirectory) ?? AppContext.BaseDirectory;
+        options.FileExport.OutputDirectory = options.FileExport.OutputDirectory.Replace(
+            McpConfigResolver.RepoRootToken, repoRoot, StringComparison.Ordinal);
+
         Directory.CreateDirectory(options.FileExport.OutputDirectory);
 
         ResourceBuilder resource = ResourceBuilder.CreateDefault()

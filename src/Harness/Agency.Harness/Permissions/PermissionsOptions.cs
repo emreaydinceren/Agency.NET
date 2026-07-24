@@ -37,7 +37,8 @@ internal sealed class PermissionsOptions
 
     /// <summary>
     /// Path to the per-machine user-grant file.
-    /// <see langword="null"/> → default <c>permissions.local.json</c> next to the application.
+    /// <see langword="null"/> → default <c>%LocalAppData%\Agency\permissions.local.json</c>
+    /// (stable across build configurations and app relocations).
     /// </summary>
     public string? LocalRulesPath { get; set; }
 

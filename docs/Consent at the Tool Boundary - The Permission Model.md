@@ -758,8 +758,11 @@ places.
 
 - `Enabled: false` short-circuits the evaluator to Allow (ops kill switch, `PermissionEvaluator.cs:78`).
 - `OnUnresolved: "Deny"` makes unresolved calls fail closed — for CI and unattended runs (§8.2).
-- `LocalRulesPath: null` → default `permissions.local.json` next to the app
-  (`PermissionEvaluator.cs:63`).
+- `LocalRulesPath: null` → default `%LocalAppData%\Agency\permissions.local.json`, a stable
+  per-user location (`PermissionEvaluator.cs:63-77`). The containing directory is created on first
+  use, since `%LocalAppData%\Agency` may not yet exist (`PermissionEvaluator.cs:73-77`). Earlier
+  versions defaulted to `AppContext.BaseDirectory` — next to whichever build output happened to be
+  running — which silently split grants between `bin/Debug` and `bin/Release`; see risk 11 below.
 - Malformed rules **fail fast at startup** via `PermissionsOptionsValidator.Validate`
   (`PermissionServiceCollectionExtensions.cs:33`), consistent with `HooksOptionsValidator`.
 
@@ -843,6 +846,19 @@ services.AddSingleton<IPermissionEvaluator>(sp =>
    Mitigations: `OnUnresolved: Deny` for headless (§8.2); abandonment-on-`SendAsync` (§6.4).
 10. **Hook asks recur by design.** "Allow always" cannot suppress a future hook `Ask` (§10);
     `DenyAlways` does. Hosts must adapt rendering (`Source == Hook` → no *Allow always*).
+11. **A "per-user, per-machine" default must not be derived from the running process's directory.**
+    A prior version defaulted `LocalRulesPath` to `AppContext.BaseDirectory`, which differs between
+    `bin/Debug/net10.0` and `bin/Release/net10.0`. Granting "Allow Always" under one build
+    configuration, then quitting and relaunching under the other, silently lost the grant — the file
+    store and the ctor-time load were each correct in isolation (139 unit tests passed throughout),
+    so nothing in the persistence *logic* was broken; the default *location* was just build-config-
+    shaped instead of user-shaped. Confirmed by diffing the two configs' `permissions.local.json`
+    files directly (different mtimes, different contents) rather than re-reading the evaluator code.
+    Fixed by anchoring the default to `%LocalAppData%\Agency\` (2026-07-24, `PermissionEvaluator.cs:63`).
+    Any future "stable per-user default" in this codebase should anchor outside the build/publish
+    output tree — the same category of fix `${RepoRoot}` token substitution applies to telemetry and
+    MCP paths (see [[Agency.Harness.Console]]), except here there is no repo at all for a published
+    NuGet consumer, so `%LocalAppData%` (not `${RepoRoot}`) is the correct anchor.
 
 **Out of scope (future):** permission modes (acceptEdits/bypass/plan), rule widening in the answer UX,
 per-directory scoping, an explicit `Ask` rule list, audit logging of decisions (compose with

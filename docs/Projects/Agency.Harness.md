@@ -477,7 +477,7 @@ public sealed record PermissionResponse(Guid RequestId, PermissionResponseKind K
 public enum PermissionResponseKind { AllowOnce, AllowAlways, DenyOnce, DenyAlways }
 ```
 
-Internal supporting types: `PermissionEvaluator` (the `IPermissionEvaluator` impl), `PermissionRule` (parses `Tool` / `Tool(glob*)` rule strings into anchored case-insensitive regexes, `\`→`/` normalized, 250 ms match timeout), `PermissionsOptions` (bound from the `Permissions` config section: `Enabled`, `Allow[]`, `Deny[]`, `OnUnresolved` ∈ {`Ask`, `Deny`}, `ToolInputKeys`, `LocalRulesPath`), `PermissionsOptionsValidator` (fail-fast rule parse at startup), and `PermissionsFileStore` (tolerant load + retry/backoff append of `permissions.local.json`).
+Internal supporting types: `PermissionEvaluator` (the `IPermissionEvaluator` impl), `PermissionRule` (parses `Tool` / `Tool(glob*)` rule strings into anchored case-insensitive regexes, `\`→`/` normalized, 250 ms match timeout), `PermissionsOptions` (bound from the `Permissions` config section: `Enabled`, `Allow[]`, `Deny[]`, `OnUnresolved` ∈ {`Ask`, `Deny`}, `ToolInputKeys`, `LocalRulesPath` — `null` defaults to `%LocalAppData%\Agency\permissions.local.json`, a stable per-user location rather than the running app's own bin folder; see [[Agency.Harness.Console]]), `PermissionsOptionsValidator` (fail-fast rule parse at startup), and `PermissionsFileStore` (tolerant load + retry/backoff append of `permissions.local.json`).
 
 ### Loop Kit
 

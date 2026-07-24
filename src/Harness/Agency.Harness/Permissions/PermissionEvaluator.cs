@@ -59,9 +59,22 @@ internal sealed class PermissionEvaluator : IPermissionEvaluator
             _toolInputKeys[entry.Key] = entry.Value;
         }
 
-        // Resolve local rules path per spec §7.1.
+        // Resolve local rules path per spec §7.1. The default lives in a stable per-user
+        // location rather than next to the running assembly — AppContext.BaseDirectory
+        // varies with build configuration (bin/Debug vs bin/Release) and would otherwise
+        // silently drop "Allow Always" grants recorded under one configuration when the
+        // app is next launched from another.
         string localPath = options.LocalRulesPath
-            ?? Path.Combine(AppContext.BaseDirectory, "permissions.local.json");
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Agency",
+                "permissions.local.json");
+
+        string? localDir = Path.GetDirectoryName(localPath);
+        if (!string.IsNullOrEmpty(localDir))
+        {
+            Directory.CreateDirectory(localDir);
+        }
 
         _store = new PermissionsFileStore(localPath, logger);
 

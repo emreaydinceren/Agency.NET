@@ -227,12 +227,17 @@ internal static class MarkdownRenderer
         string s = Markup.Escape(text);
 
         // Bold + italic: ***text*** or ___text___
-        s = Regex.Replace(s, @"\*\*\*(.+?)\*\*\*", "[bold italic]$1[/]");
-        s = Regex.Replace(s, @"___(.+?)___", "[bold italic]$1[/]");
+        // Underline is paired with bold because legacy Windows consoles (conhost.exe without
+        // Windows Terminal) have no real font-weight bold - ANSI bold there is approximated as
+        // "brighten the current color", which can be visually identical to the default color
+        // depending on the console's color scheme. Underline (SGR 4) renders as a genuinely
+        // distinct style on those hosts, so emphasis stays visible either way.
+        s = Regex.Replace(s, @"\*\*\*(.+?)\*\*\*", "[bold italic underline]$1[/]");
+        s = Regex.Replace(s, @"___(.+?)___", "[bold italic underline]$1[/]");
 
         // Bold: **text** or __text__
-        s = Regex.Replace(s, @"\*\*(.+?)\*\*", "[bold]$1[/]");
-        s = Regex.Replace(s, @"__(.+?)__", "[bold]$1[/]");
+        s = Regex.Replace(s, @"\*\*(.+?)\*\*", "[bold underline]$1[/]");
+        s = Regex.Replace(s, @"__(.+?)__", "[bold underline]$1[/]");
 
         // Italic: *text* or _text_
         s = Regex.Replace(s, @"\*([^\*\n]+?)\*", "[italic]$1[/]");

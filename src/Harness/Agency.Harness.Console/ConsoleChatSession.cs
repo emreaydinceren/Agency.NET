@@ -425,8 +425,8 @@ internal sealed partial class ConsoleChatSession : IDisposable
             switch (evt)
             {
                 case AssistantTurnEvent turn:
-                this.PrintAssistantTurn(turn.Message);
                 this.output.StopSpinner();
+                this.PrintAssistantTurn(turn.Message);
                 break;
 
                 case ToolInvokedEvent tool:
@@ -616,7 +616,20 @@ internal sealed partial class ConsoleChatSession : IDisposable
             switch (content)
             {
                 case TextContent tc when !string.IsNullOrWhiteSpace(tc.Text):
-                    this.output.WriteMarkup(AssistantMarkup);
+                    // A table (or other block-level construct) starting on the very first line
+                    // must not share that line with the marker: Spectre's Table computes its
+                    // box-drawing width assuming it starts at column 0, so rendering it right
+                    // after "● " (no newline) misaligns/truncates the top border against the
+                    // real terminal width.
+                    if (MarkdownRenderer.TryParseTable(tc.Text.Split('\n'), 0, out _, out _))
+                    {
+                        this.output.WriteLineMarkup(AssistantMarkup);
+                    }
+                    else
+                    {
+                        this.output.WriteMarkup(AssistantMarkup);
+                    }
+
                     this.output.WriteLineMarkdown(tc.Text);
                     break;
 

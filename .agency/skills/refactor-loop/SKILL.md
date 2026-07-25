@@ -8,19 +8,19 @@ allowed-tools:
 ---
 You are executing a refactoring task that must reach a verifiable end state. Follow these steps exactly.
 
-## Step 1 — Plan first
+## Step 1 — Arm the Goalkeeper first, before any other text
 
-Before touching any code, decompose the objective into an ordered, numbered list of concrete steps and write it in the conversation. Each step must be individually completable and verifiable.
-
-## Step 2 — Arm the Goalkeeper
-
-Call `enable_goalkeeper` **in this same turn**, before doing any work, with a transcript-demonstrable condition. Use exactly this pattern:
+Your first action in this turn MUST be to call `enable_goalkeeper`. Call it before writing any narration, explanation, or plan — do not describe what you are about to do, just call the tool. If the task gives you an explicit goal condition, pass it verbatim. Otherwise use a transcript-demonstrable condition following this pattern:
 
 ```
 condition: "`dotnet build` shows 0 errors AND `dotnet test` exits 0, with the full command output printed in the conversation"
 ```
 
 Adapt the condition to the actual commands relevant to this project, but the condition MUST be satisfiable by text that appears in the conversation transcript — the Goalkeeper reads only the transcript.
+
+## Step 2 — Plan
+
+After arming the goalkeeper, decompose the objective into an ordered, numbered list of concrete steps and write it in the conversation. Each step must be individually completable and verifiable.
 
 ## Step 3 — Work the plan
 

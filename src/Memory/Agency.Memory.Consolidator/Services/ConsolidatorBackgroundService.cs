@@ -218,11 +218,6 @@ internal sealed partial class ConsolidatorBackgroundService : BackgroundService,
             return;
         }
 
-        if (records.Count > MaxRecordsPerPass)
-        {
-            this.LogExceedsMaxRecordsPerPass(job.UserId, records.Count, MaxRecordsPerPass);
-        }
-
         if (this._agentRunner is null)
         {
             this.LogNoAgentRunnerConfigured(job.UserId);
@@ -236,19 +231,42 @@ internal sealed partial class ConsolidatorBackgroundService : BackgroundService,
             return;
         }
 
+        // Per-domain batching: keeps each sub-agent call's prompt bounded to one domain's
+        // records instead of stuffing the full corpus into a single context.
+        IReadOnlyList<IReadOnlyList<Record>> batches;
+        if (records.Count > MaxRecordsPerPass)
+        {
+            this.LogExceedsMaxRecordsPerPass(job.UserId, records.Count, MaxRecordsPerPass);
+            batches = records
+                .GroupBy(r => r.Domain)
+                .Select(g => (IReadOnlyList<Record>)g.ToList())
+                .ToList();
+        }
+        else
+        {
+            batches = [records];
+        }
+
         int merges = 0, updates = 0, deletes = 0;
-        try
+        foreach (IReadOnlyList<Record> batch in batches)
         {
-            (merges, updates, deletes) = await this._agentRunner(job.UserId, records, ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _errorCounter.Add(1);
-            this.LogConsolidationSubAgentFailed(ex, job.UserId);
+            try
+            {
+                (int batchMerges, int batchUpdates, int batchDeletes) =
+                    await this._agentRunner(job.UserId, batch, ct).ConfigureAwait(false);
+                merges += batchMerges;
+                updates += batchUpdates;
+                deletes += batchDeletes;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _errorCounter.Add(1);
+                this.LogConsolidationSubAgentFailed(ex, job.UserId);
+            }
         }
 
         await this._eventBus.PublishAsync(new ConsolidationCompletedEvent(
@@ -325,7 +343,7 @@ internal sealed partial class ConsolidatorBackgroundService : BackgroundService,
     private partial void LogNoRecordsSkippingConsolidation(string userId);
 
     /// <summary>Logs that a user's record count exceeds the max-records-per-pass scale guard.</summary>
-    [LoggerMessage(Level = LogLevel.Warning, Message = "UserId={UserId} has {Count} records, exceeding MaxRecordsPerPass={Max}. Consolidation will proceed on full corpus (v1 — deferred per-domain batching).")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "UserId={UserId} has {Count} records, exceeding MaxRecordsPerPass={Max}. Consolidation will proceed batched by domain.")]
     private partial void LogExceedsMaxRecordsPerPass(string userId, int count, int max);
 
     /// <summary>Logs that the consolidation sub-agent was skipped because no agent runner is configured.</summary>

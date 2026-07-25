@@ -6,7 +6,8 @@ namespace Agency.Ingestion;
 public sealed record IngestionResult(
     int Succeeded,
     int Failed,
-    IReadOnlyList<string>? FailedKeys = null)
+    IReadOnlyList<string>? FailedKeys = null,
+    IReadOnlyList<string>? FailureReasons = null)
 {
     /// <summary>
     /// Gets a value indicating whether the pipeline completed with no failures.

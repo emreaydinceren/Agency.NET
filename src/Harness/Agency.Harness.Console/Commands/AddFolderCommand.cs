@@ -1,5 +1,6 @@
 using Agency.Harness.Console.Configuration;
 using Agency.Harness.Console.Services;
+using Agency.Ingestion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
@@ -46,14 +47,22 @@ internal static class AddFolderCommand
 
         IngestionCommandService ingestor = session.ServiceProvider.GetRequiredService<IngestionCommandService>();
 
-        int totalChunks = 0;
+        IngestionResult result = new(Succeeded: 0, Failed: 0);
         await AnsiConsole.Status().StartAsync($"Ingesting {fileCount} file(s)...", async ctx =>
         {
-            totalChunks = await ingestor.IngestDirectoryAsync(folderPath, pattern, state.UserId, sessionId, projectId);
-            ctx.Status($"Done — {totalChunks} chunk(s) ingested.");
+            result = await ingestor.IngestDirectoryAsync(folderPath, pattern, state.UserId, sessionId, projectId);
+            ctx.Status($"Done — {result.Succeeded} chunk(s) ingested.");
         });
 
-        AnsiConsole.MarkupLine($"[green]Ingested {fileCount} file(s), {totalChunks} chunk(s).[/]");
+        AnsiConsole.MarkupLine($"[green]Ingested {fileCount} file(s), {result.Succeeded} chunk(s).[/]");
+        if (result.Failed > 0)
+        {
+            AnsiConsole.MarkupLine($"[red]{result.Failed} chunk(s) failed to ingest:[/]");
+            foreach (string reason in result.FailureReasons ?? [])
+            {
+                AnsiConsole.MarkupLine($"[red]  - {reason.EscapeMarkup()}[/]");
+            }
+        }
 
         DocumentContextHydrationService hydration =
             session.ServiceProvider.GetRequiredService<DocumentContextHydrationService>();

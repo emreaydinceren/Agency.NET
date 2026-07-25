@@ -22,6 +22,7 @@
 param(
     [string]$BaseUrl,
     [string]$Model,
+    [string]$EmbeddingModel,
     [string]$ApiKey,
     [string]$GitHubToken,
     [switch]$DryRun,
@@ -50,6 +51,18 @@ function Get-MaskedSecret {
     if ([string]::IsNullOrEmpty($Value)) { return "(not set)" }
     if ($Value.Length -le 3) { return "***" }
     return "$($Value.Substring(0, 3))***"
+}
+
+# Safely reads an optional property from the saved-answers object. Older
+# .quickstart.json files won't have newer fields (e.g. EmbeddingModel was added
+# after BaseUrl/Model/GitHubEnabled) - plain dot-access on a missing property
+# throws under Set-StrictMode, which some users' profiles enable globally.
+function Get-SavedProperty {
+    param($Saved, [string]$Name)
+    if (-not $Saved) { return $null }
+    $prop = $Saved.PSObject.Properties[$Name]
+    if ($null -eq $prop) { return $null }
+    return $prop.Value
 }
 
 # Cheap, non-blocking check for whether something is listening on a local port.
@@ -196,6 +209,40 @@ $defaultModel = "google/gemma-4-e2b"
 if (-not $Model -and $saved -and $saved.Model) { $defaultModel = $saved.Model }
 
 $resolvedModel = Resolve-Answer -ParamValue $Model -Default $defaultModel -PromptText "  Model name"
+
+# ── Interview: embedding model ───────────────────────────────────────────────
+
+Write-Title "🧬 Which embedding model should it use?"
+Write-Info "Used by /add-file and /add-folder to index documents for semantic_search."
+Write-Info "This must be a *separate* model from the chat model above, actually loaded"
+Write-Info "on your endpoint - check LM Studio's or Ollama's loaded models, or your"
+Write-Info "cloud provider's embedding model list, if unsure."
+
+$defaultEmbeddingModel = "text-embedding-nomic-embed-text-v1.5"
+$savedEmbeddingModel = Get-SavedProperty -Saved $saved -Name 'EmbeddingModel'
+if (-not $EmbeddingModel -and $savedEmbeddingModel) { $defaultEmbeddingModel = $savedEmbeddingModel }
+
+$resolvedEmbeddingModel = Resolve-Answer -ParamValue $EmbeddingModel -Default $defaultEmbeddingModel -PromptText "  Embedding model name"
+
+# Best-effort check against the endpoint's /models list. This is exactly the failure
+# mode that silently broke /add-file before: an embedding model id configured but
+# never loaded, with no error until a chunk upsert fails deep in the ingestion
+# pipeline. Never blocks setup - just a heads-up when the endpoint is reachable.
+if (-not $DryRun) {
+    $modelsUrl = "$($resolvedBaseUrl.TrimEnd('/'))/models"
+    try {
+        $modelsResponse = Invoke-RestMethod -Uri $modelsUrl -Method Get -TimeoutSec 3 -ErrorAction Stop
+        $loadedIds = @($modelsResponse.data | ForEach-Object { $_.id })
+        if ($loadedIds.Count -gt 0 -and ($loadedIds -notcontains $resolvedEmbeddingModel)) {
+            Write-Warn "⚠️  '$resolvedEmbeddingModel' isn't in the models your endpoint currently reports as loaded."
+            Write-Warn "   /add-file and /add-folder will fail until it's loaded (e.g. via LM Studio's 'lms load' command)."
+        } elseif ($loadedIds.Count -gt 0) {
+            Write-Ok "✅ '$resolvedEmbeddingModel' is loaded and ready."
+        }
+    } catch {
+        Write-Skip "💡 Couldn't reach $modelsUrl to verify the embedding model is loaded - skipping check."
+    }
+}
 
 # ── Interview: API key ───────────────────────────────────────────────────────
 

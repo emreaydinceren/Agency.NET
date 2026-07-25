@@ -43,7 +43,8 @@ internal sealed class DocumentContextHydrationService(
     private static string BuildFact(IReadOnlyList<DocumentInfo> docs, string sessionId)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("The following documents have been ingested and are available for semantic_search:");
+        sb.AppendLine("The following documents have been ingested. Do not read them directly with read_file —");
+        sb.AppendLine("call semantic_search instead to retrieve relevant excerpts:");
 
         foreach (DocumentInfo doc in docs.OrderBy(d => d.SourceFile))
         {

@@ -25,7 +25,9 @@ public sealed class SemanticSearchTool(IVectorStore vectorStore, IProjectSession
     public ToolDefinition Definition =>
         new ToolDefinition(
             "semantic_search",
-            "Searches ingested documents using semantic similarity. Searches across all accessible scopes: global, current session, and all loaded projects.",
+            "The correct tool for answering questions about documents ingested via /add-file or /add-folder — " +
+            "use this instead of read_file for any such document. Searches ingested documents using semantic " +
+            "similarity across all accessible scopes: global, current session, and all loaded projects.",
             InputSchema);
 
     /// <summary>

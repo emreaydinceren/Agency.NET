@@ -150,6 +150,35 @@ public sealed class DefaultIngestionPipelineTests
     }
 
     /// <summary>
+    /// When a chunk fails, the triggering exception's message must appear in
+    /// FailureReasons so callers (e.g. the console's /add-file command) can show
+    /// the user *why* ingestion failed instead of a bare, unexplained count.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_UpsertThrows_AddsMessageToFailureReasons()
+    {
+        var doc = new Document("content", "source1");
+        var pipeline = new DefaultIngestionPipeline<string>(StringConverter, maxDegreeOfParallelism: 1);
+        var storeMock = new Mock<IVectorStore>();
+        storeMock
+            .Setup(s => s.UpsertAsync<string>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<IDictionary<string, object>?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("No models loaded."));
+
+        var loaderMock = new Mock<IDocumentLoader>();
+        loaderMock.Setup(l => l.LoadAsync(It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable([doc], ct: TestContext.Current.CancellationToken));
+
+        var splitterMock = new Mock<ITextSplitter>();
+        splitterMock.Setup(s => s.Split(doc)).Returns([doc]);
+
+        var result = await pipeline.ExecuteAsync(loaderMock.Object, splitterMock.Object, storeMock.Object, "test-user", null, ct: TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result.FailureReasons);
+        Assert.Contains("No models loaded.", result.FailureReasons);
+    }
+
+    /// <summary>
     /// When a chunk fails, its key must appear in FailedKeys so callers can log
     /// the exact keys that need to be retried without re-ingesting the entire
     /// document set.

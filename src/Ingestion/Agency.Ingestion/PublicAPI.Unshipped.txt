@@ -1,1 +1,7 @@
 #nullable enable
+*REMOVED*Agency.Ingestion.IngestionResult.Deconstruct(out int Succeeded, out int Failed, out System.Collections.Generic.IReadOnlyList<string!>? FailedKeys) -> void
+*REMOVED*Agency.Ingestion.IngestionResult.IngestionResult(int Succeeded, int Failed, System.Collections.Generic.IReadOnlyList<string!>? FailedKeys = null) -> void
+Agency.Ingestion.IngestionResult.Deconstruct(out int Succeeded, out int Failed, out System.Collections.Generic.IReadOnlyList<string!>? FailedKeys, out System.Collections.Generic.IReadOnlyList<string!>? FailureReasons) -> void
+Agency.Ingestion.IngestionResult.FailureReasons.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Agency.Ingestion.IngestionResult.FailureReasons.init -> void
+Agency.Ingestion.IngestionResult.IngestionResult(int Succeeded, int Failed, System.Collections.Generic.IReadOnlyList<string!>? FailedKeys = null, System.Collections.Generic.IReadOnlyList<string!>? FailureReasons = null) -> void

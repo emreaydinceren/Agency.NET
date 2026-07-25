@@ -1,4 +1,5 @@
 using Agency.Harness.Console.Services;
+using Agency.Ingestion;
 using Agency.VectorStore.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -43,14 +44,22 @@ internal static class AddFileCommand
 
         IngestionCommandService ingestor = session.ServiceProvider.GetRequiredService<IngestionCommandService>();
 
-        int chunks = 0;
+        IngestionResult result = new(Succeeded: 0, Failed: 0);
         await AnsiConsole.Status().StartAsync("Ingesting...", async ctx =>
         {
-            chunks = await ingestor.IngestFileAsync(filePath, state.UserId, sessionId, projectId);
-            ctx.Status($"Done — {chunks} chunk(s) ingested.");
+            result = await ingestor.IngestFileAsync(filePath, state.UserId, sessionId, projectId);
+            ctx.Status($"Done — {result.Succeeded} chunk(s) ingested.");
         });
 
-        AnsiConsole.MarkupLine($"[green]Ingested 1 file, {chunks} chunk(s).[/]");
+        AnsiConsole.MarkupLine($"[green]Ingested 1 file, {result.Succeeded} chunk(s).[/]");
+        if (result.Failed > 0)
+        {
+            AnsiConsole.MarkupLine($"[red]{result.Failed} chunk(s) failed to ingest:[/]");
+            foreach (string reason in result.FailureReasons ?? [])
+            {
+                AnsiConsole.MarkupLine($"[red]  - {reason.EscapeMarkup()}[/]");
+            }
+        }
 
         DocumentContextHydrationService hydration =
             session.ServiceProvider.GetRequiredService<DocumentContextHydrationService>();

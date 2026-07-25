@@ -50,6 +50,18 @@ public sealed class IngestionResultTests
     }
 
     /// <summary>
+    /// FailureReasons is null (not an empty list) when there are no failures, for
+    /// the same reason FailedKeys is: a clean null check in the common success path.
+    /// </summary>
+    [Fact]
+    public void FailureReasons_DefaultsToNull()
+    {
+        var result = new IngestionResult(1, 0);
+
+        Assert.Null(result.FailureReasons);
+    }
+
+    /// <summary>
     /// Verifies that all three constructor arguments are stored correctly,
     /// including the provided FailedKeys list. Callers rely on the exact same
     /// list instance being accessible for logging or retry logic.

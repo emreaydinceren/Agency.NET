@@ -8,7 +8,7 @@ internal sealed class IngestionCommandService(
     IVectorStore vectorStore,
     ITextSplitter textSplitter)
 {
-    public async Task<int> IngestFileAsync(
+    public Task<IngestionResult> IngestFileAsync(
         string filePath,
         string userId,
         string? sessionId,
@@ -16,7 +16,7 @@ internal sealed class IngestionCommandService(
         CancellationToken ct = default)
     {
         var pipeline = new DefaultIngestionPipeline<string>(chunk => chunk.Content);
-        IngestionResult result = await pipeline.ExecuteAsync(
+        return pipeline.ExecuteAsync(
             new FileLoader(filePath),
             textSplitter,
             vectorStore,
@@ -24,10 +24,9 @@ internal sealed class IngestionCommandService(
             sessionId,
             projectId,
             ct);
-        return result.Succeeded;
     }
 
-    public async Task<int> IngestDirectoryAsync(
+    public Task<IngestionResult> IngestDirectoryAsync(
         string directoryPath,
         string searchPattern,
         string userId,
@@ -36,7 +35,7 @@ internal sealed class IngestionCommandService(
         CancellationToken ct = default)
     {
         var pipeline = new DefaultIngestionPipeline<string>(chunk => chunk.Content);
-        IngestionResult result = await pipeline.ExecuteAsync(
+        return pipeline.ExecuteAsync(
             new DirectoryLoader(directoryPath, searchPattern),
             textSplitter,
             vectorStore,
@@ -44,7 +43,6 @@ internal sealed class IngestionCommandService(
             sessionId,
             projectId,
             ct);
-        return result.Succeeded;
     }
 
     public static int CountFiles(string directoryPath, string searchPattern) =>

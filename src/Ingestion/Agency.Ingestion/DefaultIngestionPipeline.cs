@@ -71,6 +71,7 @@ public sealed partial class DefaultIngestionPipeline<TValue> : IIngestionPipelin
         int succeeded = 0;
         int failed = 0;
         var failedKeys = new ConcurrentBag<string>();
+        var failureReasons = new ConcurrentDictionary<string, byte>();
 
         this.LogPipelineStarted();
 
@@ -100,6 +101,7 @@ public sealed partial class DefaultIngestionPipeline<TValue> : IIngestionPipelin
                     {
                         Interlocked.Increment(ref failed);
                         failedKeys.Add(key);
+                        failureReasons.TryAdd(ex.Message, 0);
                         _documentsCounter.Add(1, new TagList { { "status", "failure" } });
                         this.LogChunkUpsertFailed(ex, key);
                     }
@@ -120,7 +122,8 @@ public sealed partial class DefaultIngestionPipeline<TValue> : IIngestionPipelin
         this.LogPipelineCompleted(succeeded, failed, sw.Elapsed.TotalMilliseconds);
 
         return new IngestionResult(succeeded, failed,
-            !failedKeys.IsEmpty ? failedKeys.ToList() : null);
+            !failedKeys.IsEmpty ? failedKeys.ToList() : null,
+            !failureReasons.IsEmpty ? failureReasons.Keys.ToList() : null);
     }
 
     private static Dictionary<string, object> BuildChunkMetadata(

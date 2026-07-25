@@ -970,7 +970,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         var ct = TestContext.Current.CancellationToken;
-        string userId = $"Consolidator_LargeCorpus-{Guid.NewGuid():N}";
+        string userId = "e36-consolidator-largecorpus";
 
         // ── Deterministic sub-invariant: warning emitted pre-LLM ─────────────
         // Seed records only in the mock store (no Postgres I/O for this sub-invariant)
@@ -1056,7 +1056,7 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         for (int i = 0; i < LlmSeedCount; i++)
         {
             await realStore.UpsertAsync(MakeRecord(
-                id: Guid.NewGuid().ToString(),
+                id: $"44444444-4444-4444-4444-{i:D12}",
                 userId: llmUserId,
                 sessionId: null,
                 domain: $"Domain{i % 10}",

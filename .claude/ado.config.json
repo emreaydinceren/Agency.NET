@@ -1,0 +1,37 @@
+{
+  "_comment": "Config for the one-way git -> Azure DevOps Boards projection (/sync-ado). Fill org/project, pick your processTemplate, then adjust the stateMaps to your process's real state names. The PAT is read from the env var named in patEnvVar and is NEVER stored here. This projection is display-only: it never gates /next and git remains the system of record.",
+  "org": "https://dev.azure.com/<your-org>",
+  "project": "<your-project>",
+  "processTemplate": "Agile",
+  "patEnvVar": "AZURE_DEVOPS_EXT_PAT",
+
+  "typeMap": {
+    "spec": "Feature",
+    "pbi": "User Story",
+    "task": "Task"
+  },
+
+  "_stateMapNote": "Methodology states are granular; ADO's built-in states are coarse. These maps project methodology -> ADO. Defaults below are for the AGILE process (New/Active/Resolved/Closed). Scrum users: map to New/Approved/Committed/Done. Basic users: To Do/Doing/Done.",
+  "specStateMap": {
+    "DRAFT": "New",
+    "QA_1": "Active",
+    "ARCH": "Active",
+    "BLOCKED_ON_PM": "Active",
+    "QA_2": "Active",
+    "AWAITING_SIGNOFF": "Active",
+    "SIGNED_OFF": "Active",
+    "PLANNED": "Active"
+  },
+  "pbiStateMap": {
+    "READY": "New",
+    "RED_PROVEN": "Active",
+    "GREEN_DONE": "Resolved",
+    "REWORK": "Active",
+    "BLOCKED": "Active",
+    "DONE": "Closed"
+  },
+
+  "_tagNote": "Methodology detail ADO's coarse states drop is preserved as a tag, so the board still shows where an item really is.",
+  "methodologyStateTagPrefix": "sdlc:",
+  "blockedTag": "blocked"
+}

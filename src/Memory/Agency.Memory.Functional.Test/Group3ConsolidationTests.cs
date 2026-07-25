@@ -796,16 +796,18 @@ public sealed class Group3ConsolidationTests : IAsyncLifetime
         }
 
         var ct = TestContext.Current.CancellationToken;
-        string userId = $"Consolidator_PerUserSerial-{Guid.NewGuid():N}";
+        string userId = "e35-consolidator-per-user-serial";
 
         IEmbeddingGenerator embedder = TestInfrastructure.DeterministicEmbedder(EmbeddingDim);
         PostgresMemoryStore store = TestInfrastructure.BuildMemoryStore(
             this._dataSource, embedder, NullLogger<PostgresMemoryStore>.Instance);
 
         // Seed one record so the service does not exit on empty-store guard.
-        // E3.5 verifies coalescing via stub runners and is not cache-replayed, so a random id is fine.
+        // The stub-runner half above uses this deterministically too: the LLM-gated epilogue
+        // below drives two real consolidation passes over this same userId/record, so both
+        // must be fixed literals (not random GUIDs) to keep the request bodies cache-replayable.
         await store.UpsertAsync(MakeRecord(
-            id: Guid.NewGuid().ToString(),
+            id: "55555555-5555-5555-5555-000000000001",
             userId: userId,
             sessionId: "session-coalesce",
             domain: "Preferences",

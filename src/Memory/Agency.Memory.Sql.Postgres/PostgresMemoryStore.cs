@@ -364,12 +364,16 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Record>> GetAllForUserAsync(string userId, CancellationToken ct = default)
     {
+        // ORDER BY is load-bearing, not cosmetic: the consolidator renders these records into an
+        // LLM prompt in list order, so an unordered scan makes the prompt bytes (and therefore the
+        // HTTP cache key) vary run-to-run even when the underlying rows are identical.
         const string sql = @"
             SELECT id::text, user_id, session_id, content_type, domain, key,
                    title, value, tags, importance, embedding,
                    created_at, updated_at, last_accessed_at
             FROM records
-            WHERE user_id = @user_id;";
+            WHERE user_id = @user_id
+            ORDER BY created_at, id;";
 
         await using var conn = await this._dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(sql, (NpgsqlConnection)conn);

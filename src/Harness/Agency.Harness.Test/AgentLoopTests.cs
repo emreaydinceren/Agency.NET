@@ -608,28 +608,74 @@ public sealed class AgentLoopTests
 
     // ── Degenerate response (no tool calls, no text) ────────────────────────────
 
+    /// <summary>Builds a <see cref="ChatResponse"/> with only reasoning content — no tool call, no text.</summary>
+    private static ChatResponse DegenerateResponse(int inputTokens = 50, int outputTokens = 20) =>
+        new([new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("thinking about it...")])])
+        {
+            Usage = new UsageDetails { InputTokenCount = inputTokens, OutputTokenCount = outputTokens },
+            FinishReason = ChatFinishReason.Stop,
+        };
+
     /// <summary>
-    /// When the LLM response has neither a tool call nor any text content — e.g. a reasoning-only
-    /// response, a known flakiness pattern for some local backends — the loop reports
-    /// <see cref="AgentResultStatus.Error"/> instead of silently treating it as success.
+    /// A single degenerate response (neither tool call nor text — e.g. reasoning-only, a known
+    /// flakiness pattern for some local backends) is retried transparently and the turn succeeds
+    /// once the LLM produces a real answer.
     /// </summary>
     [Fact]
-    public async Task RunAsync_WhenResponseHasNoTextOrToolCalls_EmitsErrorResult()
+    public async Task RunAsync_RetriesOnceOnDegenerateResponseThenSucceeds()
     {
         var llm = new FakeChatClient();
-        llm.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant,
-            [new TextReasoningContent("thinking about it...")])])
-        {
-            Usage = new UsageDetails { InputTokenCount = 50, OutputTokenCount = 20 },
-            FinishReason = ChatFinishReason.Stop,
-        });
+        llm.EnqueueResponse(DegenerateResponse());
+        llm.EnqueueResponse(TextResponse("The answer is 42."));
+
+        var agent = new Agent(llm, "model");
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, llm.GetResponseCallCount);
+        var result = Assert.IsType<AgentResultEvent>(events[^1]);
+        Assert.Equal(AgentResultStatus.Success, result.Status);
+        Assert.Equal("The answer is 42.", result.FinalText);
+    }
+
+    /// <summary>
+    /// Once every retry attempt is exhausted and the LLM still returns neither a tool call nor
+    /// any text content, the loop reports <see cref="AgentResultStatus.Error"/> instead of
+    /// silently treating it as success.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ExhaustsDegenerateRetriesThenEmitsErrorResult()
+    {
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(DegenerateResponse());
+        llm.EnqueueResponse(DegenerateResponse());
+        llm.EnqueueResponse(DegenerateResponse());
+
+        var agent = new Agent(llm, "model");
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, llm.GetResponseCallCount);
+        var result = Assert.IsType<AgentResultEvent>(events[^1]);
+        Assert.Equal(AgentResultStatus.Error, result.Status);
+        Assert.NotNull(result.FinalText);
+    }
+
+    /// <summary>
+    /// Token usage from discarded degenerate attempts is real spend against the backend, so it
+    /// must still be reflected in the final result's accumulated usage rather than being dropped.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_DegenerateRetry_AccumulatesUsageFromDiscardedAttempts()
+    {
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(DegenerateResponse(inputTokens: 50, outputTokens: 20));
+        llm.EnqueueResponse(TextResponse("Done.", inputTokens: 60, outputTokens: 5));
 
         var agent = new Agent(llm, "model");
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = Assert.IsType<AgentResultEvent>(events[^1]);
-        Assert.Equal(AgentResultStatus.Error, result.Status);
-        Assert.NotNull(result.FinalText);
+        Assert.Equal(110, result.TotalUsage.InputTokens);   // 50 + 60
+        Assert.Equal(25, result.TotalUsage.OutputTokens);   // 20 + 5
     }
 
     /// <summary>

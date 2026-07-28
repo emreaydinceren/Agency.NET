@@ -709,9 +709,10 @@ public sealed partial class Agent
             // 5. Evaluate stop conditions.
             if (this._stop(ctx, lastAssistant))
             {
-                AgentResultStatus status = DetermineStatus(ctx, lastAssistant);
                 string? finalText = ExtractFinalText(lastAssistant);
-                AgentResultEvent resultEvent = new AgentResultEvent(status, finalText, ctx.TotalUsage, ctx.TotalCostUsd);
+                AgentResultStatus status = DetermineStatus(ctx, lastAssistant, finalText);
+                AgentResultEvent resultEvent = new AgentResultEvent(
+                    status, finalText ?? NoUsableOutputMessage, ctx.TotalUsage, ctx.TotalCostUsd);
                 if (this._hooks.OnStop is { } onStop)
                 {
                     await onStop(new StopHookContext(resultEvent, ctx), ct);
@@ -724,9 +725,11 @@ public sealed partial class Agent
             var toolCalls = lastAssistant.Contents.OfType<FunctionCallContent>().ToList();
             if (toolCalls.Count == 0)
             {
-                // Defensive: stop predicate disagreed with reality — treat as success.
+                // Defensive: stop predicate disagreed with reality — treat as success, unless the
+                // model also produced no usable text (see DetermineStatus).
+                string? finalText = ExtractFinalText(lastAssistant);
                 AgentResultEvent resultEvent = new AgentResultEvent(
-                    AgentResultStatus.Success, ExtractFinalText(lastAssistant),
+                    DetermineStatus(ctx, lastAssistant, finalText), finalText ?? NoUsableOutputMessage,
                     ctx.TotalUsage, ctx.TotalCostUsd);
                 if (this._hooks.OnStop is { } onStop)
                 {
@@ -1031,11 +1034,20 @@ public sealed partial class Agent
         }
     }
 
-    internal static AgentResultStatus DetermineStatus(Context _, ChatMessage last)
+    /// <summary>Reported as <see cref="AgentResultEvent.FinalText"/> when the LLM's response has
+    /// neither a tool call nor any text content — a known flakiness pattern for some backends,
+    /// where tokens are spent on non-text content (e.g. reasoning) but no answer is produced.</summary>
+    internal const string NoUsableOutputMessage =
+        "The LLM finished the turn without requesting a tool call or producing any text output.";
+
+    internal static AgentResultStatus DetermineStatus(Context _, ChatMessage last, string? finalText)
     {
-        return last.Contents.OfType<FunctionCallContent>().Any()
-            ? AgentResultStatus.MaxStepsReached
-            : AgentResultStatus.Success;
+        if (last.Contents.OfType<FunctionCallContent>().Any())
+        {
+            return AgentResultStatus.MaxStepsReached;
+        }
+
+        return finalText is null ? AgentResultStatus.Error : AgentResultStatus.Success;
     }
 
     internal static string? ExtractFinalText(ChatMessage msg)

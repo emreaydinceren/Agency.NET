@@ -606,6 +606,32 @@ public sealed class AgentLoopTests
         Assert.Contains("3,350", result.FinalText);  // input token count surfaced in message
     }
 
+    // ── Degenerate response (no tool calls, no text) ────────────────────────────
+
+    /// <summary>
+    /// When the LLM response has neither a tool call nor any text content — e.g. a reasoning-only
+    /// response, a known flakiness pattern for some local backends — the loop reports
+    /// <see cref="AgentResultStatus.Error"/> instead of silently treating it as success.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenResponseHasNoTextOrToolCalls_EmitsErrorResult()
+    {
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant,
+            [new TextReasoningContent("thinking about it...")])])
+        {
+            Usage = new UsageDetails { InputTokenCount = 50, OutputTokenCount = 20 },
+            FinishReason = ChatFinishReason.Stop,
+        });
+
+        var agent = new Agent(llm, "model");
+        var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
+
+        var result = Assert.IsType<AgentResultEvent>(events[^1]);
+        Assert.Equal(AgentResultStatus.Error, result.Status);
+        Assert.NotNull(result.FinalText);
+    }
+
     /// <summary>
     /// A truncated response that still contains a function-call block does not result in the
     /// tool being invoked — truncation short-circuits the loop before tool execution.

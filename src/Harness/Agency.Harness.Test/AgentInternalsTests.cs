@@ -27,6 +27,9 @@ public sealed class AgentInternalsTests
     private static ChatMessage ToolUseMessage() =>
         new(ChatRole.Assistant, [new FunctionCallContent("id-1", "tool")]);
 
+    private static ChatMessage ReasoningOnlyMessage() =>
+        new(ChatRole.Assistant, [new TextReasoningContent("thinking...")]);
+
     /// <summary>
     /// A message with no pending tool calls yields <see cref="AgentResultStatus.Success"/>,
     /// even at a high iteration count.
@@ -35,8 +38,9 @@ public sealed class AgentInternalsTests
     public void DetermineStatus_ReturnsSuccess_WhenLastMessageHasNoToolCalls()
     {
         Context ctx = ContextAtIteration(5);
+        ChatMessage msg = TextOnlyMessage();
 
-        AgentResultStatus status = Agent.DetermineStatus(ctx, TextOnlyMessage());
+        AgentResultStatus status = Agent.DetermineStatus(ctx, msg, Agent.ExtractFinalText(msg));
 
         Assert.Equal(AgentResultStatus.Success, status);
     }
@@ -48,8 +52,9 @@ public sealed class AgentInternalsTests
     public void DetermineStatus_ReturnsMaxStepsReached_WhenStepLimitHitWithPendingToolCalls()
     {
         Context ctx = ContextAtIteration(5);
+        ChatMessage msg = ToolUseMessage();
 
-        AgentResultStatus status = Agent.DetermineStatus(ctx, ToolUseMessage());
+        AgentResultStatus status = Agent.DetermineStatus(ctx, msg, Agent.ExtractFinalText(msg));
 
         Assert.Equal(AgentResultStatus.MaxStepsReached, status);
     }
@@ -62,8 +67,9 @@ public sealed class AgentInternalsTests
     public void DetermineStatus_ReturnsSuccess_WhenIterationBelowLimitAndNoToolCalls()
     {
         Context ctx = ContextAtIteration(2);
+        ChatMessage msg = TextOnlyMessage();
 
-        AgentResultStatus status = Agent.DetermineStatus(ctx, TextOnlyMessage());
+        AgentResultStatus status = Agent.DetermineStatus(ctx, msg, Agent.ExtractFinalText(msg));
 
         Assert.Equal(AgentResultStatus.Success, status);
     }
@@ -79,10 +85,26 @@ public sealed class AgentInternalsTests
         // last message still has pending tool calls — whether stopped by BudgetExceeded,
         // step count, or any other predicate — the agent didn't finish cleanly.
         Context ctx = ContextAtIteration(2);
+        ChatMessage msg = ToolUseMessage();
 
-        AgentResultStatus status = Agent.DetermineStatus(ctx, ToolUseMessage());
+        AgentResultStatus status = Agent.DetermineStatus(ctx, msg, Agent.ExtractFinalText(msg));
 
         Assert.Equal(AgentResultStatus.MaxStepsReached, status);
+    }
+
+    /// <summary>
+    /// A message with no pending tool calls and no extractable text (e.g. reasoning-only content)
+    /// yields <see cref="AgentResultStatus.Error"/> rather than being mistaken for a clean success.
+    /// </summary>
+    [Fact]
+    public void DetermineStatus_ReturnsError_WhenNoToolCallsAndNoFinalText()
+    {
+        Context ctx = ContextAtIteration(2);
+        ChatMessage msg = ReasoningOnlyMessage();
+
+        AgentResultStatus status = Agent.DetermineStatus(ctx, msg, Agent.ExtractFinalText(msg));
+
+        Assert.Equal(AgentResultStatus.Error, status);
     }
 
     // ── Agent.ExtractFinalText ────────────────────────────────────────────────

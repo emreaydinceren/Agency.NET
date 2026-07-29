@@ -19,8 +19,6 @@
       href: How%20Agency%20Gives%20AI%20Agents%20Memory.md
     - name: Ingestion and Semantic Search for Agents
       href: Projects%20-%20Ingestion%20and%20Semantic%20Search%20for%20Agent.md
-    - name: Ingestion / Harness Integration
-      href: Ingestion-Harness-Integration.md
     - name: Governance and Actionable Insights through Observability
       href: Governance%20and%20Actionable%20Insights%20through%20Observability.md
     - name: Loop Kit — Driving an Agent Until the Job Is Actually Done

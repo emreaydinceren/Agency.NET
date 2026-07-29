@@ -615,52 +615,89 @@ public sealed partial class Agent
                     .ToList();
             }
 
-            // 4. Call the LLM.
+            // 4. Call the LLM, retrying on a malformed or degenerate response - known flakiness
+            // patterns for some local OpenAI-compatible backends (e.g. LM Studio).
             var llmSw = Stopwatch.StartNew();
             ChatResponse response;
+            ChatMessage lastAssistant;
             const int maxEmptyChoicesAttempts = 3;
-            int attempt = 0;
+            const int maxDegenerateAttempts = 3;
+            int emptyChoicesAttempt = 0;
+            int degenerateAttempt = 0;
+            LlmTokenUsage iterationUsage = new(0, 0);
             while (true)
             {
-                attempt++;
-                try
+                while (true)
                 {
-                    response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+                    emptyChoicesAttempt++;
+                    try
+                    {
+                        response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+                        break;
+                    }
+                    catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "index")
+                    {
+                        // Known upstream issue: some OpenAI-compatible backends (e.g. LM Studio) occasionally
+                        // return a 200 response with an empty `choices` array - typically when grammar-constrained
+                        // tool-call generation fails, or the backend is mid-swap between models under VRAM
+                        // pressure. The OpenAI SDK's ChatCompletion.Role getter indexes into that empty array and
+                        // throws instead of the backend surfacing a proper error. Back off briefly before retrying
+                        // so a transient backend hiccup has time to clear instead of hitting it again instantly.
+                        if (emptyChoicesAttempt >= maxEmptyChoicesAttempts)
+                        {
+                            this.LogEmptyChoicesExhausted(this._model, this._clientType, maxEmptyChoicesAttempts);
+                            throw new InvalidOperationException(
+                                $"The LLM backend for model '{this._model}' ({this._clientType}) returned " +
+                                $"{maxEmptyChoicesAttempts} consecutive malformed responses with no completion choices, " +
+                                "instead of a normal reply or an error. This is a known compatibility issue with some " +
+                                "OpenAI-compatible local servers (e.g. LM Studio) - the backend is reachable and " +
+                                "returning HTTP 200, but failing to actually generate a response for this request " +
+                                "(often for tool-calling requests). Check that the backend server is running and " +
+                                "responsive, and consider restarting it; if the problem persists, it may not be fixable " +
+                                "from this client.",
+                                ex);
+                        }
+
+                        this.LogEmptyChoicesRetry(this._model, this._clientType, emptyChoicesAttempt, maxEmptyChoicesAttempts);
+                        await Task.Delay(TimeSpan.FromMilliseconds(250 * emptyChoicesAttempt), this._timeProvider, ct);
+                    }
+                }
+
+                lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
+                    ?? new ChatMessage(ChatRole.Assistant, []);
+                LlmTokenUsage attemptUsage = response.Usage is { } u
+                    ? new LlmTokenUsage(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0)
+                    : new LlmTokenUsage(0, 0);
+                iterationUsage = new(
+                    iterationUsage.InputTokens + attemptUsage.InputTokens,
+                    iterationUsage.OutputTokens + attemptUsage.OutputTokens);
+
+                // A response with neither a tool call nor any text content wastes the turn - the
+                // model spent its output budget on something (e.g. reasoning-only content) that
+                // never surfaces as an answer. Retry before giving up, same rationale as above.
+                bool isDegenerate = response.FinishReason != ChatFinishReason.Length
+                    && !lastAssistant.Contents.OfType<FunctionCallContent>().Any()
+                    && ExtractFinalText(lastAssistant) is null;
+                if (!isDegenerate)
+                {
                     break;
                 }
-                catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "index")
-                {
-                    // Known upstream issue: some OpenAI-compatible backends (e.g. LM Studio) occasionally
-                    // return a 200 response with an empty `choices` array - typically when grammar-constrained
-                    // tool-call generation fails, or the backend is mid-swap between models under VRAM
-                    // pressure. The OpenAI SDK's ChatCompletion.Role getter indexes into that empty array and
-                    // throws instead of the backend surfacing a proper error. Back off briefly before retrying
-                    // so a transient backend hiccup has time to clear instead of hitting it again instantly.
-                    if (attempt >= maxEmptyChoicesAttempts)
-                    {
-                        this.LogEmptyChoicesExhausted(this._model, this._clientType, maxEmptyChoicesAttempts);
-                        throw new InvalidOperationException(
-                            $"The LLM backend for model '{this._model}' ({this._clientType}) returned " +
-                            $"{maxEmptyChoicesAttempts} consecutive malformed responses with no completion choices, " +
-                            "instead of a normal reply or an error. This is a known compatibility issue with some " +
-                            "OpenAI-compatible local servers (e.g. LM Studio) - the backend is reachable and " +
-                            "returning HTTP 200, but failing to actually generate a response for this request " +
-                            "(often for tool-calling requests). Check that the backend server is running and " +
-                            "responsive, and consider restarting it; if the problem persists, it may not be fixable " +
-                            "from this client.",
-                            ex);
-                    }
 
-                    this.LogEmptyChoicesRetry(this._model, this._clientType, attempt, maxEmptyChoicesAttempts);
-                    await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), this._timeProvider, ct);
+                string contentTypes = string.Join(
+                    ",", lastAssistant.Contents.Select(static c => c.GetType().Name));
+                degenerateAttempt++;
+                if (degenerateAttempt >= maxDegenerateAttempts)
+                {
+                    this.LogDegenerateResponseExhausted(
+                        this._model, this._clientType, maxDegenerateAttempts, contentTypes);
+                    break;
                 }
+
+                this.LogDegenerateResponseRetry(
+                    this._model, this._clientType, degenerateAttempt, maxDegenerateAttempts, contentTypes);
             }
             llmSw.Stop();
-            var lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
-                ?? new ChatMessage(ChatRole.Assistant, []);
-            var turnUsage = response.Usage is { } u
-                ? new LlmTokenUsage(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0)
-                : new LlmTokenUsage(0, 0);
+            var turnUsage = iterationUsage;
 
             ctx.TotalUsage = new(
                 ctx.TotalUsage.InputTokens + turnUsage.InputTokens,
@@ -709,9 +746,10 @@ public sealed partial class Agent
             // 5. Evaluate stop conditions.
             if (this._stop(ctx, lastAssistant))
             {
-                AgentResultStatus status = DetermineStatus(ctx, lastAssistant);
                 string? finalText = ExtractFinalText(lastAssistant);
-                AgentResultEvent resultEvent = new AgentResultEvent(status, finalText, ctx.TotalUsage, ctx.TotalCostUsd);
+                AgentResultStatus status = DetermineStatus(ctx, lastAssistant, finalText);
+                AgentResultEvent resultEvent = new AgentResultEvent(
+                    status, finalText ?? NoUsableOutputMessage, ctx.TotalUsage, ctx.TotalCostUsd);
                 if (this._hooks.OnStop is { } onStop)
                 {
                     await onStop(new StopHookContext(resultEvent, ctx), ct);
@@ -724,9 +762,11 @@ public sealed partial class Agent
             var toolCalls = lastAssistant.Contents.OfType<FunctionCallContent>().ToList();
             if (toolCalls.Count == 0)
             {
-                // Defensive: stop predicate disagreed with reality — treat as success.
+                // Defensive: stop predicate disagreed with reality — treat as success, unless the
+                // model also produced no usable text (see DetermineStatus).
+                string? finalText = ExtractFinalText(lastAssistant);
                 AgentResultEvent resultEvent = new AgentResultEvent(
-                    AgentResultStatus.Success, ExtractFinalText(lastAssistant),
+                    DetermineStatus(ctx, lastAssistant, finalText), finalText ?? NoUsableOutputMessage,
                     ctx.TotalUsage, ctx.TotalCostUsd);
                 if (this._hooks.OnStop is { } onStop)
                 {
@@ -1031,11 +1071,20 @@ public sealed partial class Agent
         }
     }
 
-    internal static AgentResultStatus DetermineStatus(Context _, ChatMessage last)
+    /// <summary>Reported as <see cref="AgentResultEvent.FinalText"/> when the LLM's response has
+    /// neither a tool call nor any text content — a known flakiness pattern for some backends,
+    /// where tokens are spent on non-text content (e.g. reasoning) but no answer is produced.</summary>
+    internal const string NoUsableOutputMessage =
+        "The LLM finished the turn without requesting a tool call or producing any text output.";
+
+    internal static AgentResultStatus DetermineStatus(Context _, ChatMessage last, string? finalText)
     {
-        return last.Contents.OfType<FunctionCallContent>().Any()
-            ? AgentResultStatus.MaxStepsReached
-            : AgentResultStatus.Success;
+        if (last.Contents.OfType<FunctionCallContent>().Any())
+        {
+            return AgentResultStatus.MaxStepsReached;
+        }
+
+        return finalText is null ? AgentResultStatus.Error : AgentResultStatus.Success;
     }
 
     internal static string? ExtractFinalText(ChatMessage msg)
@@ -1074,6 +1123,14 @@ public sealed partial class Agent
     /// <summary>Logs that every empty-<c>choices</c> retry attempt was exhausted and the turn is failing.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "LLM returned no completion choices on all {MaxAttempts} attempts - giving up. Model={Model}, ClientType={ClientType}")]
     private partial void LogEmptyChoicesExhausted(string model, string clientType, int maxAttempts);
+
+    /// <summary>Logs that the LLM returned neither a tool call nor any text content and the call is being retried.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LLM response had no tool call and no text content (contents: {ContentTypes}). Retrying (attempt {Attempt}/{MaxAttempts}). Model={Model}, ClientType={ClientType}")]
+    private partial void LogDegenerateResponseRetry(string model, string clientType, int attempt, int maxAttempts, string contentTypes);
+
+    /// <summary>Logs that every degenerate-response retry attempt was exhausted and the turn is failing.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "LLM returned neither a tool call nor any text content on all {MaxAttempts} attempts (contents: {ContentTypes}) - giving up. Model={Model}, ClientType={ClientType}")]
+    private partial void LogDegenerateResponseExhausted(string model, string clientType, int maxAttempts, string contentTypes);
 
     /// <summary>Logs that an agent chat turn completed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "Agent chat turn completed. Model={Model}, InputTokens={InputTokens}, OutputTokens={OutputTokens}, DurationMs={DurationMs}")]

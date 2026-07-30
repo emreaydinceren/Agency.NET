@@ -219,10 +219,9 @@ internal sealed partial class ConsoleChatSession : IDisposable
                 if (hydration is not null)
                 {
                     string? fact = await hydration.RefreshIfDirtyAsync(turnCts.Token);
-                    if (fact is not null)
-                    {
-                        this._chatSession!.SetKnowledge(new KnowledgeContext { Facts = [fact] });
-                    }
+                    this._chatSession!.SetKnowledge(fact is not null
+                        ? new KnowledgeContext { Facts = [fact] }
+                        : KnowledgeContext.Empty);
                 }
 
                 var input = initialInput ?? await this._inputReader.ReadLineAsync(PromptMarkup, turnCts.Token);

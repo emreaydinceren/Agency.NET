@@ -73,14 +73,29 @@ public sealed class ChatSession : IAsyncDisposable
     /// system-prompt inputs, tools, environment, and user for the next turn. Built with the same
     /// factory <see cref="SendAsync"/> uses; the preview is not stored and does not start the session.
     /// </summary>
-    internal Context PreviewContext() => this._ctx ?? Agent.CreateContext(
-        string.Empty,
-        this._toolContext,
-        new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
-        user: this._user,
-        timeProvider: this._agent.TimeProvider,
-        skills: this._skills,
-        session: this._session);
+    internal Context PreviewContext()
+    {
+        if (this._ctx is not null)
+        {
+            return this._ctx;
+        }
+
+        Context preview = Agent.CreateContext(
+            string.Empty,
+            this._toolContext,
+            new EnvironmentalContext { ContextWindowSize = this._options.ContextWindowSize },
+            user: this._user,
+            timeProvider: this._agent.TimeProvider,
+            skills: this._skills,
+            session: this._session);
+
+        if (this._pendingKnowledge is not null)
+        {
+            preview.Knowledge = this._pendingKnowledge;
+        }
+
+        return preview;
+    }
 
     /// <summary>
     /// Switches the agent used for subsequent turns. Conversation history is preserved;

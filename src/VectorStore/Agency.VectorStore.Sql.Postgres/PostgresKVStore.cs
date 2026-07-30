@@ -55,7 +55,11 @@ public sealed class PostgresKVStore : IVectorStore
     }
 
     /// <summary>
-    /// Configures the PostgreSQL database with the pgvector extension and optimized indexes.
+    /// Creates the <c>semantic_kv_store</c> table, the <c>semantic_kv_projects</c> registry table, and
+    /// their supporting indexes if they do not already exist. Idempotent — existing rows are preserved
+    /// across repeated calls. If <c>semantic_kv_store</c> already exists with an <c>embedding</c> column
+    /// whose <c>vector(dimensions)</c> width differs from <paramref name="dimensions"/>, logs a warning
+    /// rather than altering the column or throwing.
     /// </summary>
     public async Task InitializeSchemaAsync(int dimensions = 1536, CancellationToken cancellationToken = default)
     {
@@ -67,12 +71,26 @@ public sealed class PostgresKVStore : IVectorStore
         await _telemetry.ExecuteAsync<int>(
             "initialize",
             activity,
-            () =>
+            async () =>
             {
+                const string dimensionQuery = @"
+                SELECT atttypmod
+                FROM pg_attribute
+                WHERE attrelid = to_regclass('semantic_kv_store') AND attname = 'embedding' AND NOT attisdropped;";
+
+                List<int> existingDimensions = await this._postgreSqlRunner.QueryAsync<int>(
+                    dimensionQuery,
+                    reader => Task.FromResult(reader.GetInt32(0)),
+                    null,
+                    cancellationToken);
+
+                if (existingDimensions.Count > 0 && existingDimensions[0] != dimensions)
+                {
+                    VectorStoreTelemetry.LogDimensionMismatch(this._logger, existingDimensions[0], dimensions);
+                }
+
                 string sql = $@"
                 CREATE EXTENSION IF NOT EXISTS vector;
-
-                DROP TABLE IF EXISTS semantic_kv_store CASCADE;
 
                 CREATE TABLE IF NOT EXISTS semantic_kv_store (
                     user_id    TEXT        NOT NULL,
@@ -91,9 +109,19 @@ public sealed class PostgresKVStore : IVectorStore
 
                 CREATE INDEX IF NOT EXISTS semantic_kv_store_metadata_idx
                     ON semantic_kv_store USING gin (metadata);
+
+                CREATE TABLE IF NOT EXISTS semantic_kv_projects (
+                    user_id    TEXT        NOT NULL,
+                    project_id TEXT        NOT NULL,
+                    created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (user_id, project_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS semantic_kv_store_user_project_idx
+                    ON semantic_kv_store (user_id, project_id);
             ";
 
-                return this._postgreSqlRunner.ExecuteAsync(sql, null, cancellationToken);
+                return await this._postgreSqlRunner.ExecuteAsync(sql, null, cancellationToken);
             },
             onSuccess: (_, elapsedMs) => VectorStoreTelemetry.LogSchemaInitialized(this._logger, elapsedMs),
             onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorInitializingSchema(this._logger, ex, elapsedMs));
@@ -127,7 +155,8 @@ public sealed class PostgresKVStore : IVectorStore
                 FROM semantic_kv_store
                 WHERE user_id = @uid
                   AND (
-                      @allSessions
+                      (session_id = '*' AND project_id = '*')
+                      OR @allSessions
                       OR (session_id = @sid AND project_id = '*')
                       OR (@hasProjects AND session_id = '*' AND project_id = ANY(@pids))
                   )
@@ -274,12 +303,90 @@ public sealed class PostgresKVStore : IVectorStore
     }
 
     /// <inheritdoc/>
+    public async Task<bool> CreateProjectAsync(string userId, string projectId, CancellationToken cancellationToken = default)
+    {
+        projectId = ProjectName.EnsureValid(projectId);
+
+        using var activity = _telemetry.StartActivity("vectorstore.create_project");
+        activity?.SetTag("vectorstore.operation", "create_project");
+        activity?.SetTag("vectorstore.user_id", userId);
+        activity?.SetTag("vectorstore.project_id", projectId);
+        VectorStoreTelemetry.LogCreatingProject(this._logger, userId, projectId);
+
+        return await _telemetry.ExecuteAsync(
+            "create_project",
+            activity,
+            async () =>
+            {
+                int rowsAffected = await this._postgreSqlRunner.ExecuteAsync(
+                    """
+                    INSERT INTO semantic_kv_projects (user_id, project_id)
+                    VALUES (@uid, @pid)
+                    ON CONFLICT (user_id, project_id) DO NOTHING
+                    """,
+                    new Dictionary<string, object?> { ["uid"] = userId, ["pid"] = projectId },
+                    cancellationToken);
+
+                if (rowsAffected == 0)
+                {
+                    return false;
+                }
+
+                List<int> existingChunk = await this._postgreSqlRunner.QueryAsync<int>(
+                    "SELECT 1 FROM semantic_kv_store WHERE user_id = @uid AND project_id = @pid LIMIT 1",
+                    reader => Task.FromResult(reader.GetInt32(0)),
+                    new Dictionary<string, object?> { ["uid"] = userId, ["pid"] = projectId },
+                    cancellationToken);
+
+                bool created = existingChunk.Count == 0;
+                activity?.SetTag("vectorstore.created", created);
+                return created;
+            },
+            onSuccess: (created, elapsedMs) => VectorStoreTelemetry.LogProjectCreated(this._logger, elapsedMs, userId, projectId, created),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorCreatingProject(this._logger, ex, elapsedMs, userId, projectId));
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> DeleteProjectAsync(string userId, string projectId, CancellationToken cancellationToken = default)
+    {
+        projectId = ProjectName.EnsureValid(projectId);
+
+        using var activity = _telemetry.StartActivity("vectorstore.delete_project");
+        activity?.SetTag("vectorstore.operation", "delete_project");
+        activity?.SetTag("vectorstore.user_id", userId);
+        activity?.SetTag("vectorstore.project_id", projectId);
+        VectorStoreTelemetry.LogDeletingProject(this._logger, userId, projectId);
+
+        return await _telemetry.ExecuteAsync(
+            "delete_project",
+            activity,
+            async () =>
+            {
+                int rowsAffected = await this._postgreSqlRunner.ExecuteAsync(
+                    "DELETE FROM semantic_kv_store WHERE user_id = @uid AND project_id = @pid",
+                    new Dictionary<string, object?> { ["uid"] = userId, ["pid"] = projectId },
+                    cancellationToken);
+
+                await this._postgreSqlRunner.ExecuteAsync(
+                    "DELETE FROM semantic_kv_projects WHERE user_id = @uid AND project_id = @pid",
+                    new Dictionary<string, object?> { ["uid"] = userId, ["pid"] = projectId },
+                    cancellationToken);
+
+                activity?.SetTag("vectorstore.deleted_count", rowsAffected);
+                return rowsAffected;
+            },
+            onSuccess: (deletedCount, elapsedMs) => VectorStoreTelemetry.LogProjectDeleted(this._logger, elapsedMs, userId, projectId, deletedCount),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorDeletingProject(this._logger, ex, elapsedMs, userId, projectId));
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<string>> ListProjectsAsync(string userId, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            SELECT DISTINCT project_id
-            FROM semantic_kv_store
-            WHERE user_id = @uid AND project_id != '*'
+            SELECT project_id FROM semantic_kv_projects WHERE user_id = @uid
+            UNION
+            SELECT DISTINCT project_id FROM semantic_kv_store
+                WHERE user_id = @uid AND project_id != '*'
             ORDER BY project_id
             """;
 

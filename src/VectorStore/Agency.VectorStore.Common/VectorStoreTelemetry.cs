@@ -127,6 +127,10 @@ public sealed partial class VectorStoreTelemetry : IDisposable
     [LoggerMessage(Level = LogLevel.Error, Message = "Error initializing vector store schema after {ElapsedMs}ms")]
     internal static partial void LogErrorInitializingSchema(ILogger logger, Exception ex, double elapsedMs);
 
+    /// <summary>Logs that the existing <c>semantic_kv_store.embedding</c> column's dimension differs from the configured dimensions.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Existing semantic_kv_store.embedding column has dimension {ExistingDimensions}, but schema initialization was requested with {ConfiguredDimensions}. The column was not altered; inserts using the configured dimensions will fail until a migration is performed.")]
+    internal static partial void LogDimensionMismatch(ILogger logger, int existingDimensions, int configuredDimensions);
+
     /// <summary>Logs that a vector store search is starting.</summary>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Searching vector store with limit {Limit} and metadata filter present: {HasFilter}")]
     internal static partial void LogSearching(ILogger logger, int limit, bool hasFilter);
@@ -150,6 +154,30 @@ public sealed partial class VectorStoreTelemetry : IDisposable
     /// <summary>Logs that a vector store upsert failed.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "Error upserting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}")]
     internal static partial void LogErrorUpserting(ILogger logger, Exception ex, double elapsedMs, string userId, string? sessionId, string key);
+
+    /// <summary>Logs that a vector store create-project is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Creating vector store project for user {UserId} project {ProjectId}")]
+    internal static partial void LogCreatingProject(ILogger logger, string userId, string projectId);
+
+    /// <summary>Logs that a vector store create-project completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Vector store create-project completed in {ElapsedMs}ms for user {UserId} project {ProjectId}. Created: {Created}")]
+    internal static partial void LogProjectCreated(ILogger logger, double elapsedMs, string userId, string projectId, bool created);
+
+    /// <summary>Logs that a vector store create-project failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error creating vector store project after {ElapsedMs}ms for user {UserId} project {ProjectId}")]
+    internal static partial void LogErrorCreatingProject(ILogger logger, Exception ex, double elapsedMs, string userId, string projectId);
+
+    /// <summary>Logs that a vector store delete-project is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Deleting vector store project for user {UserId} project {ProjectId}")]
+    internal static partial void LogDeletingProject(ILogger logger, string userId, string projectId);
+
+    /// <summary>Logs that a vector store delete-project completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Vector store delete-project completed in {ElapsedMs}ms for user {UserId} project {ProjectId}. Deleted count: {DeletedCount}")]
+    internal static partial void LogProjectDeleted(ILogger logger, double elapsedMs, string userId, string projectId, int deletedCount);
+
+    /// <summary>Logs that a vector store delete-project failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error deleting vector store project after {ElapsedMs}ms for user {UserId} project {ProjectId}")]
+    internal static partial void LogErrorDeletingProject(ILogger logger, Exception ex, double elapsedMs, string userId, string projectId);
 
     /// <summary>Logs that a vector store delete is starting.</summary>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Deleting vector store entry for user {UserId} session {SessionId} key {Key}")]

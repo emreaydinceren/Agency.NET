@@ -79,8 +79,11 @@ internal static class CommandRegistry
             (_, session) => DumpContextCommand.Run(session));
         RegisterAsyncCommand("/add-file", "Ingest a file into the vector store.", AddFileCommand.RunAsync, argumentHint: "<path>");
         RegisterAsyncCommand("/add-folder", "Ingest all files in a folder into the vector store.", AddFolderCommand.RunAsync, argumentHint: "<path>");
-        RegisterAsyncCommand("/projects-load", "Load a project into the session context.", ProjectsCommand.LoadAsync, argumentHint: "<name>");
-        RegisterAsyncCommand("/projects-unload", "Unload a project from the session context.", ProjectsCommand.UnloadAsync, argumentHint: "<name>");
-        RegisterAsyncCommand("/projects-list", "List all projects in the vector store.", (_, session) => ProjectsCommand.ListAsync(session));
+        RegisterAsyncCommand("/project-load", "Load a project into the session context.", ProjectsCommand.LoadAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/project-unload", "Unload a project from the session context.", ProjectsCommand.UnloadAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/project-list", "List all projects in the vector store.", (_, session) => ProjectsCommand.ListAsync(session));
+        RegisterAsyncCommand("/project-create", "Create (and load) a project so it exists before any document is ingested into it.", ProjectsCommand.CreateAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/project-delete", "Permanently delete a project and every document ingested into it.", ProjectsCommand.DeleteAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/project-show", "List the documents held in one project, without loading it.", ProjectsCommand.ShowAsync, argumentHint: "<name>");
     }
 }

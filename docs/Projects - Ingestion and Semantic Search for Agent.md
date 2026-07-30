@@ -99,7 +99,7 @@ of three **scopes**:
   relevant right now.
 - **Project** — a *named* bundle you can **load** and **unload** on demand. Think of a project as a
   labelled box of documents: "the handbook," "the Q3 report." You pull the box off the shelf when you
-  need it (`/projects-load handbook`) and put it back when you don't.
+  need it (`/project-load handbook`) and put it back when you don't.
 
 Here is the elegant part: **a single search always looks across all three at once** — global, *plus*
 your current session, *plus* whichever projects you have loaded. You never have to tell the search
@@ -135,11 +135,13 @@ search only happens when the model actually calls for it.
 
 You are chatting with the agent and want it to answer questions using your team handbook.
 
-1. You type `/add-folder ./handbook`. The agent asks for a file pattern (default `*.md`), counts the
-   files, asks which scope to file them under — you pick a project named `handbook` — and ingests them.
-   Behind the scenes each file is chopped into bite-sized chunks, each chunk is embedded into a vector,
-   and each is stored tagged with `project = handbook`.
-2. Next time you start a conversation where you want the handbook, you type `/projects-load handbook`.
+1. You type `/project-create handbook`, which declares the project and loads it into your session in
+   the same step — no separate load command needed. Then you type `/add-folder ./handbook`; the agent
+   asks for a file pattern (default `*.md`), counts the files, and — because `handbook` is the only
+   project loaded — ingests straight into it without prompting for a scope. Behind the scenes each file
+   is chopped into bite-sized chunks, each chunk is embedded into a vector, and each is stored tagged
+   with `project = handbook`.
+2. Next time you start a conversation where you want the handbook, you type `/project-load handbook`.
    That adds the handbook box to your search union for this session.
 3. Before your next message even runs, the agent's instructions quietly gain a line:
    `- [project:handbook] onboarding.md` (and so on). The model now *knows* the handbook is on the shelf.
@@ -208,7 +210,7 @@ dependency arrows, so the shared contracts sit at the bottom and depend on nothi
 | `Agency.Ingestion` | The pipeline: load → split → embed → store. | `src/Ingestion/Agency.Ingestion` |
 | `Agency.Ingestion.SemanticKernel` | The chunker (`ITextSplitter`) built on Semantic Kernel's `TextChunker`. | `…/Agency.Ingestion.SemanticKernel` |
 | `Agency.Harness` | The host loop. Owns `IProjectSessionState` and the `SemanticSearchTool`. | `src/Harness/Agency.Harness` |
-| `Agency.Harness.Console` | The REPL. Owns the `/add-*` and `/projects-*` commands, the services, and the DI wiring. | `src/Harness/Agency.Harness.Console` |
+| `Agency.Harness.Console` | The REPL. Owns the `/add-*` and `/project-*` commands, the services, and the DI wiring. | `src/Harness/Agency.Harness.Console` |
 
 **Why this matters to you as a reader:** when you go looking for "where does a document get stored," you
 will not find it in the LLM tool. You will find it in a REPL command that the *human* triggered. The
@@ -221,7 +223,10 @@ tool only ever reads.
 Everything hangs off four small types in `Agency.VectorStore.Common`.
 
 A stored chunk is addressed by a composite key: `(user_id, session_id, project_id, key)`. The two
-middle fields are the **scope tag**. The query that reads it back is the `Query` record
+middle fields are the **scope tag**. A project's existence isn't limited to that tag, though: a project
+can also be *declared* ahead of any ingestion, via a small registry table (`semantic_kv_projects`) that
+sits alongside the chunk table and off the search path — see `ProjectLifecycle-Specifications.md` §7.2–§7.3
+for the full design. The query that reads it back is the `Query` record
 (`Query.cs:24`):
 
 ```csharp
@@ -492,16 +497,20 @@ into the system prompt under `## Facts`, exactly like a memory fact — the mode
 
 ### 6.7 The REPL commands: the human's side of the contract
 
-Five commands make up the entire human interface, registered in the command registry. They are the only
-things that *write* (**P1**).
+Eight commands make up the entire human interface, registered in the command registry. Seven of them
+*write* (**P1**); `/project-show` is the one read-only exception, added to let you inspect a project
+before deciding whether to load it.
 
 | Command | File | What it does |
 |---|---|---|
 | `/add-file [path]` | `Commands/AddFileCommand.cs` | Checks for prior ingestion, resolves scope, ingests one file, marks the inventory dirty. |
 | `/add-folder [path]` | `Commands/AddFolderCommand.cs` | Prompts for a glob (default `*.md`), counts files, gates ingestion of `>50` files behind a confirm, ingests, marks dirty. |
-| `/projects-load [name]` | `Commands/ProjectsCommand.cs` | Adds a project to the session's loaded list; marks dirty. |
-| `/projects-unload [name]` | `Commands/ProjectsCommand.cs` | Removes it (with a picker if no name given); marks dirty. |
-| `/projects-list` | `Commands/ProjectsCommand.cs` | Renders every project in the store with a loaded/available badge. |
+| `/project-list` | `Commands/ProjectsCommand.cs` | Renders every known project (declared or with ingested documents) with a loaded/available badge. |
+| `/project-load [name]` | `Commands/ProjectsCommand.cs` | Adds a project to the session's loaded list; marks dirty. |
+| `/project-unload [name]` | `Commands/ProjectsCommand.cs` | Removes it (with a picker if no name given); marks dirty. |
+| `/project-create <name>` | `Commands/ProjectsCommand.cs` | Declares a project and loads it into the session in the same step; marks dirty iff the loaded set changed. |
+| `/project-delete <name>` | `Commands/ProjectsCommand.cs` | Confirms, then permanently deletes every chunk tagged with the project plus its registry row; unloads it locally if loaded; marks dirty. |
+| `/project-show <name>` | `Commands/ProjectsCommand.cs` | Read-only: lists the documents held in one project, without loading it or changing session scope. |
 
 The shared bit of cleverness is **scope resolution**. `ScopeResolutionHelper.Resolve`
 (`Commands/ScopeResolutionHelper.cs:8`) decides where an ingest lands. Its ergonomics are worth noting:

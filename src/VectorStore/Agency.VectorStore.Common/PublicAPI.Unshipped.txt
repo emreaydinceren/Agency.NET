@@ -1,2 +1,8 @@
 #nullable enable
 Agency.VectorStore.Common.VectorStoreTelemetry.Dispose() -> void
+Agency.VectorStore.Common.ProjectName
+const Agency.VectorStore.Common.ProjectName.MaxLength = 64 -> int
+static Agency.VectorStore.Common.ProjectName.TryNormalize(string? raw, out string! canonical, out string? error) -> bool
+static Agency.VectorStore.Common.ProjectName.EnsureValid(string? raw) -> string!
+Agency.VectorStore.Common.IVectorStore.CreateProjectAsync(string! userId, string! projectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Agency.VectorStore.Common.IVectorStore.DeleteProjectAsync(string! userId, string! projectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!

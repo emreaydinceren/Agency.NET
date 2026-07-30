@@ -140,7 +140,7 @@ The difference is *"I edited some files"* versus *"the build is green and I prov
 
 An agent that can't read *your* files is guessing — it only knows the public internet, never your handbook, your runbooks, or the design doc you wrote this morning. Agency closes that gap with a **scoped vector store and exactly one read-only tool over it**, so the agent answers from your sources, pulls only what's relevant, and only ever sees what it's allowed to.
 
-- **The human curates; the model only reads.** Ingestion and project membership are *host* actions, driven by REPL commands (`/add-file`, `/add-folder`, `/projects-load`). The LLM is handed a single read-only `semantic_search` verb — it can never ingest, delete, reorganise, or widen its own reach.
+- **The human curates; the model only reads.** Ingestion and project membership are *host* actions, driven by REPL commands (`/add-file`, `/add-folder`, `/project-load`). The LLM is handed a single read-only `semantic_search` verb — it can never ingest, delete, reorganise, or widen its own reach.
 - **Three scopes, unioned on every read.** Every chunk lives in exactly one of **global** (always on), **session** (this conversation only), or **project** (a named box you load and unload on demand). A single search automatically unions all three you currently have access to — you never tell it where to look.
 - **`user_id` is the only hard wall.** Scopes organise *your own* knowledge; they aren't security boundaries. The real partition is the user, enforced as a mandatory `AND user_id = @uid` in the SQL — cross-scope reach is a feature, cross-user reach is impossible by construction.
 - **The model is told what exists before it asks.** A cheap document *inventory* — just the titles in scope — is pushed into the system prompt each turn (`- [project:handbook] onboarding.md`). The model sees the shelf labels for free, then decides whether the expensive *search* is worth pulling.
@@ -178,7 +178,7 @@ Grouped by what they're for — the production guarantees that are genuinely har
 
 ### Agent capabilities
 
-- **Scoped semantic search over your documents** — ingest files and folders from the REPL (`/add-file`, `/add-folder`) into **global / session / project** scopes, then load and unload named projects on demand (`/projects-load`). The model gets one read-only `semantic_search` tool that unions every accessible scope behind a hard `user_id` partition, plus a per-turn document *inventory* in the system prompt so it knows what's available before it asks. Opt-in behind a single `Embedding:BaseUrl` config key.
+- **Scoped semantic search over your documents** — ingest files and folders from the REPL (`/add-file`, `/add-folder`) into **global / session / project** scopes, then load and unload named projects on demand (`/project-load`). The model gets one read-only `semantic_search` tool that unions every accessible scope behind a hard `user_id` partition, plus a per-turn document *inventory* in the system prompt so it knows what's available before it asks. Opt-in behind a single `Embedding:BaseUrl` config key.
 - **Budget & token guardrails** — stop the loop on step count, no-more-tool-calls, accumulated USD cost, or total tokens. Compose any combination with `StopConditions.Any(...)`.
 - **Stateful, structured context** — context is assembled from typed sub-contexts (query, temporal, environmental, user, knowledge, memory) rather than a raw prompt string. Domain facts and recalled memories are re-injected into the system prompt on **every** loop iteration, so grounding never drifts out of the window.
 - **Multi-turn sessions with per-turn timeouts** — `ChatSession` / `Agent.ChatAsync` preserve conversation history across turns; `AgentOptions.TurnTimeoutSeconds` bounds each turn.
@@ -394,8 +394,8 @@ With `Embedding:BaseUrl` configured (see below), the REPL gains the ingestion an
 
 ```text
 /add-folder ./handbook        # pick a glob + scope (e.g. a project named "handbook"); chunks + embeds every file
-/projects-load handbook       # add the handbook box to this session's search union
-/projects-list                # show every project with a loaded/available badge
+/project-load handbook        # add the handbook box to this session's search union
+/project-list                 # show every project with a loaded/available badge
 
 > How many vacation days do new hires get?
 # the agent sees "[project:handbook] onboarding.md" in its inventory,

@@ -221,4 +221,49 @@ public sealed class ChatSessionTests
 
         Assert.Equal(0, fireCount);
     }
+
+    // ── PreviewContext / SetKnowledge ────────────────────────────────────────
+
+    /// <summary>
+    /// Knowledge queued via <see cref="ChatSession.SetKnowledge"/> before any turn has
+    /// started must still appear in <see cref="ChatSession.PreviewContext"/>'s result,
+    /// even though no <see cref="Context"/> has been created yet.
+    /// </summary>
+    [Fact]
+    public void PreviewContext_KnowledgeSetBeforeFirstTurn_IsReflectedInPreview()
+    {
+        var client = new FakeChatClient();
+        var agent = new Agent(client, "model");
+        var session = new ChatSession(agent, new AgentOptions());
+
+        var knowledge = new KnowledgeContext { Facts = ["3 documents ingested"] };
+        session.SetKnowledge(knowledge);
+
+        Context preview = session.PreviewContext();
+
+        Assert.Contains("3 documents ingested", preview.Knowledge.Facts);
+    }
+
+    /// <summary>
+    /// Once a turn has started, <see cref="ChatSession.PreviewContext"/> must return the
+    /// live <see cref="Context"/> itself — not a freshly built preview — so knowledge set
+    /// via <see cref="ChatSession.SetKnowledge"/> afterward is reflected immediately.
+    /// </summary>
+    [Fact]
+    public async Task PreviewContext_AfterFirstTurn_ReturnsLiveContext()
+    {
+        var client = new FakeChatClient();
+        client.EnqueueResponse(TextResponse("hello"));
+        var agent = new Agent(client, "model");
+        var session = new ChatSession(agent, new AgentOptions());
+
+        await DrainAsync(session, "hello");
+
+        Assert.True(session.IsStarted);
+        Assert.DoesNotContain("5 documents ingested", session.PreviewContext().Knowledge.Facts);
+
+        session.SetKnowledge(new KnowledgeContext { Facts = ["5 documents ingested"] });
+
+        Assert.Contains("5 documents ingested", session.PreviewContext().Knowledge.Facts);
+    }
 }

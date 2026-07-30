@@ -49,6 +49,94 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         Assert.NotEmpty(results);
     }
 
+    /// <summary>
+    /// Verifies that calling InitializeSchemaAsync a second time does not destroy rows already
+    /// stored by a prior UpsertAsync call. Captures the non-destructive schema-init contract from
+    /// docs/ProjectLifecycle-Specifications.md §6.0 (PR-0.1).
+    /// </summary>
+    [Fact]
+    public async Task InitializeSchemaAsync_CalledTwice_PreservesExistingRows()
+    {
+        var kvStore = this._fixture.KVStore;
+        var key = this._fixture.UniqueName("reinit_preserve");
+
+        await kvStore.UpsertAsync("test-user", "test-session", key, new { text = "should survive reinit" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await kvStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
+
+        var results = await kvStore.SearchAsync<dynamic>(
+            new Query("test-user", "test-session", key, null, null, 1),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == key);
+    }
+
+    /// <summary>
+    /// Verifies that calling InitializeSchemaAsync a second time leaves a usable
+    /// <c>semantic_kv_projects</c> registry table behind (created once, not recreated
+    /// destructively). Captures the registry-table contract from
+    /// docs/ProjectLifecycle-Specifications.md §6.0, §7.2 (PR-0.2).
+    /// </summary>
+    [Fact]
+    public async Task InitializeSchemaAsync_CalledTwice_CreatesProjectsTableOnce()
+    {
+        var kvStore = this._fixture.KVStore;
+
+        await kvStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
+        await kvStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
+
+        int rowsAffected = await this._fixture.Runner.ExecuteAsync(
+            "INSERT INTO semantic_kv_projects (user_id, project_id) VALUES (@u, @p)",
+            new Dictionary<string, object?> { ["u"] = "test-user", ["p"] = this._fixture.UniqueName("registry_proj") },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, rowsAffected);
+    }
+
+    /// <summary>
+    /// Verifies that re-initialising an existing <c>semantic_kv_store</c> table with a different
+    /// <c>dimensions</c> value logs a warning rather than silently proceeding, per the
+    /// <c>vector(dimensions)</c> typmod mismatch hazard in docs/ProjectLifecycle-Specifications.md
+    /// §6.0 (PR-0.3). Uses its own <see cref="PostgresKVStore"/> instance (sharing the fixture's
+    /// connection and embedding generator) so the warning can be captured via a dedicated
+    /// <see cref="ILogger{TCategoryName}"/> test double, and restores the table to the dimension
+    /// every other test in this fixture expects before returning.
+    /// </summary>
+    [Fact]
+    public async Task InitializeSchemaAsync_DimensionMismatch_LogsWarning()
+    {
+        var logger = new CapturingLogger<PostgresKVStore>();
+        var store = new PostgresKVStore(this._fixture.EmbeddingGenerator, this._fixture.Runner, logger);
+
+        try
+        {
+            await store.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
+            await store.InitializeSchemaAsync(dimensions: 768, TestContext.Current.CancellationToken);
+
+            Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning);
+        }
+        finally
+        {
+            // Restore the dimension every other test in this shared fixture expects.
+            await this._fixture.KVStore.InitializeSchemaAsync(dimensions: 1536, TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// A minimal <see cref="ILogger{T}"/> test double that captures every log call's level and
+    /// formatted message, so tests can assert on log output without pulling in a new dependency.
+    /// </summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+            => this.Entries.Add((logLevel, formatter(state, exception)));
+    }
+
     // ── Functional: Upsert ──────────────────────────────────────────────────
 
     /// <summary>
@@ -328,13 +416,13 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         Assert.Contains(allResults, r => r.Key == keyGlobal);
         Assert.Contains(allResults, r => r.Key == keySession);
 
-        // Specific sessionId → only session-scoped entry visible
+        // Specific sessionId activates the three-scope union: global + that session are both visible.
         var sessionResults = await kvStore.SearchAsync<dynamic>(
             new Query("test-user", "test-session", null, null, null, 100),
             TestContext.Current.CancellationToken);
 
         Assert.Contains(sessionResults, r => r.Key == keySession);
-        Assert.DoesNotContain(sessionResults, r => r.Key == keyGlobal);
+        Assert.Contains(sessionResults, r => r.Key == keyGlobal);
     }
 
     /// <summary>
@@ -400,6 +488,493 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         Assert.Equal("session-a", remaining[0].SessionId);
     }
 
+    // ── CreateProjectAsync ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that declaring a brand-new project returns <see langword="true"/> and that the project
+    /// subsequently appears in <see cref="IVectorStore.ListProjectsAsync"/>. Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.2 (6.2.1, 6.2.6).
+    /// </summary>
+    [Fact]
+    public async Task CreateProjectAsync_NewName_ReturnsTrue_AndAppearsInListProjects()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("new-project");
+
+        bool created = await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+        Assert.True(created);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+        Assert.Contains(projectId, projects);
+    }
+
+    /// <summary>
+    /// Verifies that declaring the same project a second time returns <see langword="false"/>, pinning
+    /// the idempotence of <see cref="IVectorStore.CreateProjectAsync"/>. Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.2 (6.2.2, 6.2.6).
+    /// </summary>
+    [Fact]
+    public async Task CreateProjectAsync_CalledTwice_SecondReturnsFalse()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("twice-project");
+
+        bool first = await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+        bool second = await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        Assert.True(first);
+        Assert.False(second);
+    }
+
+    /// <summary>
+    /// Verifies that a project which already exists only because a chunk was upserted under its id
+    /// (a "derived" project, never declared via <see cref="IVectorStore.CreateProjectAsync"/>) is treated
+    /// as already known: creating it returns <see langword="false"/> rather than a false "created".
+    /// Captures docs/ProjectLifecycle-Specifications.md §6.2 (6.2.3, 6.2.6) — the derived-existence probe.
+    /// </summary>
+    [Fact]
+    public async Task CreateProjectAsync_ProjectDerivedFromExistingChunks_ReturnsFalse()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("derived-project");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("derived-chunk"), new { text = "derived chunk" },
+            projectId: projectId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        bool created = await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        Assert.False(created);
+    }
+
+    /// <summary>
+    /// Verifies that declaring an empty project and including its id in <see cref="Query.ProjectIds"/>
+    /// does not change the set of search hits compared to the same search without that project id — a
+    /// registry row is not a chunk and must never surface as, or affect, a search result. A non-empty
+    /// global and session baseline is seeded first so that "both empty" cannot pass vacuously. This is
+    /// the regression guard for the rejected sentinel-row design
+    /// (docs/ProjectLifecycle-Specifications.md §7.3, §14.2) — do not weaken or remove it.
+    /// </summary>
+    [Fact]
+    public async Task CreateProjectAsync_DoesNotAffectSearchResults()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string sessionId = this._fixture.UniqueName("baseline-session");
+        string projectId = this._fixture.UniqueName("empty-project");
+        string globalKey = this._fixture.UniqueName("baseline_global");
+        string sessionKey = this._fixture.UniqueName("baseline_session");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, globalKey, new { text = "global baseline" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(userId, sessionId, sessionKey, new { text = "session baseline" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        bool created = await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+        Assert.True(created);
+
+        IReadOnlyList<SearchHit<dynamic>> withoutProject = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, sessionId, null, null, null, 100, false, null),
+            TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> withProject = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, sessionId, null, null, null, 100, false, [projectId]),
+            TestContext.Current.CancellationToken);
+
+        // Guard against a vacuous "both empty" comparison: the baseline must actually be present.
+        Assert.Contains(withoutProject, r => r.Key == globalKey);
+        Assert.Contains(withoutProject, r => r.Key == sessionKey);
+
+        List<string> withoutKeys = withoutProject.Select(r => r.Key).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        List<string> withKeys = withProject.Select(r => r.Key).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        Assert.Equal(withoutKeys, withKeys);
+    }
+
+    /// <summary>
+    /// Verifies that creating a project for one user does not make it appear for a different user with
+    /// the same project name, pinning the <c>user_id</c> partition (P3). Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.2 (6.2.5, 6.2.6).
+    /// </summary>
+    [Fact]
+    public async Task CreateProjectAsync_OtherUsersProjectSameName_IsIndependent()
+    {
+        string userA = Guid.NewGuid().ToString("N");
+        string userB = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("shared-name");
+
+        bool created = await this._fixture.KVStore.CreateProjectAsync(userA, projectId, TestContext.Current.CancellationToken);
+        Assert.True(created);
+
+        IReadOnlyList<string> projectsForB = await this._fixture.KVStore.ListProjectsAsync(userB, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(projectId, projectsForB);
+    }
+
+    /// <summary>
+    /// Verifies that an invalid project id (the reserved global sentinel <c>"*"</c>, or an empty string)
+    /// is rejected with <see cref="ArgumentException"/> before any I/O — validation precedes the database
+    /// call, so this is a pure unit-level check. Captures docs/ProjectLifecycle-Specifications.md §6.2
+    /// (6.2.7, 6.2.6).
+    /// </summary>
+    [Theory]
+    [InlineData("*")]
+    [InlineData("")]
+    public async Task CreateProjectAsync_InvalidProjectId_ThrowsArgumentException(string invalidProjectId)
+    {
+        string userId = Guid.NewGuid().ToString("N");
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await this._fixture.KVStore.CreateProjectAsync(userId, invalidProjectId, TestContext.Current.CancellationToken));
+    }
+
+    // ── ListProjectsAsync ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that a project declared only via a registry row — no chunk ever upserted under its id —
+    /// appears in <see cref="IVectorStore.ListProjectsAsync"/>. Captures the "declared" half of the
+    /// declared ∪ derived union (docs/ProjectLifecycle-Specifications.md §6.5, 6.5.1).
+    /// </summary>
+    [Fact]
+    public async Task ListProjectsAsync_IncludesDeclaredProjectWithNoEntries()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("declared-only");
+
+        await this._fixture.Runner.ExecuteAsync(
+            "INSERT INTO semantic_kv_projects (user_id, project_id) VALUES (@u, @p)",
+            new Dictionary<string, object?> { ["u"] = userId, ["p"] = projectId },
+            TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.Contains(projectId, projects);
+    }
+
+    /// <summary>
+    /// Verifies that a project which has a chunk upserted under its id, but no registry row (as in a
+    /// pre-existing store from before <see cref="IVectorStore.CreateProjectAsync"/> existed), still
+    /// appears in <see cref="IVectorStore.ListProjectsAsync"/>. Captures the "derived" half of the union
+    /// and the backward-compatibility guarantee (docs/ProjectLifecycle-Specifications.md §6.5, 6.5.2, L1).
+    /// </summary>
+    [Fact]
+    public async Task ListProjectsAsync_IncludesDerivedProjectWithNoRegistryRow()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("derived-only");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("derived-chunk"), new { text = "derived" },
+            projectId: projectId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.Contains(projectId, projects);
+    }
+
+    /// <summary>
+    /// Verifies that a project which is both declared (a registry row) and populated (a chunk under the
+    /// same id) appears exactly once in <see cref="IVectorStore.ListProjectsAsync"/> — the <c>UNION</c>
+    /// de-duplicates the overlap. Captures docs/ProjectLifecycle-Specifications.md §6.5, 6.5.3.
+    /// </summary>
+    [Fact]
+    public async Task ListProjectsAsync_ProjectBothDeclaredAndPopulated_AppearsOnce()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("declared-and-populated");
+
+        await this._fixture.Runner.ExecuteAsync(
+            "INSERT INTO semantic_kv_projects (user_id, project_id) VALUES (@u, @p)",
+            new Dictionary<string, object?> { ["u"] = userId, ["p"] = projectId },
+            TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("declared-and-populated-chunk"), new { text = "populated" },
+            projectId: projectId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.Single(projects, p => p == projectId);
+    }
+
+    /// <summary>
+    /// Verifies that the global scope sentinel <c>"*"</c> never appears in
+    /// <see cref="IVectorStore.ListProjectsAsync"/>, even when global-scoped data exists for the user.
+    /// Captures docs/ProjectLifecycle-Specifications.md §6.5, 6.5.4.
+    /// </summary>
+    [Fact]
+    public async Task ListProjectsAsync_ExcludesGlobalSentinel()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("global-only"), new { text = "global" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain("*", projects);
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="IVectorStore.ListProjectsAsync"/> returns projects in ascending order,
+    /// regardless of the order in which they were inserted. Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.5, 6.5.5.
+    /// </summary>
+    [Fact]
+    public async Task ListProjectsAsync_IsOrderedAscending()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string[] projectIds = ["zebra", "apple", "mango"];
+
+        foreach (string projectId in projectIds)
+        {
+            await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName($"order-{projectId}"), new { },
+                projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["apple", "mango", "zebra"], projects);
+    }
+
+    // ── DeleteProjectAsync ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Verifies that deleting a project removes every chunk tagged with its id and returns the count of
+    /// chunks removed, while a different project's chunks survive untouched. Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.3 (6.3.1).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_RemovesAllChunksForProject_ReturnsCount()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string p1 = this._fixture.UniqueName("p1");
+        string p2 = this._fixture.UniqueName("p2");
+
+        for (int i = 0; i < 3; i++)
+        {
+            await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName($"p1_chunk_{i}"), new { text = $"p1 chunk {i}" },
+                projectId: p1, cancellationToken: TestContext.Current.CancellationToken);
+        }
+        for (int i = 0; i < 2; i++)
+        {
+            await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName($"p2_chunk_{i}"), new { text = $"p2 chunk {i}" },
+                projectId: p2, cancellationToken: TestContext.Current.CancellationToken);
+        }
+
+        int removed = await this._fixture.KVStore.DeleteProjectAsync(userId, p1, TestContext.Current.CancellationToken);
+        Assert.Equal(3, removed);
+
+        IReadOnlyList<SearchHit<dynamic>> p2Results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, null, null, null, 100, false, [p2]),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(2, p2Results.Count);
+    }
+
+    /// <summary>
+    /// Verifies that deleting a project never removes global-scoped or session-scoped entries, since
+    /// those scopes have no project id to match. Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.3 (6.3.2), P2.
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_LeavesGlobalAndSessionScopesUntouched()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string sessionId = this._fixture.UniqueName("session");
+        string globalKey = this._fixture.UniqueName("global_untouched");
+        string sessionKey = this._fixture.UniqueName("session_untouched");
+        string unrelatedProject = this._fixture.UniqueName("unrelated-project");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, globalKey, new { text = "global" },
+            cancellationToken: TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(userId, sessionId, sessionKey, new { text = "session" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.DeleteProjectAsync(userId, unrelatedProject, TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, sessionId, null, null, null, 100),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == globalKey);
+        Assert.Contains(results, r => r.Key == sessionKey);
+    }
+
+    /// <summary>
+    /// Verifies that deleting a project for one user does not remove another user's chunks under a
+    /// project of the same name, pinning the <c>user_id</c> partition (P3). Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.3 (6.3.3).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_OtherUserSameProjectName_Unaffected()
+    {
+        string userA = Guid.NewGuid().ToString("N");
+        string userB = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("shared-project-name");
+        string keyA = this._fixture.UniqueName("userA_chunk");
+
+        await this._fixture.KVStore.UpsertAsync(userA, null, keyA, new { text = "user A chunk" },
+            projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+
+        int removedForB = await this._fixture.KVStore.DeleteProjectAsync(userB, projectId, TestContext.Current.CancellationToken);
+        Assert.Equal(0, removedForB);
+
+        IReadOnlyList<SearchHit<dynamic>> resultsForA = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userA, null, null, null, null, 100, false, [projectId]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(resultsForA, r => r.Key == keyA);
+    }
+
+    /// <summary>
+    /// Verifies that deleting a project that has never been created or populated returns 0 and does not
+    /// throw. Captures docs/ProjectLifecycle-Specifications.md §6.3 (6.3.4), L2.
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_UnknownProject_ReturnsZero_DoesNotThrow()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("never-existed");
+
+        int removed = await this._fixture.KVStore.DeleteProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, removed);
+    }
+
+    /// <summary>
+    /// Verifies that deleting a project removes its <c>semantic_kv_projects</c> registry row, so it no
+    /// longer appears in <see cref="IVectorStore.ListProjectsAsync"/>. Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.3 (6.3.5).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_RemovesRegistryRow_ProjectNoLongerListed()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("registry-remove");
+
+        await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("registry-remove-chunk"), new { text = "chunk" },
+            projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.DeleteProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(projectId, projects);
+    }
+
+    /// <summary>
+    /// Verifies that deleting a project which was declared via <see cref="IVectorStore.CreateProjectAsync"/>
+    /// but never had a chunk ingested into it returns 0 (no chunks to remove) and unlists the project.
+    /// Captures docs/ProjectLifecycle-Specifications.md §6.3 (6.3.6).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_DeclaredButEmptyProject_ReturnsZero_AndUnlists()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("declared-empty");
+
+        await this._fixture.KVStore.CreateProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        int removed = await this._fixture.KVStore.DeleteProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+        Assert.Equal(0, removed);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(projectId, projects);
+    }
+
+    /// <summary>
+    /// Verifies that once a project is deleted, a subsequent <see cref="IVectorStore.SearchAsync{TValue}"/>
+    /// call that still passes the deleted id in <see cref="Query.ProjectIds"/> returns zero hits from that
+    /// project and does not throw — the dangling reference degrades to an empty set (L2). Captures
+    /// docs/ProjectLifecycle-Specifications.md §6.3 (6.3.7).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_ThenSearch_ReturnsNoHitsFromThatProject()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("dangling-reference");
+        string key = this._fixture.UniqueName("dangling-reference-chunk");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "will be deleted" },
+            projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.DeleteProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, null, null, null, 100, false, [projectId]),
+            TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(results, r => r.Key == key);
+    }
+
+    /// <summary>
+    /// Verifies that passing a pre-cancelled <see cref="CancellationToken"/> to
+    /// <see cref="IVectorStore.DeleteProjectAsync"/> throws <see cref="OperationCanceledException"/> and
+    /// removes no rows. Captures docs/ProjectLifecycle-Specifications.md §6.3 (6.3.8).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_HonoursCancellation()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("cancel-project");
+        string key = this._fixture.UniqueName("cancel-project-chunk");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, key, new { text = "should survive cancellation" },
+            projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await this._fixture.KVStore.DeleteProjectAsync(userId, projectId, cancelled.Token));
+
+        IReadOnlyList<SearchHit<dynamic>> results = await this._fixture.KVStore.SearchAsync<dynamic>(
+            new Query(userId, null, null, null, null, 100, false, [projectId]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(results, r => r.Key == key);
+    }
+
+    /// <summary>
+    /// Verifies that the reserved global sentinel <c>"*"</c> is rejected with
+    /// <see cref="ArgumentException"/> before any I/O — validation precedes the database call, so this is
+    /// a pure unit-level check. Captures docs/ProjectLifecycle-Specifications.md §6.3 (6.3.10).
+    /// </summary>
+    [Fact]
+    public async Task DeleteProjectAsync_GlobalSentinel_ThrowsArgumentException()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await this._fixture.KVStore.DeleteProjectAsync(userId, "*", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Verifies that a project deleted via <see cref="IVectorStore.DeleteProjectAsync"/> and then
+    /// re-ingested into via <see cref="IVectorStore.UpsertAsync{TValue}"/> under the same project id
+    /// reappears in <see cref="IVectorStore.ListProjectsAsync"/> as a <b>derived</b> project — no registry
+    /// row is recreated, only a chunk exists. This pins the "accept, detect, and report" resurrection
+    /// behaviour as specified — not a bug — so a future change that accidentally prevents it (e.g. a
+    /// registry-row precondition on <c>UpsertAsync</c>) fails this test rather than silently changing the
+    /// contract. Captures docs/ProjectLifecycle-Specifications.md §9.2.
+    /// </summary>
+    [Fact]
+    public async Task DeleteThenUpsert_ProjectReappearsAsDerived()
+    {
+        string userId = Guid.NewGuid().ToString("N");
+        string projectId = this._fixture.UniqueName("resurrection");
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("resurrection-seed"), new { text = "seed chunk" },
+            projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.DeleteProjectAsync(userId, projectId, TestContext.Current.CancellationToken);
+
+        await this._fixture.KVStore.UpsertAsync(userId, null, this._fixture.UniqueName("resurrection-concurrent"), new { text = "concurrent ingest" },
+            projectId: projectId, cancellationToken: TestContext.Current.CancellationToken);
+
+        IReadOnlyList<string> projects = await this._fixture.KVStore.ListProjectsAsync(userId, TestContext.Current.CancellationToken);
+
+        Assert.Contains(projectId, projects);
+    }
+
     // ── Fixture ─────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -458,6 +1033,16 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
         /// Gets the shared PostgreSQL vector store instance.
         /// </summary>
         public PostgresKVStore KVStore { get; private set; } = default!;
+
+        /// <summary>
+        /// Gets the PostgreSQL runner backing the shared connection.
+        /// </summary>
+        public PostgreSqlRunner Runner => this._sqlRunner;
+
+        /// <summary>
+        /// Gets the deterministic mock embedding generator shared by this fixture's stores.
+        /// </summary>
+        public IEmbeddingGenerator EmbeddingGenerator => this._embeddingGenerator;
 
         /// <summary>
         /// Returns a unique key scoped to this test run.

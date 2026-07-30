@@ -64,8 +64,30 @@ public interface IVectorStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists the distinct project ids that have entries for the given user, excluding the global project
-    /// sentinel <c>"*"</c>.
+    /// Declares a project for the given user so that it is listed and loadable before any document is
+    /// ingested into it. Idempotent.
+    /// </summary>
+    /// <returns><see langword="true"/> if a new project was declared; <see langword="false"/> if a
+    /// project with that id was already known (declared or derived from existing entries).</returns>
+    Task<bool> CreateProjectAsync(
+        string userId,
+        string projectId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes every entry tagged with <paramref name="projectId"/> for the given user, then removes the
+    /// project declaration. Idempotent: deleting an unknown project removes nothing and returns 0.
+    /// </summary>
+    /// <returns>The number of stored entries (chunks) removed.</returns>
+    Task<int> DeleteProjectAsync(
+        string userId,
+        string projectId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists the distinct project ids known for the given user — either declared via
+    /// <see cref="CreateProjectAsync"/> or derived from at least one stored entry — excluding the global
+    /// project sentinel <c>"*"</c>.
     /// </summary>
     /// <param name="userId">The user whose projects to list. Cannot be null.</param>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>

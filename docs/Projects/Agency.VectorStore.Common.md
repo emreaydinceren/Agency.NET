@@ -37,6 +37,16 @@ public interface IVectorStore
         string? projectId = null,
         CancellationToken cancellationToken = default);
 
+    Task<bool> CreateProjectAsync(
+        string userId,
+        string projectId,
+        CancellationToken cancellationToken = default);
+
+    Task<int> DeleteProjectAsync(
+        string userId,
+        string projectId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<string>> ListProjectsAsync(
         string userId,
         CancellationToken cancellationToken = default);
@@ -52,7 +62,9 @@ public interface IVectorStore
 - `UpsertAsync` inserts or replaces a keyed entry; a `null` `sessionId` is stored as `"*"` (user-global scope), and a `null` `projectId` is stored as `"*"` (global project scope).
 - `SearchAsync` returns ranked results for a `Query`, ordered by ascending vector distance.
 - `DeleteAsync` returns `true` when an entry was removed, `false` if none existed; `projectId` narrows the delete to a specific project scope.
-- `ListProjectsAsync` returns the distinct project identifiers that have at least one stored entry for the user.
+- `CreateProjectAsync` declares a project for the user so it is listed and loadable before any document is ingested into it; idempotent — returns `true` if a new project was declared, `false` if a project with that id was already known (declared or derived from existing entries).
+- `DeleteProjectAsync` deletes every entry tagged with the given `projectId` for the user, then removes the project declaration; idempotent — deleting an unknown project removes nothing and returns `0`. Returns the number of stored entries (chunks) removed.
+- `ListProjectsAsync` returns the distinct project ids known for the user — either declared via `CreateProjectAsync` or derived from at least one stored entry — excluding the global project sentinel `"*"`, in ascending order.
 - `ListDocumentsAsync` returns the distinct documents (source file + session + project) for the user, optionally restricted to a session and/or a set of project identifiers.
 
 ### Value Types

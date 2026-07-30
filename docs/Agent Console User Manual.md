@@ -205,11 +205,14 @@ Here are the commands you'll commonly see:
 | `/dump-context` | Shows you *everything* currently being sent to the AI behind the scenes (see [Section 10](#10-peeking-under-the-hood-dump-context)). |
 | `/add-file <path>` | Gives the agent one of your documents to search later (see [Section 8](#8-giving-the-agent-your-own-documents)). |
 | `/add-folder <path>` | Gives the agent a whole folder of documents. |
-| `/projects-list` | Lists the document "projects" the agent knows about. |
-| `/projects-load <name>` | Switches on a project so the agent can search it. |
-| `/projects-unload <name>` | Switches a project back off. |
+| `/project-list` | Lists the document "projects" the agent knows about. |
+| `/project-load <name>` | Switches on a project so the agent can search it. |
+| `/project-unload <name>` | Switches a project back off. |
+| `/project-create <name>` | Creates a project (or reuses one that already exists) and switches it on, in one step. |
+| `/project-delete <name>` | Permanently deletes a project and every document ingested into it, after asking you to confirm. |
+| `/project-show <name>` | Lists the documents inside one project, without switching it on. |
 
-> **Heads up:** the document commands (`/add-file`, `/add-folder`, `/projects-*`) only appear when the app
+> **Heads up:** the document commands (`/add-file`, `/add-folder`, `/project-*`) only appear when the app
 > is configured with a document search feature turned on. If you don't see them, that feature simply isn't
 > enabled in your setup — that's fine, the rest of the app works normally.
 
@@ -277,13 +280,26 @@ guard so you don't accidentally load thousands of files.
 
 ### 8.3 What's a "project"?
 
-When you add documents, the app may ask where to **file** them, or it may file them automatically. Think of
-a **project** as a *labeled box of documents*. You can keep, say, your "handbook" docs in one project and
-your "API notes" in another, and load only the box you care about right now.
+Think of a **project** as a *labeled box of documents*. You can keep, say, your "handbook" docs in one
+project and your "API notes" in another, and load only the box you care about right now.
 
-- `/projects-list` shows all the boxes and whether each is currently switched on ("loaded").
-- `/projects-load handbook` switches the "handbook" box on, so searches include it.
-- `/projects-unload handbook` switches it back off.
+The easiest way to start one is `/project-create` — it makes the box **and** switches it on in a single
+step, so the very next file you add lands in it automatically:
+
+```text
+❯ /project-create handbook
+Project 'handbook' created and loaded.
+
+❯ /add-file ./docs/handbook/onboarding.md
+```
+
+- `/project-list` shows all the boxes and whether each is currently switched on ("loaded").
+- `/project-load handbook` switches the "handbook" box back on later, if it isn't loaded right now.
+- `/project-unload handbook` switches it back off.
+- `/project-show handbook` peeks at what's inside a box, without switching it on.
+- `/project-delete handbook` **permanently deletes** the box — it removes the stored documents' ingested
+  pieces from the vector store, not just the box's name, and there's no undo. The only way back is to
+  re-add the original files.
 
 When you have exactly one project loaded, the app is smart enough to just put new documents there without
 asking. When the choice is unclear (no projects, or several), it'll politely ask whether you mean *Global*

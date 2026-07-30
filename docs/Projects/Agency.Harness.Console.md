@@ -216,7 +216,7 @@ internal static class CommandRegistry
 }
 ```
 
-The static constructor registers the built-in commands, including the five ingestion/project commands wired to `AddFileCommand`, `AddFolderCommand`, and `ProjectsCommand`. `ScopeResolutionHelper.Resolve(IProjectSessionState)` returns the `(sessionId, projectId)` ingestion scope — auto-targeting the single loaded project when exactly one is loaded, otherwise prompting Global / Session / a loaded project / a new project name.
+The static constructor registers the built-in commands, including the eight ingestion/project commands wired to `AddFileCommand`, `AddFolderCommand`, and `ProjectsCommand`. `ScopeResolutionHelper.Resolve(IProjectSessionState)` returns the `(sessionId, projectId)` ingestion scope — auto-targeting the single loaded project when exactly one is loaded, otherwise prompting Global / Session / a loaded project / a new project name.
 
 `CommandManager` matches typed input against the registered commands and dispatches; `DumpContextCommand.Run` and `ModelsCommand.RunSelectModelCommandAsync` implement the `/dump-context` and `/model` commands respectively.
 
@@ -392,7 +392,10 @@ When `Embedding:BaseUrl` is configured, the data-plane commands ingest documents
 
 - `/add-file <path>` (`AddFileCommand`) normalises the path, checks `IVectorStore.ListDocumentsAsync` for a prior ingest of the same source (prompting to re-ingest), resolves scope via `ScopeResolutionHelper`, then runs `IngestionCommandService.IngestFileAsync` inside a Spectre status spinner and marks the hydration service dirty.
 - `/add-folder <path>` (`AddFolderCommand`) prompts for a glob (default `*.md`), counts matches with `IngestionCommandService.CountFiles`, guards bulk ingests (>50 files prompt for confirmation), resolves scope, runs `IngestionCommandService.IngestDirectoryAsync`, and marks dirty.
-- `/projects-load <name>` / `/projects-unload <name>` (`ProjectsCommand`) mutate `IProjectSessionState.LoadedProjects` and mark the hydration service dirty so the next turn's Fact reflects the new scope; `/projects-list` renders all projects from `IVectorStore.ListProjectsAsync` with a loaded/available status column.
+- `/project-load <name>` / `/project-unload <name>` (`ProjectsCommand`) mutate `IProjectSessionState.LoadedProjects` and mark the hydration service dirty so the next turn's Fact reflects the new scope; `/project-list` renders all projects from `IVectorStore.ListProjectsAsync` with a loaded/available status column.
+- `/project-create <name>` (`ProjectsCommand`) declares the project via `IVectorStore.CreateProjectAsync` and loads it into the session in the same step — no separate `/project-load` call is needed — marking the hydration service dirty only if the loaded set actually changed.
+- `/project-delete <name>` (`ProjectsCommand`) confirms, then physically deletes every chunk tagged with that project via `IVectorStore.DeleteProjectAsync` (plus its registry row), unloads it locally if it was loaded, and marks the hydration service dirty.
+- `/project-show <name>` (`ProjectsCommand`) lists the documents held in one project via `IVectorStore.ListDocumentsAsync`; read-only — it neither loads the project nor marks the hydration service dirty.
 - Ingested documents become searchable through the `SemanticSearchTool` (see Agent Tools), which scopes its query to the session's `UserId`, `SessionId`, and loaded projects.
 
 `ScopeResolutionHelper.Resolve` auto-targets the single loaded project (returns `projectId` = that project) when exactly one is loaded; otherwise it prompts for Global, Session (uses the live `SessionId`), an existing loaded project, or a new project name.
@@ -429,9 +432,12 @@ Built-in commands are registered in `CommandRegistry`'s static constructor; skil
 | `/dump-context` | | Print the full context sent to the model (not added to history) |
 | `/add-file` | `<path>` | Ingest a file into the vector store |
 | `/add-folder` | `<path>` | Ingest all files in a folder into the vector store |
-| `/projects-load` | `<name>` | Load a project into the session context |
-| `/projects-unload` | `<name>` | Unload a project from the session context |
-| `/projects-list` | | List all projects in the vector store |
+| `/project-list` | | List all projects in the vector store |
+| `/project-load` | `<name>` | Load a project into the session context |
+| `/project-unload` | `<name>` | Unload a project from the session context |
+| `/project-create` | `<name>` | Create (and load) a project so it exists before any document is ingested into it |
+| `/project-delete` | `<name>` | Permanently delete a project and every document ingested into it |
+| `/project-show` | `<name>` | List the documents held in one project, without loading it |
 | `/<skill-name>` | | Render a user-invocable skill body and submit it as a user turn |
 
 > The data-plane commands resolve their dependencies (`IVectorStore`, `IngestionCommandService`, `DocumentContextHydrationService`) from `ConsoleChatSession.ServiceProvider` with `GetRequiredService`, so they only function when `Embedding:BaseUrl` is configured; otherwise those services are absent.

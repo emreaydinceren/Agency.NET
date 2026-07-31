@@ -203,6 +203,8 @@ Here are the commands you'll commonly see:
 | `/exit` or `/quit` | Ends the session and closes the app. |
 | `/model` | Opens a picker to switch which AI model you're talking to (see [Section 7](#7-switching-the-ai-model-model)). |
 | `/dump-context` | Shows you *everything* currently being sent to the AI behind the scenes (see [Section 10](#10-peeking-under-the-hood-dump-context)). |
+| `/mcp-list` | Lists every configured MCP server and its status — on, off (even one that's off because it never started), or failed to connect — and how many of its tools are enabled (see [Section 12](#12-skills-and-other-extras)). |
+| `/mcp-toggle <server>` | Switches one MCP server's tools on or off, and remembers your choice across restarts (see [Section 12](#12-skills-and-other-extras)). |
 | `/add-file <path>` | Gives the agent one of your documents to search later (see [Section 8](#8-giving-the-agent-your-own-documents)). |
 | `/add-folder <path>` | Gives the agent a whole folder of documents. |
 | `/project-list` | Lists the document "projects" the agent knows about. |
@@ -445,7 +447,13 @@ A few optional features you may bump into:
 
 - **MCP servers** — An advanced way to plug in *more* tools from other programs (for example, a Notion
   connector). If configured, you'll see a startup line like `[Agency] MCP: connected 1 server(s)...` and
-  the agent simply has extra abilities. Nothing changes about how you chat.
+  the agent has extra abilities. Nothing changes about how you chat. Use `/mcp-list` to see which servers
+  are connected, and `/mcp-toggle <server>` to switch one on or off (or leave off the server name to pick
+  one from a list). Turning a server off is remembered — it won't even start next time you launch the app,
+  which is handy if it runs something heavy in the background (say, its own Docker container). If it's
+  already running this session, switching it off takes effect immediately, no restart needed. Switching one
+  back on saves your choice right away too, but the server itself only starts on your *next* launch. (A
+  normal rebuild keeps this choice; a full clean rebuild resets it back to what `appsettings.json` says.)
 
 You don't need any of these to use the app productively. They're there when you grow into them.
 

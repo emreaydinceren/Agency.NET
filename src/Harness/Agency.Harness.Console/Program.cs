@@ -293,6 +293,20 @@ internal class Program
                     }
                     int connected = mcpOptions.Servers.Length - pool.FailedServers.Count;
                     System.Console.WriteLine($"[Agency] MCP: connected {connected} of {mcpOptions.Servers.Length} server(s), {pool.Tools.Count} tool(s).");
+
+                    // Prime every turn with an index of what's already stored in the "memory" MCP
+                    // server (domain/key pairs only) so the model doesn't have to gamble on whether
+                    // calling recall is worthwhile. See MemoryIndexHook for the no-values rationale.
+                    builder.Services.AddSingleton<IPostConfigureOptions<AgentOptions>>(sp =>
+                        new PostConfigureOptions<AgentOptions>(name: null, action: agentOpts =>
+                        {
+                            ITool? listGlobalKeys = sp.GetService<McpClientPool>()?.Tools
+                                .FirstOrDefault(t => t.Definition.Name == MemoryIndexHook.ListGlobalKeysToolName);
+                            AgentHooks memoryIndexHooks = MemoryIndexHook.Build(listGlobalKeys);
+                            agentOpts.UserHooks = agentOpts.UserHooks is { } existing
+                                ? existing.Compose(memoryIndexHooks)
+                                : memoryIndexHooks;
+                        }));
                 }
                 catch (Exception ex)
                 {

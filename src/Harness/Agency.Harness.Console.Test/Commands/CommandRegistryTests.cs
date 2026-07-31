@@ -10,10 +10,15 @@ namespace Agency.Harness.Console.Test.Commands;
 /// </summary>
 /// <remarks>
 /// <see cref="CommandRegistry"/> is a static class with a shared, process-wide command list
-/// populated once by its static constructor. These tests only read <see cref="CommandRegistry.Commands"/>
-/// — they never mutate it — so they are safe to run alongside other tests that register
-/// additional (e.g. skill) commands.
+/// populated once by its static constructor. These tests only read
+/// <see cref="CommandRegistry.Commands"/>, but reading is <em>not</em> sufficient to make them
+/// safe on their own: enumerating the underlying <see cref="List{T}"/> while another test class
+/// appends to it throws <see cref="InvalidOperationException"/> ("Collection was modified"),
+/// regardless of which side mutates. <c>SkillCommandRegistryTests</c> does append, via
+/// <c>CommandRegistry.RegisterSkillCommands</c>, so both classes share the
+/// <c>CommandRegistryStatic</c> collection to keep xUnit from running them concurrently.
 /// </remarks>
+[Collection("CommandRegistryStatic")]
 public sealed class CommandRegistryTests
 {
     // ---------------------------------------------------------------------------
@@ -152,6 +157,46 @@ public sealed class CommandRegistryTests
         }
 
         Command? listCommand = FindCommand("/project-list");
+        Assert.NotNull(listCommand);
+        Assert.True(string.IsNullOrEmpty(listCommand.ArgumentHint));
+    }
+
+    // ---------------------------------------------------------------------------
+    // /mcp-list, /mcp-toggle — registration and argument-hint advertisement
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// The static constructor must register both <c>/mcp-list</c> and <c>/mcp-toggle</c>.
+    /// </summary>
+    [Fact]
+    public void CommandRegistry_McpCommands_AreRegistered()
+    {
+        Assert.NotNull(FindCommand("/mcp-list"));
+        Assert.NotNull(FindCommand("/mcp-toggle"));
+    }
+
+    /// <summary>
+    /// <c>/mcp-toggle</c> takes a server name argument and must advertise the <c>"&lt;server&gt;"</c>
+    /// argument hint — this is what makes the <c>/</c> picker leave the line open with a trailing
+    /// space instead of auto-submitting.
+    /// </summary>
+    [Fact]
+    public void CommandRegistry_McpToggle_AdvertisesServerArgumentHint()
+    {
+        Command? toggleCommand = FindCommand("/mcp-toggle");
+
+        Assert.NotNull(toggleCommand);
+        Assert.Equal("<server>", toggleCommand.ArgumentHint);
+    }
+
+    /// <summary>
+    /// <c>/mcp-list</c> takes no argument and must advertise none.
+    /// </summary>
+    [Fact]
+    public void CommandRegistry_McpList_AdvertisesNoArgumentHint()
+    {
+        Command? listCommand = FindCommand("/mcp-list");
+
         Assert.NotNull(listCommand);
         Assert.True(string.IsNullOrEmpty(listCommand.ArgumentHint));
     }

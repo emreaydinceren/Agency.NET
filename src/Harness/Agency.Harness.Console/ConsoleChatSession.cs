@@ -94,6 +94,13 @@ internal sealed partial class ConsoleChatSession : IDisposable
     internal ChatSession? CurrentSession => this._chatSession;
 
     /// <summary>
+    /// Gets the tool context shared with the active <see cref="ChatSession"/> — the same scoped
+    /// instance passed into its constructor, so mutating its <see cref="ToolContext.Registry"/>
+    /// (e.g. via <c>/mcp-toggle</c>) is visible to the very next turn.
+    /// </summary>
+    internal ToolContext Tools => this.toolContext;
+
+    /// <summary>
     /// Renders and submits a pre-rendered skill body as a user turn, using the same
     /// streaming pipeline as a normally typed message. Called by skill <c>/</c> commands
     /// registered via <see cref="Commands.CommandRegistry.RegisterSkillCommands"/>.

@@ -332,7 +332,7 @@ Controls how many results are returned by the `semantic_search` tool.
 
 ### Mcp
 
-Declares MCP (Model Context Protocol) servers whose tools are injected into the agent's tool registry. Startup is skipped entirely when `DOTNET_ENVIRONMENT=Test`.
+Declares MCP (Model Context Protocol) servers whose tools are injected into the agent's tool registry. Startup is skipped entirely when `DOTNET_ENVIRONMENT=Test`. An individual server can also be skipped via `Enabled: false` — it is then never started at all, which is the practical reason to reach for it (e.g. keeping the `github` server's Docker container from being spawned).
 
 Path values support three portability tokens, expanded by `McpConfigResolver` *after* the host is built (not by the placeholder resolver — all three are bare, colon-less tokens, so the [placeholder resolver](#placeholder-notation) passes them through untouched):
 - `${RepoRoot}` — resolved to the nearest ancestor directory containing `.git`.
@@ -367,6 +367,7 @@ dotnet user-secrets set -p src\Sql\Agency.Sql.Postgres.Test "GitHub:PersonalAcce
 | `Mcp:Servers[].Arguments` | string[] | Stdio only. CLI arguments. |
 | `Mcp:Servers[].EnvironmentVariables` | object | Stdio only. Extra environment for the child process. |
 | `Mcp:Servers[].Url` | string | Http only. MCP endpoint URL. |
+| `Mcp:Servers[].Enabled` | bool | Default `true`. When `false`, the server is skipped before any transport is created — no subprocess or Docker container is spawned. Written back to `appsettings.json` when toggled via `/mcp-toggle`. |
 
 **`Mcp:_examples`** is an inert copy-paste template shipped alongside `Servers` — `McpClientOptions` has no `_examples` property, so it binds to nothing and is silently ignored at startup. It exists only to show the `Http` transport shape:
 

@@ -21,6 +21,9 @@ namespace Agency.Harness.Console.Test;
 /// only the Console-layer registration and argument-hint surfacing.
 /// </para>
 /// </remarks>
+// Appends to CommandRegistry's process-wide static command list, which CommandRegistryTests
+// enumerates — shared collection so the two never run concurrently. See CommandRegistryTests.
+[Collection("CommandRegistryStatic")]
 public sealed class SkillCommandRegistryTests
 {
     // ---------------------------------------------------------------------------

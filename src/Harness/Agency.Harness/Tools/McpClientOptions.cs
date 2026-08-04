@@ -50,6 +50,13 @@ public sealed class McpServerConfig
     /// Gets or sets the endpoint URL for HTTP transport. Required when <see cref="Transport"/> is <see cref="McpTransportKind.Http"/>.
     /// </summary>
     public string? Url { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether this server is connected at startup. When <see langword="false"/>, the server
+    /// is not connected at all - no subprocess is spawned and no transport is created. Written by
+    /// <c>/mcp-toggle</c> to persist a disabled server across restarts.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
 }
 
 /// <summary>

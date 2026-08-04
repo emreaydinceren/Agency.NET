@@ -22,16 +22,25 @@ public sealed class McpClientPool : IAsyncDisposable
     /// <summary>Gets the error message for each server that failed to connect, keyed by server name.</summary>
     public IReadOnlyDictionary<string, string> FailedServers { get; }
 
+    /// <summary>
+    /// Gets the names of servers that were not connected because they are disabled (<see cref="McpServerConfig.Enabled"/>
+    /// is <see langword="false"/>), in configured order. A disabled server appears in neither <see cref="ToolNamesByServer"/>
+    /// nor <see cref="FailedServers"/>, so this list is what lets the UI surface it for re-enabling.
+    /// </summary>
+    public IReadOnlyList<string> DisabledServers { get; }
+
     private McpClientPool(
         List<McpClient> clients,
         List<ITool> tools,
         Dictionary<string, IReadOnlyList<string>> toolNamesByServer,
-        Dictionary<string, string> failedServers)
+        Dictionary<string, string> failedServers,
+        List<string> disabledServers)
     {
         this._clients = clients;
         this.Tools = tools;
         this.ToolNamesByServer = toolNamesByServer;
         this.FailedServers = failedServers;
+        this.DisabledServers = disabledServers;
     }
 
     /// <summary>
@@ -49,9 +58,16 @@ public sealed class McpClientPool : IAsyncDisposable
         List<ITool> tools = [];
         var toolNamesByServer = new Dictionary<string, IReadOnlyList<string>>();
         var failedServers = new Dictionary<string, string>();
+        List<string> disabledServers = [];
 
         foreach (McpServerConfig server in options.Servers)
         {
+            if (!server.Enabled)
+            {
+                disabledServers.Add(server.Name);
+                continue;
+            }
+
             try
             {
                 IClientTransport transport = CreateTransport(server);
@@ -75,7 +91,7 @@ public sealed class McpClientPool : IAsyncDisposable
             }
         }
 
-        return new McpClientPool(clients, tools, toolNamesByServer, failedServers);
+        return new McpClientPool(clients, tools, toolNamesByServer, failedServers, disabledServers);
     }
 
     private static IClientTransport CreateTransport(McpServerConfig server) =>

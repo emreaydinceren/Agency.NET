@@ -28,6 +28,14 @@ namespace Agency.Harness.Console.Test.Commands;
 /// give those three commands real argument-extraction bodies, this theory should be widened to cover all
 /// five argument-taking project commands, per the original Task 21 scope.
 /// </remarks>
+// This class (along with McpCommandTests and ConsolePickerTests) drives Spectre.Console commands by
+// temporarily swapping the process-wide static AnsiConsole.Console for a captured instance, then
+// restoring it. That static is shared across the whole test process, so xUnit's default cross-class
+// parallelization lets two test classes race on it: one class's captured writer can observe another
+// class's output (or vice versa), producing flaky, non-deterministic failures unrelated to the
+// behavior under test. Sharing the "AnsiConsoleTests" collection serializes exactly the classes that
+// touch the static, rather than disabling parallelization for the whole assembly.
+[Collection("AnsiConsoleTests")]
 public sealed class ProjectsCommandTests
 {
     // ---------------------------------------------------------------------------

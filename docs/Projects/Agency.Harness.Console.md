@@ -456,6 +456,7 @@ Built-in commands are registered in `CommandRegistry`'s static constructor; skil
 | `/project-create` | `<name>` | Create (and load) a project so it exists before any document is ingested into it |
 | `/project-delete` | `<name>` | Permanently delete a project and every document ingested into it |
 | `/project-show` | `<name>` | List the documents held in one project, without loading it |
+| `/memory-toggle` | | Toggle long-term memory retrieval on/off for this session (on by default); warns when the memory subsystem was never started at launch, so the toggle can't be mistaken for a working switch |
 | `/mcp-list` | | List configured MCP servers with connection status (`on`/`off`/`failed`, including servers disabled in config and never connected) and tool counts |
 | `/mcp-toggle` | `<server>` | Toggle one MCP server's tools on/off, persisting the change to `Enabled` in `appsettings.json` so a disabled server isn't connected at all on the next start |
 | `/<skill-name>` | | Render a user-invocable skill body and submit it as a user turn |

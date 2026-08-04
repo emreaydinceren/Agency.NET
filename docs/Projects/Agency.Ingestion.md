@@ -1,7 +1,5 @@
 # Agency.Ingestion
 
-#ingestion #pipeline #documents #chunking #abstractions
-
 ## What It Is
 
 `Agency.Ingestion` is the core abstraction layer that defines and orchestrates the document ingestion pipeline — the process of loading raw documents, splitting them into chunks, stamping provenance metadata, and storing each chunk in a vector store under an owning user, optional session, and optional project scope.
@@ -145,11 +143,11 @@ Activity `ingestion.execute` carries tags `ingestion.succeeded` and `ingestion.f
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Ingestion.FileSystem]] | Provides `IDocumentLoader` implementations for ingestion sources |
-| [[Agency.Ingestion.SemanticKernel]] | Provides `ITextSplitter` implementations used by the pipeline |
-| [[Agency.VectorStore.Common]] | `DefaultIngestionPipeline` calls `IVectorStore.UpsertAsync`, passing the `projectId` scope through |
-| [[Agency.VectorStore.Sql.Postgres]] | Typical production store backend |
-| [[Agency.VectorStore.Sql.Sqlite]] | Typical dev/test store backend |
+| [Agency.Ingestion.FileSystem](Agency.Ingestion.FileSystem.md) | Provides `IDocumentLoader` implementations for ingestion sources |
+| [Agency.Ingestion.SemanticKernel](Agency.Ingestion.SemanticKernel.md) | Provides `ITextSplitter` implementations used by the pipeline |
+| [Agency.VectorStore.Common](Agency.VectorStore.Common.md) | `DefaultIngestionPipeline` calls `IVectorStore.UpsertAsync`, passing the `projectId` scope through |
+| [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Typical production store backend |
+| [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) | Typical dev/test store backend |
 
 ## Design Notes
 

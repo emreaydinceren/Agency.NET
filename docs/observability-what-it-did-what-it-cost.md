@@ -1,4 +1,4 @@
-# Governance & Actionable Insights through Observability
+# Observability — What the Agent Did, and What It Cost
 
 > **What this document is.** The single, self-contained reference for Agency's *observability* layer —
 > the seam where work the agent actually did (a turn, a tool call, a database query, a loop run)
@@ -8,9 +8,9 @@
 > (real types, `file:line` references, and the design principles behind them). The two cover the same
 > system at different depths — read Part I for *what* and *why*, Part II for *how*.
 >
-> This doc is the close sibling of two others. [The Capability Layer](The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md)
+> This doc is the close sibling of two others. [Tools and MCP](tools-and-mcp-words-into-real-effects.md)
 > is the boundary where a tool call becomes an effect; this document is how that effect (and every
-> other) becomes a *record*. [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)
+> other) becomes a *record*. [Permissions](permissions-consent-at-the-tool-boundary.md)
 > decides whether a call runs; this layer reports what happened either way. Where those leave off, this
 > picks up — and unlike them, it spans the *whole* solution, not just the harness.
 
@@ -320,7 +320,7 @@ string the permission gate and hooks key on. Because the whole stack (dispatch, 
 metric, span) shares one identifier, you can join "this tool was denied" (permission), "this tool was
 slow" (span), and "this tool is called 400×/day" (metric) on a single key. A generic "proxy"
 dispatcher that masked the real name would have broken that join — the same reason progressive
-disclosure preserves real names (see [The Capability Layer §6.3](The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md)).
+disclosure preserves real names (see [Tools and MCP §6.3](tools-and-mcp-words-into-real-effects.md)).
 
 ### 5.1 Why token counters record *deltas*
 

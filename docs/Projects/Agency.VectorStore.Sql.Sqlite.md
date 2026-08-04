@@ -1,5 +1,4 @@
 # Agency.VectorStore.Sql.Sqlite
-#vectorstore #sqlite #semantic-search #cosine #udf #observability
 
 ## What It Is
 
@@ -10,7 +9,7 @@
 ## Prerequisites
 
 - `Microsoft.Data.Sqlite` — the embeddings are stored as JSON-array `TEXT`, so no native vector extension is required; the `vec_distance_cosine` UDF is implemented in managed C#.
-- A `SqliteRunner` (from [[Agency.Sql.Sqlite]]) whose `onConnectionOpen` callback invokes `SqliteKVStore.RegisterVectorFunctions`, otherwise the UDF is unavailable on the connection.
+- A `SqliteRunner` (from [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md)) whose `onConnectionOpen` callback invokes `SqliteKVStore.RegisterVectorFunctions`, otherwise the UDF is unavailable on the connection.
 
 ## API Surface
 
@@ -66,7 +65,7 @@ public sealed class SqliteKVStore : IVectorStore
 }
 ```
 
-The class implements `IVectorStore` from [[Agency.VectorStore.Common]]. The query/result contracts it consumes live in that project:
+The class implements `IVectorStore` from [Agency.VectorStore.Common](Agency.VectorStore.Common.md). The query/result contracts it consumes live in that project:
 
 ```csharp
 // File: src/VectorStore/Agency.VectorStore.Common/Query.cs
@@ -159,10 +158,10 @@ The store defines an `ActivitySource` and `Meter`, both named `"Agency.VectorSto
 
 | Project | Relationship |
 |---|---|
-| [[Agency.VectorStore.Common]] | Provides the `IVectorStore` contract this class implements, plus `Query`, `SearchHit<TValue>`, `DocumentInfo`, and `JsonMetadataHelpers`. |
-| [[Agency.Embeddings.Common]] | Supplies the `IEmbeddingGenerator` used to vectorize stored values and query text. |
-| [[Agency.Sql.Sqlite]] | Provides the `SqliteRunner` used for all SQL execution and the connection-open hook for `RegisterVectorFunctions`. |
-| [[Agency.VectorStore.Sql.Postgres]] | Sibling `IVectorStore` implementation backed by PostgreSQL + pgvector; same contract, native vector indexing instead of a managed UDF. |
+| [Agency.VectorStore.Common](Agency.VectorStore.Common.md) | Provides the `IVectorStore` contract this class implements, plus `Query`, `SearchHit<TValue>`, `DocumentInfo`, and `JsonMetadataHelpers`. |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Supplies the `IEmbeddingGenerator` used to vectorize stored values and query text. |
+| [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md) | Provides the `SqliteRunner` used for all SQL execution and the connection-open hook for `RegisterVectorFunctions`. |
+| [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Sibling `IVectorStore` implementation backed by PostgreSQL + pgvector; same contract, native vector indexing instead of a managed UDF. |
 
 ## Design Notes
 

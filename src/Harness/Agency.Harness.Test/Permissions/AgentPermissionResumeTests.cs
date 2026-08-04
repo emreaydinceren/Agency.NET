@@ -414,6 +414,59 @@ public sealed class AgentPermissionResumeTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Resuming a parked ask whose <see cref="PermissionRequestedEvent.KeyValue"/> is present
+    /// (e.g. a file path) with <see cref="PermissionResponseKind.DenyOnce"/> produces a blocked
+    /// result that restates the specific key value and explicitly scopes the denial to it, so a
+    /// model does not over-generalize one denial into a blanket refusal for unrelated inputs to
+    /// the same tool.
+    /// </summary>
+    [Fact]
+    public async Task Resume_DenyOnce_WithKeyValue_BlockedResultRestatesKeyValueAndScopesDenial()
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        var toolA = new FakeTool("toolA", _ => new ToolResult("should not run"));
+        var registry = new ToolRegistry([toolA]);
+
+        var evaluator = new StubPermissionEvaluator();
+        evaluator.Decisions["toolA"] = new PermissionDecision.Ask(@"e:\repos\agency2\test1.md", @"toolA(e:\repos\agency2\test1.md)");
+
+        var llm = new FakeChatClient();
+        llm.EnqueueResponse(ToolCallResponse(("id-a", "toolA")));
+        llm.EnqueueResponse(TextResponse("Understood."));
+
+        var ctx = MakeContext(new ToolContext { Registry = registry });
+        var agent = new Agent(llm, "model", permissions: evaluator);
+
+        (_, List<PermissionRequestedEvent> permEvents) = await ParkTurnAsync(agent, ctx, ct);
+
+        PermissionRequestedEvent permEvent = Assert.Single(permEvents);
+        var responses = new List<PermissionResponse>
+        {
+            new(permEvent.RequestId, PermissionResponseKind.DenyOnce, "testing this capability"),
+        };
+
+        List<AgentEvent> resumeEvents = await CollectAsync(
+            agent.ResumeAsync(ctx, responses, options: null, ct), ct);  // CS1061 expected here
+
+        Assert.Equal(0, toolA.InvokeCount);
+
+        var toolMessages = ctx.Conversation.Messages.Where(m => m.Role == ChatRole.Tool).ToList();
+        Assert.Single(toolMessages);
+
+        string resultContent = string.Concat(
+            toolMessages[0].Contents.OfType<FunctionResultContent>().Select(c => c.Result?.ToString() ?? string.Empty));
+
+        // Restates the exact denied path...
+        Assert.Contains(@"e:\repos\agency2\test1.md", resultContent, StringComparison.Ordinal);
+        // ...and states the denial is scoped to it, not a blanket refusal for the tool.
+        Assert.Contains("only to", resultContent, StringComparison.Ordinal);
+
+        AgentResultEvent finalResult = Assert.IsType<AgentResultEvent>(resumeEvents[^1]);
+        Assert.NotEqual(AgentResultStatus.AwaitingPermission, finalResult.Status);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Case 4 — AllowAlways and DenyAlways record grants
     //

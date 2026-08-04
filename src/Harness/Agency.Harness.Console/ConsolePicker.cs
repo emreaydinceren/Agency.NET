@@ -40,7 +40,8 @@ internal static class ConsolePicker
     int returnItemIndex,
     string? title = null,
     string? moreChoicesText = null,
-    int pageSize = 10)
+    int pageSize = 10,
+    CancellationToken cancellationToken = default)
     {
         Dictionary<int, int> maxWidthOfColumn = new Dictionary<int, int>();
 
@@ -74,7 +75,7 @@ internal static class ConsolePicker
                 searchText: row[0].TrimStart('/')));
         }
 
-        return Show(items, title, moreChoicesText, pageSize: pageSize);
+        return Show(items, title, moreChoicesText, pageSize: pageSize, cancellationToken: cancellationToken);
     }
 
     public static string? Show(
@@ -98,6 +99,7 @@ internal static class ConsolePicker
     /// <param name="filterPlaceholderText">Placeholder text shown while no filter text has been typed.</param>
     /// <param name="cancelValue">Value returned if the picker is cancelled via Escape.</param>
     /// <param name="pageSize">Number of items to show per page. Defaults to 10.</param>
+    /// <param name="cancellationToken">Optional token to abort the picker from outside (e.g. an abandoned turn).</param>
     /// <returns>The selected item's value, or <paramref name="cancelValue"/> if cancelled.</returns>
     public static T? Show<T>(
         IReadOnlyList<ConsolePickerItem<T>> items,
@@ -105,7 +107,8 @@ internal static class ConsolePicker
         string? moreChoicesText = null,
         string? filterPlaceholderText = null,
         T? cancelValue = default,
-        int pageSize = 10) where T : notnull
+        int pageSize = 10,
+        CancellationToken cancellationToken = default) where T : notnull
     {
         if (items.Count == 0)
         {
@@ -113,8 +116,11 @@ internal static class ConsolePicker
         }
 
         // Anchor the block to column 0 so redraw/erase math below never has to
-        // account for a partial line the caller left behind.
-        if (System.Console.CursorLeft != 0)
+        // account for a partial line the caller left behind. Guarded by IsOutputRedirected
+        // because CursorLeft requires a real console buffer handle and throws IOException
+        // when output is redirected (e.g. under a test host) — real interactive terminals are
+        // never redirected, so this doesn't change production behavior.
+        if (!System.Console.IsOutputRedirected && System.Console.CursorLeft != 0)
         {
             System.Console.Write(Environment.NewLine);
         }
@@ -141,6 +147,21 @@ internal static class ConsolePicker
                 List<string> lines = BuildRenderLines(
                     filtered, title, moreChoicesText, filterPlaceholderText, filter.ToString(), selectedIndex, pageSize);
                 Redraw(lines, ref lastRenderedLineCount);
+
+                // Spectre's ReadKey is non-blocking by contract — it returns null immediately
+                // when no key is buffered. Poll IsKeyAvailable() and sleep between checks
+                // (matching ConsoleInputReader's discipline) instead of spinning the CPU and
+                // repainting on every pass while nothing has changed.
+                while (!console.Input.IsKeyAvailable())
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        Erase(lastRenderedLineCount);
+                        return cancelValue;
+                    }
+
+                    Thread.Sleep(50);
+                }
 
                 ConsoleKeyInfo? keyInfo = console.Input.ReadKey(intercept: true);
                 if (keyInfo is null)
@@ -232,14 +253,22 @@ internal static class ConsolePicker
     {
         var lines = new List<string>();
 
+        // Every line below is truncated rather than left to MarkupLine's soft-wrap: a wrapped row
+        // spills its content onto a second physical row that this method never counts, which desyncs
+        // Redraw/Erase's line count from what's actually on screen and leaves stray rows behind on
+        // the next redraw. Truncating keeps the invariant that one entry here is one physical row.
+        int width = AnsiConsole.Console.Profile.Width;
+        int unprefixedWidth = Math.Max(1, width);
+        int prefixedWidth = Math.Max(1, width - 2); // accounts for the "❯ " / "  " / "› " prefix
+
         if (!string.IsNullOrWhiteSpace(title))
         {
-            lines.Add($"[bold]{Markup.Escape(title)}[/]");
+            lines.Add($"[bold]{Markup.Escape(Truncate(title, unprefixedWidth))}[/]");
         }
 
         string filterDisplay = filterText.Length > 0
-            ? Markup.Escape(filterText)
-            : $"[grey]{Markup.Escape(filterPlaceholderText ?? "Type to filter")}[/]";
+            ? Markup.Escape(Truncate(filterText, prefixedWidth))
+            : $"[grey]{Markup.Escape(Truncate(filterPlaceholderText ?? "Type to filter", prefixedWidth))}[/]";
         lines.Add($"[grey]›[/] {filterDisplay}");
 
         if (filtered.Count == 0)
@@ -263,19 +292,27 @@ internal static class ConsolePicker
             if (item.GroupLabel is not null && item.GroupLabel != currentGroup)
             {
                 currentGroup = item.GroupLabel;
-                lines.Add($"[grey]{Markup.Escape(currentGroup)}[/]");
+                lines.Add($"[grey]{Markup.Escape(Truncate(currentGroup, unprefixedWidth))}[/]");
             }
 
-            string text = Markup.Escape(item.DisplayText);
+            string text = Markup.Escape(Truncate(item.DisplayText, prefixedWidth));
             lines.Add(i == selectedIndex ? $"[yellow]❯ {text}[/]" : $"  {text}");
         }
 
         if (filtered.Count > pageSize)
         {
-            lines.Add($"[grey]{Markup.Escape(moreChoicesText ?? "(Move up and down to reveal more choices)")}[/]");
+            string moreChoices = Truncate(moreChoicesText ?? "(Move up and down to reveal more choices)", unprefixedWidth);
+            lines.Add($"[grey]{Markup.Escape(moreChoices)}[/]");
         }
 
         return lines;
+    }
+
+    /// <summary>Truncates <paramref name="text"/> to at most <paramref name="maxWidth"/> visible characters, appending an ellipsis when cut.</summary>
+    private static string Truncate(string text, int maxWidth)
+    {
+        maxWidth = Math.Max(1, maxWidth);
+        return text.Length <= maxWidth ? text : string.Concat(text.AsSpan(0, maxWidth - 1), "…");
     }
 
     private static void Redraw(List<string> lines, ref int lastRenderedLineCount)

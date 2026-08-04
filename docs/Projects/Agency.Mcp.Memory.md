@@ -1,10 +1,8 @@
 # Agency.Mcp.Memory
 
-#mcp #memory #keyvaluestore #server
-
 ## What It Is
 
-`Agency.Mcp.Memory` is the standalone MCP server executable that exposes scoped memory operations to LLM agents over stdio transport, backed by a pluggable [[Agency.KeyValueStore.Common]] `IKVStore` implementation (SQLite or PostgreSQL).
+`Agency.Mcp.Memory` is the standalone MCP server executable that exposes scoped memory operations to LLM agents over stdio transport, backed by a pluggable [Agency.KeyValueStore.Common](Agency.KeyValueStore.Common.md) `IKVStore` implementation (SQLite or PostgreSQL).
 
 **Namespace:** `Agency.Mcp.Memory`
 
@@ -217,11 +215,11 @@ This project does not define a custom `ActivitySource` or `Meter`. All diagnosti
 
 | Project | Relationship |
 |---|---|
-| [[Agency.KeyValueStore.Common]] | `MemoryTool` depends on `IKVStore` (`UpsertAsync`, `SearchAsync`, `DeleteAsync`, `GetMetadataAsync`) and the `Query`, `SearchHit`, and `SearchHit<T>` types |
-| [[Agency.KeyValueStore.Sql.Postgres]] | Provides `PostgresKVStore` when `Provider = "postgres"` |
-| [[Agency.KeyValueStore.Sql.Sqlite]] | Provides `SqliteKVStore` when `Provider = "sqlite"`; schema is auto-initialized on startup |
-| [[Agency.Sql.Postgres]] | Provides `PostgreSqlRunner` used to construct `PostgresKVStore` |
-| [[Agency.Sql.Sqlite]] | Provides `SqliteRunner` used to construct `SqliteKVStore` |
+| [Agency.KeyValueStore.Common](Agency.KeyValueStore.Common.md) | `MemoryTool` depends on `IKVStore` (`UpsertAsync`, `SearchAsync`, `DeleteAsync`, `GetMetadataAsync`) and the `Query`, `SearchHit`, and `SearchHit<T>` types |
+| [Agency.KeyValueStore.Sql.Postgres](Agency.KeyValueStore.Sql.Postgres.md) | Provides `PostgresKVStore` when `Provider = "postgres"` |
+| [Agency.KeyValueStore.Sql.Sqlite](Agency.KeyValueStore.Sql.Sqlite.md) | Provides `SqliteKVStore` when `Provider = "sqlite"`; schema is auto-initialized on startup |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | Provides `PostgreSqlRunner` used to construct `PostgresKVStore` |
+| [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md) | Provides `SqliteRunner` used to construct `SqliteKVStore` |
 
 ## Design Notes
 

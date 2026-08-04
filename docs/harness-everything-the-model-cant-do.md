@@ -1,4 +1,4 @@
-# Agency.Harness — Architecture
+# The Harness — Everything the Model Can't Do for Itself
 
 > **Mental model:** `AGENT = LLM + HARNESS`.
 > The **LLM** is the thinking loop (Context → Observe → Reason → Act). The **harness** is everything the
@@ -37,13 +37,13 @@ caps) is code in a satellite, not an instruction in the prompt.
 
 | Box | Where it lives | What it does | Deep dive |
 |---|---|---|---|
-| **The LLM** (Context/Observe/Reason/Act) | `Agent.cs` | The Reason→Act→Observe loop; runs one *turn* per `ChatSession.SendAsync`, many LLM *iterations* inside a turn. | [How the Agent Loop and Context Work Together](How%20the%20Agent%20Loop%20and%20Context%20Work%20Together.md) |
-| **CONTEXT** | `Contexts/` — `Context.cs`, `SessionContext`, `FocusContext`, `KnowledgeContext`, `TemporalContext`, `EnvironmentalContext`… | The composed, harness-owned state injected into the model each turn. | [How the Agent Loop and Context Work Together](How%20the%20Agent%20Loop%20and%20Context%20Work%20Together.md) |
+| **The LLM** (Context/Observe/Reason/Act) | `Agent.cs` | The Reason→Act→Observe loop; runs one *turn* per `ChatSession.SendAsync`, many LLM *iterations* inside a turn. | [The Agent Loop](agent-loop-anatomy-of-a-single-turn.md) |
+| **CONTEXT** | `Contexts/` — `Context.cs`, `SessionContext`, `FocusContext`, `KnowledgeContext`, `TemporalContext`, `EnvironmentalContext`… | The composed, harness-owned state injected into the model each turn. | [The Agent Loop](agent-loop-anatomy-of-a-single-turn.md) |
 | **PROMPT** | `SystemPromptBuilder.cs` | Assembles the system prompt (instructions, tool catalog, skill descriptions). | — |
-| **TOOLS & SKILLS** | `Tools/` + `Skills/` | `ITool` implementations (read/write file, PowerShell, MCP proxy…) and the `SKILL.md` progressive-disclosure system surfaced through the `skill` meta-tool (`SkillTool.cs`). | [The Capability Layer — Tools, MCP & Progressive Disclosure](The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md) · [How Agency's Skills Model Works](How%20Agency%27s%20Skills%20Model%20Works.md) |
-| **MEMORY** | `Contexts/MemoryContext.cs`, `MemoryRecord.cs` | Recall/persist facts across turns. | [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md) |
-| **SECURITY & GOVERNANCE** | `Permissions/` (`PermissionEvaluator`, rules, file store) + the `OnPreToolUse` veto and shipped `BlockListHooks` / `AuditHooks` | Deterministic veto/audit *around* the model — enforced, not requested. | [Consent at the Tool Boundary — The Permission Model](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md) · [How Hooks Work](How%20Hooks%20Work.md) · [Governance & Actionable Insights through Observability](Governance%20%26%20Actionable%20Insights%20through%20Observability.md) |
-| **ORCHESTRATION** | `ChatSession.cs`, `StopConditions.cs`, and `Loop/LoopRunner` (Loop Kit) | Drives turns, accumulates history, decides whether to loop again. | [Loop Kit — Spec](Planned/Loop%20Kit%20-%20Spec.md) |
+| **TOOLS & SKILLS** | `Tools/` + `Skills/` | `ITool` implementations (read/write file, PowerShell, MCP proxy…) and the `SKILL.md` progressive-disclosure system surfaced through the `skill` meta-tool (`SkillTool.cs`). | [Tools and MCP — Where the Model's Words Become Real Effects](tools-and-mcp-words-into-real-effects.md) · [Skills](skills-a-playbook-in-one-markdown-file.md) |
+| **MEMORY** | `Contexts/MemoryContext.cs`, `MemoryRecord.cs` | Recall/persist facts across turns. | [Memory](memory-from-amnesiac-to-collaborator.md) |
+| **SECURITY & GOVERNANCE** | `Permissions/` (`PermissionEvaluator`, rules, file store) + the `OnPreToolUse` veto and shipped `BlockListHooks` / `AuditHooks` | Deterministic veto/audit *around* the model — enforced, not requested. | [Permissions — Consent at the Tool Boundary](permissions-consent-at-the-tool-boundary.md) · [Hooks](hooks-nine-places-to-plug-into-the-loop.md) · [Observability — What the Agent Did, and What It Cost](observability-what-it-did-what-it-cost.md) |
+| **ORCHESTRATION** | `ChatSession.cs`, `StopConditions.cs`, and `Loop/LoopRunner` (Loop Kit) | Drives turns, accumulates history, decides whether to loop again. | [Loop Kit](loop-kit-driving-an-agent-until-done.md) |
 
 > **Note on Hooks.** Hooks are a general 9-point lifecycle mechanism (`AgentHooks`), not a security
 > construct — only `OnPreToolUse` (the allow/block/rewrite veto) plus the shipped `BlockListHooks` /
@@ -74,7 +74,7 @@ caps) is code in a satellite, not an instruction in the prompt.
 In the diagram *Orchestration* is a single box, but in this codebase it's the area under active
 development, because structural stop conditions don't guarantee a task is **finished to a checkable bar**.
 That gap is what **Loop Kit** (`src/Harness/Agency.Harness/Loop/`, see
-[`docs/Planned/Loop Kit - Spec.md`](../docs/Planned/Loop%20Kit%20-%20Spec.md)) closes.
+[Loop Kit](loop-kit-driving-an-agent-until-done.md)) closes.
 
 The core idea is the **soft/hard split**:
 

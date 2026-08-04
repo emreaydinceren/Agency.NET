@@ -1,4 +1,4 @@
-# Loop Kit: Driving an Agent Until the Job Is Actually Done
+# Loop Kit — Driving an Agent Until the Job Is Actually Done
 
 > **What this document is.** The single, self-contained reference for Agency's *Loop Kit* — the layer
 > that drives an agent **turn after turn until the work is actually done**, where "done" is decided by
@@ -8,9 +8,9 @@
 > (real types, `file:line` references, and the design principles behind them). The two cover the same
 > system at different depths — read Part I for *what* and *why*, Part II for *how*.
 >
-> This doc is a close sibling of three others. [The Capability Layer](The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md)
+> This doc is a close sibling of three others. [Tools and MCP](tools-and-mcp-words-into-real-effects.md)
 > explains **tools** — the functions the agent calls — and **Skills**, which Loop Kit reuses for its
-> planning/working halves. [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)
+> planning/working halves. [Permissions](permissions-consent-at-the-tool-boundary.md)
 > explains **parking** — the clean pause Loop Kit must respect when a tool needs approval. Where those
 > leave off, this picks up: not *what* the agent can do or *whether it's allowed*, but **when it gets to
 > stop.**
@@ -45,7 +45,7 @@ see throughout:
   Reason→Act→Observe wheel many times, but to the outside world it's "I sent a message, I got a final
   answer back."
 - A **tool** is just a function the model can call by name. (The full story is in
-  [The Capability Layer](The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md).)
+  [Tools and MCP](tools-and-mcp-words-into-real-effects.md).)
 
 That's the whole vocabulary you need. Loop Kit is about what happens *between and after* turns.
 
@@ -83,7 +83,7 @@ The rule that follows is the spine of the whole design:
 > **A done-check must be hard. Planning can be soft.**
 
 That single rule tells you where every piece lives: the *plan* and the *work* are prompts (Skills,
-which the Capability Layer doc explains); the *done-check* and the *safety cap* are code.
+which the Tools and MCP doc explains); the *done-check* and the *safety cap* are code.
 
 ## If you only remember five ideas
 
@@ -198,7 +198,7 @@ Three decisions define the feature, and each is a refusal to build something big
 nothing else. It reuses `ChatSession`, the Skills system, the agent's existing tools, and the model
 resolver verbatim. `Agent.cs` — the Reason→Act→Observe loop — **does not change at all.** The driver
 sits *above* the session, the same way MCP and progressive disclosure sit *beside* the tool registry in
-the Capability Layer.
+the capability layer.
 
 **2. Soft where it reasons, hard where it gates.** Plan and Work are Skills (prompts). The done-check
 and the cap are code. The split is not stylistic — it's a security boundary (Part I, "soft vs hard").
@@ -392,7 +392,7 @@ A goal can be armed two ways and disarmed three ways. All of them mutate the one
 
 A loop Skill lists `enable_goalkeeper` in its `AllowedTools`, so the model can arm the goal **without a
 permission prompt**: a Skill's allowed tools are pre-approved for that turn (the active-skill
-pre-approval mechanism documented in [Consent at the Tool Boundary §11](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)).
+pre-approval mechanism documented in [Permissions §11](permissions-consent-at-the-tool-boundary.md)).
 The user loading the Skill *is* the consent.
 
 **Disarming.**
@@ -522,7 +522,7 @@ literal — and it's why `Agent.cs` has no Loop-Kit-shaped branch anywhere in it
 ### 5.1 The park interaction, precisely
 
 Loop Kit must respect the permission model's **parking** contract (see
-[Consent at the Tool Boundary §6](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)).
+[Permissions §6](permissions-consent-at-the-tool-boundary.md)).
 Three harness facts, verified, shape the park branch (`:146`):
 
 - **`AwaitingPermission` does not fire `OnStop`.** A parked turn pauses without a stop event, so the

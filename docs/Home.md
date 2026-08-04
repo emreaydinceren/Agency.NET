@@ -17,18 +17,18 @@ This page is the **portal**. It is deliberately not comprehensive — it gives y
 
 ## Explore by topic — narrative deep-dives
 
-| If you want to understand…                                                         | Read                                                                                                                                                  |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The agent loop, turns, and how context is composed each turn                       | [How the Agent Loop and Context Work Together](How%20the%20Agent%20Loop%20and%20Context%20Work%20Together.md)                                         |
-| The harness architecture (the `AGENT = LLM + HARNESS` map onto code)               | [Harness Architecture](Harness%20Architecture.md)                                                                                                     |
-| Tools, MCP, and progressive tool/skill disclosure                                  | [The Capability Layer — Tools, MCP, and Progressive Disclosure](The%20Capability%20Layer%20-%20Tools%2C%20MCP%2C%20and%20Progressive%20Disclosure.md) |
-| The `SKILL.md` progressive-disclosure model                                        | [How Agency's Skills Model Works](How%20Agency%27s%20Skills%20Model%20Works.md)                                                                       |
-| The 9-point lifecycle hook spine                                                   | [How Hooks Work](How%20Hooks%20Work.md)                                                                                                               |
-| Permissions — the allow/block/rewrite veto at the tool boundary                    | [Consent at the Tool Boundary — The Permission Model](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)                         |
-| Agent memory — recall and persistence across turns                                 | [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md)                                                                   |
-| Ingesting your own documents and retrieving them by meaning (the data plane / RAG) | [Ingestion and Semantic Search for Agents](Projects%20-%20Ingestion%20and%20Semantic%20Search%20for%20Agent.md)                                       |
-| Observability, tracing, and governance metrics                                     | [[Governance and Actionable Insights through Observability]]                                                                                          |
-| Driving an agent until the job is verifiably done (Loop Kit)                       | [Loop Kit — Driving an Agent Until the Job Is Actually Done](Loop%20Kit%20-%20Driving%20an%20Agent%20Until%20the%20Job%20Is%20Actually%20Done.md)     |
+| If you want to understand…                                                         | Read                                                                                                          |
+|------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| The harness — the `AGENT = LLM + HARNESS` map onto code                            | [The Harness — Everything the Model Can't Do for Itself](harness-everything-the-model-cant-do.md)             |
+| The agent loop, turns, and how context is composed each turn                       | [The Agent Loop — Anatomy of a Single Turn](agent-loop-anatomy-of-a-single-turn.md)                           |
+| Tools, MCP, and progressive tool/skill disclosure                                  | [Tools and MCP — Where the Model's Words Become Real Effects](tools-and-mcp-words-into-real-effects.md)       |
+| The `SKILL.md` progressive-disclosure model                                        | [Skills — Teaching an Agent a New Playbook with One Markdown File](skills-a-playbook-in-one-markdown-file.md) |
+| The 9-point lifecycle hook spine                                                   | [Hooks — Nine Places to Plug Into the Agent Loop](hooks-nine-places-to-plug-into-the-loop.md)                 |
+| Permissions — the allow/block/rewrite veto at the tool boundary                    | [Permissions — Consent at the Tool Boundary](permissions-consent-at-the-tool-boundary.md)                     |
+| Agent memory — recall and persistence across turns                                 | [Memory — From Amnesiac with a Tool Belt to Collaborator](memory-from-amnesiac-to-collaborator.md)            |
+| Ingesting your own documents and retrieving them by meaning (the data plane / RAG) | [Retrieval (RAG) — Semantic Search Over Your Own Documents](retrieval-rag-semantic-search.md)                 |
+| Observability, tracing, and governance metrics                                     | [Observability — What the Agent Did, and What It Cost](observability-what-it-did-what-it-cost.md)             |
+| Driving an agent until the job is verifiably done (Loop Kit)                       | [Loop Kit — Driving an Agent Until the Job Is Actually Done](loop-kit-driving-an-agent-until-done.md)         |
 
 ## Explore by project
 
@@ -99,20 +99,10 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 ### Harness
 | Project | Role |
 |---|---|
-| [Agency.Harness](Projects/Agency.Harness.md) | The agent itself: the `Agent` loop, `ChatSession` turn driver, tools, skills, permissions, the hook spine, and Loop Kit. See [Harness Architecture](Harness%20Architecture.md). |
+| [Agency.Harness](Projects/Agency.Harness.md) | The agent itself: the `Agent` loop, `ChatSession` turn driver, tools, skills, permissions, the hook spine, and Loop Kit. See [The Harness](harness-everything-the-model-cant-do.md). |
 | [Agency.Harness.Console](Projects/Agency.Harness.Console.md) | A reference console host wiring the harness to LLM providers and memory. |
 
 ---
-
-## Working in the repo
-
-| Topic | Doc |
-|---|---|
-| Build, test, and run infrastructure | [`../Agents/BuildAndTest.md`](../Agents/BuildAndTest.md) |
-| C# conventions and design principles | [`../Agents/CSharpPrinciples.md`](../Agents/CSharpPrinciples.md) |
-| CI pipeline (Gitea Actions, offline functional-test cache) | [`../Agents/CIPipeline.md`](../Agents/CIPipeline.md) |
-| Cutting a release / publishing NuGet packages | [`../Agents/Releasing.md`](../Agents/Releasing.md) |
-| Bug/task trackers | [`../Agents/Trackers.md`](../Agents/Trackers.md) |
 
 ### Infrastructure at a glance
 

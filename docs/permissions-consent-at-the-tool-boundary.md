@@ -1,4 +1,4 @@
-# Consent at the Tool Boundary: The Permission Model
+# Permissions — Consent at the Tool Boundary
 
 > **What this document is.** The single, self-contained reference for Agency's permission model — the
 > layer that decides whether a tool call the agent wants to make is actually allowed to run, and what
@@ -10,7 +10,7 @@
 > *Permission Model Design Document*; where that draft said *"Proposed,"* this describes what actually
 > shipped — including one mechanism (active-skill pre-approval, §11) the original design predated. For
 > the consent layer's sibling — the *operator-policy* layer it sits beside — see
-> [How Hooks Work](How%20Hooks%20Work.md).
+> [Hooks](hooks-nine-places-to-plug-into-the-loop.md).
 
 For an engineer building an agent harness, the hardest shift after "give it memory" is "give it a
 conscience." A capable agent with a tool belt will cheerfully run `Remove-Item -Recurse`, write to
@@ -857,7 +857,7 @@ services.AddSingleton<IPermissionEvaluator>(sp =>
     Fixed by anchoring the default to `%LocalAppData%\Agency\` (2026-07-24, `PermissionEvaluator.cs:63`).
     Any future "stable per-user default" in this codebase should anchor outside the build/publish
     output tree — the same category of fix `${RepoRoot}` token substitution applies to telemetry and
-    MCP paths (see [[Agency.Harness.Console]]), except here there is no repo at all for a published
+    MCP paths (see [Agency.Harness.Console](Projects/Agency.Harness.Console.md)), except here there is no repo at all for a published
     NuGet consumer, so `%LocalAppData%` (not `${RepoRoot}`) is the correct anchor.
 
 **Out of scope (future):** permission modes (acceptEdits/bypass/plan), rule widening in the answer UX,

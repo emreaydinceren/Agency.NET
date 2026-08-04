@@ -1,5 +1,4 @@
 # Agency.Memory.Retrieval
-#memory #retrieval #ranking #rag
 
 ## What It Is
 
@@ -91,12 +90,12 @@ Both `RetrievalEngine` and `RetrievalGate` are `internal`; host code does not ca
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Provides `IMemoryStore`, `Record`, `ContentType`, `RankingFormula`, `RankingWeights`, `MemoryOptions`, and `SearchQuery`/`SearchHit` that the engine and gate depend on entirely |
-| [[Agency.Harness]] | Owns `Context`, `KnowledgeContext`, `MemoryContext`, `MemoryRecord`, `FocusContext`, and `SessionContext`; the engine reads and writes these types each iteration |
-| [[Agency.Embeddings.Common]] | Supplies `IEmbeddingGenerator` used to vectorise the retrieval query |
-| [[Agency.Memory.Sql.Postgres]] | Ships the `PostgresMemoryStore` implementation of `IMemoryStore` that the engine searches at runtime |
-| [[Agency.Memory.Distiller]] | Writes `Record` items via `IMemoryStore.UpsertAsync`; mutating the store advances `LastWrittenAt`, which is the signal the retrieval gate reads to decide whether to re-run |
-| [[Agency.Mcp.Memory]] | Exposes agent-facing tools (`SetFocus`, `MarkGoalComplete`) that update `Context.Focus` and trigger distillation; focus changes feed back into the query built in step 2 |
+| [Agency.Memory.Common](Agency.Memory.Common.md) | Provides `IMemoryStore`, `Record`, `ContentType`, `RankingFormula`, `RankingWeights`, `MemoryOptions`, and `SearchQuery`/`SearchHit` that the engine and gate depend on entirely |
+| [Agency.Harness](Agency.Harness.md) | Owns `Context`, `KnowledgeContext`, `MemoryContext`, `MemoryRecord`, `FocusContext`, and `SessionContext`; the engine reads and writes these types each iteration |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Supplies `IEmbeddingGenerator` used to vectorise the retrieval query |
+| [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Ships the `PostgresMemoryStore` implementation of `IMemoryStore` that the engine searches at runtime |
+| [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Writes `Record` items via `IMemoryStore.UpsertAsync`; mutating the store advances `LastWrittenAt`, which is the signal the retrieval gate reads to decide whether to re-run |
+| [Agency.Mcp.Memory](Agency.Mcp.Memory.md) | Exposes agent-facing tools (`SetFocus`, `MarkGoalComplete`) that update `Context.Focus` and trigger distillation; focus changes feed back into the query built in step 2 |
 
 ## Design Notes
 

@@ -72,7 +72,12 @@ public static class MemoryServiceCollectionExtensions
             new InMemoryEventBus(sp.GetRequiredService<ILogger<InMemoryEventBus>>()));
 
         // Per-session channel registry (singleton; holds all per-session channels).
-        services.AddSingleton<ChannelSessionRegistry>();
+        // Uses an explicit factory because the constructor is internal (matches InactivityTimerService
+        // and DistillerBackgroundService below) — ServiceProvider's implicit activation only discovers
+        // public constructors, so AddSingleton<ChannelSessionRegistry>() alone would fail to resolve it.
+        services.AddSingleton<ChannelSessionRegistry>(sp => new ChannelSessionRegistry(
+            sp.GetRequiredService<IOptions<DistillerOptions>>(),
+            sp.GetRequiredService<ILogger<ChannelSessionRegistry>>()));
 
         // Conversation manager registry.
         services.AddSingleton<IConversationManagerRegistry, InMemoryConversationManagerRegistry>();
@@ -121,6 +126,11 @@ public static class MemoryServiceCollectionExtensions
                     // Retrieval callback: gated vector search injecting into Context.
                     Func<Context, CancellationToken, Task> retrievalCallback = async (ctx, ct) =>
                     {
+                        if (!ctx.MemoryEnabled)
+                        {
+                            return;
+                        }
+
                         bool shouldRetrieve = await RetrievalGate.ShouldRetrieveAsync(ctx, store, ct)
                             .ConfigureAwait(false);
                         if (shouldRetrieve)

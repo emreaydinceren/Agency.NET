@@ -85,6 +85,7 @@ internal static class CommandRegistry
         RegisterAsyncCommand("/project-create", "Create (and load) a project so it exists before any document is ingested into it.", ProjectsCommand.CreateAsync, argumentHint: "<name>");
         RegisterAsyncCommand("/project-delete", "Permanently delete a project and every document ingested into it.", ProjectsCommand.DeleteAsync, argumentHint: "<name>");
         RegisterAsyncCommand("/project-show", "List the documents held in one project, without loading it.", ProjectsCommand.ShowAsync, argumentHint: "<name>");
+        RegisterAsyncCommand("/memory-toggle", "Toggle long-term memory retrieval on/off for this session (on by default).", (_, session) => MemoryCommand.Toggle(session));
         RegisterAsyncCommand("/mcp-list", "List configured MCP servers with connection status and tool counts.",
             (_, session) => McpCommand.ListAsync(session));
         RegisterAsyncCommand("/mcp-toggle", "Toggle one MCP server's tools on/off for this session.",

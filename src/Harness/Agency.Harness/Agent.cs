@@ -527,10 +527,17 @@ public sealed partial class Agent
             }
             else
             {
-                // Deny: produce a [Blocked] result (spec §2.5).
+                // Deny: produce a [Blocked] result (spec §2.5). When a key value (e.g. a file
+                // path) is available, restate it and note the denial's scope explicitly — models
+                // otherwise tend to over-generalize a single denial into a blanket refusal for
+                // unrelated inputs to the same tool.
+                string pathSuffix = pendingCall.KeyValue is { Length: > 0 } keyValue ? $" for '{keyValue}'" : string.Empty;
+                string scopeNote = pendingCall.KeyValue is { Length: > 0 } keyValue2
+                    ? $" This denial applies only to '{keyValue2}' — other files or inputs are not affected."
+                    : " This denial applies only to this specific call — other inputs are not affected.";
                 string reason = resp.Message is { Length: > 0 } msg
-                    ? $"[Blocked] The user denied permission for this tool call: {msg}"
-                    : "[Blocked] The user denied permission for this tool call.";
+                    ? $"[Blocked] The user denied permission for this tool call{pathSuffix}: {msg}.{scopeNote}"
+                    : $"[Blocked] The user denied permission for this tool call{pathSuffix}.{scopeNote}";
                 var deniedResult = new ToolResult(reason, IsError: true);
                 resultContent = new FunctionResultContent(pendingCall.CallId, reason);
                 evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, deniedResult);

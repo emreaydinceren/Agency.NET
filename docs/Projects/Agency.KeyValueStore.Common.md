@@ -1,5 +1,4 @@
 # Agency.KeyValueStore.Common
-#keyvaluestore #abstractions #search #metadata
 
 ## What It Is
 
@@ -101,7 +100,7 @@ public static class SearchHitExtensions
 }
 ```
 
-Converts a list of `SearchHit<TValue>` to an [[Agency.Common]] `Dataset` with three columns: `Key`, `Value`, and `UpdatedOn`. This bridges key-value search results into the RAG formatting pipeline.
+Converts a list of `SearchHit<TValue>` to an [Agency.Common](Agency.Common.md) `Dataset` with three columns: `Key`, `Value`, and `UpdatedOn`. This bridges key-value search results into the RAG formatting pipeline.
 
 ### `JsonMetadataHelpers`
 
@@ -121,7 +120,7 @@ public static class JsonMetadataHelpers
 
 ## How It Works
 
-A caller acquires an `IKVStore` implementation (e.g. from [[Agency.KeyValueStore.Sql.Postgres]] or [[Agency.KeyValueStore.Sql.Sqlite]]) and interacts through the four operations:
+A caller acquires an `IKVStore` implementation (e.g. from [Agency.KeyValueStore.Sql.Postgres](Agency.KeyValueStore.Sql.Postgres.md) or [Agency.KeyValueStore.Sql.Sqlite](Agency.KeyValueStore.Sql.Sqlite.md)) and interacts through the four operations:
 
 ```csharp
 using Agency.KeyValueStore.Common;
@@ -160,10 +159,10 @@ Dataset dataset = hits.ToDataset();
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Common]] | `SearchHitExtensions.ToDataset` produces a `Dataset` defined in `Agency.Common`, bridging key-value results into the RAG formatting pipeline |
-| [[Agency.KeyValueStore.Sql.Postgres]] | PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` to hydrate the metadata column |
-| [[Agency.KeyValueStore.Sql.Sqlite]] | SQLite implementation of `IKVStore`; follows the same pattern |
-| [[Agency.Harness]] | Agent tool layers depend on `IKVStore` for persistent session memory |
+| [Agency.Common](Agency.Common.md) | `SearchHitExtensions.ToDataset` produces a `Dataset` defined in `Agency.Common`, bridging key-value results into the RAG formatting pipeline |
+| [Agency.KeyValueStore.Sql.Postgres](Agency.KeyValueStore.Sql.Postgres.md) | PostgreSQL implementation of `IKVStore`; uses `JsonMetadataHelpers` to hydrate the metadata column |
+| [Agency.KeyValueStore.Sql.Sqlite](Agency.KeyValueStore.Sql.Sqlite.md) | SQLite implementation of `IKVStore`; follows the same pattern |
+| [Agency.Harness](Agency.Harness.md) | Agent tool layers depend on `IKVStore` for persistent session memory |
 
 ## Design Notes
 

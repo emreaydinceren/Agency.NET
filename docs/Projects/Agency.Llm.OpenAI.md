@@ -1,7 +1,5 @@
 # Agency.Llm.OpenAI
 
-#llm #openai #factory #meai #observability #pipeline-policy
-
 ## What It Is
 
 Agency.Llm.OpenAI is the OpenAI-compatible `IChatClient` factory that wraps the official `OpenAI` .NET SDK and wires in OpenTelemetry and logging middleware via `Microsoft.Extensions.AI`. It works with any OpenAI-protocol-compatible endpoint: OpenAI cloud, Azure OpenAI, LM Studio, Ollama, and others. It also includes `SuppressThinkingPipelinePolicy`, an HTTP pipeline policy that unconditionally disables extended thinking/reasoning tokens on models that support them (e.g. Qwen3 MoE).
@@ -95,11 +93,11 @@ No additional `ActivitySource` or `Meter` is declared in this project; telemetry
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Llm.Common]] | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` |
-| [[Agency.Harness]] | `Models.cs` calls `new OpenAIClient(options).CreateChatClient()` when `ClientType` is `"OpenAI"` |
-| [[Agency.Harness.Console]] | Configures `ClientType = "OpenAI"` in `appsettings.json` to select this factory |
-| [[Agency.Embeddings.OpenAI]] | Sibling project — both wrap OpenAI-compatible APIs, but for embeddings rather than chat |
-| [[Agency.Llm.Claude]] | Peer factory implementing the same `IModelProvider` pattern for the Anthropic SDK |
+| [Agency.Llm.Common](Agency.Llm.Common.md) | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` |
+| [Agency.Harness](Agency.Harness.md) | `Models.cs` calls `new OpenAIClient(options).CreateChatClient()` when `ClientType` is `"OpenAI"` |
+| [Agency.Harness.Console](Agency.Harness.Console.md) | Configures `ClientType = "OpenAI"` in `appsettings.json` to select this factory |
+| [Agency.Embeddings.OpenAI](Agency.Embeddings.OpenAI.md) | Sibling project — both wrap OpenAI-compatible APIs, but for embeddings rather than chat |
+| [Agency.Llm.Claude](Agency.Llm.Claude.md) | Peer factory implementing the same `IModelProvider` pattern for the Anthropic SDK |
 
 ## Design Notes
 

@@ -1,5 +1,4 @@
 # Agency.Embeddings.OpenAI
-#embeddings #openai #implementation #observability
 
 ## What It Is
 Agency.Embeddings.OpenAI is the OpenAI-compatible embeddings provider that generates vector embeddings by calling an OpenAI-compatible HTTP endpoint and returns them as `ReadOnlyMemory<float>` arrays implementing the `IEmbeddingGenerator` contract for use by higher-level retrieval and storage components.
@@ -85,10 +84,10 @@ Activity tags follow the OpenTelemetry GenAI semantic conventions: `gen_ai.syste
 ## How It Relates to Other Projects
 | Project | Relationship |
 |---|---|
-| [[Agency.Embeddings.Common]] | Defines the `IEmbeddingGenerator` interface that `EmbeddingGenerator` implements. |
-| [[Agency.VectorStore.Sql.Postgres]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search. |
-| [[Agency.VectorStore.Sql.Sqlite]] | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search; uses `Dimensions` to create schemas with the correct column width. |
-| [[Agency.Sql.Postgres]] | Consumes embeddings indirectly via `SQLQueryEmbedder` in retrieval/query pipelines. |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Defines the `IEmbeddingGenerator` interface that `EmbeddingGenerator` implements. |
+| [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search. |
+| [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) | Consumes `IEmbeddingGenerator` to produce vectors for storage and similarity search; uses `Dimensions` to create schemas with the correct column width. |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | Consumes embeddings indirectly via `SQLQueryEmbedder` in retrieval/query pipelines. |
 
 ## Design Notes
 - Two public constructors are provided so callers can use either the DI options pattern (`IOptions<EmbeddingOptions>`) or a direct `EmbeddingOptions` instance; an additional `internal` constructor accepts a custom `HttpMessageHandler` to enable unit testing without a live endpoint.

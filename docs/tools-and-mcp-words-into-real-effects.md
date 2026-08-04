@@ -1,4 +1,4 @@
-# The Capability Layer: Tools, MCP, and Progressive Disclosure
+# Tools and MCP — Where the Model's Words Become Real Effects
 
 > **What this document is.** The single, self-contained reference for Agency's *tool* layer — the
 > seam where a model's request ("please run this") becomes a real effect on a real machine. It is
@@ -7,8 +7,8 @@
 > code (real types, `file:line` references, and the design principles behind them). The two cover the
 > same system at different depths — read Part I for *what* and *why*, Part II for *how*.
 >
-> This doc is the close sibling of two others. [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)
-> gates this boundary; this document *is* the boundary. [How the Agent Loop and Context Work Together](How%20the%20Agent%20Loop%20and%20Context%20Work%20Together.md)
+> This doc is the close sibling of two others. [Permissions](permissions-consent-at-the-tool-boundary.md)
+> gates this boundary; this document *is* the boundary. [The Agent Loop](agent-loop-anatomy-of-a-single-turn.md)
 > explains `Context`, of which the tool registry (`ctx.Tools`) is one slot. Where those leave off,
 > this picks up.
 
@@ -220,7 +220,7 @@ Everything downstream keys off `call.Name`: the `agent.tool.invoke` activity (`:
 yielded to the host (`:873`). The result becomes a `FunctionResultContent` — prefixed `[Error]` when
 `IsError` (`:868-870`) — and is appended to the conversation **all-or-nothing, in batch order**, once
 the whole batch settles. (That ordering invariant is what makes permission *parking* safe; the full
-argument lives in [Consent at the Tool Boundary §6.2](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md).)
+argument lives in [Permissions §6.2](permissions-consent-at-the-tool-boundary.md).)
 
 Two failure channels converge here: a tool that *throws* is caught and turned into
 `ToolResult($"Tool error: {ex.Message}", IsError: true)` (`Agent.cs:840`), while a tool that returns

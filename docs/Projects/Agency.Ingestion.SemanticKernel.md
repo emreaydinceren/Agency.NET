@@ -1,5 +1,4 @@
 # Agency.Ingestion.SemanticKernel
-#ingestion #semantickernel #chunking #textsplitter
 
 ## What It Is
 
@@ -28,5 +27,5 @@ namespace Agency.Ingestion.SemanticKernel;
 
 ## Related
 
-- [[Agency.Ingestion]]
-- [[Agency.Ingestion.FileSystem]]
+- [Agency.Ingestion](Agency.Ingestion.md)
+- [Agency.Ingestion.FileSystem](Agency.Ingestion.FileSystem.md)

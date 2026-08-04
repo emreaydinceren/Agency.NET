@@ -1,9 +1,8 @@
 # Agency.Memory.Hygiene
-#memory #hygiene #pruning
 
 ## What It Is
 
-`Agency.Memory.Hygiene` is the maintenance background service for the Agency long-term memory subsystem. It runs periodic sweeps against [[Agency.Memory.Common]]'s `IMemoryStore`, hard-deleting records that have aged past their per-`ContentType` TTL and records whose importance score falls below a configured threshold and have not been accessed within a staleness window. The sweeper operates entirely off the hot path — it never participates in a user-facing agent turn — and is the only subsystem in the memory stack that is LLM-free.
+`Agency.Memory.Hygiene` is the maintenance background service for the Agency long-term memory subsystem. It runs periodic sweeps against [Agency.Memory.Common](Agency.Memory.Common.md)'s `IMemoryStore`, hard-deleting records that have aged past their per-`ContentType` TTL and records whose importance score falls below a configured threshold and have not been accessed within a staleness window. The sweeper operates entirely off the hot path — it never participates in a user-facing agent turn — and is the only subsystem in the memory stack that is LLM-free.
 
 **Namespace:** `Agency.Memory.Hygiene`
 
@@ -128,11 +127,11 @@ Each call to `RunOnceAsync` opens a single `Activity` named `memory.sweep` with 
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Provides `IMemoryStore` (the two deletion methods the sweeper calls), `ContentType`, `MemoryOptions` (TTL map, importance threshold, stale age, schedule), and `Record` |
-| [[Agency.Memory.Sql.Postgres]] | Ships the production `PostgresMemoryStore` that implements `DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` via bulk SQL with `BTREE (updated_at)` and `BTREE (last_accessed_at)` index scans |
-| [[Agency.Memory.Retrieval]] | Updates `last_accessed_at` on every retrieval hit, which resets the staleness window and prevents recently-used records from being pruned by either pass |
-| [[Agency.Memory.Distiller]] | Writes `Record` items via `IMemoryStore.UpsertAsync`; these newly written records are the primary source of data that the hygiene sweeper later prunes when they age out |
-| [[Agency.Memory.Consolidator]] | Merges and replaces records via `IMemoryStore.MergeAsync`; merged records carry refreshed timestamps that restart their TTL window |
+| [Agency.Memory.Common](Agency.Memory.Common.md) | Provides `IMemoryStore` (the two deletion methods the sweeper calls), `ContentType`, `MemoryOptions` (TTL map, importance threshold, stale age, schedule), and `Record` |
+| [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Ships the production `PostgresMemoryStore` that implements `DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` via bulk SQL with `BTREE (updated_at)` and `BTREE (last_accessed_at)` index scans |
+| [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) | Updates `last_accessed_at` on every retrieval hit, which resets the staleness window and prevents recently-used records from being pruned by either pass |
+| [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Writes `Record` items via `IMemoryStore.UpsertAsync`; these newly written records are the primary source of data that the hygiene sweeper later prunes when they age out |
+| [Agency.Memory.Consolidator](Agency.Memory.Consolidator.md) | Merges and replaces records via `IMemoryStore.MergeAsync`; merged records carry refreshed timestamps that restart their TTL window |
 
 ## Design Notes
 

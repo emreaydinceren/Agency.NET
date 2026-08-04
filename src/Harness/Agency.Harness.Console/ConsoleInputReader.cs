@@ -262,7 +262,7 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                         .Select(cmd => new ConsolePickerRow(cmd.CommandText, cmd.ArgumentHint ?? string.Empty, cmd.Description))
                         .ToList();
                     output.WriteLine();
-                    string? picked = ConsolePicker.Show(commands, 0);
+                    string? picked = ConsolePicker.Show(commands, 0, cancellationToken: ct);
                     output.WriteMarkup(markup);
                     if (picked is not null)
                     {

@@ -1,17 +1,16 @@
 # Agency.Memory.Sql.Sqlite
-#memory #sql #sqlite #storage #embedded
 
 ## What It Is
 
-`Agency.Memory.Sql.Sqlite` is the SQLite implementation of the [[Agency.Memory.Common]] `IMemoryStore` contract that durably stores and vector-searches `Record` items for the Agency long-term memory system. It is the zero-server, embedded, in-process sibling of [[Agency.Memory.Sql.Postgres]] — ideal for local agents, samples, and fast tests that need no external database. It manages a `records` table (per-user partitioning, embeddings stored as JSON-array TEXT), a `user_state` table (write-timestamp tracking), a `watermarks` table (distillation progress), a `dead_letter` table (failed-job audit trail), and a `schema_meta` table (embedding-dimension guard). All tables are provisioned at startup by `MemorySchemaInitializer` using idempotent DDL.
+`Agency.Memory.Sql.Sqlite` is the SQLite implementation of the [Agency.Memory.Common](Agency.Memory.Common.md) `IMemoryStore` contract that durably stores and vector-searches `Record` items for the Agency long-term memory system. It is the zero-server, embedded, in-process sibling of [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) — ideal for local agents, samples, and fast tests that need no external database. It manages a `records` table (per-user partitioning, embeddings stored as JSON-array TEXT), a `user_state` table (write-timestamp tracking), a `watermarks` table (distillation progress), a `dead_letter` table (failed-job audit trail), and a `schema_meta` table (embedding-dimension guard). All tables are provisioned at startup by `MemorySchemaInitializer` using idempotent DDL.
 
 **Namespace:** `Agency.Memory.Sql.Sqlite`
 
 ## Prerequisites
 
 - **`Microsoft.Data.Sqlite`** — the managed SQLite provider; declared as a package dependency. No native engine install and no external server are required; the database file is created automatically on first access.
-- An **`IEmbeddingGenerator`** registration (e.g., from [[Agency.Embeddings.OpenAI]]) — required by `SqliteMemoryStore` to auto-embed records that arrive without a pre-computed vector.
-- **`MemoryOptions`** bound via `IOptions<MemoryOptions>` (registered by `AddAgencyMemory` from [[Agency.Memory.Common]]).
+- An **`IEmbeddingGenerator`** registration (e.g., from [Agency.Embeddings.OpenAI](Agency.Embeddings.OpenAI.md)) — required by `SqliteMemoryStore` to auto-embed records that arrive without a pre-computed vector.
+- **`MemoryOptions`** bound via `IOptions<MemoryOptions>` (registered by `AddAgencyMemory` from [Agency.Memory.Common](Agency.Memory.Common.md)).
 
 The connection string can target a file (`Data Source=memory.db`) or an in-memory database (`Data Source=mem;Mode=Memory;Cache=Shared`). In-memory databases live only as long as at least one connection stays open, so tests hold a keep-alive connection for the database lifetime.
 
@@ -130,7 +129,7 @@ public sealed record DeadLetterEntry(
 
 ## Registration
 
-Call `AddAgencyMemorySqlite` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers `SqliteWatermarkRepository`, `SqliteDeadLetterRepository`, `MemorySchemaInitializer`, and `IMemoryStore → SqliteMemoryStore`, all as singletons. It also registers the provider-neutral abstractions `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer` (defined in [[Agency.Memory.Common]]), which is what lets the rest of the pipeline ([[Agency.Memory.Distiller]] and the host) resolve storage without referencing this concrete provider.
+Call `AddAgencyMemorySqlite` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers `SqliteWatermarkRepository`, `SqliteDeadLetterRepository`, `MemorySchemaInitializer`, and `IMemoryStore → SqliteMemoryStore`, all as singletons. It also registers the provider-neutral abstractions `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer` (defined in [Agency.Memory.Common](Agency.Memory.Common.md)), which is what lets the rest of the pipeline ([Agency.Memory.Distiller](Agency.Memory.Distiller.md) and the host) resolve storage without referencing this concrete provider.
 
 ```csharp
 // File: src/Memory/Agency.Memory.Sql.Sqlite/SqliteMemoryServiceCollectionExtensions.cs
@@ -170,7 +169,7 @@ switch (provider.ToLowerInvariant())
 }
 ```
 
-Nothing downstream — [[Agency.Memory.Retrieval]], [[Agency.Memory.Distiller]], [[Agency.Memory.Consolidator]], [[Agency.Memory.Hygiene]] — changes between providers; they depend only on the [[Agency.Memory.Common]] contracts.
+Nothing downstream — [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md), [Agency.Memory.Distiller](Agency.Memory.Distiller.md), [Agency.Memory.Consolidator](Agency.Memory.Consolidator.md), [Agency.Memory.Hygiene](Agency.Memory.Hygiene.md) — changes between providers; they depend only on the [Agency.Memory.Common](Agency.Memory.Common.md) contracts.
 
 ## How It Works
 
@@ -233,7 +232,7 @@ ORDER BY distance ASC
 LIMIT @top_k;
 ```
 
-The distance value is converted to similarity with `similarity = 1.0 - distance`, matching the Postgres provider's `<=>` semantics so [[Agency.Memory.Retrieval]] behaves identically regardless of backend. The scan is `O(n·d)` over the user's rows — appropriate for the embedded/local scale this provider targets. After returning results, `SearchAsync` fires a background `Task` (fire-and-forget) to bump `last_accessed_at` for the hit rows so hygiene staleness checks reflect recent access without blocking the hot path.
+The distance value is converted to similarity with `similarity = 1.0 - distance`, matching the Postgres provider's `<=>` semantics so [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) behaves identically regardless of backend. The scan is `O(n·d)` over the user's rows — appropriate for the embedded/local scale this provider targets. After returning results, `SearchAsync` fires a background `Task` (fire-and-forget) to bump `last_accessed_at` for the hit rows so hygiene staleness checks reflect recent access without blocking the hot path.
 
 ### `LastWrittenAt` and the retrieval gate
 
@@ -245,7 +244,7 @@ Every write operation (`UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, `MergeAsyn
 
 ### Atomic merge (`MergeAsync`)
 
-`MergeAsync` opens a single connection and transaction, deletes the listed record IDs (via a dynamically built `id IN (@id0, @id1, ...)` list, scoped to the owning `userId`), inserts the replacement record, and bumps `user_state.last_written_at` — all within one transaction. If any step fails, the transaction is rolled back. This implements the Consolidator's `Memory_Merge` tool atomicity requirement (Spec §6.3 / §8.4) and is the reason the store manages `SqliteConnection` directly rather than going through the stateless [[Agency.Sql.Sqlite]] runner.
+`MergeAsync` opens a single connection and transaction, deletes the listed record IDs (via a dynamically built `id IN (@id0, @id1, ...)` list, scoped to the owning `userId`), inserts the replacement record, and bumps `user_state.last_written_at` — all within one transaction. If any step fails, the transaction is rolled back. This implements the Consolidator's `Memory_Merge` tool atomicity requirement (Spec §6.3 / §8.4) and is the reason the store manages `SqliteConnection` directly rather than going through the stateless [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md) runner.
 
 ### Distillation watermarks
 
@@ -274,21 +273,21 @@ Every write operation (`UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, `MergeAsyn
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Defines `IMemoryStore`, `Record`, `ContentType`, `SearchQuery`, `SearchHit`, and `MemoryOptions` — the entire contract this project implements |
-| [[Agency.Memory.Sql.Postgres]] | Sibling provider implementing the same `IMemoryStore` contract on PostgreSQL + pgvector; this project is the embedded/zero-server alternative |
-| [[Agency.Embeddings.Common]] | Provides `IEmbeddingGenerator`; `SqliteMemoryStore` calls it to produce embeddings for records that arrive without a pre-computed vector |
-| [[Agency.Sql.Sqlite]] | Shared SQLite infrastructure; `VectorFunctions` reuses the same in-process cosine-UDF approach used by [[Agency.VectorStore.Sql.Sqlite]] |
-| [[Agency.Memory.Retrieval]] | Calls `IMemoryStore.SearchAsync` and `LastWrittenAtAsync` on every agent iteration; depends on the `IMemoryStore` contract, not on a specific backend |
-| [[Agency.Memory.Distiller]] | Calls `IMemoryStore.UpsertAsync` and the watermark repository to persist extracted episodes and advance the distillation watermark |
-| [[Agency.Memory.Consolidator]] | Calls `IMemoryStore.GetAllForUserAsync`, `MergeAsync`, `UpdateRecordAsync`, and `DeleteByIdAsync` during cross-session memory reconciliation |
-| [[Agency.Memory.Hygiene]] | Calls `DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` on a background schedule to prune stale records |
+| [Agency.Memory.Common](Agency.Memory.Common.md) | Defines `IMemoryStore`, `Record`, `ContentType`, `SearchQuery`, `SearchHit`, and `MemoryOptions` — the entire contract this project implements |
+| [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Sibling provider implementing the same `IMemoryStore` contract on PostgreSQL + pgvector; this project is the embedded/zero-server alternative |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Provides `IEmbeddingGenerator`; `SqliteMemoryStore` calls it to produce embeddings for records that arrive without a pre-computed vector |
+| [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md) | Shared SQLite infrastructure; `VectorFunctions` reuses the same in-process cosine-UDF approach used by [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) |
+| [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) | Calls `IMemoryStore.SearchAsync` and `LastWrittenAtAsync` on every agent iteration; depends on the `IMemoryStore` contract, not on a specific backend |
+| [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Calls `IMemoryStore.UpsertAsync` and the watermark repository to persist extracted episodes and advance the distillation watermark |
+| [Agency.Memory.Consolidator](Agency.Memory.Consolidator.md) | Calls `IMemoryStore.GetAllForUserAsync`, `MergeAsync`, `UpdateRecordAsync`, and `DeleteByIdAsync` during cross-session memory reconciliation |
+| [Agency.Memory.Hygiene](Agency.Memory.Hygiene.md) | Calls `DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` on a background schedule to prune stale records |
 
 ## Design Notes
 
-- **Why embeddings are stored as JSON-array TEXT with a brute-force cosine UDF instead of a vector index.** SQLite has no native vector type or ANN index. Rather than take a native dependency (e.g. `sqlite-vec`), this provider reuses the proven in-process `vec_distance_cosine` UDF pattern already established by [[Agency.VectorStore.Sql.Sqlite]]. For the embedded/local scale this backend targets, a per-user linear scan is fast enough and keeps the provider dependency-free and trivially portable. Production-scale approximate-nearest-neighbour search remains the job of [[Agency.Memory.Sql.Postgres]].
+- **Why embeddings are stored as JSON-array TEXT with a brute-force cosine UDF instead of a vector index.** SQLite has no native vector type or ANN index. Rather than take a native dependency (e.g. `sqlite-vec`), this provider reuses the proven in-process `vec_distance_cosine` UDF pattern already established by [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md). For the embedded/local scale this backend targets, a per-user linear scan is fast enough and keeps the provider dependency-free and trivially portable. Production-scale approximate-nearest-neighbour search remains the job of [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md).
 
 - **Why timestamps are ISO-8601 round-trip strings.** Storing `created_at`/`updated_at`/`last_accessed_at`/`last_written_at` with the `"O"` format (and always UTC) makes lexical string ordering equal to chronological ordering. This lets the monotonic `MAX(...)` upserts on `user_state` and `watermarks` work directly on TEXT columns and lets range comparisons in the hygiene sweeps use simple string `<` predicates — no SQLite date functions required.
 
-- **Why the store manages `SqliteConnection` directly instead of using the `Agency.Sql.Sqlite` runner.** `MergeAsync` requires an atomic multi-statement transaction (delete + insert + watermark bump), and the shared runner executes one statement per freshly-opened connection with no transaction surface. Managing the connection directly mirrors how [[Agency.Memory.Sql.Postgres]] uses `NpgsqlDataSource`, and lets the store register the cosine UDF on every connection it opens.
+- **Why the store manages `SqliteConnection` directly instead of using the `Agency.Sql.Sqlite` runner.** `MergeAsync` requires an atomic multi-statement transaction (delete + insert + watermark bump), and the shared runner executes one statement per freshly-opened connection with no transaction surface. Managing the connection directly mirrors how [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) uses `NpgsqlDataSource`, and lets the store register the cosine UDF on every connection it opens.
 
 - **Why the embedding dimension is persisted to `schema_meta`.** Unlike Postgres, where `vector(N)` encodes the dimension in the column type and can be validated from the catalog, a SQLite TEXT column carries no dimension. To preserve the same §12.3 fail-fast behaviour, the initializer records the dimension on first init and throws `InvalidOperationException` if a later call passes a different one — catching an accidental embedder swap before it silently corrupts search results.

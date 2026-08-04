@@ -1,4 +1,4 @@
-# How Agency's Skills Model Works
+# Skills — Teaching an Agent a New Playbook with One Markdown File
 
 > **What this document is.** The single, self-contained reference for Agency's **skills** subsystem —
 > the feature that lets you drop a folder of Markdown instructions on disk and have the agent discover
@@ -8,8 +8,8 @@
 > change the code (real types, `file:line` references, the six core design principles). The two cover
 > the same system at different depths — read Part I for *what* and *why*, Part II for *how*. For the
 > permission layer that skills hook into (`allowed-tools`), see
-> [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md);
-> for the operator-policy layer beside it, see [How Hooks Work](How%20Hooks%20Work.md).
+> [Permissions](permissions-consent-at-the-tool-boundary.md);
+> for the operator-policy layer beside it, see [Hooks](hooks-nine-places-to-plug-into-the-loop.md).
 
 An agent is only as good as the instructions it carries. But instructions are expensive: every word of
 "here is how to run a code review," "here is our deployment checklist," "here is how to triage a flaky
@@ -480,7 +480,7 @@ answer, a skill's pre-approval is never written to `permissions.local.json`. It'
 checked inline. So "load skill X, which is allowed to run these three tools" can never silently widen
 your standing permissions — the grant evaporates at the next user turn. Two different lifetimes (one
 turn vs. forever) stay in two different places. Full mechanics in
-[Consent at the Tool Boundary §11](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md).
+[Permissions §11](permissions-consent-at-the-tool-boundary.md).
 
 ---
 

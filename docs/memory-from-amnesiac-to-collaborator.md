@@ -1,4 +1,4 @@
-# How Agency Gives AI Agents Memory
+# Memory — From Amnesiac with a Tool Belt to Collaborator
 
 For software engineers entering the world of AI agents, the most important shift in mindset is moving from **stateless inference** to **stateful persistence**. This document explains how Agency gives "brains" to these systems so they stop acting like *amnesiacs with a tool belt* and start behaving like senior engineers.
 
@@ -207,6 +207,8 @@ The memory feature is split across one harness project and several `Agency.Memor
 | `Agency.Memory.Hygiene` | Maintenance — TTL + low-importance garbage collection. | `…/Agency.Memory.Hygiene` |
 
 **Why this matters to you as a reader:** when you go looking for "where does retrieval happen," you will not find it in `Agent.cs`. You will find a *callback* registered into the loop. The rest of this part is the trail of breadcrumbs that connects the two.
+
+> **Not covered by the table above:** `Agency.Mcp.Memory` (see its [project reference](Projects/Agency.Mcp.Memory.md)) is a second, independent memory implementation — a flat scoped key-value store exposed as MCP tools, with no embeddings and no automatic retrieval. It is easy to mistake for part of this pipeline because it's also named "memory" and also plugs into `Agency.Harness.Console`; it isn't. See §6.12.
 
 ---
 
@@ -531,6 +533,23 @@ To tie Part II back to the four pillars, here is one fact's life cycle through t
 ![Memory — one fact's life cycle](attachments/memory-trace.svg)
 
 The user never re-stated the preference. The agent never called a "remember" tool. The recall happened because a background scribe distilled a fact in March, and a gated search re-grounded the agent in June — exactly the stateless-to-stateful shift this document opened with.
+
+---
+
+### 6.12 A second, independent memory implementation: MCP scoped memory
+
+Not every memory system in Agency is `Agency.Memory.*`. `Agency.Mcp.Memory` (see its [project reference](Projects/Agency.Mcp.Memory.md)) is a standalone MCP server exposing a flat, scoped key-value store — `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` — over stdio. No embeddings, no semantic search, no distiller. It's the "notebook" model: explicit `domain`/`key`/`value` entries the model writes and reads on purpose, rather than facts extracted automatically from conversation.
+
+That difference matters for **P2 (capture is system-owned)**. `Agency.Memory.*` never gives the agent a "save this" tool — capture is a background job the agent can only time, never invoke directly (§6.7). `Agency.Mcp.Memory` is the opposite: `Memorize` *is* a model-invoked save tool, and `Recall` is a model-invoked read. Nothing forces either call — the model has to decide, unprompted, that a fact is worth saving or worth recalling.
+
+That's a real reliability gap on the read side: an agent holding a memorized fact can still fail to use it if it never thinks to call `Recall` — there is no gate, no `OnPreIteration` injection, nothing pulling the fact into context the way §6.5 describes for the CoALA pipeline. `Agency.Harness.Console` closes part of that gap with `MemoryIndexHook` (`src/Harness/Agency.Harness.Console/MemoryIndexHook.cs`; see [Agency.Harness.Console](Projects/Agency.Harness.Console.md)), which reuses the *exact same* extension seam described in §6.2 — `AgentHooks.OnSessionStarted` — to auto-prime every turn with a lightweight index of what's stored (`domain|key` pairs only, fetched via `ListGlobalKeys`), appended into `ctx.Knowledge.Facts`. The model no longer has to guess whether memory has anything relevant; it can see the index up front and decide whether a `Recall` call is worth making.
+
+Two design choices worth calling out:
+
+- **Only the index is auto-injected, never the stored values.** `Agency.Mcp.Memory` has no relevance ranking — no embeddings, no over-fetch-and-rerank the way `RetrievalEngine` narrows a large store down to what matters (§6.5) — so auto-injecting every stored *value* on every turn would reproduce the exact context-rot problem the CoALA pipeline exists to avoid. The index is cheap and bounded by key count, not by value payload size; fetching a specific value stays a deliberate, model-initiated `Recall(domain, key)` call.
+- **`OnSessionStarted` fires once per turn, not once per session** (§6.1: every `ChatSession.SendAsync` call re-enters `Agent.ChatAsync` → `RunAsync`, re-firing the hook — proven by `AgentSessionIdTests.ChatAsync_SessionId_IsStableAcrossTwoTurns`). So the hook must *replace* its own prior fact on each firing rather than append, or the index would duplicate on every turn of a session. It does this by filtering out any existing fact carrying its own recognizable prefix before adding the freshly-fetched one.
+
+The point worth taking away: the hook seam isn't exclusive to `Agency.Memory.*`. Any memory implementation — including one with a completely different storage model and no semantic search at all — can plug into the same `OnSessionStarted`/`OnPreIteration` points and get the same "the system decides when memory speaks, not the model's unprompted judgment" property, without the harness knowing or caring which memory system is attached. That's principle 1 from the top of this document, holding up a second time under a system it wasn't originally designed for.
 
 ---
 

@@ -1,7 +1,5 @@
 # Agency.Llm.Common
 
-#llm #abstractions #options #tools #models
-
 ## What It Is
 
 Agency.Llm.Common is the shared contract library that defines provider-agnostic types for configuring LLM clients, describing available models, and declaring the tool-calling surface used across the agentic pipeline.
@@ -87,18 +85,18 @@ public interface IToolRegistry
 
 ## How It Works
 
-`Agency.Llm.Common` is a pure type library — it contains no runtime logic. Provider implementations ([[Agency.Llm.Claude]] and [[Agency.Llm.OpenAI]]) reference this project and expose `LlmClientOptions` subclasses bound via `IOptions<T>`. The `IModelProvider` interface is also implemented by both providers and exposed via their registered services.
+`Agency.Llm.Common` is a pure type library — it contains no runtime logic. Provider implementations ([Agency.Llm.Claude](Agency.Llm.Claude.md) and [Agency.Llm.OpenAI](Agency.Llm.OpenAI.md)) reference this project and expose `LlmClientOptions` subclasses bound via `IOptions<T>`. The `IModelProvider` interface is also implemented by both providers and exposed via their registered services.
 
-The `Tools` sub-namespace contains the tool-calling contract. [[Agency.Harness]] drives the agentic loop by calling `IToolRegistry.InvokeAsync` after the LLM returns a tool-use request, and passes `IToolRegistry.ListDefinitions()` to the provider on each turn.
+The `Tools` sub-namespace contains the tool-calling contract. [Agency.Harness](Agency.Harness.md) drives the agentic loop by calling `IToolRegistry.InvokeAsync` after the LLM returns a tool-use request, and passes `IToolRegistry.ListDefinitions()` to the provider on each turn.
 
 ## How It Relates to Other Projects
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Llm.Claude]] | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
-| [[Agency.Llm.OpenAI]] | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
-| [[Agency.Harness]] | Depends on `ITool`, `IToolRegistry`, `ToolDefinition`, `ToolResult`, `Model` |
-| [[Agency.Harness.Console]] | References `LlmClientOptions` and `Model` for CLI configuration |
+| [Agency.Llm.Claude](Agency.Llm.Claude.md) | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
+| [Agency.Llm.OpenAI](Agency.Llm.OpenAI.md) | Implements `IModelProvider`; consumes `LlmClientOptions`, `ToolDefinition`, `ToolResult` |
+| [Agency.Harness](Agency.Harness.md) | Depends on `ITool`, `IToolRegistry`, `ToolDefinition`, `ToolResult`, `Model` |
+| [Agency.Harness.Console](Agency.Harness.Console.md) | References `LlmClientOptions` and `Model` for CLI configuration |
 
 ## Design Notes
 

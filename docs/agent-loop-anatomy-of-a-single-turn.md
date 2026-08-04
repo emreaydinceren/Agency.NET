@@ -1,10 +1,10 @@
-# How the Agent Loop and Context Work Together
+# The Agent Loop — Anatomy of a Single Turn
 
 > **Where this fits.** This is the grounding document for `Context` — the single object the
 > Agency agent loop carries through every turn. The other deep-dives lean on it constantly:
-> [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md)
-> talks about "retrieval writes `ctx.Knowledge`"; [How Agency's Skills Model Works](How%20Agency's%20Skills%20Model%20Works.md)
-> talks about the active-skill window; [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md)
+> [Memory](memory-from-amnesiac-to-collaborator.md)
+> talks about "retrieval writes `ctx.Knowledge`"; [Skills](skills-a-playbook-in-one-markdown-file.md)
+> talks about the active-skill window; [Permissions](permissions-consent-at-the-tool-boundary.md)
 > talks about the parked tool batch. All three of those live *inside* `Context`. This document
 > explains the object itself, and the loop that gives it meaning.
 >
@@ -419,7 +419,7 @@ sends a *new* message while a turn is parked, `ChatSession.SendAsync` (`ChatSess
 implicitly denies every pending call, drains the batch, and proceeds with the new message. That
 `PendingToolBatch` lives on `Context` (not in some side table) is precisely what will let the
 state-persistence project snapshot and resume a parked turn by serialising one object. The full
-mechanics are in [Consent at the Tool Boundary](Consent%20at%20the%20Tool%20Boundary%20-%20The%20Permission%20Model.md).
+mechanics are in [Permissions](permissions-consent-at-the-tool-boundary.md).
 
 #### `ActiveSkillState` — the per-turn pre-approval window
 
@@ -444,7 +444,7 @@ mutable class owned solely by the loop and the skill tool, mutated single-thread
 so a plain `Set`/`Clear` is simpler and there is no immutability contract to uphold. The Tier-2
 sub-contexts (`Knowledge`, etc.) are immutable records shared more widely, so they follow the
 "assign a new instance" rule instead. Same blackboard, two mutation styles, each fit to its owner.
-The skills side of this is detailed in [How Agency's Skills Model Works](How%20Agency's%20Skills%20Model%20Works.md).
+The skills side of this is detailed in [Skills](skills-a-playbook-in-one-markdown-file.md).
 
 ---
 

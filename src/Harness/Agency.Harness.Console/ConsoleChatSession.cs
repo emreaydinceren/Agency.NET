@@ -144,7 +144,7 @@ internal sealed partial class ConsoleChatSession : IDisposable
 
         while (parked)
         {
-            IReadOnlyList<PermissionResponse>? responses = this.CollectPermissionResponses(pendingRequests);
+            IReadOnlyList<PermissionResponse>? responses = this.CollectPermissionResponses(pendingRequests, cts.Token);
             if (responses is null)
             {
                 break;
@@ -312,7 +312,7 @@ internal sealed partial class ConsoleChatSession : IDisposable
 
                     while (parked)
                     {
-                        var responses = this.CollectPermissionResponses(pendingRequests);
+                        var responses = this.CollectPermissionResponses(pendingRequests, turnCts.Token);
                         if (responses is null)
                         {
                             // User cancelled the picker (Escape) — abandon: the next SendAsync
@@ -527,7 +527,8 @@ internal sealed partial class ConsoleChatSession : IDisposable
     // so the suggested devirtualization would buy nothing.
 #pragma warning disable CA1859
     private IReadOnlyList<PermissionResponse>? CollectPermissionResponses(
-        List<PermissionRequestedEvent> pending)
+        List<PermissionRequestedEvent> pending,
+        CancellationToken cancellationToken)
     {
         var responses = new List<PermissionResponse>(pending.Count);
 
@@ -580,7 +581,7 @@ internal sealed partial class ConsoleChatSession : IDisposable
                 };
 
             // returnItemIndex = 1 returns the second column (the internal kind key).
-            string? picked = ConsolePicker.Show(rows, returnItemIndex: 1, title: "Choose an action:");
+            string? picked = ConsolePicker.Show(rows, returnItemIndex: 1, title: "Choose an action:", cancellationToken: cancellationToken);
 
             if (picked is null)
             {

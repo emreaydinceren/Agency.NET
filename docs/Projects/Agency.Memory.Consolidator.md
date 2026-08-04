@@ -1,5 +1,4 @@
 # Agency.Memory.Consolidator
-#memory #consolidation #agent #background-service
 
 ## What It Is
 
@@ -228,12 +227,12 @@ The sub-agent's `ToolRegistry` holds four `ITool` implementations, registered ex
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Provides `IMemoryStore`, `Record`, `ContentType`, `ConsolidationJob`, `ConsolidatorOptions`, `ConsolidationTrigger`, `IAsyncEventBus`, `DistillationCompletedEvent`, `ConsolidationCompletedEvent`, `MemoryMutatedEvent` |
-| [[Agency.Harness]] | Supplies the `Agent`, `ChatSession`, `AgentOptions`, `ToolContext`, `ToolRegistry`, `StopConditions`, and `AgentEvent` / `ToolInvokedEvent` types the sub-agent is built from |
-| [[Agency.Llm.Common]] | Defines `ITool`, `ToolDefinition`, and `ToolResult` that the four consolidation tools implement |
-| [[Agency.Memory.Distiller]] | Publishes `DistillationCompletedEvent`, the default upstream trigger for a consolidation pass |
-| [[Agency.Memory.Sql.Postgres]] | Ships the `PostgresMemoryStore` implementation of `IMemoryStore`; `MergeAsync` and `DeleteByIdAsync` execute as single PostgreSQL transactions |
-| [[Agency.Mcp.Memory]] | Exposes agent tools that drive distillation; distillation completion cascades into consolidation |
+| [Agency.Memory.Common](Agency.Memory.Common.md) | Provides `IMemoryStore`, `Record`, `ContentType`, `ConsolidationJob`, `ConsolidatorOptions`, `ConsolidationTrigger`, `IAsyncEventBus`, `DistillationCompletedEvent`, `ConsolidationCompletedEvent`, `MemoryMutatedEvent` |
+| [Agency.Harness](Agency.Harness.md) | Supplies the `Agent`, `ChatSession`, `AgentOptions`, `ToolContext`, `ToolRegistry`, `StopConditions`, and `AgentEvent` / `ToolInvokedEvent` types the sub-agent is built from |
+| [Agency.Llm.Common](Agency.Llm.Common.md) | Defines `ITool`, `ToolDefinition`, and `ToolResult` that the four consolidation tools implement |
+| [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Publishes `DistillationCompletedEvent`, the default upstream trigger for a consolidation pass |
+| [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Ships the `PostgresMemoryStore` implementation of `IMemoryStore`; `MergeAsync` and `DeleteByIdAsync` execute as single PostgreSQL transactions |
+| [Agency.Mcp.Memory](Agency.Mcp.Memory.md) | Exposes agent tools that drive distillation; distillation completion cascades into consolidation |
 
 ## Design Notes
 

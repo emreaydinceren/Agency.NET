@@ -1,7 +1,5 @@
 # Agency.Embeddings.Common
 
-#embeddings #abstractions #interface #batching
-
 ## What It Is
 
 Agency.Embeddings.Common is the shared abstractions library that defines the embedding generation contract used across the solution and provides a batching decorator that reduces round-trips to the embedding API.
@@ -94,12 +92,12 @@ IReadOnlyList<ReadOnlyMemory<float>> vectors = await batching.GenerateEmbeddings
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Embeddings.OpenAI]] | Concrete `IEmbeddingGenerator` implementation using the OpenAI-compatible HTTP API |
-| [[Agency.Sql.Postgres]] | `SQLQueryEmbedder` injects `IEmbeddingGenerator` to replace `vectorize(…)` placeholders in SQL |
-| [[Agency.Sql.Sqlite]] | Same `SQLQueryEmbedder` pattern, SQLite variant |
-| [[Agency.VectorStore.Sql.Postgres]] | Injects `IEmbeddingGenerator` to embed stored values and compute query vectors |
-| [[Agency.VectorStore.Sql.Sqlite]] | Same vector store pattern, SQLite variant |
-| [[Agency.Ingestion]] | Indirectly — the vector store used by the ingestion pipeline depends on `IEmbeddingGenerator` |
+| [Agency.Embeddings.OpenAI](Agency.Embeddings.OpenAI.md) | Concrete `IEmbeddingGenerator` implementation using the OpenAI-compatible HTTP API |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | `SQLQueryEmbedder` injects `IEmbeddingGenerator` to replace `vectorize(…)` placeholders in SQL |
+| [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md) | Same `SQLQueryEmbedder` pattern, SQLite variant |
+| [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Injects `IEmbeddingGenerator` to embed stored values and compute query vectors |
+| [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) | Same vector store pattern, SQLite variant |
+| [Agency.Ingestion](Agency.Ingestion.md) | Indirectly — the vector store used by the ingestion pipeline depends on `IEmbeddingGenerator` |
 
 ## Design Notes
 

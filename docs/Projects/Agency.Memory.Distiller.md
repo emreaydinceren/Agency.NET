@@ -1,17 +1,16 @@
 # Agency.Memory.Distiller
-#memory #distillation #async #write-path
 
 ## What It Is
 
-`Agency.Memory.Distiller` is the write-path component of the Agency long-term memory system. It converts conversation turns into durable [[Agency.Memory.Common]] `Record` objects entirely off the agent's hot path. After every distillation trigger fires — a goal-completion signal, an inactivity timeout, or session disposal — a `DistillationJob` is placed on a bounded per-session channel. A single `DistillerBackgroundService` drains those channels, reads the unprocessed turns from the session's `IConversationManager`, calls an LLM to extract zero or more Fact or Memory records, embeds each record, and upserts the results into [[Agency.Memory.Common]]'s `IMemoryStore`. The agent's hot path sees none of this work; the only hot-path side effect is that `OnAssistantTurn` restarts an inactivity timer.
+`Agency.Memory.Distiller` is the write-path component of the Agency long-term memory system. It converts conversation turns into durable [Agency.Memory.Common](Agency.Memory.Common.md) `Record` objects entirely off the agent's hot path. After every distillation trigger fires — a goal-completion signal, an inactivity timeout, or session disposal — a `DistillationJob` is placed on a bounded per-session channel. A single `DistillerBackgroundService` drains those channels, reads the unprocessed turns from the session's `IConversationManager`, calls an LLM to extract zero or more Fact or Memory records, embeds each record, and upserts the results into [Agency.Memory.Common](Agency.Memory.Common.md)'s `IMemoryStore`. The agent's hot path sees none of this work; the only hot-path side effect is that `OnAssistantTurn` restarts an inactivity timer.
 
 **Namespace:** `Agency.Memory.Distiller`
 
 ## Prerequisites
 
 - An **LLM** is required for episode extraction. The distiller has no default LLM binding — the host must call `AddAgencyDistillerLlm` with an `Microsoft.Extensions.AI.IChatClient` in addition to `AddAgencyMemory`.
-- A storage backend supplying [[Agency.Memory.Common]]'s `IMemoryStore`, `IWatermarkStore`, and `IDeadLetterStore` (e.g. a Postgres + pgvector provider, or in-memory implementations for tests).
-- An `IEmbeddingGenerator` from [[Agency.Embeddings.Common]] to vectorise each record before upsert.
+- A storage backend supplying [Agency.Memory.Common](Agency.Memory.Common.md)'s `IMemoryStore`, `IWatermarkStore`, and `IDeadLetterStore` (e.g. a Postgres + pgvector provider, or in-memory implementations for tests).
+- An `IEmbeddingGenerator` from [Agency.Embeddings.Common](Agency.Embeddings.Common.md) to vectorise each record before upsert.
 
 ## API Surface
 
@@ -63,7 +62,7 @@ using Agency.Memory.Distiller.Services;
 
 // BackgroundService. Single consumer; drains all per-session channels then
 // suspends on ChannelSessionRegistry.WaitForWorkAsync (SemaphoreSlim wake).
-// Depends on [[Agency.Memory.Common]]'s storage contracts IMemoryStore,
+// Depends on [Agency.Memory.Common](Agency.Memory.Common.md)'s storage contracts IMemoryStore,
 // IWatermarkStore, and IDeadLetterStore directly — there are no local adapters.
 // ActivitySource name : "Agency.Memory.Distiller"
 // Meter name          : "Agency.Memory.Distiller"
@@ -237,9 +236,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 // Prerequisites that must already be registered:
 //   IMemoryStore          (a storage provider, e.g. Postgres + pgvector)
-//   IWatermarkStore       ([[Agency.Memory.Common]] contract; provider-supplied)
-//   IDeadLetterStore      ([[Agency.Memory.Common]] contract; provider-supplied)
-//   IEmbeddingGenerator   ([[Agency.Embeddings.Common]])
+//   IWatermarkStore       ([Agency.Memory.Common](Agency.Memory.Common.md) contract; provider-supplied)
+//   IDeadLetterStore      ([Agency.Memory.Common](Agency.Memory.Common.md) contract; provider-supplied)
+//   IEmbeddingGenerator   ([Agency.Embeddings.Common](Agency.Embeddings.Common.md))
 //   (IAsyncEventBus is registered by AddAgencyMemory itself.)
 
 services.AddAgencyMemory(
@@ -268,7 +267,7 @@ services.AddAgencyDistillerLlm(chatClient, model: "your-model-id");
 - `ChannelSessionRegistry` (singleton; holds all per-session channels).
 - `IConversationManagerRegistry` → `InMemoryConversationManagerRegistry` (singleton).
 - `InactivityTimerService` (singleton, also registered as `IHostedService`).
-- `DistillerBackgroundService` as an `IHostedService` — its constructor resolves [[Agency.Memory.Common]]'s `IMemoryStore`, `IWatermarkStore`, and `IDeadLetterStore` from the container (no local storage adapters exist; the host wires up the implementations of those Common interfaces).
+- `DistillerBackgroundService` as an `IHostedService` — its constructor resolves [Agency.Memory.Common](Agency.Memory.Common.md)'s `IMemoryStore`, `IWatermarkStore`, and `IDeadLetterStore` from the container (no local storage adapters exist; the host wires up the implementations of those Common interfaces).
 - Baseline `AgentHooks` via `IPostConfigureOptions<AgentOptions>` — sets `AgentOptions.BaselineHooks` so the retrieval callback, timer-restart, session registration / tool registration, and session-end distillation job are wired without further configuration.
 
 `AddAgencyDistillerLlm` registers `ILlmClientAdapter` → `ChatClientLlmAdapter`. `AgentFactory` composes `BaselineHooks` first, followed by any `UserHooks`.
@@ -334,7 +333,7 @@ int newWatermark = await watermarks.AdvanceAsync(
 | Permanent | Any other unrecognised exception | Dead-letter immediately |
 | Cancellation | `OperationCanceledException` | Re-thrown; never dead-lettered |
 
-Dead-letter writes go to [[Agency.Memory.Common]]'s `IDeadLetterStore.WriteAsync` and are followed by a `DistillationFailedEvent`. Both `DistillationCompletedEvent` and `DistillationFailedEvent` are published on `IAsyncEventBus` after each job settles.
+Dead-letter writes go to [Agency.Memory.Common](Agency.Memory.Common.md)'s `IDeadLetterStore.WriteAsync` and are followed by a `DistillationFailedEvent`. Both `DistillationCompletedEvent` and `DistillationFailedEvent` are published on `IAsyncEventBus` after each job settles.
 
 ### Session lifecycle hooks
 
@@ -368,17 +367,17 @@ Defined on `DistillerBackgroundService`:
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Depends on its storage contracts `IMemoryStore`, `IWatermarkStore`, and `IDeadLetterStore` directly (the local watermark/dead-letter interfaces and adapters were removed); also consumes `Record`, `DistillationJob`, `DistillerOptions`, `MemoryOptions`, events, `IAsyncEventBus`, and `MemoryHookFactory` |
-| [[Agency.Memory.Retrieval]] | `AddAgencyMemory` builds a `RetrievalEngine` / `RetrievalGate` and binds them to the `OnPreIteration` baseline hook |
-| [[Agency.Harness]] | Consumes `BackgroundService` wiring, `IConversationManager`, `Context`, `FocusContext`, `AgentOptions.BaselineHooks`, and hook context types |
-| [[Agency.Llm.Common]] | `MarkGoalCompleteTool` and `SetFocusTool` implement its `ITool` contract |
-| [[Agency.Embeddings.Common]] | `IEmbeddingGenerator` used to embed `Title + "\n\n" + Value` before upsert |
-| [[Agency.Memory.Distiller.Test]] | Unit test project; accesses internals via `InternalsVisibleTo` |
-| [[Agency.Memory.Functional.Test]] | Functional test project; accesses internals to wire stub and real LLM clients |
+| [Agency.Memory.Common](Agency.Memory.Common.md) | Depends on its storage contracts `IMemoryStore`, `IWatermarkStore`, and `IDeadLetterStore` directly (the local watermark/dead-letter interfaces and adapters were removed); also consumes `Record`, `DistillationJob`, `DistillerOptions`, `MemoryOptions`, events, `IAsyncEventBus`, and `MemoryHookFactory` |
+| [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) | `AddAgencyMemory` builds a `RetrievalEngine` / `RetrievalGate` and binds them to the `OnPreIteration` baseline hook |
+| [Agency.Harness](Agency.Harness.md) | Consumes `BackgroundService` wiring, `IConversationManager`, `Context`, `FocusContext`, `AgentOptions.BaselineHooks`, and hook context types |
+| [Agency.Llm.Common](Agency.Llm.Common.md) | `MarkGoalCompleteTool` and `SetFocusTool` implement its `ITool` contract |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | `IEmbeddingGenerator` used to embed `Title + "\n\n" + Value` before upsert |
+| `Agency.Memory.Distiller.Test` | Unit test project; accesses internals via `InternalsVisibleTo` |
+| `Agency.Memory.Functional.Test` | Functional test project; accesses internals to wire stub and real LLM clients |
 
 ## Design Notes
 
-- **Storage contracts live in [[Agency.Memory.Common]], not here.** `IWatermarkStore` and `IDeadLetterStore` (and `IMemorySchemaInitializer`) were moved out of the Distiller into `Agency.Memory.Common.Storage`, and the project's old local interfaces + `WatermarkStoreAdapter` / `DeadLetterStoreAdapter` were deleted along with its reference to any concrete provider. This lets the Distiller depend only on narrow abstractions while the host selects a storage provider at composition time, so the write-path component never references a database package directly.
+- **Storage contracts live in [Agency.Memory.Common](Agency.Memory.Common.md), not here.** `IWatermarkStore` and `IDeadLetterStore` (and `IMemorySchemaInitializer`) were moved out of the Distiller into `Agency.Memory.Common.Storage`, and the project's old local interfaces + `WatermarkStoreAdapter` / `DeadLetterStoreAdapter` were deleted along with its reference to any concrete provider. This lets the Distiller depend only on narrow abstractions while the host selects a storage provider at composition time, so the write-path component never references a database package directly.
 
 - **The agent never authors a memory.** `MarkGoalComplete` and `SetFocus` are the only memory-adjacent tools the primary agent sees. `MarkGoalComplete` enqueues a distillation trigger; it does not write a record. The actual extraction decision — what is worth remembering, in which domain, at what importance — is made by the distiller's LLM call after the fact. This keeps the hot-path agent focused on its task and produces more consistent memories than agent-authored writes.
 

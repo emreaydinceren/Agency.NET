@@ -1,5 +1,4 @@
 # Agency.KeyValueStore.Sql.Sqlite
-#keyvaluestore #sqlite #observability
 
 ## What It Is
 
@@ -35,5 +34,5 @@ namespace Agency.KeyValueStore.Sql.Sqlite;
 
 ## Related
 
-- [[Agency.KeyValueStore.Common]]
-- [[Agency.Sql.Sqlite]]
+- [Agency.KeyValueStore.Common](Agency.KeyValueStore.Common.md)
+- [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md)

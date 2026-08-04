@@ -1,16 +1,14 @@
 # Agency.KeyValueStore.Sql.Postgres
 
-#keyvaluestore #postgresql #jsonb #observability
-
 ## What It Is
 
-Agency.KeyValueStore.Sql.Postgres is the PostgreSQL-backed implementation of [[Agency.KeyValueStore.Common]]'s `IKVStore` that stores, retrieves, and deletes typed key-value entries with optional JSONB metadata in a `kv_store` table scoped by `user_id` and `session_id`.
+Agency.KeyValueStore.Sql.Postgres is the PostgreSQL-backed implementation of [Agency.KeyValueStore.Common](Agency.KeyValueStore.Common.md)'s `IKVStore` that stores, retrieves, and deletes typed key-value entries with optional JSONB metadata in a `kv_store` table scoped by `user_id` and `session_id`.
 
 **Namespace:** `Agency.KeyValueStore.Sql.Postgres`
 
 ## Prerequisites
 
-- A running PostgreSQL instance accessible via a configured [[Agency.Sql.Postgres]] `PostgreSqlRunner`
+- A running PostgreSQL instance accessible via a configured [Agency.Sql.Postgres](Agency.Sql.Postgres.md) `PostgreSqlRunner`
 - `InitializeSchemaAsync` must be called once before first use to create the `kv_store` table and its GIN index
 
 ## API Surface
@@ -127,9 +125,9 @@ Operations instrumented: `kvstore.initialize`, `kvstore.upsert`, `kvstore.search
 
 | Project | Relationship |
 |---|---|
-| [[Agency.KeyValueStore.Common]] | Defines `IKVStore`, `Query`, `SearchHit`, and `SearchHit<TValue>` — the contracts this project implements |
-| [[Agency.Sql.Postgres]] | Supplies `PostgreSqlRunner`, which executes all DDL and DML issued by `PostgresKVStore` |
-| [[Agency.KeyValueStore.Sql.Sqlite]] | Sibling SQLite implementation of the same `IKVStore` contract |
+| [Agency.KeyValueStore.Common](Agency.KeyValueStore.Common.md) | Defines `IKVStore`, `Query`, `SearchHit`, and `SearchHit<TValue>` — the contracts this project implements |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | Supplies `PostgreSqlRunner`, which executes all DDL and DML issued by `PostgresKVStore` |
+| [Agency.KeyValueStore.Sql.Sqlite](Agency.KeyValueStore.Sql.Sqlite.md) | Sibling SQLite implementation of the same `IKVStore` contract |
 
 ## Design Notes
 

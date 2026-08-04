@@ -1,5 +1,4 @@
 # Agency.Ingestion.FileSystem
-#ingestion #filesystem #loader #documents
 
 ## What It Is
 
@@ -26,5 +25,5 @@ using Agency.Ingestion.FileSystem;
 
 ## Related
 
-- [[Agency.Ingestion]]
-- [[Agency.Ingestion.SemanticKernel]]
+- [Agency.Ingestion](Agency.Ingestion.md)
+- [Agency.Ingestion.SemanticKernel](Agency.Ingestion.SemanticKernel.md)

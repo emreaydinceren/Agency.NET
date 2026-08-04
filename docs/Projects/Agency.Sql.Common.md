@@ -1,5 +1,4 @@
 # Agency.Sql.Common
-#sql #abstractions #observability #base
 
 ## What It Is
 
@@ -36,6 +35,6 @@ namespace Agency.Sql.Common;
 
 ## Related
 
-- [[Agency.Common]]
-- [[Agency.Sql.Postgres]]
-- [[Agency.Sql.Sqlite]]
+- [Agency.Common](Agency.Common.md)
+- [Agency.Sql.Postgres](Agency.Sql.Postgres.md)
+- [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md)

@@ -1,7 +1,5 @@
 # Agency.Llm.Claude
 
-#llm #claude #anthropic #implementation #microsoft-extensions-ai
-
 ## What It Is
 
 `Agency.Llm.Claude` is the Anthropic Claude provider factory that creates `IChatClient` instances backed by the Anthropic API and implements `IModelProvider` to enumerate available models.
@@ -96,9 +94,9 @@ Logging of request and response details is enabled via `UseLogging()`.
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Llm.Common]] | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` from this assembly |
-| [[Agency.Harness]] | `Models.cs` calls `new ClaudeClient(options).CreateChatClient()` when the provider is `"CLAUDE"` |
-| [[Agency.Harness.Console]] | Selects the Claude provider via configuration (`Agent:Provider = "Claude"`) |
+| [Agency.Llm.Common](Agency.Llm.Common.md) | Implements `IModelProvider`; uses `LlmClientOptions` and `Model` from this assembly |
+| [Agency.Harness](Agency.Harness.md) | `Models.cs` calls `new ClaudeClient(options).CreateChatClient()` when the provider is `"CLAUDE"` |
+| [Agency.Harness.Console](Agency.Harness.Console.md) | Selects the Claude provider via configuration (`Agent:Provider = "Claude"`) |
 
 ## Design Notes
 

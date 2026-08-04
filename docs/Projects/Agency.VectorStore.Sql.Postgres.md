@@ -1,7 +1,5 @@
 # Agency.VectorStore.Sql.Postgres
 
-#vectorstore #postgresql #pgvector #hnsw #observability
-
 ## What It Is
 
 `Agency.VectorStore.Sql.Postgres` is the PostgreSQL-backed vector store implementation that persists JSON values and their embeddings in a `semantic_kv_store` table and retrieves them via cosine-distance search with optional exact key matching and JSONB metadata filtering. Entries are scoped along three axes — user, session, and project — so a single query can fold together user-global, session-specific, and loaded-project results.
@@ -15,7 +13,7 @@
 
 ## API Surface
 
-`PostgresKVStore` implements `IVectorStore` (defined in [[Agency.VectorStore.Common]]) and adds one schema-setup method. The store is constructed directly via its public constructor; this project ships no DI registration.
+`PostgresKVStore` implements `IVectorStore` (defined in [Agency.VectorStore.Common](Agency.VectorStore.Common.md)) and adds one schema-setup method. The store is constructed directly via its public constructor; this project ships no DI registration.
 
 ```csharp
 // File: src/VectorStore/Agency.VectorStore.Sql.Postgres/PostgresKVStore.cs
@@ -67,7 +65,7 @@ public class PostgresKVStore : IVectorStore
 }
 ```
 
-`ListDocumentsAsync` returns `DocumentInfo` records (defined in [[Agency.VectorStore.Common]]):
+`ListDocumentsAsync` returns `DocumentInfo` records (defined in [Agency.VectorStore.Common](Agency.VectorStore.Common.md)):
 
 ```csharp
 // File: src/VectorStore/Agency.VectorStore.Common/DocumentInfo.cs
@@ -164,9 +162,9 @@ Every activity records an `exception` event with `exception.type`, `exception.me
 
 | Project | Relationship |
 |---|---|
-| [[Agency.VectorStore.Common]] | Implements `IVectorStore`; consumes `Query`, `SearchHit<TValue>`, `DocumentInfo`, and `JsonMetadataHelpers`. |
-| [[Agency.Embeddings.Common]] | Injects `IEmbeddingGenerator` to produce embeddings for upsert and semantic search. |
-| [[Agency.Sql.Postgres]] | Injects `PostgreSqlRunner` for parameterized SQL execution and result hydration. |
+| [Agency.VectorStore.Common](Agency.VectorStore.Common.md) | Implements `IVectorStore`; consumes `Query`, `SearchHit<TValue>`, `DocumentInfo`, and `JsonMetadataHelpers`. |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Injects `IEmbeddingGenerator` to produce embeddings for upsert and semantic search. |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | Injects `PostgreSqlRunner` for parameterized SQL execution and result hydration. |
 
 ## Design Notes
 

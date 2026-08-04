@@ -1,7 +1,5 @@
 # Agency.Sql.Postgres
 
-#sql #postgresql #pgvector #observability
-
 ## What It Is
 
 Agency.Sql.Postgres is the PostgreSQL adapter that executes raw SQL against a PostgreSQL/pgvector database and resolves `vectorize('...')` macros in SQL text into real embedding vectors before execution.
@@ -13,13 +11,13 @@ Agency.Sql.Postgres is the PostgreSQL adapter that executes raw SQL against a Po
 - A reachable PostgreSQL instance with the `pgvector` extension installed.
 - A valid Npgsql connection string, e.g. `Host=localhost;Port=5432;Database=dev_db;Username=dev_user;Password=dev_password`.
 - For local development, start the bundled PostgreSQL container: `cd src && docker-compose up -d` (see `src/docker-compose.yml`).
-- `SQLQueryEmbedder` additionally requires an [[Agency.Embeddings.Common]] `IEmbeddingGenerator` implementation at runtime.
+- `SQLQueryEmbedder` additionally requires an [Agency.Embeddings.Common](Agency.Embeddings.Common.md) `IEmbeddingGenerator` implementation at runtime.
 
 ## API Surface
 
 ### `PostgreSqlRunner`
 
-Sealed, async-disposable SQL runner that owns a singleton `NpgsqlDataSource` with `pgvector` support. Inherits `ExecuteAsync` and `QueryAsync` from [[Agency.Sql.Common]] `SqlRunnerBase`.
+Sealed, async-disposable SQL runner that owns a singleton `NpgsqlDataSource` with `pgvector` support. Inherits `ExecuteAsync` and `QueryAsync` from [Agency.Sql.Common](Agency.Sql.Common.md) `SqlRunnerBase`.
 
 ```csharp
 // File: src/Sql/Agency.Sql.Postgres/PostgreSqlRunner.cs
@@ -88,7 +86,7 @@ public partial class SQLQueryEmbedder
 
 ## Observability
 
-`PostgreSqlRunner` instruments every operation via the [[Agency.Sql.Common]] base class pattern:
+`PostgreSqlRunner` instruments every operation via the [Agency.Sql.Common](Agency.Sql.Common.md) base class pattern:
 
 | Signal | Name | Tags |
 |---|---|---|
@@ -103,12 +101,12 @@ public partial class SQLQueryEmbedder
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Sql.Common]] | `PostgreSqlRunner` extends `SqlRunnerBase`, which provides the full telemetry skeleton and the `ExecuteAsync` / `QueryAsync` implementations |
-| [[Agency.Common]] | `QueryAsync` returns `Dataset`; column schema is adapted via `DbColumnAdapter` defined in [[Agency.Sql.Common]] |
-| [[Agency.Embeddings.Common]] | `SQLQueryEmbedder` depends on `IEmbeddingGenerator` to resolve `vectorize()` macros |
-| [[Agency.VectorStore.Sql.Postgres]] | Uses `PostgreSqlRunner` for all database access |
-| [[Agency.KeyValueStore.Sql.Postgres]] | Uses `PostgreSqlRunner` for all database access |
-| [[Agency.RagFormatter]] | Formats the `Dataset` objects returned by `QueryAsync` into Markdown tables for LLM context |
+| [Agency.Sql.Common](Agency.Sql.Common.md) | `PostgreSqlRunner` extends `SqlRunnerBase`, which provides the full telemetry skeleton and the `ExecuteAsync` / `QueryAsync` implementations |
+| [Agency.Common](Agency.Common.md) | `QueryAsync` returns `Dataset`; column schema is adapted via `DbColumnAdapter` defined in [Agency.Sql.Common](Agency.Sql.Common.md) |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | `SQLQueryEmbedder` depends on `IEmbeddingGenerator` to resolve `vectorize()` macros |
+| [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Uses `PostgreSqlRunner` for all database access |
+| [Agency.KeyValueStore.Sql.Postgres](Agency.KeyValueStore.Sql.Postgres.md) | Uses `PostgreSqlRunner` for all database access |
+| [Agency.RagFormatter](Agency.RagFormatter.md) | Formats the `Dataset` objects returned by `QueryAsync` into Markdown tables for LLM context |
 
 ## Design Notes
 

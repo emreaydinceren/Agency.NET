@@ -1,5 +1,4 @@
 # Agency.Sql.Sqlite
-#sql #sqlite #embeddings #observability
 
 ## What It Is
 
@@ -33,8 +32,8 @@ using Agency.Sql.Sqlite;
 
 ## Related
 
-- [[Agency.Sql.Common]]
-- [[Agency.Embeddings.Common]]
-- [[Agency.Common]]
-- [[Agency.VectorStore.Sql.Sqlite]]
-- [[Agency.KeyValueStore.Sql.Sqlite]]
+- [Agency.Sql.Common](Agency.Sql.Common.md)
+- [Agency.Embeddings.Common](Agency.Embeddings.Common.md)
+- [Agency.Common](Agency.Common.md)
+- [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md)
+- [Agency.KeyValueStore.Sql.Sqlite](Agency.KeyValueStore.Sql.Sqlite.md)

@@ -1,7 +1,5 @@
 # Agency.Configuration
 
-#configuration #appsettings #placeholder #shared-config #infrastructure
-
 ## What It Is
 
 `Agency.Configuration` is the shared configuration infrastructure for the Agency AI Toolkit. It provides two `IConfigurationBuilder` extension methods that:
@@ -172,6 +170,6 @@ No project references.
 ## Related
 
 - [Configuration Manual](../Configuration%20Manual.md) — full documentation of placeholder syntax, `shared-appsettings.json`, `shared-test-appsettings.json`, wiring order, env-var overrides, and error behaviour.
-- [[Agency.Harness.Console]] — the runtime consumer; calls both extension methods in `Program.cs` (and loads `shared-test-appsettings.json` under `DOTNET_ENVIRONMENT=Test`).
+- [Agency.Harness.Console](Agency.Harness.Console.md) — the runtime consumer; calls both extension methods in `Program.cs` (and loads `shared-test-appsettings.json` under `DOTNET_ENVIRONMENT=Test`).
 - Functional-test consumers — `Agency.Llm.Test`, `Agency.Harness.Test`, `Agency.Embeddings.OpenAI.Test`, and `Agency.Memory.Functional.Test` call the same extensions in their config builders and reference the test-only `shared-test-appsettings.json` (`${TestProxy:…}` tokens).
-- [[Home]]
+- [Project Reference Home](Home.md)

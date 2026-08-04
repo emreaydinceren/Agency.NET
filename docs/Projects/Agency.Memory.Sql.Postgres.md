@@ -1,9 +1,8 @@
 # Agency.Memory.Sql.Postgres
-#memory #sql #postgres #storage
 
 ## What It Is
 
-`Agency.Memory.Sql.Postgres` is the PostgreSQL + pgvector implementation of the [[Agency.Memory.Common]] `IMemoryStore` contract that durably stores and vector-searches `Record` items for the Agency long-term memory system. It manages a `records` table (HNSW-indexed embeddings, per-user partitioning), a `user_state` table (write-timestamp tracking), a `watermarks` table (distillation progress), and a `dead_letter` table (failed-job audit trail). All four tables are provisioned at startup by `MemorySchemaInitializer` using idempotent DDL.
+`Agency.Memory.Sql.Postgres` is the PostgreSQL + pgvector implementation of the [Agency.Memory.Common](Agency.Memory.Common.md) `IMemoryStore` contract that durably stores and vector-searches `Record` items for the Agency long-term memory system. It manages a `records` table (HNSW-indexed embeddings, per-user partitioning), a `user_state` table (write-timestamp tracking), a `watermarks` table (distillation progress), and a `dead_letter` table (failed-job audit trail). All four tables are provisioned at startup by `MemorySchemaInitializer` using idempotent DDL.
 
 **Namespace:** `Agency.Memory.Sql.Postgres`
 
@@ -12,14 +11,14 @@
 - **PostgreSQL 18** (or any version that supports `gen_random_uuid()` and `TIMESTAMPTZ`).
 - **pgvector extension** — must be installable in the target database. `MemorySchemaInitializer` runs `CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;` on startup.
 - **Npgsql 9+** and the **pgvector .NET client** (`Pgvector` NuGet package) — both are declared as package dependencies in the project.
-- An **`IEmbeddingGenerator`** registration (e.g., from [[Agency.Embeddings.OpenAI]]) — required by `PostgresMemoryStore` to auto-embed records that arrive without a pre-computed vector.
-- **`MemoryOptions`** bound via `IOptions<MemoryOptions>` (registered by `AddAgencyMemory` from [[Agency.Memory.Common]]).
+- An **`IEmbeddingGenerator`** registration (e.g., from [Agency.Embeddings.OpenAI](Agency.Embeddings.OpenAI.md)) — required by `PostgresMemoryStore` to auto-embed records that arrive without a pre-computed vector.
+- **`MemoryOptions`** bound via `IOptions<MemoryOptions>` (registered by `AddAgencyMemory` from [Agency.Memory.Common](Agency.Memory.Common.md)).
 
 For local development, Docker Compose in `src/docker-compose.yml` provides a pre-configured PostgreSQL 18 instance at `localhost:5432` with credentials `dev_user` / `dev_password`, database `dev_db`.
 
 ## API Surface
 
-The three repositories implement provider-neutral storage contracts defined in [[Agency.Memory.Common]] (`Agency.Memory.Common.Storage`): `PostgresMemoryStore` implements `IMemoryStore`, `MemorySchemaInitializer` implements `IMemorySchemaInitializer`, `WatermarkRepository` implements `IWatermarkStore`, and `DeadLetterRepository` implements `IDeadLetterStore`.
+The three repositories implement provider-neutral storage contracts defined in [Agency.Memory.Common](Agency.Memory.Common.md) (`Agency.Memory.Common.Storage`): `PostgresMemoryStore` implements `IMemoryStore`, `MemorySchemaInitializer` implements `IMemorySchemaInitializer`, `WatermarkRepository` implements `IWatermarkStore`, and `DeadLetterRepository` implements `IDeadLetterStore`.
 
 ### `PostgresMemoryStore` — `IMemoryStore` implementation
 
@@ -137,7 +136,7 @@ public sealed record DeadLetterEntry(
 
 ## Registration
 
-Call `AddAgencyMemoryPostgres` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers everything as singletons. Each concrete repository is registered once, and the provider-neutral storage interfaces from [[Agency.Memory.Common]] are bound back to those same singletons so the Distiller and host can resolve storage without referencing this concrete provider (enabling config-driven provider selection):
+Call `AddAgencyMemoryPostgres` alongside `AddAgencyMemory` and `AddAgencyEmbeddingsOpenAI` (or equivalent) in any order. The extension method registers everything as singletons. Each concrete repository is registered once, and the provider-neutral storage interfaces from [Agency.Memory.Common](Agency.Memory.Common.md) are bound back to those same singletons so the Distiller and host can resolve storage without referencing this concrete provider (enabling config-driven provider selection):
 
 - `NpgsqlDataSource` (with pgvector enabled via `UseVector()`)
 - `WatermarkRepository`, and `IWatermarkStore` → `WatermarkRepository`
@@ -222,7 +221,7 @@ ORDER BY distance ASC
 LIMIT @top_k;
 ```
 
-The distance value is converted to similarity with `similarity = 1.0 - distance`. [[Agency.Memory.Retrieval]] is responsible for over-fetching and composite re-ranking on top of this raw similarity-ordered result.
+The distance value is converted to similarity with `similarity = 1.0 - distance`. [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) is responsible for over-fetching and composite re-ranking on top of this raw similarity-ordered result.
 
 After returning results, `SearchAsync` fires a background `Task` (fire-and-forget, using `CancellationToken.None`) to `UPDATE records SET last_accessed_at = now() WHERE id = ANY(@ids)` so that hygiene staleness checks reflect recent access without blocking the hot path.
 
@@ -250,20 +249,20 @@ Every write operation (`UpsertAsync`, `ForgetAsync`, `ForgetMeAsync`, `MergeAsyn
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Memory.Common]] | Defines the storage contracts this project implements — `Storage.IMemoryStore`, `Storage.IMemorySchemaInitializer`, `Storage.IWatermarkStore`, `Storage.IDeadLetterStore` — plus the `Record`, `ContentType`, `SearchQuery`, `SearchHit`, and `MemoryOptions` types they exchange |
-| [[Agency.Embeddings.Common]] | Provides `IEmbeddingGenerator`; `PostgresMemoryStore` calls it to produce embeddings for records that arrive without a pre-computed vector |
-| [[Agency.Memory.Retrieval]] | Calls `IMemoryStore.SearchAsync` and `LastWrittenAtAsync` on every agent iteration; depends on this project at runtime |
-| [[Agency.Memory.Distiller]] | Calls `IMemoryStore.UpsertAsync` and `WatermarkRepository.AdvanceAsync` to persist extracted episodes and advance the distillation watermark |
-| [[Agency.Memory.Consolidator]] | Calls `IMemoryStore.GetAllForUserAsync`, `MergeAsync`, `UpdateRecordAsync`, and `DeleteByIdAsync` during cross-session memory reconciliation |
-| [[Agency.Memory.Hygiene]] | Calls `DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` on a background schedule to prune stale records |
-| [[Agency.Sql.Postgres]] | Shared Postgres infrastructure (connection string helpers, test fixtures) referenced by this project |
+| [Agency.Memory.Common](Agency.Memory.Common.md) | Defines the storage contracts this project implements — `Storage.IMemoryStore`, `Storage.IMemorySchemaInitializer`, `Storage.IWatermarkStore`, `Storage.IDeadLetterStore` — plus the `Record`, `ContentType`, `SearchQuery`, `SearchHit`, and `MemoryOptions` types they exchange |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Provides `IEmbeddingGenerator`; `PostgresMemoryStore` calls it to produce embeddings for records that arrive without a pre-computed vector |
+| [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) | Calls `IMemoryStore.SearchAsync` and `LastWrittenAtAsync` on every agent iteration; depends on this project at runtime |
+| [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Calls `IMemoryStore.UpsertAsync` and `WatermarkRepository.AdvanceAsync` to persist extracted episodes and advance the distillation watermark |
+| [Agency.Memory.Consolidator](Agency.Memory.Consolidator.md) | Calls `IMemoryStore.GetAllForUserAsync`, `MergeAsync`, `UpdateRecordAsync`, and `DeleteByIdAsync` during cross-session memory reconciliation |
+| [Agency.Memory.Hygiene](Agency.Memory.Hygiene.md) | Calls `DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync` on a background schedule to prune stale records |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | Shared Postgres infrastructure (connection string helpers, test fixtures) referenced by this project |
 
 ## Design Notes
 
-- **Why the repositories implement interfaces that live in [[Agency.Memory.Common]] rather than defining their own.** The storage contracts (`IMemoryStore`, `IMemorySchemaInitializer`, `IWatermarkStore`, `IDeadLetterStore`) were relocated into `Agency.Memory.Common.Storage`. Consumers such as the Distiller depend only on those abstractions, so a different backing store could be substituted purely through DI (`AddAgencyMemoryPostgres` binds each interface to its concrete repository). Keeping the contracts in Common — not in this provider — is what makes provider selection a configuration concern rather than a code-reference concern.
+- **Why the repositories implement interfaces that live in [Agency.Memory.Common](Agency.Memory.Common.md) rather than defining their own.** The storage contracts (`IMemoryStore`, `IMemorySchemaInitializer`, `IWatermarkStore`, `IDeadLetterStore`) were relocated into `Agency.Memory.Common.Storage`. Consumers such as the Distiller depend only on those abstractions, so a different backing store could be substituted purely through DI (`AddAgencyMemoryPostgres` binds each interface to its concrete repository). Keeping the contracts in Common — not in this provider — is what makes provider selection a configuration concern rather than a code-reference concern.
 
 - **Why a functional unique index (`COALESCE(session_id, '')`) rather than a table-level `UNIQUE` constraint.** PostgreSQL treats `NULL != NULL` in unique constraint evaluation, so a plain `UNIQUE (user_id, session_id, domain, key)` would allow any number of rows with a `NULL` session, making the upsert conflict detection fail for user-global records. Using `COALESCE(session_id, '')` in a functional unique index maps all global records to the empty-string partition and restores the expected one-row-per-key semantics without requiring a sentinel value in the column itself. The `ON CONFLICT` clause in `UpsertAsync` mirrors the same expression exactly.
 
-- **Why `last_written_at` is cached in-process and written through on every mutation, rather than queried from the database.** The retrieval gate (`RetrievalGate` in [[Agency.Memory.Retrieval]]) checks `LastWrittenAtAsync` on every agent iteration that might need retrieval. If this check required a database round-trip, it would add latency on the hot path — the exact problem Spec P1 ("hot path is sacred") prohibits. Writing through to `ConcurrentDictionary` on every mutation means the gate check is O(1) across all turns after the first write. The one-turn hydration penalty on cold start (process restart before any user write) is acceptable because an empty cache means no prior writes exist, and the gate returns `true` (run retrieval) only once before the cache is warm.
+- **Why `last_written_at` is cached in-process and written through on every mutation, rather than queried from the database.** The retrieval gate (`RetrievalGate` in [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md)) checks `LastWrittenAtAsync` on every agent iteration that might need retrieval. If this check required a database round-trip, it would add latency on the hot path — the exact problem Spec P1 ("hot path is sacred") prohibits. Writing through to `ConcurrentDictionary` on every mutation means the gate check is O(1) across all turns after the first write. The one-turn hydration penalty on cold start (process restart before any user write) is acceptable because an empty cache means no prior writes exist, and the gate returns `true` (run retrieval) only once before the cache is warm.
 
 - **Why the hygiene methods accept a caller-supplied `now` instead of using the database `now()`.** The hygiene sweeper injects a `TimeProvider` so that unit tests can control the clock deterministically (Spec §8.5, TI-4). If the SQL predicate used `now()`, the staleness window would be evaluated against the database server clock, which tests cannot control. Passing `@now` from the application's `TimeProvider.GetUtcNow()` ensures the same virtual clock governs both the test assertion and the SQL predicate, eliminating a whole class of timing-sensitive test failures.

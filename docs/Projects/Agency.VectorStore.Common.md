@@ -1,5 +1,4 @@
 # Agency.VectorStore.Common
-#vectorstore #abstractions #interface #search #pgvector #metadata #projects
 
 ## What It Is
 
@@ -129,7 +128,7 @@ public static class SearchHitExtensions
 }
 ```
 
-Converts search results into an [[Agency.Common]] `Dataset` for consumption by [[Agency.RagFormatter]].
+Converts search results into an [Agency.Common](Agency.Common.md) `Dataset` for consumption by [Agency.RagFormatter](Agency.RagFormatter.md).
 
 #### JsonMetadataHelpers
 
@@ -146,14 +145,14 @@ public static class JsonMetadataHelpers
 }
 ```
 
-Used by concrete implementations ([[Agency.VectorStore.Sql.Postgres]], [[Agency.VectorStore.Sql.Sqlite]]) to deserialize metadata JSON columns back into typed CLR dictionaries after a database read.
+Used by concrete implementations ([Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md), [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md)) to deserialize metadata JSON columns back into typed CLR dictionaries after a database read.
 
 ## How It Works
 
 1. A caller constructs a `Query` with a `UserId`, optional `SessionId`, optional key/value filters, optional `MetadataFilter`, an optional `ProjectIds` scope, and a `Limit`.
-2. The concrete `IVectorStore` implementation converts the query's `Value` text into an embedding vector via [[Agency.Embeddings.Common]], executes an ANN search against the backing store (honoring the session and project scopes), and returns a list of `SearchHit<TValue>` ordered by ascending cosine distance.
+2. The concrete `IVectorStore` implementation converts the query's `Value` text into an embedding vector via [Agency.Embeddings.Common](Agency.Embeddings.Common.md), executes an ANN search against the backing store (honoring the session and project scopes), and returns a list of `SearchHit<TValue>` ordered by ascending cosine distance.
 3. Each `SearchHit<TValue>` exposes the raw `Distance` plus derived `SimilarityPercentage`, `RecencyMinutes`, and `RecencyHours` for downstream ranking or filtering.
-4. Callers that feed results into the RAG pipeline call `.ToDataset()` to produce a `Dataset` accepted by [[Agency.RagFormatter]].
+4. Callers that feed results into the RAG pipeline call `.ToDataset()` to produce a `Dataset` accepted by [Agency.RagFormatter](Agency.RagFormatter.md).
 5. To enumerate what has been ingested, callers use `ListProjectsAsync` to discover project scopes and `ListDocumentsAsync` (returning `DocumentInfo` records) to list the source files stored under a user/session/project.
 6. Implementations use `JsonMetadataHelpers.DeserializeMetadata` when reading metadata back from JSON-serialized storage columns.
 
@@ -199,12 +198,12 @@ Dataset table = hits.ToDataset();
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Common]] | Provides `Dataset` and `IColumnMetadata`; `SearchHitExtensions.ToDataset` returns a `Dataset` |
-| [[Agency.Embeddings.Common]] | Project dependency; concrete implementations use `IEmbeddingGenerator` to vectorize query text before ANN search |
-| [[Agency.VectorStore.Sql.Postgres]] | Implements `IVectorStore` using PostgreSQL + pgvector; uses `JsonMetadataHelpers` for metadata round-tripping |
-| [[Agency.VectorStore.Sql.Sqlite]] | Implements `IVectorStore` using SQLite; uses `JsonMetadataHelpers` for metadata round-tripping |
-| [[Agency.RagFormatter]] | Consumes the `Dataset` produced by `ToDataset()` to render search results as Markdown context for LLM prompts |
-| [[Agency.Mcp.Memory]] | Registers and uses an `IVectorStore` implementation to back agent memory tools |
+| [Agency.Common](Agency.Common.md) | Provides `Dataset` and `IColumnMetadata`; `SearchHitExtensions.ToDataset` returns a `Dataset` |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Project dependency; concrete implementations use `IEmbeddingGenerator` to vectorize query text before ANN search |
+| [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Implements `IVectorStore` using PostgreSQL + pgvector; uses `JsonMetadataHelpers` for metadata round-tripping |
+| [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) | Implements `IVectorStore` using SQLite; uses `JsonMetadataHelpers` for metadata round-tripping |
+| [Agency.RagFormatter](Agency.RagFormatter.md) | Consumes the `Dataset` produced by `ToDataset()` to render search results as Markdown context for LLM prompts |
+| [Agency.Mcp.Memory](Agency.Mcp.Memory.md) | Registers and uses an `IVectorStore` implementation to back agent memory tools |
 
 ## Design Notes
 

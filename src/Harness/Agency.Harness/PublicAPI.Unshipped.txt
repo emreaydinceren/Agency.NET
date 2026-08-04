@@ -1,4 +1,8 @@
 #nullable enable
+Agency.Harness.ChatSession.MemoryEnabled.get -> bool
+Agency.Harness.ChatSession.SetMemoryEnabled(bool enabled) -> void
+Agency.Harness.Contexts.Context.MemoryEnabled.get -> bool
+Agency.Harness.Contexts.Context.MemoryEnabled.set -> void
 Agency.Harness.Tools.McpClientPool.DisabledServers.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Agency.Harness.Tools.McpClientPool.FailedServers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 Agency.Harness.Tools.McpServerConfig.Enabled.get -> bool

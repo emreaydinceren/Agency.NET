@@ -1,5 +1,4 @@
 # Agency.Memory.Common
-#memory #common #abstractions #storage
 
 ## What It Is
 
@@ -511,14 +510,14 @@ Same record from a different session: `0.40 + 0.225 + 0.12 + 0 = 0.745`.
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Harness]] | Upstream dependency. Memory events inherit from `AgentEvent`; `MemoryHookFactory` produces `AgentHooks`; `DistillationJob` carries a `FocusContext` from `Agency.Harness.Contexts`. |
-| [[Agency.Embeddings.Common]] | Upstream dependency. `IMemoryStore.UpsertAsync` generates embeddings via `IEmbeddingGenerator` when `Record.Embedding` is empty. |
-| [[Agency.Memory.Retrieval]] | Downstream consumer. Implements the retrieval gate and ranking using `IMemoryStore`, `SearchQuery`, `SearchHit`, `RankingFormula` (internal), and `RankingWeights`. Has `InternalsVisibleTo` access. |
-| [[Agency.Memory.Distiller]] | Downstream consumer. Implements `DistillerBackgroundService`; enqueues and processes `DistillationJob`; depends on `IWatermarkStore` and `IDeadLetterStore`; publishes `DistillationSettledEvent` variants. Hosts the `AddAgencyMemory` DI entry point. |
-| [[Agency.Memory.Consolidator]] | Downstream consumer. Implements `ConsolidatorBackgroundService`; dequeues `ConsolidationJob`; calls `IMemoryStore.MergeAsync`, `UpdateRecordAsync`, `DeleteByIdAsync`; publishes `ConsolidationCompletedEvent` and `MemoryMutatedEvent`. |
-| [[Agency.Memory.Hygiene]] | Downstream consumer. Implements `HygieneSweeperBackgroundService`; calls `IMemoryStore.DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync`; reads `MemoryOptions` for TTL and importance thresholds. |
-| [[Agency.Memory.Sql.Postgres]] | Downstream implementation. Provides the PostgreSQL + pgvector implementation of `IMemoryStore`, `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer`. |
-| [[Agency.Memory.Sql.Sqlite]] | Downstream implementation. Provides the SQLite implementation of `IMemoryStore`, `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer`. |
+| [Agency.Harness](Agency.Harness.md) | Upstream dependency. Memory events inherit from `AgentEvent`; `MemoryHookFactory` produces `AgentHooks`; `DistillationJob` carries a `FocusContext` from `Agency.Harness.Contexts`. |
+| [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Upstream dependency. `IMemoryStore.UpsertAsync` generates embeddings via `IEmbeddingGenerator` when `Record.Embedding` is empty. |
+| [Agency.Memory.Retrieval](Agency.Memory.Retrieval.md) | Downstream consumer. Implements the retrieval gate and ranking using `IMemoryStore`, `SearchQuery`, `SearchHit`, `RankingFormula` (internal), and `RankingWeights`. Has `InternalsVisibleTo` access. |
+| [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Downstream consumer. Implements `DistillerBackgroundService`; enqueues and processes `DistillationJob`; depends on `IWatermarkStore` and `IDeadLetterStore`; publishes `DistillationSettledEvent` variants. Hosts the `AddAgencyMemory` DI entry point. |
+| [Agency.Memory.Consolidator](Agency.Memory.Consolidator.md) | Downstream consumer. Implements `ConsolidatorBackgroundService`; dequeues `ConsolidationJob`; calls `IMemoryStore.MergeAsync`, `UpdateRecordAsync`, `DeleteByIdAsync`; publishes `ConsolidationCompletedEvent` and `MemoryMutatedEvent`. |
+| [Agency.Memory.Hygiene](Agency.Memory.Hygiene.md) | Downstream consumer. Implements `HygieneSweeperBackgroundService`; calls `IMemoryStore.DeleteWhereTtlExceededAsync` and `DeleteWhereLowImportanceStaleAsync`; reads `MemoryOptions` for TTL and importance thresholds. |
+| [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Downstream implementation. Provides the PostgreSQL + pgvector implementation of `IMemoryStore`, `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer`. |
+| [Agency.Memory.Sql.Sqlite](Agency.Memory.Sql.Sqlite.md) | Downstream implementation. Provides the SQLite implementation of `IMemoryStore`, `IWatermarkStore`, `IDeadLetterStore`, and `IMemorySchemaInitializer`. |
 | Agency.Memory.Common.Test | Test project. Has `InternalsVisibleTo` access for unit testing internal types. |
 | Agency.Memory.Functional.Test | Functional test project. Has `InternalsVisibleTo` access to instantiate `InMemoryEventBus` directly and access internal infrastructure for crash-recovery tests. |
 

@@ -25,6 +25,7 @@ public sealed class ChatSession : IAsyncDisposable
     private readonly SessionContext? _session;
     private Context? _ctx;
     private KnowledgeContext? _pendingKnowledge;
+    private bool _pendingMemoryEnabled = true;
     private int _turnCount;
     private bool _disposed;
 
@@ -94,6 +95,8 @@ public sealed class ChatSession : IAsyncDisposable
             preview.Knowledge = this._pendingKnowledge;
         }
 
+        preview.MemoryEnabled = this._pendingMemoryEnabled;
+
         return preview;
     }
 
@@ -124,6 +127,23 @@ public sealed class ChatSession : IAsyncDisposable
         }
     }
 
+    /// <summary>Gets whether memory retrieval is enabled for this session. On by default.</summary>
+    public bool MemoryEnabled => this._ctx?.MemoryEnabled ?? this._pendingMemoryEnabled;
+
+    /// <summary>
+    /// Enables or disables memory retrieval for this session. If the context has already been
+    /// created, updates it immediately; otherwise queues the value to be applied on first send.
+    /// </summary>
+    /// <param name="enabled">Whether memory retrieval should run on subsequent turns.</param>
+    public void SetMemoryEnabled(bool enabled)
+    {
+        this._pendingMemoryEnabled = enabled;
+        if (this._ctx is not null)
+        {
+            this._ctx.MemoryEnabled = enabled;
+        }
+    }
+
     /// <summary>
     /// Sends <paramref name="userMessage"/> to the agent and streams back the resulting
     /// <see cref="AgentEvent"/>s. The underlying <see cref="Context"/> is created lazily
@@ -148,6 +168,8 @@ public sealed class ChatSession : IAsyncDisposable
             timeProvider: this._agent.TimeProvider,
             skills: this._skills,
             session: this._session);
+
+        this._ctx.MemoryEnabled = this._pendingMemoryEnabled;
 
         if (this._pendingKnowledge is not null)
         {

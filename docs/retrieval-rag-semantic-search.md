@@ -1,4 +1,4 @@
-# Projects - Ingestion and Semantic Search for Agents
+# Retrieval (RAG) — Semantic Search Over Your Own Documents
 
 > **What this document is.** A gentle, self-contained guide to how Agency lets you feed your own
 > documents to an AI agent and have the agent find the right passage at the right moment. It is

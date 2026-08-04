@@ -1,7 +1,5 @@
 # Agency.Harness
 
-#agent #loop #tools #events #orchestration #mcp #skills #permissions #hooks #observability #goalkeeper #semantic-search
-
 ## What It Is
 
 `Agency.Harness` is the autonomous agent loop library that drives a think → act → observe cycle until a `StopCondition` fires. It accepts an `IChatClient` (via `Microsoft.Extensions.AI`), a `Context` object aggregating the user query, conversation history, tools, skills, memory, and grounding data, and yields a stream of typed `AgentEvent` records so callers can react to each stage without polling. On top of the bare loop it layers several cross-cutting subsystems: an MCP tool pool (`McpClientPool`) that exposes Model Context Protocol server tools as `ITool` instances, a **progressive tool-discovery** decorator that withholds verbose schemas until requested, a **permission model** that parks tool calls for user approval (park/resume), a **skills** subsystem implementing SKILL.md progressive disclosure, a **config-driven hooks** pipeline that runs operator-defined command/HTTP handlers at lifecycle points, a **Loop Kit** (`Agency.Harness.Loop`) that drives the session across turns toward a verifiable goal with an unskippable, independent done-check (the *Goalkeeper*) and a hard turn/budget cap, and a **semantic-search** tool that lets the model query ingested documents across the global, session, and loaded-project scopes tracked by `IProjectSessionState`.
@@ -477,7 +475,7 @@ public sealed record PermissionResponse(Guid RequestId, PermissionResponseKind K
 public enum PermissionResponseKind { AllowOnce, AllowAlways, DenyOnce, DenyAlways }
 ```
 
-Internal supporting types: `PermissionEvaluator` (the `IPermissionEvaluator` impl), `PermissionRule` (parses `Tool` / `Tool(glob*)` rule strings into anchored case-insensitive regexes, `\`→`/` normalized, 250 ms match timeout), `PermissionsOptions` (bound from the `Permissions` config section: `Enabled`, `Allow[]`, `Deny[]`, `OnUnresolved` ∈ {`Ask`, `Deny`}, `ToolInputKeys`, `LocalRulesPath` — `null` defaults to `%LocalAppData%\Agency\permissions.local.json`, a stable per-user location rather than the running app's own bin folder; see [[Agency.Harness.Console]]), `PermissionsOptionsValidator` (fail-fast rule parse at startup), and `PermissionsFileStore` (tolerant load + retry/backoff append of `permissions.local.json`).
+Internal supporting types: `PermissionEvaluator` (the `IPermissionEvaluator` impl), `PermissionRule` (parses `Tool` / `Tool(glob*)` rule strings into anchored case-insensitive regexes, `\`→`/` normalized, 250 ms match timeout), `PermissionsOptions` (bound from the `Permissions` config section: `Enabled`, `Allow[]`, `Deny[]`, `OnUnresolved` ∈ {`Ask`, `Deny`}, `ToolInputKeys`, `LocalRulesPath` — `null` defaults to `%LocalAppData%\Agency\permissions.local.json`, a stable per-user location rather than the running app's own bin folder; see [Agency.Harness.Console](Agency.Harness.Console.md)), `PermissionsOptionsValidator` (fail-fast rule parse at startup), and `PermissionsFileStore` (tolerant load + retry/backoff append of `permissions.local.json`).
 
 ### Loop Kit
 
@@ -546,7 +544,7 @@ internal interface IGoalkeeper
 | `WallClockSeconds` | `int?` | `null` | Default per-loop timeout (linked-CTS, like `AgentOptions.TurnTimeoutSeconds`). |
 | `GoalkeeperRubric` | `string?` | `null` | Extra strictness text appended to the Goalkeeper system prompt. |
 
-> **Host wiring.** `AddAgencyLoop` binds `LoopOptions` only — it does **not** register `LoopRunner`, `Goalkeeper`, `GoalState`, or the tools as DI services. A host that wants goal-driven loops wires those itself: register `GoalState` as a scoped service, add `EnableGoalkeeperTool`/`DisableGoalkeeperTool` to the `ToolContext`, and construct a `LoopRunner` per session (the Goalkeeper resolves its cheap client via `Models.CreateChatClient`). The Console host (`[[Agency.Harness.Console]]`) does all of this — it drives `LoopRunner.RunAsync` for every user turn.
+> **Host wiring.** `AddAgencyLoop` binds `LoopOptions` only — it does **not** register `LoopRunner`, `Goalkeeper`, `GoalState`, or the tools as DI services. A host that wants goal-driven loops wires those itself: register `GoalState` as a scoped service, add `EnableGoalkeeperTool`/`DisableGoalkeeperTool` to the `ToolContext`, and construct a `LoopRunner` per session (the Goalkeeper resolves its cheap client via `Models.CreateChatClient`). The Console host (`[Agency.Harness.Console](Agency.Harness.Console.md)`) does all of this — it drives `LoopRunner.RunAsync` for every user turn.
 
 ### Skills
 
@@ -684,7 +682,7 @@ public interface IProjectSessionState
 }
 ```
 
-`SemanticSearchTool` is the model-facing `ITool` (name `semantic_search`) that turns a `search_text` string into a [[Agency.VectorStore.Common]] `Query` scoped by the session state and renders the hits as a Markdown table via [[Agency.RagFormatter]].
+`SemanticSearchTool` is the model-facing `ITool` (name `semantic_search`) that turns a `search_text` string into a [Agency.VectorStore.Common](Agency.VectorStore.Common.md) `Query` scoped by the session state and renders the hits as a Markdown table via [Agency.RagFormatter](Agency.RagFormatter.md).
 
 ```csharp
 // File: src/Harness/Agency.Harness/Tools/SemanticSearchTool.cs
@@ -870,7 +868,7 @@ internal sealed class HookRegistry
 
 ## Registration
 
-Three public DI extension methods register agent construction and the optional cross-cutting subsystems. (Skills, MCP, and progressive-discovery wiring on the `ToolContext` side are done by the host — typically [[Agency.Harness.Console]].)
+Three public DI extension methods register agent construction and the optional cross-cutting subsystems. (Skills, MCP, and progressive-discovery wiring on the `ToolContext` side are done by the host — typically [Agency.Harness.Console](Agency.Harness.Console.md).)
 
 ```csharp
 // File: src/Harness/Agency.Harness/Agents/AgentServiceCollectionExtensions.cs
@@ -1073,12 +1071,12 @@ var toolCtx = new ToolContext { Registry = progressive };
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Llm.Common]] | `Agent` depends on `IToolRegistry`, `ITool`, `ToolDefinition`, `ToolResult`, `Model`, `IModelProvider`, and `LlmClientOptions` from this project |
-| [[Agency.Llm.Claude]] | Concrete `IChatClient`/`IModelProvider` adapter for the Anthropic API; resolved by `Models.CreateChatClient` |
-| [[Agency.Llm.OpenAI]] | Concrete `IChatClient`/`IModelProvider` adapter for the OpenAI-compatible API |
-| [[Agency.VectorStore.Common]] | `SemanticSearchTool` depends on `IVectorStore`, `Query`, and `SearchHit<T>` to run scoped semantic search |
-| [[Agency.RagFormatter]] | `SemanticSearchTool` renders hits with `ToDataset()` / `ToMarkdownTable()` from this project |
-| [[Agency.Harness.Console]] | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, drives `LoopRunner.RunAsync` for every user turn, renders `AgentEvent` streams (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent`), and answers `PermissionRequestedEvent`s |
+| [Agency.Llm.Common](Agency.Llm.Common.md) | `Agent` depends on `IToolRegistry`, `ITool`, `ToolDefinition`, `ToolResult`, `Model`, `IModelProvider`, and `LlmClientOptions` from this project |
+| [Agency.Llm.Claude](Agency.Llm.Claude.md) | Concrete `IChatClient`/`IModelProvider` adapter for the Anthropic API; resolved by `Models.CreateChatClient` |
+| [Agency.Llm.OpenAI](Agency.Llm.OpenAI.md) | Concrete `IChatClient`/`IModelProvider` adapter for the OpenAI-compatible API |
+| [Agency.VectorStore.Common](Agency.VectorStore.Common.md) | `SemanticSearchTool` depends on `IVectorStore`, `Query`, and `SearchHit<T>` to run scoped semantic search |
+| [Agency.RagFormatter](Agency.RagFormatter.md) | `SemanticSearchTool` renders hits with `ToDataset()` / `ToMarkdownTable()` from this project |
+| [Agency.Harness.Console](Agency.Harness.Console.md) | REPL harness that creates `ChatSession`, wires MCP/skills/permissions/progressive-discovery, drives `LoopRunner.RunAsync` for every user turn, renders `AgentEvent` streams (including the Loop Kit `GoalSetEvent`/`TurnStartedEvent`/`VerdictEvent`/`LoopResultEvent`), and answers `PermissionRequestedEvent`s |
 
 ## Design Notes
 
@@ -1098,6 +1096,6 @@ var toolCtx = new ToolContext { Registry = progressive };
 - **`Context` is caller-owned, loop-mutates only counters** — `IterationCount`, `TotalCostUsd`, and `TotalUsage` are the only `internal set` counters. `Knowledge`/`Memory`/`Focus`/`Session` are `set` so lifecycle hooks (and the loop's first-turn `Session.Id` assignment) can mutate them mid-session; everything else is `init`-only, keeping session state predictable and snapshot-friendly.
 - **`SystemPromptBuilder` is a pure function** — rebuilt from `Context` every iteration so knowledge facts, retrieved records, the skills catalog, and the context-window budget are always fresh; being a static pure function makes it unit-testable in isolation from the loop.
 - **MCP tools and native tools share one flat namespace** — both register into the same name-keyed `ToolRegistry`; once registered the loop dispatches purely by tool name. `Register` is last-write-wins with no collision guard, so a server-supplied name that collides with a native tool (e.g. another `read_file`) silently overwrites it — name MCP servers' tools defensively. `McpProxyTool` keeps only text content blocks, dropping images/embedded resources. `McpClientPool` is `IAsyncDisposable`; use `await using` to close all server connections even on cancellation.
-- **Semantic search is scoped by session state, not baked into the tool** — `SemanticSearchTool` holds no identity of its own; it reads `UserId`, `SessionId`, and `LoadedProjects` from the injected `IProjectSessionState` on every call and folds them into the `Query`, so a host's `/project load|unload` commands immediately widen or narrow what the next search sees (global + current session + loaded projects) without rebuilding the tool. Formatting (`ToDataset().ToMarkdownTable()`) is delegated to [[Agency.RagFormatter]], keeping the tool a thin adapter between the model and [[Agency.VectorStore.Common]].
+- **Semantic search is scoped by session state, not baked into the tool** — `SemanticSearchTool` holds no identity of its own; it reads `UserId`, `SessionId`, and `LoadedProjects` from the injected `IProjectSessionState` on every call and folds them into the `Query`, so a host's `/project load|unload` commands immediately widen or narrow what the next search sees (global + current session + loaded projects) without rebuilding the tool. Formatting (`ToDataset().ToMarkdownTable()`) is delegated to [Agency.RagFormatter](Agency.RagFormatter.md), keeping the tool a thin adapter between the model and [Agency.VectorStore.Common](Agency.VectorStore.Common.md).
 - **Knowledge can be injected before the first turn** — `ChatSession.SetKnowledge` queues a `KnowledgeContext` into `_pendingKnowledge` when the context has not been created yet and applies it lazily on the first `SendAsync`; once the context exists it writes straight through to `Context.Knowledge`. This lets a host hydrate document context (e.g. from ingestion) ahead of the opening prompt without forcing an empty warm-up turn.
 - **Tool-payload logging is opt-in** — by default tool calls and failures are logged by name with payloads redacted; `AgentOptions.LogToolPayloads` (wired to `Agent`'s `logToolPayloads`) logs full inputs and error-result content verbatim. It is off by default because payloads may contain file contents, commands, and ids.

@@ -1,9 +1,8 @@
 # Agency.RagFormatter
-#rag #formatter #markdown #dataset
 
 ## What It Is
 
-Agency.RagFormatter is the formatting layer that converts a [[Agency.Common]] `Dataset` into a Markdown table string ready for injection into an LLM prompt as RAG context.
+Agency.RagFormatter is the formatting layer that converts a [Agency.Common](Agency.Common.md) `Dataset` into a Markdown table string ready for injection into an LLM prompt as RAG context.
 
 **Namespace:** `Agency.RagFormatter`
 
@@ -64,11 +63,11 @@ string systemPrompt = $"""
 
 | Project | Relationship |
 |---|---|
-| [[Agency.Common]] | Extends `Dataset`; column metadata comes from `IColumnMetadata` |
-| [[Agency.Sql.Common]] | `Dataset` is produced by SQL runner implementations in this layer |
-| [[Agency.Sql.Postgres]] | `PostgreSqlRunner.QueryAsync` returns a `Dataset` that this formats |
-| [[Agency.Sql.Sqlite]] | `SqliteRunner.QueryAsync` returns a `Dataset` that this formats |
-| [[Agency.Harness]] | Formatted table can be injected into agent context as factual knowledge |
+| [Agency.Common](Agency.Common.md) | Extends `Dataset`; column metadata comes from `IColumnMetadata` |
+| [Agency.Sql.Common](Agency.Sql.Common.md) | `Dataset` is produced by SQL runner implementations in this layer |
+| [Agency.Sql.Postgres](Agency.Sql.Postgres.md) | `PostgreSqlRunner.QueryAsync` returns a `Dataset` that this formats |
+| [Agency.Sql.Sqlite](Agency.Sql.Sqlite.md) | `SqliteRunner.QueryAsync` returns a `Dataset` that this formats |
+| [Agency.Harness](Agency.Harness.md) | Formatted table can be injected into agent context as factual knowledge |
 
 ## Design Notes
 

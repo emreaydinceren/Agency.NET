@@ -1,4 +1,4 @@
-# How Hooks Work
+# Hooks — Nine Places to Plug Into the Agent Loop
 
 ## What This Document Covers
 
@@ -262,7 +262,7 @@ Agency's entire memory feature attaches to the loop through these same hooks: `O
 
 The loop contains no memory logic at all — memory is delivered as a baseline `AgentHooks` instance, composed in like everything else.
 
-How retrieval, distillation, and consolidation actually work is its own story, told in [How Agency Gives AI Agents Memory](How%20Agency%20Gives%20AI%20Agents%20Memory.md). For this document, the takeaway is simpler: **the hook system is load-bearing enough that the framework's flagship feature is built entirely on top of it.**
+How retrieval, distillation, and consolidation actually work is its own story, told in [Memory](memory-from-amnesiac-to-collaborator.md). For this document, the takeaway is simpler: **the hook system is load-bearing enough that the framework's flagship feature is built entirely on top of it.**
 
 ---
 

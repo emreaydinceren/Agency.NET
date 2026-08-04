@@ -1,5 +1,4 @@
 # Agency.Common
-#common #foundation #dataset #abstractions
 
 ## What It Is
 
@@ -31,5 +30,5 @@ None — Agency.Common has no project or package references.
 
 ## Related
 
-- [[Agency.Harness]]
-- [[Home]]
+- [Agency.Harness](Agency.Harness.md)
+- [Project Reference Home](Home.md)

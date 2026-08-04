@@ -126,6 +126,15 @@ public sealed record Context
     /// </summary>
     public DateTimeOffset? MemoryLastRetrievedAt { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether memory retrieval is enabled for this session. On by default
+    /// (<see cref="ChatSession"/> seeds new contexts with its <c>_pendingMemoryEnabled</c>
+    /// default) — the retrieval callback wired by <c>AddAgencyMemory</c> skips retrieval
+    /// entirely while this is <see langword="false"/>, even when the memory subsystem is
+    /// registered. Toggled at runtime via <see cref="ChatSession.SetMemoryEnabled"/>.
+    /// </summary>
+    public bool MemoryEnabled { get; set; }
+
     // ── Permission park state ─────────────────────────────────────────────────
 
     /// <summary>

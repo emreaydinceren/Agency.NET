@@ -150,6 +150,88 @@ public sealed class GoalkeeperTests
         Assert.Null(fake.LastOptions!.Tools);
     }
 
+    // ── T-GK-5: turn-0 false positive — goalkeeper arm echo is not evidence ──────
+
+    /// <summary>
+    /// T-GK-5: reproduces the turn-0 false-positive bug — a transcript containing only the
+    /// enable_goalkeeper tool call/result round-trip (which echoes the literal target text
+    /// via the tool's confirmation and the assistant's narration) must not present that echo
+    /// as evidence to the judge model. Asserted at the <see cref="Goalkeeper.EvaluateAsync"/>
+    /// level by inspecting the actual message sent to the (fake) judge client.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_WhenTranscriptOnlyHasGoalkeeperArmEcho_DoesNotSendEchoAsEvidence()
+    {
+        const string condition = "the most recent assistant message is exactly the text COUNTER_3_DONE";
+        const string targetText = "COUNTER_3_DONE";
+
+        var armCall = new ChatMessage(ChatRole.Assistant,
+        [
+            new TextContent($"I'll arm the goalkeeper now with condition: {condition}"),
+            new FunctionCallContent("call-1", "enable_goalkeeper",
+                new Dictionary<string, object?> { ["condition"] = condition }),
+        ]);
+        var armResult = new ChatMessage(ChatRole.Tool,
+        [
+            new FunctionResultContent("call-1", $"Goalkeeper armed. Condition: {condition}"),
+        ]);
+        IReadOnlyList<ChatMessage> transcript = [armCall, armResult];
+
+        var fake = new FakeChatClient();
+        fake.EnqueueResponse(TextResponse("VERDICT: continue\nREASON: no work has happened yet"));
+
+        var goalkeeper = MakeGoalkeeper(fake);
+        Verdict verdict = await goalkeeper.EvaluateAsync(condition, transcript, CancellationToken.None);
+
+        Assert.IsType<Verdict.ContinueLoop>(verdict);
+
+        // The message actually sent to the judge client must not surface the echoed
+        // condition text as if it were transcript evidence — only the GOAL CONDITION
+        // section (one occurrence) should contain it.
+        string sentText = Assert.Single(fake.ReceivedMessages)[0].Text;
+        int occurrences = 0;
+        int index = 0;
+        while ((index = sentText.IndexOf(targetText, index, StringComparison.Ordinal)) >= 0)
+        {
+            occurrences++;
+            index += targetText.Length;
+        }
+
+        Assert.Equal(1, occurrences);
+    }
+
+    /// <summary>
+    /// Regression companion to T-GK-5: a genuine assistant completion elsewhere in the
+    /// transcript must still be visible to (and usable by) the judge — the fix must not
+    /// make the Goalkeeper blind to real completions.
+    /// </summary>
+    [Fact]
+    public async Task EvaluateAsync_WhenGenuineCompletionFollowsArmEcho_StillReachesDone()
+    {
+        const string condition = "the most recent assistant message is exactly the text COUNTER_3_DONE";
+
+        var armCall = new ChatMessage(ChatRole.Assistant,
+        [
+            new FunctionCallContent("call-1", "enable_goalkeeper",
+                new Dictionary<string, object?> { ["condition"] = condition }),
+        ]);
+        var armResult = new ChatMessage(ChatRole.Tool,
+        [
+            new FunctionResultContent("call-1", $"Goalkeeper armed. Condition: {condition}"),
+        ]);
+        var genuineCompletion = new ChatMessage(ChatRole.Assistant, "COUNTER_3_DONE");
+        IReadOnlyList<ChatMessage> transcript = [armCall, armResult, genuineCompletion];
+
+        var fake = new FakeChatClient();
+        fake.EnqueueResponse(TextResponse("VERDICT: done\nREASON: the assistant said COUNTER_3_DONE"));
+
+        var goalkeeper = MakeGoalkeeper(fake);
+        Verdict verdict = await goalkeeper.EvaluateAsync(condition, transcript, CancellationToken.None);
+
+        var done = Assert.IsType<Verdict.Done>(verdict);
+        Assert.False(string.IsNullOrWhiteSpace(done.Reason));
+    }
+
     // ── CapturingFakeChatClient ───────────────────────────────────────────────
 
     /// <summary>

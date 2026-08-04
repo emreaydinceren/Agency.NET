@@ -6,9 +6,25 @@ namespace Agency.Harness.Looping;
 /// </summary>
 internal static class GoalkeeperPromptBuilder
 {
+    /// <summary>
+    /// Tool names whose call/result round-trip is loop-control metadata, not evidence of task
+    /// progress. A message describing or echoing the goal condition (e.g. the tool's own
+    /// confirmation text) must never be shown to the judge as if it were transcript evidence —
+    /// see the false-positive Done verdict this guards against (turn-0 self-referential echo).
+    /// </summary>
+    private static readonly HashSet<string> ControlPlaneToolNames =
+        new(StringComparer.Ordinal) { "enable_goalkeeper", "disable_goalkeeper" };
+
+    private const string ControlPlanePlaceholder =
+        "(goalkeeper control action — armed/disarmed the goal; not evidence of task progress)";
+
     private const string DefaultRubric =
         "Be strict: only answer DONE when the transcript contains clear, explicit evidence " +
-        "that the condition is satisfied. When in doubt, answer CONTINUE.";
+        "that the condition is satisfied. When in doubt, answer CONTINUE. " +
+        "Text that merely describes or repeats the goal condition (e.g. a tool confirmation " +
+        "message, or the assistant narrating that it is arming the goalkeeper) is NOT evidence " +
+        "that the condition is satisfied — only treat the condition as met when it is " +
+        "independently and substantively true elsewhere in the transcript.";
 
     /// <summary>
     /// Builds the system instruction that tells the cheap model how to respond.
@@ -57,14 +73,33 @@ internal static class GoalkeeperPromptBuilder
         string condition,
         IReadOnlyList<ChatMessage> transcript)
     {
+        // Identify the call ids of enable_goalkeeper/disable_goalkeeper invocations so both
+        // halves of the round-trip (the assistant's tool call — which may carry narration text
+        // restating the condition — and the tool's result echo) can be excluded below.
+        var controlPlaneCallIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ChatMessage msg in transcript)
+        {
+            foreach (FunctionCallContent call in msg.Contents.OfType<FunctionCallContent>())
+            {
+                if (ControlPlaneToolNames.Contains(call.Name))
+                {
+                    controlPlaneCallIds.Add(call.CallId);
+                }
+            }
+        }
+
         // Flatten the transcript into a readable block, keeping role labels.
         var sb = new System.Text.StringBuilder();
         foreach (ChatMessage msg in transcript)
         {
+            bool isControlPlaneMessage =
+                msg.Contents.OfType<FunctionCallContent>().Any(c => ControlPlaneToolNames.Contains(c.Name)) ||
+                msg.Contents.OfType<FunctionResultContent>().Any(r => controlPlaneCallIds.Contains(r.CallId));
+
             string role = msg.Role == ChatRole.Assistant ? "ASSISTANT" :
                           msg.Role == ChatRole.User ? "USER" : msg.Role.Value.ToUpperInvariant();
             sb.Append('[').Append(role).Append("] ");
-            sb.AppendLine(msg.Text ?? string.Empty);
+            sb.AppendLine(isControlPlaneMessage ? ControlPlanePlaceholder : msg.Text ?? string.Empty);
         }
 
         string transcriptText = sb.ToString();

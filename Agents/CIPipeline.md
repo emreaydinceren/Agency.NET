@@ -111,6 +111,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | Copied-out `PackageSmokeTest` harness fails every package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''` (restore) or `CS0103: The name 'Console' does not exist` (build) | `Agency.PackageSmokeTest.csproj` had no explicit `TargetFramework`/`ImplicitUsings`; it relied on `src/Directory.Build.props` via MSBuild's directory-props auto-import, which stops working once the project is `cp -r`'d to a `mktemp -d` outside `src/` | Set `TargetFramework`/`ImplicitUsings` explicitly in the harness `.csproj` itself — don't rely on ancestor `Directory.Build.props` for a project designed to be copied out of the tree |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1301: The local source '.../src/gitea-local' doesn't exist` | `dotnet add package --source <name>` never resolves a NuGet.Config source *name* — it only accepts a literal URL/path, and silently falls back to treating the name as a relative local directory when it isn't an absolute URI | Ship a NuGet.Config alongside the copied-out harness (`cp NuGet.Config "$work/harness/"`) and drop `--source` entirely, letting restore use the ambient config the normal way |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1302: ... requires HTTPS sources` right after the previous bug's fix | `dotnet nuget update source` rewrites the whole source entry and drops any attribute it doesn't manage itself, silently stripping the checked-in `allowInsecureConnections="true"` off `gitea-local` | Pass `--allow-insecure-connections` on the `dotnet nuget update source` call so the attribute survives the rewrite |
+| `LoopConsoleIntegrationTests` (or any LLM-driven console test) fails all 3 attempts after an *unrelated-looking* change, and the **number** of failing tests differs between runs | A native tool's `ToolDefinition` description was edited. Progressive discovery reveals native tools in full, so that text is in the `tools` array of **every** request → cache-key change → miss on every LLM-driven test | Treat `ToolDefinition` text as cached-request-body content: it needs a cassette re-record, same as a prompt edit. See the 2026-08-04 reflection |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
 
@@ -365,3 +366,60 @@ call in `ci-main.yaml`.
   first. Don't assume a fix here is complete just because CI got further than last time — expect
   the log to show *new* territory (a different error, at a later line) if the step never
   previously executed that far.
+
+## Reflection — 2026-08-04: a tool *description* is cached request bytes
+
+**Failure:** PR #195 went red on the functional step across runs 512, 514 and 515, and PR #196 on
+run 518. The failing test was
+`LoopConsoleIntegrationTests.T_CON_LOOP_2_RefactorLoopSkill_ArmsGoalkeeper_GoalBoxRenders`
+(plus `T_CON_LOOP_3`/`_4` in run 515), all 3 attempts each time. The rest of the functional suite
+stayed green.
+
+**Root cause:** a one-sentence reword of `WriteFileTool`'s `ToolDefinition` **description**.
+`ProgressiveDiscoveryToolRegistry.ListDefinitions` reveals *native* tools in full (only MCP tools
+get the placeholder-schema/one-line-summary treatment), so that description is serialised into the
+`tools` array of **every** chat-completion request. Editing one sentence changed the request body,
+and the cache key is `SHA256(Method|PathAndQuery|SHA256(body))` with no fuzzy matching — so every
+LLM-driven console test missed its cassette, the proxy forwarded live, and the worker turn no
+longer called `enable_goalkeeper`. No `GoalSetEvent`, no goal box, assertion fails.
+
+**The confound that cost three CI round-trips.** The same PR also changed `GoalkeeperPromptBuilder`
+(rubric text + filtering the arm round-trip out of the judged transcript). Both edits change request
+bytes, and for four runs they moved together, so no run could attribute the failure:
+
+| Run | `write_file` desc | goalkeeper prompt | Result |
+|---|---|---|---|
+| 512 | present | present | failure (1 test) |
+| 514 | present | present | failure (1 test) |
+| 515 | present | absent | failure (3 tests) |
+| 516 | absent | absent | **success** |
+| 518 | present | present | failure (1 test) |
+| 519 | absent | present | **success** |
+
+Run 516 cleared `write_file` and went green; run 519 filled the missing cell (goalkeeper change
+alone) and *also* went green — proving the goalkeeper prompt edit was never a cause, despite a
+plausible first-principles argument that it must be. The first split was made on that argument
+rather than on a measurement, and it was wrong.
+
+**Why the goalkeeper prompt edit was harmless — the asymmetry worth remembering.** A cassette miss
+on the **worker** turn is fatal: the model's response *is* the control flow, so a different reply
+means a different tool call (or none), and the conversation diverges structurally. A cassette miss
+on an **auxiliary judge** turn is usually survivable: the judge just re-judges live, and "did the
+marker appear in this transcript" is an easy enough call that the live verdict matches the recorded
+one. So edits to tool definitions and the system prompt are high-risk for cassettes; edits to a
+secondary evaluator's prompt often are not.
+
+**Lessons for future agents:**
+- `ToolDefinition.Description` is **cached request-body content**, exactly like a prompt string.
+  Editing tool metadata invalidates cassettes; it is not a "docs-only" change. Native tools are the
+  dangerous ones (revealed in full, every request); an MCP tool's description only reaches the wire
+  after a `tool_help` round-trip.
+- **Change one byte-affecting thing at a time.** If two edits both touch request bytes and ship
+  together, no CI run can attribute the failure — you get a plausible story instead of a
+  measurement. Isolate the variable *before* splitting work apart.
+- **Varying failure counts across otherwise identical runs point at the cache, not the code.** The
+  proxy forwards misses live rather than erroring, so an invalidated cassette impersonates a flaky
+  model. Here it was 1, then 1, then 3 failing tests with the tests themselves unchanged.
+- Reproducing locally needs the proxy (`runner-host.example:12345`) and LM Studio (`llm.test:1234`);
+  from a dev box that cannot reach them, CI is the only oracle — so spend the round-trips on
+  *single-variable* experiments rather than on bundled guesses.

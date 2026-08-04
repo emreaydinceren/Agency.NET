@@ -6,6 +6,17 @@ a red CI run — most failures here are environmental, not code regressions.
 
 ## Topology
 
+> ⚠️ **Every hostname in this doc is a redacted placeholder**, not a name that resolves.
+> `gitea-host.example`, `runner-host.example` and `llm.test` stand in for the real internal
+> hosts, which are kept out of this file because the `secret-scan` job fails the build on an
+> `internal-mdns-host` finding (see the 2026-07-09 reflection). **Curling a placeholder always
+> times out — that tells you nothing about whether the service is up.** To get the real
+> endpoints, read a built `shared-test-appsettings.json` (any test project's
+> `bin/<config>/net10.0/`) for the proxy URL, and `shared-appsettings.json` for LM Studio; or
+> check `Agents/Trackers.md` if present. A wasted debugging session in 2026-08-04 concluded the
+> whole functional-test rig was unreachable purely from probing these placeholders — the rig was
+> up the entire time, and the local repro took 100 seconds once the real names were used.
+
 - **Host:** self-hosted Gitea at `http://gitea-host.example:3000` (repo `emre/Agency`). Actions
   run on a runner labelled `dotnet-10` inside the `mcr.microsoft.com/dotnet/sdk:10.0` Linux
   container, `shell: bash`.
@@ -55,11 +66,22 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 ```
 
 - **No fuzzy matching.** One differing byte in the request body → different key → miss.
-- On a **miss** the proxy forwards to live LM Studio. The standalone proxy does **not**
-  re-persist misses, so a miss surfaces as a *flaky/garbage live response*, not a 502 —
-  which makes misses look like model/parse bugs. Always rule out a cache miss first.
-- Cassettes live in the **`Agency.HttpCacheProxy` repo** (`src/Agency.Utils.HttpCacheProxy/cache/*.json`),
-  **not** in this repo. Each blob: `{ Method, PathAndQuery, BodyHash, StatusCode, Headers, Body(base64) }`.
+- On a **miss** the proxy forwards to live LM Studio and returns the live response, so a miss
+  surfaces as a *flaky/garbage live response*, not a 502 — which makes misses look like
+  model/parse bugs. Always rule out a cache miss first.
+- **A miss is persisted.** `Proxy:FileCache.Enabled` is `true` and `ProxyMiddleware` calls
+  `_responseCache.Set(...)` after forwarding, so the live response becomes the new cassette for
+  that key. Two consequences: a functional suite run against a changed prompt **self-records**
+  (no separate record mode needed), and — the dangerous half — **a bad live response is saved and
+  replayed forever**, turning a one-off flake into a deterministic failure. After a run that
+  failed on a miss, delete the newly-written blobs before retrying, or you will replay the bad
+  answer. (An earlier version of this doc claimed misses are *not* persisted. They are.)
+- Cassettes live under `src/Agency.Utils.HttpCacheProxy/cache/*.json` in the **standalone
+  `Agency.HttpCacheProxy` repo**, **not** in this repo — and they are **gitignored there**
+  (`.gitignore:17`), so they are not version-controlled at all. They exist only as local disk
+  state on the proxy host, which CI reaches over the network. There is no "pull the cassettes"
+  step: losing that directory means re-recording. Each blob:
+  `{ Method, PathAndQuery, BodyHash, StatusCode, Headers, Body(base64) }`.
 - A request is cacheable **iff its bytes are identical on every run and every OS**. Anything
   per-run-variable (GUIDs, timestamps, unsorted collections) is uncacheable — those tests must
   degrade gracefully (`Assert.Skip`), e.g. the Group 3 consolidation tests.
@@ -105,6 +127,8 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | `Agency.CodeIndexer` `EdgeResolver` `Assert.Single` flake | Known metrics race | Re-run; not a regression |
 | `thirdlicense` can't fetch license data | packages embed `localhost:3000` | `socat` forward to `gitea-host.example:3000` (already in ci-main) |
 | Cassette "missing" after clearing `cache/` | Proxy in-memory tier masks the miss | Restart the proxy after clearing `cache/` |
+| A functional test failed once on a cache miss, and now fails **identically every run**, including locally | The miss was **persisted**: the bad live response is now the cassette for that key and is replayed forever | Delete the blobs written by the failing run (diff the `cache/` listing before/after), restart the proxy, then re-run so a good response is recorded |
+| A test asserts the model took a specific action (called a tool, followed a skill step) and breaks after *any* prompt-adjacent change | The cassette pins a run where the small model *happened* to comply; the assertion tests the recording, not the harness | Re-record until compliant, or make the assertion independent of model compliance. Expect these to be the first casualties of any prompt/tool-definition edit |
 | `build-and-publish` fails at a "Read package revision"-style step right after a versioning change | A gate step greps a field that a prior commit removed/renamed; empty grep + `bash -e -o pipefail` → exit 1 | Check what the *previous* merge to `main` changed in versioning/build props before assuming a code regression |
 | "🔍 Inspect & test-install published packages" fails: `error: The source specified has already been added` | `src/NuGet.Config` already registers `gitea-local` at the same feed URL the step tries to add as `gitea-smoketest`; `dotnet nuget add source` dedupes by URL, not name | Use `dotnet nuget update source gitea-local --username … --password … --store-password-in-clear-text` instead of adding a new source, and point `dotnet add package --source` at `gitea-local` |
 | "🔍 Inspect & test-install published packages" fails: `cp: cannot stat '../PackageSmokeTest': No such file or directory` | The step's `working-directory` is already `src`, so `PackageSmokeTest` lives one level below cwd, not two; the `../` was a leftover from writing the command as if run from repo root | Use `cp -r PackageSmokeTest "$work/harness"` (no `../`) |

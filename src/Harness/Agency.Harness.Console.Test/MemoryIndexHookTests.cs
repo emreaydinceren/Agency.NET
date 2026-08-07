@@ -101,9 +101,14 @@ public sealed class MemoryIndexHookTests
         Assert.Equal("abc-123", userId);
     }
 
-    /// <summary>An empty store (no domains/keys) adds no fact — avoids permanent prompt clutter for a fresh user.</summary>
+    /// <summary>
+    /// An empty store still gets a fact carrying the write-side instruction. A fresh user is exactly
+    /// the case that needs it: with nothing stored and nothing in the system prompt, "save durable
+    /// facts" would exist only inside the memorize tool's description, which the model reads only
+    /// after it has already decided to reach for the tool.
+    /// </summary>
     [Fact]
-    public async Task OnSessionStarted_EmptyIndex_AddsNoFact()
+    public async Task OnSessionStarted_EmptyIndex_StillAddsWritePolicyFact()
     {
         var tool = new FakeListGlobalKeysTool("{}");
         AgentHooks hooks = MemoryIndexHook.Build(tool);
@@ -111,7 +116,28 @@ public sealed class MemoryIndexHookTests
 
         await FireOnSessionStarted(hooks, ctx);
 
-        Assert.Empty(ctx.Knowledge.Facts);
+        string fact = Assert.Single(ctx.Knowledge.Facts);
+        Assert.Contains("memorize", fact, StringComparison.Ordinal);
+        Assert.Contains("Nothing is stored for this user yet.", fact, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The write-side instruction rides on the same fact as the index, so it must survive alongside
+    /// stored keys rather than being displaced by them.
+    /// </summary>
+    [Fact]
+    public async Task OnSessionStarted_NonEmptyIndex_AlsoCarriesWritePolicy()
+    {
+        var tool = new FakeListGlobalKeysTool("""{"Personal":{"Keys":["FavouriteDessert"],"Tags":[]}}""");
+        AgentHooks hooks = MemoryIndexHook.Build(tool);
+        Context ctx = MakeContext();
+
+        await FireOnSessionStarted(hooks, ctx);
+
+        string fact = Assert.Single(ctx.Knowledge.Facts);
+        Assert.Contains("memorize", fact, StringComparison.Ordinal);
+        Assert.Contains("Personal|FavouriteDessert", fact, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nothing is stored", fact, StringComparison.Ordinal);
     }
 
     /// <summary>No resolved user id → the tool is never called (nothing valid to scope the lookup to).</summary>

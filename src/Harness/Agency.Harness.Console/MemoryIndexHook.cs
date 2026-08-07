@@ -17,7 +17,9 @@ namespace Agency.Harness.Console;
 /// </remarks>
 internal static class MemoryIndexHook
 {
-    private const string FactPrefix = "Known memory keys (call recall(domain, key) to fetch a value): ";
+    private const string FactPrefix = "Memory (persists across sessions): ";
+    private const string WritePolicy =
+        "save durable facts about this user with memorize as you learn them, and fetch them with recall. ";
     internal const string ListGlobalKeysToolName = "list_global_keys";
 
     /// <summary>
@@ -106,6 +108,12 @@ internal static class MemoryIndexHook
             }
         }
 
-        return pairs.Count > 0 ? FactPrefix + string.Join(", ", pairs) : null;
+        // An empty store still gets a fact. The index is what would be clutter for a fresh user; the
+        // write-side instruction is the opposite — with no keys stored and nothing in the system prompt
+        // telling the model to save, "remember things about me" lives only in the memorize tool's own
+        // description, which the model only reads once it has already decided to reach for the tool.
+        return FactPrefix + WritePolicy + (pairs.Count > 0
+            ? "Already stored — call recall(domain, key) for a value: " + string.Join(", ", pairs)
+            : "Nothing is stored for this user yet.");
     }
 }

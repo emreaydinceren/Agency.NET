@@ -60,7 +60,7 @@ internal sealed partial class ChannelSessionRegistry : IDisposable
     /// <returns>The channel for the session.</returns>
     internal Channel<DistillationJob> GetOrCreate(string userId, string sessionId)
     {
-        return this._channels.GetOrAdd(sessionId, _ => CreateChannel(userId, sessionId));
+        return this._channels.GetOrAdd(sessionId, key => CreateChannel(userId, key));
     }
 
     /// <summary>

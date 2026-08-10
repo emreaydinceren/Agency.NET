@@ -1,18 +1,19 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Harness.Hooks.Configuration.Handlers;
 
-internal sealed class CommandHookHandler : IHookHandler
+internal sealed partial class CommandHookHandler : IHookHandler
 {
     private readonly HookHandlerConfig _cfg;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
 
     internal CommandHookHandler(HookHandlerConfig cfg, ILogger? logger = null)
     {
         _cfg = cfg;
-        _logger = logger;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     public async Task<HookHandlerOutput> InvokeAsync(HookPayload payload, CancellationToken ct)
@@ -60,7 +61,10 @@ internal sealed class CommandHookHandler : IHookHandler
         }
         catch (OperationCanceledException)
         {
+#pragma warning disable S2486 // Generic exceptions should not be ignored
             try { proc.Kill(entireProcessTree: true); } catch { }
+#pragma warning restore S2486 // Generic exceptions should not be ignored
+            LogCommandTimedOut(_cfg.Command ?? string.Empty, _cfg.Timeout ?? 30);
             return new HookHandlerOutput(HookExitCodes.Timeout, null, null, null);
         }
 
@@ -85,4 +89,7 @@ internal sealed class CommandHookHandler : IHookHandler
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Command hook '{Command}' timed out after {TimeoutSeconds}s and was killed.")]
+    private partial void LogCommandTimedOut(string command, int timeoutSeconds);
 }

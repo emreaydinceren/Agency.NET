@@ -41,9 +41,9 @@ public sealed class ToolRegistry : IToolRegistry
     /// <summary>Gets a shared no-op <see cref="IToolRegistry"/> instance used when no tools are registered.</summary>
     public static readonly IToolRegistry Empty = EmptyToolRegistry.Instance;
 
-    private HashSet<string> _disabledByUserToolNames = new();
+    private readonly HashSet<string> _disabledByUserToolNames = new();
 
-    private HashSet<string> _disabledBySystemToolNames = new();
+    private readonly HashSet<string> _disabledBySystemToolNames = new();
 
     private readonly Dictionary<string, (ITool Tool, ToolDefinition Definition)> _tools;
 
@@ -90,14 +90,14 @@ public sealed class ToolRegistry : IToolRegistry
     /// <inheritdoc/>
     public IReadOnlyList<ToolDefinition> ListDefinitions()
     {
-        return this._tools.Values.Where(e => IsToolDisabled(e.Definition.Name) == false).Select(e => e.Definition).ToList();
+        return this._tools.Values.Where(e => !IsToolDisabled(e.Definition.Name)).Select(e => e.Definition).ToList();
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<(bool Enabled, ToolDefinition Definition)> ListAllDefinitions()
     {
-        return this._tools.Values.Where(e => this._disabledBySystemToolNames.Contains(e.Definition.Name) == false)
-            .Select(e => (this._disabledByUserToolNames.Contains(e.Definition.Name) == false, e.Definition)).ToList();
+        return this._tools.Values.Where(e => !this._disabledBySystemToolNames.Contains(e.Definition.Name))
+            .Select(e => (!this._disabledByUserToolNames.Contains(e.Definition.Name), e.Definition)).ToList();
     }
 
     /// <inheritdoc/>

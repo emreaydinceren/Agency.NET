@@ -155,7 +155,7 @@ internal sealed class PermissionRule
         // Escape all regex metacharacters, then replace runs of escaped '*' with '.*'.
         string escaped = Regex.Escape(pattern);
         // Regex.Escape converts '*' → '\*'. Replace one-or-more consecutive '\*' with '.*'.
-        string regexBody = Regex.Replace(escaped, @"(\\\*)+", ".*");
+        string regexBody = Regex.Replace(escaped, @"(\\\*)+", ".*", RegexOptions.None, MatchTimeout);
         string anchored = $"^{regexBody}$";
 
         return new Regex(

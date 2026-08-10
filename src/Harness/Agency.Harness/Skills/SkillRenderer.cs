@@ -45,16 +45,20 @@ internal static class SkillRenderer
     // Shell expansion — layered on top of the pure Render; runner-injected
     // ---------------------------------------------------------------------------
 
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(250);
+
     // Matches fenced ```! blocks: opening fence, any content, closing ```.
     // Uses non-greedy so the first closing ``` ends the match.
     private static readonly Regex FencedShellPattern = new(
         @"```!\r?\n([\s\S]*?)```",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        MatchTimeout);
 
     // Matches inline backtick shell directives:  !`command`
     private static readonly Regex InlineShellPattern = new(
         @"!`([^`]+)`",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        MatchTimeout);
 
     /// <summary>
     /// Performs shell expansion on an already-rendered skill body.
@@ -255,7 +259,8 @@ internal static class SkillRenderer
         @"|(?<!\\\$)\$ARGUMENTS" +
         @"|(?<!\\\$)\$(\d+)" +
         @"|(?<!\\\$)\$([A-Za-z_][A-Za-z0-9_]*)",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        MatchTimeout);
 
     // Matches any unescaped argument-consuming placeholder: $ARGUMENTS, $ARGUMENTS[N], $N, $name.
     // Used to decide whether the "ARGUMENTS: <value>" fallback append is needed.
@@ -264,7 +269,8 @@ internal static class SkillRenderer
         @"(?<!\\)\$ARGUMENTS(?:\[\d+\])?" +   // $ARGUMENTS or $ARGUMENTS[N]
         @"|(?<!\\)\$\d+" +                     // $N (numeric)
         @"|(?<!\\)\$[A-Za-z_][A-Za-z0-9_]*",  // $name (identifier)
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        MatchTimeout);
 
     private static bool ContainsArgumentsPlaceholder(string body) =>
         ArgumentsConsumingPattern.IsMatch(body);

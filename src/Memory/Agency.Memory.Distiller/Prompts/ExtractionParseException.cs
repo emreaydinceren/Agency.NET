@@ -8,6 +8,9 @@ namespace Agency.Memory.Distiller.Prompts;
 /// This exception class is used by the Distiller retry loop to distinguish permanent parse
 /// failures from transient LLM errors (Spec §8.6).
 /// </remarks>
+// S3871 (exception types should be public): deliberately internal — a control-flow signal for
+// the Distiller retry loop only (see remarks above), not a type external callers should catch by name.
+#pragma warning disable S3871
 internal sealed class ExtractionParseException : Exception
 {
     /// <summary>
@@ -28,3 +31,4 @@ internal sealed class ExtractionParseException : Exception
     {
     }
 }
+#pragma warning restore S3871

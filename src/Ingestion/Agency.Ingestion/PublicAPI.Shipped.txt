@@ -15,8 +15,6 @@ Agency.Ingestion.Document.SourceId.get -> string!
 Agency.Ingestion.Document.SourceId.init -> void
 Agency.Ingestion.IDocumentLoader
 Agency.Ingestion.IDocumentLoader.LoadAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Agency.Ingestion.Document!>!
-Agency.Ingestion.IIngestionPipeline<TValue>
-Agency.Ingestion.IIngestionPipeline<TValue>.ExecuteAsync(Agency.Ingestion.IDocumentLoader! loader, Agency.Ingestion.ITextSplitter! splitter, Agency.VectorStore.Common.IVectorStore! store, string! userId, string? sessionId, string? projectId = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Ingestion.IngestionResult!>!
 Agency.Ingestion.IngestionResult
 Agency.Ingestion.IngestionResult.<Clone>$() -> Agency.Ingestion.IngestionResult!
 Agency.Ingestion.IngestionResult.Deconstruct(out int Succeeded, out int Failed, out System.Collections.Generic.IReadOnlyList<string!>? FailedKeys) -> void

@@ -295,7 +295,10 @@ public sealed class AgentInternalsTests
         Context ctx = MakeSessionContext("session-xyz");
 
         // Must complete without throwing when no OnSessionEnd hook is set.
-        await agent.RaiseSessionEndAsync(ctx, TestContext.Current.CancellationToken);
+        Exception? exception = await Record.ExceptionAsync(() =>
+            agent.RaiseSessionEndAsync(ctx, TestContext.Current.CancellationToken));
+
+        Assert.Null(exception);
     }
 
     // ── EmptyToolRegistry ─────────────────────────────────────────────────────

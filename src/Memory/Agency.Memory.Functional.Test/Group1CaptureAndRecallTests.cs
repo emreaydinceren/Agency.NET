@@ -842,10 +842,9 @@ public sealed class Group1CaptureAndRecallTests : IAsyncLifetime
             userId, SessionId, DistillationTrigger.Inactivity, UpToTurnIndex: conv.Messages.Count);
         channelRegistry.GetOrCreateWriter(userId, SessionId).TryWrite(jobFirst);
 
-        DistillationCompletedEvent firstCompleted;
         try
         {
-            firstCompleted = await TestInfrastructure.WaitForDistillationOrFailAsync(
+            await TestInfrastructure.WaitForDistillationOrFailAsync(
                 eventBus,
                 userId,
                 SessionId,

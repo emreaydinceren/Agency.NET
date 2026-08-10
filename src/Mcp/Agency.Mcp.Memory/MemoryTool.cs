@@ -155,9 +155,9 @@ public sealed class MemoryTool(IKVStore kvStore)
 
         foreach (var hit in hits)
         {
-            if (hit.Metadata?.TryGetValue("domain", out object? domain) == true && string.IsNullOrWhiteSpace(domain?.ToString()) == false)
+            if (hit.Metadata?.TryGetValue("domain", out object? domain) == true && !string.IsNullOrWhiteSpace(domain?.ToString()))
             {
-                if (items.TryGetValue(domain.ToString()!, out DomainMetadata? data) == false)
+                if (!items.TryGetValue(domain.ToString()!, out DomainMetadata? data))
                 {
                     data = new DomainMetadata();
                     items[domain.ToString()!] = data;
@@ -175,7 +175,7 @@ public sealed class MemoryTool(IKVStore kvStore)
 
                     foreach (var tag in tagValues)
                     {
-                        if (string.IsNullOrWhiteSpace(tag) == false)
+                        if (!string.IsNullOrWhiteSpace(tag))
                         {
                             data.Tags.Add(tag);
                         }
@@ -191,7 +191,7 @@ public sealed class MemoryTool(IKVStore kvStore)
                         _ => key?.ToString()
                     };
 
-                    if (string.IsNullOrWhiteSpace(keyValue) == false)
+                    if (!string.IsNullOrWhiteSpace(keyValue))
                     {
                         data.Keys.Add(keyValue);
                     }

@@ -1,19 +1,20 @@
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks.Configuration.Handlers;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Harness.Hooks.Configuration;
 
-internal sealed class HookRegistry
+internal sealed partial class HookRegistry
 {
     private readonly Dictionary<HookEventName, List<(HookMatcher Matcher, IReadOnlyList<IHookHandler> Handlers)>> _byEvent;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
 
     internal static readonly HookRegistry Empty = new(new HooksOptions(), NullFactory.Instance, null);
 
     internal HookRegistry(HooksOptions options, IHookHandlerFactory factory, ILogger? logger)
     {
-        this._logger = logger;
+        this._logger = logger ?? NullLogger.Instance;
         this._byEvent = new Dictionary<HookEventName, List<(HookMatcher, IReadOnlyList<IHookHandler>)>>();
 
         foreach (var (eventName, groups) in options.Hooks)
@@ -48,10 +49,13 @@ internal sealed class HookRegistry
 
     private List<IHookHandler> MatchingHandlers(HookEventName eventName, string subject)
     {
-        return this._byEvent[eventName]
+        var handlers = this._byEvent[eventName]
             .Where(g => g.Matcher.IsMatch(subject))
             .SelectMany(g => g.Handlers)
             .ToList();
+
+        LogMatchedHandlers(handlers.Count, eventName);
+        return handlers;
     }
 
     // ── PreToolUse ───────────────────────────────────────────────────────────
@@ -312,4 +316,7 @@ internal sealed class HookRegistry
         public IHookHandler Create(HookHandlerConfig config) =>
             throw new InvalidOperationException("HookRegistry.Empty should never have handlers created.");
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Matched {Count} handler(s) for hook event {EventName}.")]
+    private partial void LogMatchedHandlers(int count, HookEventName eventName);
 }

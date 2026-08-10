@@ -194,7 +194,10 @@ public sealed class McpServerConfigurationTests
     [Fact]
     public void Persist_MissingFile_DoesNotThrow()
     {
-        McpServerConfiguration.Persist(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"), "memory", enabled: false);
+        Exception? exception = Record.Exception(() =>
+            McpServerConfiguration.Persist(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"), "memory", enabled: false));
+
+        Assert.Null(exception);
     }
 
     /// <summary>

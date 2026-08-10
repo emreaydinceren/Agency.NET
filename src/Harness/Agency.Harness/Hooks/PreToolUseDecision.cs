@@ -5,7 +5,7 @@ namespace Agency.Harness.Hooks;
 /// <summary>The decision returned by an <c>OnPreToolUse</c> hook delegate.</summary>
 public abstract record PreToolUseDecision
 {
-    internal PreToolUseDecision() { }
+    private protected PreToolUseDecision() { }
 
     /// <summary>Allow the tool call to proceed with the original input.</summary>
     public sealed record Allow : PreToolUseDecision;

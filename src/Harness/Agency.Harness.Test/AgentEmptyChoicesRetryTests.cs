@@ -25,8 +25,12 @@ public sealed class AgentEmptyChoicesRetryTests
             FinishReason = ChatFinishReason.Stop,
         };
 
+    // S3928: "index" isn't a parameter of this method — it deliberately replicates the ParamName
+    // the OpenAI SDK throws with (see class remarks above), not a real validated argument here.
+#pragma warning disable S3928
     private static ArgumentOutOfRangeException EmptyChoicesException() =>
         new("index", "Specified argument was out of the range of valid values.");
+#pragma warning restore S3928
 
     private static async Task<List<AgentEvent>> RunToCompletion(
         Agent agent, Context ctx, CancellationToken ct)

@@ -6,6 +6,8 @@ namespace Agency.Harness.Console;
 /// <summary>Renders markdown text to the console using Spectre.Console markup.</summary>
 internal static class MarkdownRenderer
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
     /// <summary>Prints a markdown string to the console, translating common constructs to Spectre markup.</summary>
     internal static void Print(string text)
     {
@@ -61,7 +63,9 @@ internal static class MarkdownRenderer
             if (TryParseTable(lines, i, out ParsedTable? table, out int next))
             {
                 AnsiConsole.Write(BuildTable(table!));
+#pragma warning disable S127 // deliberate manual skip-ahead past the consumed table lines
                 i = next - 1;   // -1 offsets the loop's i++
+#pragma warning restore S127
                 continue;
             }
 
@@ -199,7 +203,7 @@ internal static class MarkdownRenderer
         }
 
         List<string> cells = SplitRow(line);
-        return cells.Count > 0 && cells.All(static cell => Regex.IsMatch(cell, @"^:?-+:?$"));
+        return cells.Count > 0 && cells.All(static cell => Regex.IsMatch(cell, @"^:?-+:?$", RegexOptions.None, RegexTimeout));
     }
 
     /// <summary>Splits a table row into trimmed cells, ignoring the optional leading/trailing pipes.</summary>
@@ -232,19 +236,19 @@ internal static class MarkdownRenderer
         // "brighten the current color", which can be visually identical to the default color
         // depending on the console's color scheme. Underline (SGR 4) renders as a genuinely
         // distinct style on those hosts, so emphasis stays visible either way.
-        s = Regex.Replace(s, @"\*\*\*(.+?)\*\*\*", "[bold italic underline]$1[/]");
-        s = Regex.Replace(s, @"___(.+?)___", "[bold italic underline]$1[/]");
+        s = Regex.Replace(s, @"\*\*\*(.+?)\*\*\*", "[bold italic underline]$1[/]", RegexOptions.None, RegexTimeout);
+        s = Regex.Replace(s, @"___(.+?)___", "[bold italic underline]$1[/]", RegexOptions.None, RegexTimeout);
 
         // Bold: **text** or __text__
-        s = Regex.Replace(s, @"\*\*(.+?)\*\*", "[bold underline]$1[/]");
-        s = Regex.Replace(s, @"__(.+?)__", "[bold underline]$1[/]");
+        s = Regex.Replace(s, @"\*\*(.+?)\*\*", "[bold underline]$1[/]", RegexOptions.None, RegexTimeout);
+        s = Regex.Replace(s, @"__(.+?)__", "[bold underline]$1[/]", RegexOptions.None, RegexTimeout);
 
         // Italic: *text* or _text_
-        s = Regex.Replace(s, @"\*([^\*\n]+?)\*", "[italic]$1[/]");
-        s = Regex.Replace(s, @"_([^_\n]+?)_", "[italic]$1[/]");
+        s = Regex.Replace(s, @"\*([^\*\n]+?)\*", "[italic]$1[/]", RegexOptions.None, RegexTimeout);
+        s = Regex.Replace(s, @"_([^_\n]+?)_", "[italic]$1[/]", RegexOptions.None, RegexTimeout);
 
         // Inline code: `text`
-        s = Regex.Replace(s, @"`([^`\n]+?)`", "[cyan]$1[/]");
+        s = Regex.Replace(s, @"`([^`\n]+?)`", "[cyan]$1[/]", RegexOptions.None, RegexTimeout);
 
         return s;
     }

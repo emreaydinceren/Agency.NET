@@ -50,7 +50,13 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
 
     private readonly string _connectionString;
     private readonly IEmbeddingGenerator _embedder;
+#pragma warning disable S4487 // unread private field
+    // Accepted for DI-shape consistency with the rest of the memory subsystem (ranking/retrieval-
+    // top-k config is consumed by Agency.Memory.Retrieval, not this raw CRUD store). Kept — and
+    // still validated as non-null below — so a future store-level use of MemoryOptions doesn't
+    // require a constructor signature change.
     private readonly MemoryOptions _options;
+#pragma warning restore S4487
     private readonly ILogger<SqliteMemoryStore> _logger;
 
     /// <summary>
@@ -234,7 +240,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
                 {
                     try
                     {
-                        await this.BumpLastAccessedAtAsync(ids, default);
+                        await this.BumpLastAccessedAtAsync(ids, CancellationToken.None);
                     }
                     catch (Exception ex)
                     {

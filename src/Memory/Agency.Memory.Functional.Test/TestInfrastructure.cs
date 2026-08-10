@@ -16,6 +16,10 @@ namespace Agency.Memory.Functional.Test;
 /// Carries the <see cref="DistillationFailedEvent.Reason"/> text so the test can
 /// surface the real cause instead of a misleading timeout message.
 /// </summary>
+// S3871 (exception types should be public): deliberately internal — a test-only signal caught
+// within this same assembly (see WaitForDistillationOrFailAsync's callers), not a type meant for
+// external consumption.
+#pragma warning disable S3871
 internal sealed class DistillationFailedException : Exception
 {
     /// <summary>Gets the underlying <see cref="DistillationFailedEvent"/>.</summary>
@@ -34,6 +38,7 @@ internal sealed class DistillationFailedException : Exception
         this.Event = failedEvent;
     }
 }
+#pragma warning restore S3871
 
 /// <summary>
 /// Shared test infrastructure for end-to-end functional tests.

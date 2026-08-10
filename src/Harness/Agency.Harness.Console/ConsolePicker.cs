@@ -49,7 +49,7 @@ internal static class ConsolePicker
         {
             for(int colIndex = 0; colIndex < row.Values.Length; colIndex++)
             {
-                if (maxWidthOfColumn.TryGetValue(colIndex, out var maxWidth) == false)
+                if (!maxWidthOfColumn.TryGetValue(colIndex, out var maxWidth))
                 {
                     maxWidthOfColumn[colIndex] = row[colIndex].Length;
                 }

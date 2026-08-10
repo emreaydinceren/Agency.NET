@@ -128,10 +128,18 @@ internal static class TelemetryServiceCollectionExtensions
             options.FileExport.OutputDirectory,
             $"{options.FileExport.Logs.FilePrefix}-{sessionStamp}.log");
 
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Is(logLevel)
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-            .MinimumLevel.Override("System", LogEventLevel.Warning)
+        LoggerConfiguration loggerConfig = new LoggerConfiguration()
+            .MinimumLevel.Is(logLevel);
+
+        foreach ((string category, string levelName) in options.FileExport.Logs.CategoryOverrides)
+        {
+            LogEventLevel overrideLevel = Enum.TryParse(levelName, ignoreCase: true, out LogEventLevel parsedOverride)
+                ? parsedOverride
+                : LogEventLevel.Warning;
+            loggerConfig = loggerConfig.MinimumLevel.Override(category, overrideLevel);
+        }
+
+        Log.Logger = loggerConfig
             .Enrich.FromLogContext()
             .WriteTo.File(
                 path: logPath,

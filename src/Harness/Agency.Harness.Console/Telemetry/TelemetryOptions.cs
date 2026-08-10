@@ -66,4 +66,19 @@ internal sealed class LogFileOptions
     /// Verbose, Debug, Information, Warning, Error, Fatal.
     /// </summary>
     public string MinimumLevel { get; set; } = "Information";
+
+    /// <summary>
+    /// Per-category Serilog minimum-level overrides, keyed by logger-category prefix
+    /// (e.g. <c>"Microsoft.Extensions.AI"</c>). Values use the same level names as
+    /// <see cref="MinimumLevel"/>. Serilog resolves overrides by longest-prefix match, so a more
+    /// specific category (e.g. <c>Microsoft.Extensions.AI</c>) can be carved out from a broader one
+    /// (e.g. <c>Microsoft</c>) without weakening it for every other category — useful for turning on
+    /// full LLM request/response content logging from <c>UseLogging()</c> without a rebuild; see
+    /// <c>Agents/DebuggingAndLogging.md</c>. Defaults preserve today's noise reduction for framework logs.
+    /// </summary>
+    public Dictionary<string, string> CategoryOverrides { get; set; } = new(StringComparer.Ordinal)
+    {
+        ["Microsoft"] = "Warning",
+        ["System"] = "Warning",
+    };
 }

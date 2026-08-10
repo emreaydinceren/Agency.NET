@@ -85,6 +85,7 @@ Keep this file lean. Read the linked doc only when its trigger applies:
 - **Building, testing, or running infrastructure** → read `Agents/BuildAndTest.md` (dotnet/docker commands, test configuration).
 - **Investigating a CI failure or changing the pipeline** → read `Agents/CIPipeline.md` (Gitea Actions workflows, offline functional-test cache proxy, known failure modes, debugging playbook).
 - **Cutting a release or publishing NuGet packages** → read `Agents/Releasing.md` (the tag-based publish gate, MinVer, and the ci-main publish runbook).
+- **Debugging with default logs insufficient, or turning on verbose/LLM-content logging** → read `Agents/DebuggingAndLogging.md` (the verbosity recipe, why `Logging:LogLevel` doesn't work here, and the Microsoft.Extensions.AI logging-override gotcha).
 - **Discussing or updating bugs or tasks** → read `Agents/Trackers.md` if present (private, untracked local tracker notes; not part of the public repo).
 
 ## Git & Auth

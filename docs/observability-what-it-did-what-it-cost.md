@@ -457,6 +457,10 @@ config section:
 - **Log floor.** `Logs.MinimumLevel` (default `Information`) sets how much survives.
 - **Metric cadence.** `Metrics.ExportIntervalMs` trades freshness against file volume.
 
+For the practical recipe — including a gotcha where raising `Logs.MinimumLevel` alone does not
+surface full LLM request/response content — see
+[`Agents/DebuggingAndLogging.md`](../Agents/DebuggingAndLogging.md).
+
 `★ Insight — the Test environment is governed *into determinism*.` The functional tests replay LLM
 traffic from an offline HTTP cache, and the cache key is a hash of the exact request body. Anything
 that varies per run — wall-clock time, MCP-discovered tools — would change that body and break replay.
@@ -488,6 +492,15 @@ A few precise points worth stating so the reference is honest:
 - **Tag namespaces are not yet unified.** The agent uses `agent.*`; the embedder uses the OTel `gen_ai.*`
   GenAI convention. Both are intentional, but a future pass aligning the agent onto `gen_ai.*` is open
   work.
+- **No raw HTTP body/header logging exists anywhere in the LLM client pipeline.** The OpenAI SDK
+  client is built directly via `System.ClientModel`, not `IHttpClientFactory`, so
+  `Microsoft.Extensions.Http.Logging`'s trace handlers are never in the pipeline. The closest thing
+  to request/response content visibility is Microsoft.Extensions.AI's `UseLogging()` chat-client
+  middleware (wired in `OpenAIClient.CreateChatClient`), which logs at the parsed-`ChatMessage`
+  level, not raw bytes — and by default it is silenced by the blanket `"Microsoft" → Warning` Serilog
+  override (§8.3), since its logger category starts with `Microsoft.Extensions.AI`. See
+  [`Agents/DebuggingAndLogging.md`](../Agents/DebuggingAndLogging.md) for how to carve that override
+  out when full LLM content is needed.
 
 ---
 

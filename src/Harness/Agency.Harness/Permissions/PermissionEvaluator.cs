@@ -41,12 +41,10 @@ internal sealed class PermissionEvaluator : IPermissionEvaluator
     private readonly List<PermissionRule> _grantedDeny;
 
     private readonly PermissionsFileStore _store;
-    private readonly ILogger<PermissionEvaluator>? _logger;
 
     public PermissionEvaluator(PermissionsOptions options, ILogger<PermissionEvaluator>? logger = null)
     {
         _options = options;
-        _logger = logger;
 
         // Parse config rules (validated at startup; Parse here mirrors the spec ctor description).
         _configAllow = ParseRules(options.Allow);

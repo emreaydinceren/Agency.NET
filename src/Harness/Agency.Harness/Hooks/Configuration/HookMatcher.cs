@@ -24,7 +24,7 @@ internal sealed class HookMatcher
             return new HookMatcher(Mode.MatchAll);
         }
 
-        if (System.Text.RegularExpressions.Regex.IsMatch(matcher, "^[A-Za-z0-9_|]+$"))
+        if (System.Text.RegularExpressions.Regex.IsMatch(matcher, "^[A-Za-z0-9_|]+$", RegexOptions.None, TimeSpan.FromMilliseconds(250)))
         {
             var names = new HashSet<string>(
                 matcher.Split('|'),

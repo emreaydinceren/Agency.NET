@@ -74,7 +74,7 @@ internal sealed class ConsoleOutput : IChatOutput
     private Thread? spinnerThread;
     private volatile bool spinnerRunning;
 
-    public void StartSpinner(string markup = "[yellow]Thinking..[/]")
+    public void StartSpinner(string markup = "[yellow]Thinking...[/]")
     {
         if (System.Console.IsOutputRedirected || !AnsiConsole.Console.Profile.Capabilities.Interactive)
         {

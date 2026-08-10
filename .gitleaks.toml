@@ -79,6 +79,12 @@ id = "private-ipv4"
 description = "Private / RFC1918 IP address committed"
 regex = '''\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b'''
 
+  [rules.allowlist]
+  description = "SonarAnalyzer.CSharp uses an unusual 4-segment version scheme (10.32.0.713), which coincidentally matches the 10.x.x.x private-IP shape. Update this alongside the pinned version comment in Directory.Build.props/Directory.Packages.props when it changes."
+  regexes = [
+    '''10\.32\.0\.713''',
+  ]
+
 [[rules]]
 id = "chat-webhook-url"
 description = "Slack/Discord/Teams webhook URL (embeds a token)"

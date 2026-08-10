@@ -1,20 +1,21 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Harness.Hooks.Configuration.Handlers;
 
-internal sealed class HttpHookHandler : IHookHandler
+internal sealed partial class HttpHookHandler : IHookHandler
 {
     private readonly HookHandlerConfig _cfg;
     private readonly HttpClient _client;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
 
     internal HttpHookHandler(HookHandlerConfig cfg, HttpClient client, ILogger? logger = null)
     {
         _cfg = cfg;
         _client = client;
-        _logger = logger;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     public async Task<HookHandlerOutput> InvokeAsync(HookPayload payload, CancellationToken ct)
@@ -35,8 +36,9 @@ internal sealed class HttpHookHandler : IHookHandler
         {
             resp = await _client.SendAsync(req, cts.Token);
         }
-        catch
+        catch (Exception ex)
         {
+            LogRequestFailed(ex, _cfg.Url ?? string.Empty);
             return new HookHandlerOutput(HookExitCodes.NonBlockingError, null, null, null);
         }
 
@@ -61,4 +63,7 @@ internal sealed class HttpHookHandler : IHookHandler
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "HTTP hook request to '{Url}' failed.")]
+    private partial void LogRequestFailed(Exception ex, string url);
 }

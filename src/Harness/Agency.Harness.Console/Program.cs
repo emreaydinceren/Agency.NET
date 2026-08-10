@@ -105,7 +105,7 @@ internal class Program
             // binding so AgentOptions.UserId is populated. The id partitions memory and is substituted for the
             // {userId} placeholder in tool calls by UserIdPlaceholderHook. Skipped under Test to keep functional
             // cache-replay deterministic and avoid writing to the test appsettings.
-            if (builder.Environment.IsEnvironment("Test") == false)
+            if (!builder.Environment.IsEnvironment("Test"))
             {
                 string appSettingsPath = Path.Combine(builder.Environment.ContentRootPath, "appsettings.json");
                 UserIdConfiguration.EnsureUserId(builder.Configuration, appSettingsPath, static () => Guid.NewGuid().ToString());

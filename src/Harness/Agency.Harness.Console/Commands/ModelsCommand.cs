@@ -37,7 +37,7 @@ internal class ModelsCommand
             session.SetAgent(agent);
 
             var environment = session.ServiceProvider.GetRequiredService<IHostEnvironment>();
-            if (environment.IsEnvironment("Test") == false)
+            if (!environment.IsEnvironment("Test"))
             {
                 var configuration = session.ServiceProvider.GetRequiredService<IConfiguration>();
                 string appSettingsPath = Path.Combine(environment.ContentRootPath, "appsettings.json");

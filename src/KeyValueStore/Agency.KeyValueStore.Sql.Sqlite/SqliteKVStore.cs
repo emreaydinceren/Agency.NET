@@ -117,7 +117,7 @@ public sealed partial class SqliteKVStore : IKVStore
                     parameters["hasSessionId"] = 0;
                 }
 
-                if (string.IsNullOrWhiteSpace(query.Value) == false)
+                if (!string.IsNullOrWhiteSpace(query.Value))
                 {
                     parameters["v"] = query.Value;
                     parameters["hasValue"] = 1;
@@ -128,7 +128,7 @@ public sealed partial class SqliteKVStore : IKVStore
                     parameters["hasValue"] = 0;
                 }
 
-                if (string.IsNullOrWhiteSpace(query.Key) == false)
+                if (!string.IsNullOrWhiteSpace(query.Key))
                 {
                     parameters["k"] = query.Key;
                     parameters["hasKey"] = 1;

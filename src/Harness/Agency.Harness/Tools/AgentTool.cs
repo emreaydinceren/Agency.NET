@@ -1,6 +1,4 @@
 
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Agency.Harness.Contexts;
 using Agency.Harness.Permissions;
@@ -88,7 +86,6 @@ public sealed class AgentTool : ITool
 
         AgentResultStatus? status = null;
 
-        var verboseSB = new StringBuilder();
         string finalText = string.Empty;
 
         // §9.5: collect pending requests; on AwaitingPermission auto-deny all and resume.
@@ -104,20 +101,10 @@ public sealed class AgentTool : ITool
             {
                 switch (agentEvent)
                 {
-                    case SessionStartedEvent ev:
-                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Session started: {ev.SessionId}");
-                        break;
-                    case ToolInvokedEvent ev:
-                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Tool invoked: {ev.ToolName} with input {ev.Input}");
-                        break;
-                    case IterationCompletedEvent ev:
-                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Iteration {ev.Iteration} completed.");
-                        break;
                     case PermissionRequestedEvent ev:
                         pendingRequests.Add(ev);
                         break;
                     case AgentResultEvent ev:
-                        verboseSB.AppendLine(CultureInfo.InvariantCulture, $"Agent result: {ev.Status} with {ev.FinalText}");
                         finalText = ev.FinalText ?? string.Empty;
                         status = ev.Status;
                         if (ev.Status == AgentResultStatus.AwaitingPermission)

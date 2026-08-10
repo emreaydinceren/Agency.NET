@@ -188,7 +188,7 @@ public sealed class SqliteKVStore : IVectorStore
                     LIMIT @l
                     """;
 
-                if (string.IsNullOrWhiteSpace(query.Value) == false)
+                if (!string.IsNullOrWhiteSpace(query.Value))
                 {
                     var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                     parameters["qVector"] = FormatVector(embedding.ToArray());
@@ -198,7 +198,7 @@ public sealed class SqliteKVStore : IVectorStore
                     parameters["qVector"] = null;
                 }
 
-                if (string.IsNullOrWhiteSpace(query.Key) == false)
+                if (!string.IsNullOrWhiteSpace(query.Key))
                 {
                     parameters["k"] = query.Key;
                     parameters["hasKey"] = 1;

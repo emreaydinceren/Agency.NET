@@ -10,7 +10,7 @@ namespace Agency.Ingestion;
 /// <summary>
 /// Default orchestration of the load → split → store ingestion pipeline.
 /// </summary>
-public sealed partial class DefaultIngestionPipeline<TValue> : IIngestionPipeline<TValue>
+public sealed partial class DefaultIngestionPipeline<TValue> : IIngestionPipeline
 {
     /// <summary>The activity source name used for ingestion telemetry.</summary>
     public const string ActivitySourceName = "Agency.Ingestion";

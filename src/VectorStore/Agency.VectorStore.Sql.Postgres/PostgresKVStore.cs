@@ -177,13 +177,17 @@ public sealed class PostgresKVStore : IVectorStore
 
                 bool hasProjects = (query.ProjectIds?.Count ?? 0) > 0;
                 parameters["hasProjects"] = hasProjects;
+                // S3265: NpgsqlDbType isn't marked [Flags], but Npgsql's documented convention is to
+                // OR it with NpgsqlDbType.Array to declare an array-typed parameter (here, text[]).
+#pragma warning disable S3265
                 parameters["pids"] = new NpgsqlParameter("pids", NpgsqlDbType.Array | NpgsqlDbType.Text)
                 {
                     Value = query.ProjectIds?.ToArray() ?? Array.Empty<string>()
                 };
+#pragma warning restore S3265
 
                 // Vector search on query.Value
-                if (string.IsNullOrWhiteSpace(query.Value) == false)
+                if (!string.IsNullOrWhiteSpace(query.Value))
                 {
                     var embedding = await this._embeddingGenerator.GenerateEmbeddingAsync(query.Value, cancellationToken);
                     parameters["qVector"] = new Pgvector.Vector(embedding.ToArray());
@@ -194,7 +198,7 @@ public sealed class PostgresKVStore : IVectorStore
                 }
 
                 // Exact key match (optional)
-                if (string.IsNullOrWhiteSpace(query.Key) == false)
+                if (!string.IsNullOrWhiteSpace(query.Key))
                 {
                     parameters["k"] = query.Key;
                     parameters["hasKey"] = true;
@@ -423,6 +427,9 @@ public sealed class PostgresKVStore : IVectorStore
             ORDER BY source_file
             """;
 
+        // S3265: NpgsqlDbType isn't marked [Flags], but Npgsql's documented convention is to
+        // OR it with NpgsqlDbType.Array to declare an array-typed parameter (here, text[]).
+#pragma warning disable S3265
         var parameters = new Dictionary<string, object?>
         {
             ["uid"] = userId,
@@ -433,6 +440,7 @@ public sealed class PostgresKVStore : IVectorStore
                 Value = projectIds?.ToArray() ?? Array.Empty<string>()
             }
         };
+#pragma warning restore S3265
 
         return await this._postgreSqlRunner.QueryAsync<DocumentInfo>(
             sql,

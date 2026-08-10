@@ -29,7 +29,7 @@ public sealed class LoopConsoleIntegrationTests
     private static string GetConsoleDll()
     {
         var dir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var parts = dir.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var parts = dir.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
         string tfm = parts[^1];
         string cfg = parts[^2];
         return Path.GetFullPath(Path.Combine(

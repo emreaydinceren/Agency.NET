@@ -150,9 +150,13 @@ internal sealed partial class DistillerBackgroundService : BackgroundService
                     while (channel.Reader.TryRead(out DistillationJob? job))
                     {
                         anyPending = true;
+#pragma warning disable S1854 // looks dead on the happy path, but is read below when
+                        // ProcessJobAsync throws OperationCanceledException (drain timeout) and
+                        // control jumps past the "= null" clear straight to the catch below.
                         inFlightJob = job; // track it before processing
                         await this.ProcessJobAsync(job, drainToken).ConfigureAwait(false);
                         inFlightJob = null; // processed successfully — clear
+#pragma warning restore S1854
                     }
                 }
             }
@@ -330,7 +334,6 @@ internal sealed partial class DistillerBackgroundService : BackgroundService
             catch (ExtractionParseException ex)
             {
                 // Second parse failure → permanent.
-                lastException = ex;
                 this.LogPermanentParseFailure(ex);
                 await this.DeadLetterAsync(job, ex, ct).ConfigureAwait(false);
                 _errorCounter.Add(1);
@@ -355,7 +358,6 @@ internal sealed partial class DistillerBackgroundService : BackgroundService
             catch (Exception ex)
             {
                 // Permanent failure class.
-                lastException = ex;
                 this.LogPermanentDistillationFailure(ex);
                 await this.DeadLetterAsync(job, ex, ct).ConfigureAwait(false);
                 _errorCounter.Add(1);

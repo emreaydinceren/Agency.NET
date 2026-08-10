@@ -28,7 +28,7 @@ internal sealed class TextWriterChatOutput (TextWriter textWriter) : IChatOutput
         textWriter.WriteLine(text);
     }
 
-    public void StartSpinner(string markup = "[yellow]Initializing warp drive...[/]")
+    public void StartSpinner(string markup = "[yellow]Thinking...[/]")
     {
         // No spinner support in TextWriter, so we'll just write the markup as-is.
     }

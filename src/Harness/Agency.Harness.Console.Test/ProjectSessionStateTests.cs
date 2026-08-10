@@ -123,6 +123,8 @@ public sealed class ProjectSessionStateTests
     {
         ProjectSessionState state = CreateState();
 
-        state.UnloadProject("x");
+        Exception? exception = Record.Exception(() => state.UnloadProject("x"));
+
+        Assert.Null(exception);
     }
 }

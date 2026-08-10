@@ -31,10 +31,10 @@ internal static class McpCommand
     internal sealed record ServerStatus(string Name, int EnabledTools, int TotalTools, string? Error, bool Connected)
     {
         /// <summary>Gets whether the server was attempted and failed to connect at startup.</summary>
-        internal bool Failed => this.Connected == false && this.Error is not null;
+        internal bool Failed => !this.Connected && this.Error is not null;
 
         /// <summary>Gets whether the server is disabled in config and was never attempted.</summary>
-        internal bool Disabled => this.Connected == false && this.Error is null;
+        internal bool Disabled => !this.Connected && this.Error is null;
 
         /// <summary>Gets whether at least one of the server's tools is currently enabled.</summary>
         internal bool On => this.Connected && this.EnabledTools > 0;
@@ -263,7 +263,7 @@ internal static class McpCommand
     private static void PersistEnabled(ConsoleChatSession session, string serverName, bool enabled)
     {
         var environment = session.ServiceProvider.GetRequiredService<IHostEnvironment>();
-        if (environment.IsEnvironment("Test") == false)
+        if (!environment.IsEnvironment("Test"))
         {
             string appSettingsPath = Path.Combine(environment.ContentRootPath, "appsettings.json");
             McpServerConfiguration.Persist(appSettingsPath, serverName, enabled);

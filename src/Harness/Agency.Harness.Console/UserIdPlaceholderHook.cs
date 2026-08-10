@@ -29,7 +29,7 @@ internal static class UserIdPlaceholderHook
             }
 
             string raw = ctx.Input.GetRawText();
-            if (raw.Contains(Placeholder, StringComparison.Ordinal) == false)
+            if (!raw.Contains(Placeholder, StringComparison.Ordinal))
             {
                 return Task.FromResult(PreToolUseDecision.Allowed);
             }

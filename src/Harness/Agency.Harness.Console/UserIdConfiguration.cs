@@ -29,7 +29,7 @@ internal static class UserIdConfiguration
     internal static string EnsureUserId(IConfiguration configuration, string appSettingsPath, Func<string> idFactory)
     {
         string? existing = configuration[ConfigKey];
-        if (string.IsNullOrWhiteSpace(existing) == false)
+        if (!string.IsNullOrWhiteSpace(existing))
         {
             return existing;
         }
@@ -44,7 +44,7 @@ internal static class UserIdConfiguration
 
     private static void Persist(string appSettingsPath, string id)
     {
-        if (File.Exists(appSettingsPath) == false)
+        if (!File.Exists(appSettingsPath))
         {
             // No file to persist into (e.g. config came purely from other providers); the in-memory
             // value still applies for this run, but it will not survive a restart.

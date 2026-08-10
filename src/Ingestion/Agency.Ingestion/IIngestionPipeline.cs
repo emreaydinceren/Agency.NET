@@ -5,7 +5,7 @@ namespace Agency.Ingestion;
 /// <summary>
 /// Orchestrates the full load → split → store ingestion flow.
 /// </summary>
-public interface IIngestionPipeline<TValue>
+public interface IIngestionPipeline
 {
     /// <summary>
     /// Runs the pipeline end-to-end and returns an aggregated result.

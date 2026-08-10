@@ -134,7 +134,7 @@ public sealed class PostgresKVStore : IKVStore
                 }
 
                 // Substring value search (optional)
-                if (string.IsNullOrWhiteSpace(query.Value) == false)
+                if (!string.IsNullOrWhiteSpace(query.Value))
                 {
                     parameters["hasValue"] = true;
                     parameters["vLike"] = "%" + query.Value + "%";
@@ -146,7 +146,7 @@ public sealed class PostgresKVStore : IKVStore
                 }
 
                 // Exact key match (optional)
-                if (string.IsNullOrWhiteSpace(query.Key) == false)
+                if (!string.IsNullOrWhiteSpace(query.Key))
                 {
                     parameters["k"] = query.Key;
                     parameters["hasKey"] = true;

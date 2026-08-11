@@ -203,7 +203,6 @@ Dataset table = hits.ToDataset();
 | [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | Implements `IVectorStore` using PostgreSQL + pgvector; uses `JsonMetadataHelpers` for metadata round-tripping |
 | [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) | Implements `IVectorStore` using SQLite; uses `JsonMetadataHelpers` for metadata round-tripping |
 | [Agency.RagFormatter](Agency.RagFormatter.md) | Consumes the `Dataset` produced by `ToDataset()` to render search results as Markdown context for LLM prompts |
-| [Agency.Mcp.Memory](Agency.Mcp.Memory.md) | Registers and uses an `IVectorStore` implementation to back agent memory tools |
 
 ## Design Notes
 

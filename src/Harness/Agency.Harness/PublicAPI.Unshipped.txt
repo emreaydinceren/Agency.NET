@@ -3,8 +3,56 @@ Agency.Harness.ChatSession.MemoryEnabled.get -> bool
 Agency.Harness.ChatSession.SetMemoryEnabled(bool enabled) -> void
 Agency.Harness.Contexts.Context.MemoryEnabled.get -> bool
 Agency.Harness.Contexts.Context.MemoryEnabled.set -> void
+Agency.Harness.ChatSession.ChatSession(Agency.Harness.Agent! agent, Agency.Harness.AgentOptions! options, Agency.Harness.Contexts.ToolContext? toolContext = null, Agency.Harness.Contexts.UserSpecificContext? user = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null, string? instructionsBlock = null) -> void
+static Agency.Harness.Agent.CreateContext(string! initialPrompt, Agency.Harness.Contexts.ToolContext? tools = null, Agency.Harness.Contexts.EnvironmentalContext? environment = null, Agency.Harness.Contexts.UserSpecificContext? user = null, System.TimeProvider? timeProvider = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null, string? instructionsBlock = null) -> Agency.Harness.Contexts.Context!
+Agency.Harness.Contexts.QueryContext.InstructionsBlock.get -> string?
+Agency.Harness.Contexts.QueryContext.InstructionsBlock.init -> void
+Agency.Harness.Instructions.IInstructionResolver
+Agency.Harness.Instructions.IInstructionResolver.ResolveAsync(string! workingDirectory, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Agency.Harness.Instructions.InstructionContext!>
+Agency.Harness.Instructions.InstructionContext
+Agency.Harness.Instructions.InstructionContext.InstructionContext(System.Collections.Generic.IReadOnlyList<Agency.Harness.Instructions.InstructionSource!>! Sources) -> void
+static Agency.Harness.Instructions.InstructionContext.Empty.get -> Agency.Harness.Instructions.InstructionContext!
+Agency.Harness.Instructions.InstructionContext.HasSources.get -> bool
+Agency.Harness.Instructions.InstructionContext.Sources.get -> System.Collections.Generic.IReadOnlyList<Agency.Harness.Instructions.InstructionSource!>!
+Agency.Harness.Instructions.InstructionContext.Sources.init -> void
+Agency.Harness.Instructions.InstructionContext.Deconstruct(out System.Collections.Generic.IReadOnlyList<Agency.Harness.Instructions.InstructionSource!>! Sources) -> void
+override Agency.Harness.Instructions.InstructionContext.Equals(object? obj) -> bool
+Agency.Harness.Instructions.InstructionContext.Equals(Agency.Harness.Instructions.InstructionContext? other) -> bool
+override Agency.Harness.Instructions.InstructionContext.GetHashCode() -> int
+override Agency.Harness.Instructions.InstructionContext.ToString() -> string!
+static Agency.Harness.Instructions.InstructionContext.operator ==(Agency.Harness.Instructions.InstructionContext? left, Agency.Harness.Instructions.InstructionContext? right) -> bool
+static Agency.Harness.Instructions.InstructionContext.operator !=(Agency.Harness.Instructions.InstructionContext? left, Agency.Harness.Instructions.InstructionContext? right) -> bool
+Agency.Harness.Instructions.InstructionContext.<Clone>$() -> Agency.Harness.Instructions.InstructionContext!
+Agency.Harness.Instructions.InstructionRenderer
+static Agency.Harness.Instructions.InstructionRenderer.Build(Agency.Harness.Instructions.InstructionContext! ctx) -> string!
+Agency.Harness.Instructions.InstructionServiceCollectionExtensions
+static Agency.Harness.Instructions.InstructionServiceCollectionExtensions.AddAgencyInstructions(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! config, string! sectionName = "Instructions") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Agency.Harness.Instructions.InstructionSource
+Agency.Harness.Instructions.InstructionSource.InstructionSource(string! Location, string! Content, Agency.Harness.Instructions.InstructionSourceKind Kind, string? McpServer = null) -> void
+Agency.Harness.Instructions.InstructionSource.Content.get -> string!
+Agency.Harness.Instructions.InstructionSource.Content.init -> void
+Agency.Harness.Instructions.InstructionSource.Kind.get -> Agency.Harness.Instructions.InstructionSourceKind
+Agency.Harness.Instructions.InstructionSource.Kind.init -> void
+Agency.Harness.Instructions.InstructionSource.Location.get -> string!
+Agency.Harness.Instructions.InstructionSource.Location.init -> void
+Agency.Harness.Instructions.InstructionSource.McpServer.get -> string?
+Agency.Harness.Instructions.InstructionSource.McpServer.init -> void
+Agency.Harness.Instructions.InstructionSource.Deconstruct(out string! Location, out string! Content, out Agency.Harness.Instructions.InstructionSourceKind Kind, out string? McpServer) -> void
+override Agency.Harness.Instructions.InstructionSource.Equals(object? obj) -> bool
+Agency.Harness.Instructions.InstructionSource.Equals(Agency.Harness.Instructions.InstructionSource? other) -> bool
+override Agency.Harness.Instructions.InstructionSource.GetHashCode() -> int
+override Agency.Harness.Instructions.InstructionSource.ToString() -> string!
+static Agency.Harness.Instructions.InstructionSource.operator ==(Agency.Harness.Instructions.InstructionSource? left, Agency.Harness.Instructions.InstructionSource? right) -> bool
+static Agency.Harness.Instructions.InstructionSource.operator !=(Agency.Harness.Instructions.InstructionSource? left, Agency.Harness.Instructions.InstructionSource? right) -> bool
+Agency.Harness.Instructions.InstructionSource.<Clone>$() -> Agency.Harness.Instructions.InstructionSource!
+Agency.Harness.Instructions.InstructionSourceKind
+Agency.Harness.Instructions.InstructionSourceKind.Ancestor = 1 -> Agency.Harness.Instructions.InstructionSourceKind
+Agency.Harness.Instructions.InstructionSourceKind.Mcp = 2 -> Agency.Harness.Instructions.InstructionSourceKind
+Agency.Harness.Instructions.InstructionSourceKind.RepoRoot = 0 -> Agency.Harness.Instructions.InstructionSourceKind
 Agency.Harness.Tools.McpClientPool.DisabledServers.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Agency.Harness.Tools.McpClientPool.FailedServers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+static Agency.Harness.Tools.McpClientPool.CreateAsync(Agency.Harness.Tools.McpClientOptions! options, System.Collections.Generic.IReadOnlyList<string!>? instructionFilenames = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Harness.Tools.McpClientPool!>!
+Agency.Harness.Tools.McpClientPool.InstructionSources.get -> System.Collections.Generic.IReadOnlyList<Agency.Harness.Instructions.InstructionSource!>!
 Agency.Harness.Tools.McpServerConfig.Enabled.get -> bool
 Agency.Harness.Tools.McpServerConfig.Enabled.set -> void
 *REMOVED*Agency.Harness.Contexts.MemoryContext.LongTermMemory.get -> System.Collections.Generic.IReadOnlyList<string!>!

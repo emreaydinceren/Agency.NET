@@ -100,10 +100,6 @@
           href: Projects/Agency.Memory.Sql.Postgres.md
         - name: Agency.Memory.Sql.Sqlite
           href: Projects/Agency.Memory.Sql.Sqlite.md
-    - name: MCP
-      items:
-        - name: Agency.Mcp.Memory
-          href: Projects/Agency.Mcp.Memory.md
     - name: Harness
       items:
         - name: Agency.Harness

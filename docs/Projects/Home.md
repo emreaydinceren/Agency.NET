@@ -64,5 +64,3 @@ Each node is a project; each arrow points from a project to a compile-time depen
 - [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) — PostgreSQL + pgvector memory store.
 - [Agency.Memory.Sql.Sqlite](Agency.Memory.Sql.Sqlite.md) — SQLite memory store.
 
-### MCP Servers
-- [Agency.Mcp.Memory](Agency.Mcp.Memory.md) — MCP server exposing the memory key-value store.

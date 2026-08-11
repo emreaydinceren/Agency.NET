@@ -31,8 +31,8 @@ public sealed class UserIdPlaceholderHookTests
     public async Task PlaceholderPresent_RewritesWithResolvedUserId()
     {
         PreToolUseDecision decision = await InvokeAsync(
-            "list_global_keys",
-            """{"memoryScope":{"UserId":"{userId}"}}""",
+            "semantic_search",
+            """{"scope":{"userId":"{userId}"}}""",
             "abc-123");
 
         var rewrite = Assert.IsType<PreToolUseDecision.Rewrite>(decision);
@@ -40,7 +40,7 @@ public sealed class UserIdPlaceholderHookTests
         Assert.DoesNotContain("{userId}", rewritten, StringComparison.Ordinal);
         Assert.Equal(
             "abc-123",
-            rewrite.NewInput.GetProperty("memoryScope").GetProperty("UserId").GetString());
+            rewrite.NewInput.GetProperty("scope").GetProperty("userId").GetString());
     }
 
     /// <summary>
@@ -65,10 +65,10 @@ public sealed class UserIdPlaceholderHookTests
     public async Task EmptyUserId_Allows_WithoutSubstituting()
     {
         // With no resolved id there is nothing to substitute; the placeholder is left intact and the
-        // call proceeds (the memory server will then return its own friendly "UserId is required" error).
+        // call proceeds (tools expecting UserId will handle the missing value).
         PreToolUseDecision decision = await InvokeAsync(
-            "list_global_keys",
-            """{"memoryScope":{"UserId":"{userId}"}}""",
+            "semantic_search",
+            """{"scope":{"userId":"{userId}"}}""",
             userId: null);
 
         Assert.IsType<PreToolUseDecision.Allow>(decision);

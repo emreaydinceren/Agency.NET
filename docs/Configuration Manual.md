@@ -387,22 +387,13 @@ To use it, move an entry into `Servers`.
 "Mcp": {
   "Servers": [
     {
-      "Name": "memory",
+      "Name": "github",
       "Transport": "Stdio",
-      "Command": "dotnet",
-      "Arguments": [
-        "${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll"
-      ],
+      "Command": "docker",
+      "Arguments": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
       "EnvironmentVariables": {
-        "Memory__Provider": "sqlite",
-        "Memory__ConnectionString": "Data Source=agency-mcp-memory.db"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GitHubToken}"
       }
-    },
-    {
-      "Name": "notion",
-      "Transport": "Stdio",
-      "Command": "npx",
-      "Arguments": ["-y", "@notionhq/notion-mcp-server"]
     }
   ]
 }

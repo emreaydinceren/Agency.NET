@@ -19,13 +19,12 @@ public sealed class McpServerConfigurationTests
           "Mcp": {
             "Servers": [
               {
-                "Name": "memory",
+                "Name": "example",
                 "Transport": "Stdio",
-                "Command": "dotnet",
-                "Arguments": [ "${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll" ],
+                "Command": "node",
+                "Arguments": [ "${RepoRoot}/server/index.js", "--mode=${Configuration}" ],
                 "EnvironmentVariables": {
-                  "Memory__Provider": "sqlite",
-                  "Memory__ConnectionString": "Data Source=agency-mcp-memory.db"
+                  "SERVER_HOME": "${RepoRoot}/data"
                 }
               },
               {
@@ -76,10 +75,10 @@ public sealed class McpServerConfigurationTests
         string path = WriteFixture();
         try
         {
-            McpServerConfiguration.Persist(path, "memory", enabled: false);
+            McpServerConfiguration.Persist(path, "example", enabled: false);
 
-            JsonElement memory = FindServer(path, "memory");
-            Assert.False(memory.GetProperty("Enabled").GetBoolean());
+            JsonElement example = FindServer(path, "example");
+            Assert.False(example.GetProperty("Enabled").GetBoolean());
         }
         finally
         {
@@ -97,11 +96,11 @@ public sealed class McpServerConfigurationTests
         string path = WriteFixture();
         try
         {
-            McpServerConfiguration.Persist(path, "memory", enabled: false);
-            McpServerConfiguration.Persist(path, "memory", enabled: true);
+            McpServerConfiguration.Persist(path, "example", enabled: false);
+            McpServerConfiguration.Persist(path, "example", enabled: true);
 
-            JsonElement memory = FindServer(path, "memory");
-            Assert.True(memory.GetProperty("Enabled").GetBoolean());
+            JsonElement example = FindServer(path, "example");
+            Assert.True(example.GetProperty("Enabled").GetBoolean());
 
             string written = File.ReadAllText(path);
             int occurrences = written.Split("\"Enabled\"").Length - 1;
@@ -125,7 +124,7 @@ public sealed class McpServerConfigurationTests
         string path = WriteFixture();
         try
         {
-            McpServerConfiguration.Persist(path, "memory", enabled: false);
+            McpServerConfiguration.Persist(path, "example", enabled: false);
 
             string[] expectedArguments =
                 ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"];
@@ -157,7 +156,7 @@ public sealed class McpServerConfigurationTests
         {
             string before = File.ReadAllText(path);
 
-            McpServerConfiguration.Persist(path, "does-not-exist", enabled: true);
+            McpServerConfiguration.Persist(path, "nonexistent", enabled: true);
 
             Assert.Equal(before, File.ReadAllText(path));
         }
@@ -195,7 +194,7 @@ public sealed class McpServerConfigurationTests
     public void Persist_MissingFile_DoesNotThrow()
     {
         Exception? exception = Record.Exception(() =>
-            McpServerConfiguration.Persist(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"), "memory", enabled: false));
+            McpServerConfiguration.Persist(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"), "example", enabled: false));
 
         Assert.Null(exception);
     }

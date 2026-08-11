@@ -21,12 +21,12 @@ public sealed class McpConfigResolverTests
             [
                 new McpServerConfig
                 {
-                    Name = "memory",
-                    Command = "dotnet",
-                    Arguments = ["${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll"],
+                    Name = "github",
+                    Command = "docker",
+                    Arguments = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
                     EnvironmentVariables = new Dictionary<string, string?>
                     {
-                        ["Memory__Home"] = "${RepoRoot}/data"
+                        ["CONFIG_HOME"] = "${RepoRoot}/config"
                     }
                 }
             ]
@@ -35,11 +35,10 @@ public sealed class McpConfigResolverTests
         McpConfigResolver.Expand(options, repoRoot: "/work/Agency", configuration: "Release");
 
         McpServerConfig server = options.Servers[0];
-        Assert.Equal("dotnet", server.Command);
-        Assert.Equal(
-            "/work/Agency/src/Mcp/Agency.Mcp.Memory/bin/Release/net10.0/Agency.Mcp.Memory.dll",
-            server.Arguments![0]);
-        Assert.Equal("/work/Agency/data", server.EnvironmentVariables!["Memory__Home"]);
+        Assert.Equal("docker", server.Command);
+        Assert.Equal(6, server.Arguments!.Length);
+        Assert.Equal("run", server.Arguments![0]);
+        Assert.Equal("/work/Agency/config", server.EnvironmentVariables!["CONFIG_HOME"]);
     }
 
     /// <summary>

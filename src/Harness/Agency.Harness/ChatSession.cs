@@ -23,6 +23,7 @@ public sealed class ChatSession : IAsyncDisposable
     private readonly UserSpecificContext? _user;
     private readonly SkillContext? _skills;
     private readonly SessionContext? _session;
+    private readonly string? _instructionsBlock;
     private Context? _ctx;
     private KnowledgeContext? _pendingKnowledge;
     private bool _pendingMemoryEnabled = true;
@@ -40,7 +41,8 @@ public sealed class ChatSession : IAsyncDisposable
     /// <param name="user">Optional caller identity propagated into the context on first send.</param>
     /// <param name="skills">Optional skill catalog context; defaults to <see cref="SkillContext.Empty"/>.</param>
     /// <param name="session">Optional pre-seeded session context forwarded to the context on first send.</param>
-    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null, SkillContext? skills = null, SessionContext? session = null)
+    /// <param name="instructionsBlock">Optional resolved instruction files to inject as a separate message before the prompt.</param>
+    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null, SkillContext? skills = null, SessionContext? session = null, string? instructionsBlock = null)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
         this._options = options ?? throw new ArgumentNullException(nameof(options));
@@ -48,6 +50,7 @@ public sealed class ChatSession : IAsyncDisposable
         this._user = user;
         this._skills = skills;
         this._session = session;
+        this._instructionsBlock = instructionsBlock;
     }
 
     /// <summary>Gets the model identifier of the agent driving this session.</summary>
@@ -88,7 +91,17 @@ public sealed class ChatSession : IAsyncDisposable
             user: this._user,
             timeProvider: this._agent.TimeProvider,
             skills: this._skills,
-            session: this._session);
+            session: this._session,
+            instructionsBlock: this._instructionsBlock);
+
+        // Pre-seed instructions message in preview, same as Agent.RunAsync() would do on first turn
+        if (!string.IsNullOrEmpty(this._instructionsBlock))
+        {
+            preview.Conversation.Append(new ChatMessage(ChatRole.User, this._instructionsBlock)
+            {
+                AdditionalProperties = new() { [Agent.InstructionsMessageMarkerKey] = true }
+            });
+        }
 
         if (this._pendingKnowledge is not null)
         {
@@ -167,7 +180,8 @@ public sealed class ChatSession : IAsyncDisposable
             user: this._user,
             timeProvider: this._agent.TimeProvider,
             skills: this._skills,
-            session: this._session);
+            session: this._session,
+            instructionsBlock: this._instructionsBlock);
 
         this._ctx.MemoryEnabled = this._pendingMemoryEnabled;
 

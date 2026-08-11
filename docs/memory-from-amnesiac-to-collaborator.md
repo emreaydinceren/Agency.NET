@@ -208,8 +208,6 @@ The memory feature is split across one harness project and several `Agency.Memor
 
 **Why this matters to you as a reader:** when you go looking for "where does retrieval happen," you will not find it in `Agent.cs`. You will find a *callback* registered into the loop. The rest of this part is the trail of breadcrumbs that connects the two.
 
-> **Not covered by the table above:** `Agency.Mcp.Memory` (see its [project reference](Projects/Agency.Mcp.Memory.md)) is a second, independent memory implementation — a flat scoped key-value store exposed as MCP tools, with no embeddings and no automatic retrieval. It is easy to mistake for part of this pipeline because it's also named "memory" and also plugs into `Agency.Harness.Console`; it isn't. See §6.12.
-
 ---
 
 ### 6.1 The spine: the core agentic loop
@@ -533,51 +531,6 @@ To tie Part II back to the four pillars, here is one fact's life cycle through t
 ![Memory — one fact's life cycle](attachments/memory-trace.svg)
 
 The user never re-stated the preference. The agent never called a "remember" tool. The recall happened because a background scribe distilled a fact in March, and a gated search re-grounded the agent in June — exactly the stateless-to-stateful shift this document opened with.
-
----
-
-### 6.12 A second, independent memory implementation: MCP scoped memory
-
-Not every memory system in Agency is `Agency.Memory.*`. `Agency.Mcp.Memory` (see its [project reference](Projects/Agency.Mcp.Memory.md)) is a standalone MCP server exposing a flat, scoped key-value store — `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` — over stdio. No embeddings, no semantic search, no distiller. It's the "notebook" model: explicit `domain`/`key`/`value` entries the model writes and reads on purpose, rather than facts extracted automatically from conversation.
-
-That difference matters for **P2 (capture is system-owned)**. `Agency.Memory.*` never gives the agent a "save this" tool — capture is a background job the agent can only time, never invoke directly (§6.7). `Agency.Mcp.Memory` is the opposite: `Memorize` *is* a model-invoked save tool, and `Recall` is a model-invoked read. Nothing forces either call — the model has to decide, unprompted, that a fact is worth saving or worth recalling.
-
-That's a real reliability gap on the read side: an agent holding a memorized fact can still fail to use it if it never thinks to call `Recall` — there is no gate, no `OnPreIteration` injection, nothing pulling the fact into context the way §6.5 describes for the CoALA pipeline. `Agency.Harness.Console` closes part of that gap with `MemoryIndexHook` (`src/Harness/Agency.Harness.Console/MemoryIndexHook.cs`; see [Agency.Harness.Console](Projects/Agency.Harness.Console.md)), which reuses the *exact same* extension seam described in §6.2 — `AgentHooks.OnSessionStarted` — to auto-prime every turn with a lightweight index of what's stored (`domain|key` pairs only, fetched via `ListGlobalKeys`), appended into `ctx.Knowledge.Facts`. The model no longer has to guess whether memory has anything relevant; it can see the index up front and decide whether a `Recall` call is worth making.
-
-Two design choices worth calling out:
-
-- **Only the index is auto-injected, never the stored values.** `Agency.Mcp.Memory` has no relevance ranking — no embeddings, no over-fetch-and-rerank the way `RetrievalEngine` narrows a large store down to what matters (§6.5) — so auto-injecting every stored *value* on every turn would reproduce the exact context-rot problem the CoALA pipeline exists to avoid. The index is cheap and bounded by key count, not by value payload size; fetching a specific value stays a deliberate, model-initiated `Recall(domain, key)` call.
-- **`OnSessionStarted` fires once per turn, not once per session** (§6.1: every `ChatSession.SendAsync` call re-enters `Agent.ChatAsync` → `RunAsync`, re-firing the hook — proven by `AgentSessionIdTests.ChatAsync_SessionId_IsStableAcrossTwoTurns`). So the hook must *replace* its own prior fact on each firing rather than append, or the index would duplicate on every turn of a session. It does this by filtering out any existing fact carrying its own recognizable prefix before adding the freshly-fetched one.
-
-The point worth taking away: the hook seam isn't exclusive to `Agency.Memory.*`. Any memory implementation — including one with a completely different storage model and no semantic search at all — can plug into the same `OnSessionStarted`/`OnPreIteration` points and get the same "the system decides when memory speaks, not the model's unprompted judgment" property, without the harness knowing or caring which memory system is attached. That's principle 1 from the top of this document, holding up a second time under a system it wasn't originally designed for.
-
----
-
-### 6.13 Distiller vs. MCP memory — use case and benefits, side by side
-
-Two very different pieces of engineering answer the same question ("does the agent remember?") for two different situations. This section is the condensed comparison; §6.6 and §6.12 above are the full implementations.
-
-**The Distiller LLM (`Agency.Memory.Distiller`)**
-
-- **What it is.** A second, purpose-built `IChatClient` (`ChatClientLlmAdapter`, `MaxOutputTokens = 2048`) invoked only from `DistillerBackgroundService.ProcessJobAsync` — never on the hot path. Its only job is turning a slice of conversation turns into `Record` objects via the episode-extraction prompt (`/no_think`, template v2).
-- **Use case.** Passive, ambient knowledge capture — facts that emerge as a byproduct of doing the work, the kind a human colleague would remember without being asked to write them down.
-- **Benefits.**
-  - Zero hot-path cost — the user never waits on an extraction call.
-  - Consistent quality: the system decides what's worth keeping, fed the user's known domains and the 10 most-recent Facts so it dedupes against what's already stored rather than re-saving the same fact reworded.
-  - Crash-safe for free via watermark idempotency — a killed process re-derives the same turn window on restart and never double-writes.
-  - Fights context rot by compressing many turns into a handful of durable, re-usable facts.
-
-**Agency.Mcp.Memory**
-
-- **What it is.** A standalone MCP server over stdio, backed by a flat `IKVStore` (SQLite or Postgres) — not coupled to `Agency.Harness`'s `Context`/hook machinery, so any MCP client can attach to the same store. Four tools: `Memorize`, `Recall`, `Forget`, `ListGlobalKeys`, addressed by a `{domain}|{key}` composite key. No embeddings, no similarity search.
-- **Use case.** Deliberate, addressable notes — facts the agent explicitly decides are worth filing under a specific `domain/key` ("remember my API key format is X"), not facts inferred incidentally from conversation.
-- **Benefits.**
-  - Operationally trivial — no embedding model, no vector DB, no background-service fleet; SQLite and nothing else is enough to run it.
-  - Precise, not fuzzy — exact key lookup, so there's no risk of a similarity search pulling back the wrong "close enough" memory.
-  - Portable beyond Agency — a real MCP server, so any MCP-capable host can attach to it, not just this harness.
-  - Self-describing at the protocol level — `ToolDescription.Text` gives any client full usage semantics with no external docs.
-
-**How they complement each other.** Distiller memory is what the system learned by watching; MCP memory is what the agent chose to write down. The Distiller will eventually infer "this user works in C#" from repeated context, unprompted — but a user saying "remember that my deploy key rotates every 90 days" is exactly the kind of precise, addressable fact better trusted to an explicit `Memorize` call than to a background extraction pass guessing at the right phrasing.
 
 ---
 

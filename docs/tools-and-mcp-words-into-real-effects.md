@@ -262,11 +262,9 @@ details for it:
 ```json
 "Mcp": {
   "Servers": [
-    { "Name": "memory", "Transport": "Stdio", "Command": "dotnet",
-      "Arguments": [ "${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll" ],
-      "EnvironmentVariables": { "Memory__Provider": "sqlite", "Memory__ConnectionString": "Data Source=agency-mcp-memory.db" } },
-    { "Name": "notion", "Transport": "Stdio", "Command": "npx",
-      "Arguments": [ "-y", "@notionhq/notion-mcp-server" ] }
+    { "Name": "github", "Transport": "Stdio", "Command": "docker",
+      "Arguments": [ "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server" ],
+      "EnvironmentVariables": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GitHubToken}" } }
   ]
 }
 ```

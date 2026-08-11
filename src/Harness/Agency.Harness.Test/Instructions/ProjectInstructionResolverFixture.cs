@@ -22,14 +22,14 @@ public sealed class ProjectInstructionResolverTests : IDisposable
         }
     }
 
-    /// <summary>Verifies that a single Agents.md at repo root is discovered and marked correctly.</summary>
+    /// <summary>Verifies that a single AGENTS.md at repo root is discovered and marked correctly.</summary>
     [Fact]
     public async Task ResolveAsync_WithAgentsMdInRepoRoot_ReturnsRepoRootSource()
     {
-        // Arrange: create a .git directory and Agents.md file
+        // Arrange: create a .git directory and AGENTS.md file
         Directory.CreateDirectory(this._tempDir);
         Directory.CreateDirectory(Path.Combine(this._tempDir, ".git"));
-        var agentsPath = Path.Combine(this._tempDir, "Agents.md");
+        var agentsPath = Path.Combine(this._tempDir, "AGENTS.md");
         var testContent = "# Test Instructions\n\nThis is test content.";
         await File.WriteAllTextAsync(agentsPath, testContent);
 
@@ -45,7 +45,7 @@ public sealed class ProjectInstructionResolverTests : IDisposable
         Assert.True(ctx.HasSources);
     }
 
-    /// <summary>Verifies that multiple Agents.md files are returned in root-first order.</summary>
+    /// <summary>Verifies that multiple AGENTS.md files are returned in root-first order.</summary>
     [Fact]
     public async Task ResolveAsync_WithAgentsMdInAncestorAndRoot_ReturnsInOrder()
     {
@@ -53,13 +53,13 @@ public sealed class ProjectInstructionResolverTests : IDisposable
         Directory.CreateDirectory(this._tempDir);
         Directory.CreateDirectory(Path.Combine(this._tempDir, ".git"));
 
-        var ancestorPath = Path.Combine(this._tempDir, "Agents.md");
+        var ancestorPath = Path.Combine(this._tempDir, "AGENTS.md");
         var ancestorContent = "# Root Level";
         await File.WriteAllTextAsync(ancestorPath, ancestorContent);
 
         var subdir = Path.Combine(this._tempDir, "subdir");
         Directory.CreateDirectory(subdir);
-        var subPath = Path.Combine(subdir, "Agents.md");
+        var subPath = Path.Combine(subdir, "AGENTS.md");
         var subContent = "# Sub Level";
         await File.WriteAllTextAsync(subPath, subContent);
 

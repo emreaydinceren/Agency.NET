@@ -232,7 +232,6 @@ The sub-agent's `ToolRegistry` holds four `ITool` implementations, registered ex
 | [Agency.Llm.Common](Agency.Llm.Common.md) | Defines `ITool`, `ToolDefinition`, and `ToolResult` that the four consolidation tools implement |
 | [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Publishes `DistillationCompletedEvent`, the default upstream trigger for a consolidation pass |
 | [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Ships the `PostgresMemoryStore` implementation of `IMemoryStore`; `MergeAsync` and `DeleteByIdAsync` execute as single PostgreSQL transactions |
-| [Agency.Mcp.Memory](Agency.Mcp.Memory.md) | Exposes agent tools that drive distillation; distillation completion cascades into consolidation |
 
 ## Design Notes
 

@@ -91,11 +91,6 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 | [Agency.Memory.Distiller](Projects/Agency.Memory.Distiller.md) · [Agency.Memory.Consolidator](Projects/Agency.Memory.Consolidator.md) · [Agency.Memory.Hygiene](Projects/Agency.Memory.Hygiene.md) | Write-side jobs: distil turns into facts, consolidate duplicates, prune. |
 | [Agency.Memory.Sql.Postgres](Projects/Agency.Memory.Sql.Postgres.md) · [Agency.Memory.Sql.Sqlite](Projects/Agency.Memory.Sql.Sqlite.md) | Persistence backends. |
 
-### MCP
-| Project | Role |
-|---|---|
-| [Agency.Mcp.Memory](Projects/Agency.Mcp.Memory.md) | A standalone MCP server exposing a memory tool over the key-value store. |
-
 ### Harness
 | Project | Role |
 |---|---|

@@ -47,7 +47,7 @@ public sealed class HookMatcherTests
     public void Matcher_Regex_MatchesAndRejects()
     {
         var matcher = HookMatcher.Create("^mcp__.*");
-        Assert.True(matcher.IsMatch("mcp__memory__recall"));
+        Assert.True(matcher.IsMatch("mcp__github__search"));
         Assert.False(matcher.IsMatch("Bash"));
     }
 

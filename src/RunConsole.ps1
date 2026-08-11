@@ -60,12 +60,7 @@ if ($SetupFailed) {
 
 $consoleProjectRelative = "Harness\Agency.Harness.Console\Agency.Harness.Console.csproj"
 $consoleOutputDir = Join-Path $scriptDir "Harness\Agency.Harness.Console\bin\Release\net10.0"
-# The console's appsettings.json wires up the 'memory' MCP server against this project's own
-# DLL, resolved to whatever configuration the console itself was built in (see
-# McpConfigResolver.ResolveConfiguration) - it must be built here too, or the console starts
-# with that MCP server unavailable ("could not execute, file not found").
-$mcpMemoryProjectRelative = "Mcp\Agency.Mcp.Memory\Agency.Mcp.Memory.csproj"
-$buildCommandDisplay = "dotnet build `"$consoleProjectRelative`" --configuration Release && dotnet build `"$mcpMemoryProjectRelative`" --configuration Release"
+$buildCommandDisplay = "dotnet build `"$consoleProjectRelative`" --configuration Release"
 # Launch from the build-output directory: shared-appsettings.json is a linked file that only lands
 # next to appsettings.json in the output, and the host resolves config relative to its working
 # directory - running from the source project folder would miss the shared file and fail at startup.
@@ -85,10 +80,6 @@ Push-Location $scriptDir
 try {
     dotnet build $consoleProjectRelative --configuration Release
     $buildExitCode = $LASTEXITCODE
-    if ($buildExitCode -eq 0) {
-        dotnet build $mcpMemoryProjectRelative --configuration Release
-        $buildExitCode = $LASTEXITCODE
-    }
 } finally {
     Pop-Location
 }

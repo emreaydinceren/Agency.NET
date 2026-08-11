@@ -95,7 +95,6 @@ Both `RetrievalEngine` and `RetrievalGate` are `internal`; host code does not ca
 | [Agency.Embeddings.Common](Agency.Embeddings.Common.md) | Supplies `IEmbeddingGenerator` used to vectorise the retrieval query |
 | [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) | Ships the `PostgresMemoryStore` implementation of `IMemoryStore` that the engine searches at runtime |
 | [Agency.Memory.Distiller](Agency.Memory.Distiller.md) | Writes `Record` items via `IMemoryStore.UpsertAsync`; mutating the store advances `LastWrittenAt`, which is the signal the retrieval gate reads to decide whether to re-run |
-| [Agency.Mcp.Memory](Agency.Mcp.Memory.md) | Exposes agent-facing tools (`SetFocus`, `MarkGoalComplete`) that update `Context.Focus` and trigger distillation; focus changes feed back into the query built in step 2 |
 
 ## Design Notes
 

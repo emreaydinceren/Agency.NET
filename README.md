@@ -183,7 +183,7 @@ Grouped by what they're for — the production guarantees that are genuinely har
 - **Stateful, structured context** — context is assembled from typed sub-contexts (query, temporal, environmental, user, knowledge, memory) rather than a raw prompt string. Domain facts and recalled memories are re-injected into the system prompt on **every** loop iteration, so grounding never drifts out of the window.
 - **Multi-turn sessions with per-turn timeouts** — `ChatSession` / `Agent.ChatAsync` preserve conversation history across turns; `AgentOptions.TurnTimeoutSeconds` bounds each turn.
 - **Built-in tools + pluggable registry** — `read_file`, `write_file`, `execute_powershell`, and a `subagent_tool` ship out of the box behind a name-keyed `ToolRegistry` with per-tool enable/disable.
-- **MCP in both directions** — the harness is an MCP **client** (`McpClientPool` connects to external stdio/HTTP MCP servers and exposes their tools to the agent) *and* ships an MCP **server** (`Agency.Mcp.Memory` — `Memorize` / `Recall` / `Forget` / `ListGlobalKeys`, scoped by user/session, grouped by domain, filterable by tags). Consume any MCP server; expose Agency's scoped memory to any MCP-aware host.
+- **MCP client** — `McpClientPool` connects to external stdio/HTTP MCP servers and exposes their tools to the agent. Plug in any MCP-compatible server.
 
 ### Data plane (RAG & storage)
 
@@ -440,7 +440,6 @@ graph TD
 
     DOCS(["📄 Your documents"]) --> ING
     FMT --> HARNESS
-    STORE --> MCPSRV["<b>Agency.Mcp.Memory</b><br/>standalone MCP server: Memorize / Recall / Forget"]
 ```
 
 ## Packages
@@ -474,7 +473,6 @@ graph TD
 | `AgencyDotNet.Memory.Consolidator` | Merge/Update/Delete maintenance sub-agent |
 | `AgencyDotNet.Memory.Hygiene` | TTL + low-importance garbage collection |
 | `AgencyDotNet.Memory.Sql.Postgres` · `AgencyDotNet.Memory.Sql.Sqlite` | Memory persistence backends |
-| `AgencyDotNet.Mcp.Memory` | MCP server: scoped `Memorize` / `Recall` / `Forget` / `ListGlobalKeys` |
 
 ## Observability
 
@@ -521,34 +519,6 @@ dotnet test --filter "Category=Functional"
 ```
 
 Functional tests are tagged `[Trait("Category", "Functional")]` so CI excludes them by default and they run on demand. Time-dependent behaviour (turn timeouts, the memory inactivity trigger, the hygiene sweeper) is tested with an injected `FakeTimeProvider` rather than real delays, so the suite stays fast and deterministic.
-
-## Using the MCP memory server
-
-`Agency.Mcp.Memory` is a stdio MCP server. Point any MCP client at it to get four memory tools backed by an `IKVStore` (SQLite or PostgreSQL):
-
-| Tool | Purpose |
-| --- | --- |
-| `Memorize` | Store a value under a composite `{domain}\|{key}`, scoped to a user/session, with optional tags. |
-| `Recall` | Retrieve entries filtered by scope, domain, key, and/or tags. |
-| `Forget` | Delete the entry identified by `{domain}\|{key}` within a scope. |
-| `ListGlobalKeys` | Index distinct keys and tags grouped by domain for a user's global (session-wide) scope. |
-
-Memory is not a flat key-value bag: every entry is partitioned by a `MemoryScope(UserId, SessionId)`, grouped by `Domain`, identified by `Key`, and filterable by `Tags`. A `null` `SessionId` denotes a user-wide (global) scope, which `ListGlobalKeys` targets so an agent can discover what's persisted before issuing a targeted `Recall`.
-
-Example client config (Claude Desktop / Cline format):
-
-```json
-{
-  "mcpServers": {
-    "agency-memory": {
-      "command": "dotnet",
-      "args": ["run", "--project", "path/to/Agency.Mcp.Memory"]
-    }
-  }
-}
-```
-
-The agent harness can also **consume** any MCP server (including this one) via `McpClientPool` — see step 6 of the Quick start.
 
 ## Roadmap
 

@@ -65,7 +65,7 @@ public sealed class UserIdPlaceholderHookTests
     public async Task EmptyUserId_Allows_WithoutSubstituting()
     {
         // With no resolved id there is nothing to substitute; the placeholder is left intact and the
-        // call proceeds (the memory server will then return its own friendly "UserId is required" error).
+        // call proceeds (tools expecting UserId will handle the missing value).
         PreToolUseDecision decision = await InvokeAsync(
             "list_global_keys",
             """{"memoryScope":{"UserId":"{userId}"}}""",

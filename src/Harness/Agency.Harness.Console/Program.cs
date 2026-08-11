@@ -9,6 +9,7 @@ using Agency.Harness.Console.Telemetry;
 using Agency.Harness.Contexts;
 using Agency.Harness.Hooks;
 using Agency.Harness.Hooks.Configuration;
+using Agency.Harness.Instructions;
 using Agency.Harness.Looping;
 using Agency.Harness.Permissions;
 using Agency.Harness.Skills;
@@ -294,19 +295,6 @@ internal class Program
                     int connected = mcpOptions.Servers.Length - pool.FailedServers.Count;
                     System.Console.WriteLine($"[Agency] MCP: connected {connected} of {mcpOptions.Servers.Length} server(s), {pool.Tools.Count} tool(s).");
 
-                    // Prime every turn with an index of what's already stored in the "memory" MCP
-                    // server (domain/key pairs only) so the model doesn't have to gamble on whether
-                    // calling recall is worthwhile. See MemoryIndexHook for the no-values rationale.
-                    builder.Services.AddSingleton<IPostConfigureOptions<AgentOptions>>(sp =>
-                        new PostConfigureOptions<AgentOptions>(name: null, action: agentOpts =>
-                        {
-                            ITool? listGlobalKeys = sp.GetService<McpClientPool>()?.Tools
-                                .FirstOrDefault(t => t.Definition.Name == MemoryIndexHook.ListGlobalKeysToolName);
-                            AgentHooks memoryIndexHooks = MemoryIndexHook.Build(listGlobalKeys);
-                            agentOpts.UserHooks = agentOpts.UserHooks is { } existing
-                                ? existing.Compose(memoryIndexHooks)
-                                : memoryIndexHooks;
-                        }));
                 }
                 catch (Exception ex)
                 {
@@ -316,7 +304,45 @@ internal class Program
                 }
             }
 
-            // 5.6 Skills — discover skill directories at startup and make the catalog available as a singleton.
+            // 5.6 Project instructions — resolve AGENTS.md/CLAUDE.md files for injection into first user message.
+            //     Skipped in Test environment (HTTP-cache-replay tests cannot include external instruction files).
+            InstructionContext projectInstructions = builder.Environment.IsEnvironment("Test")
+                ? InstructionContext.Empty
+                : await new ProjectInstructionResolver().ResolveAsync(Directory.GetCurrentDirectory());
+
+            // Merge MCP server instruction resources if available.
+            var poolFromServices = builder.Services.BuildServiceProvider().GetService<McpClientPool>();
+            if (poolFromServices is not null && poolFromServices.InstructionSources.Count > 0)
+            {
+                var mergedSources = new List<InstructionSource>(projectInstructions.Sources);
+                mergedSources.AddRange(poolFromServices.InstructionSources);
+                projectInstructions = new InstructionContext(mergedSources);
+            }
+
+            string instructionsBlock = InstructionRenderer.Build(projectInstructions);
+            builder.Services.AddSingleton(new ResolvedInstructions(instructionsBlock));
+
+            if (projectInstructions.HasSources)
+            {
+                System.Console.WriteLine($"[Agency] Loaded project instructions from {projectInstructions.Sources.Count} source(s):");
+                foreach (var source in projectInstructions.Sources)
+                {
+                    string kindLabel = source.Kind switch
+                    {
+                        Agency.Harness.Instructions.InstructionSourceKind.RepoRoot => "repo-root",
+                        Agency.Harness.Instructions.InstructionSourceKind.Ancestor => "ancestor",
+                        Agency.Harness.Instructions.InstructionSourceKind.Mcp => $"mcp ({source.McpServer})",
+                        _ => "unknown"
+                    };
+                    System.Console.WriteLine($"  - [{kindLabel}] {source.Location}");
+                }
+            }
+            else
+            {
+                System.Console.WriteLine("[Agency] No project instructions found.");
+            }
+
+            // 5.7 Skills — discover skill directories at startup and make the catalog available as a singleton.
             //     Config key: Skills:Directories (string[]). Defaults to ["./.agency/skills", "~/.agency/skills"]
             //     in project-first order so project skills override personal skills (first-occurrence wins).
             //
@@ -502,3 +528,6 @@ internal class Program
         }
     }
 }
+
+/// <summary>Carries resolved project instructions for injection into the first ChatSession.</summary>
+internal sealed record ResolvedInstructions(string InstructionsBlock);

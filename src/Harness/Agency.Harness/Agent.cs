@@ -107,6 +107,7 @@ public sealed partial class Agent
     }
 
     private const string RedactedPayload = "(redacted; set Agent:LogToolPayloads=true to log)";
+    internal const string InstructionsMessageMarkerKey = "Agency.Harness.InstructionsBlock";
 
     /// <summary>
     /// Returns the tool input rendered for logging: the raw JSON when <see cref="AgentOptions.LogToolPayloads"/>
@@ -155,6 +156,7 @@ public sealed partial class Agent
     /// <param name="timeProvider">Optional clock for temporal grounding; defaults to <see cref="TimeProvider.System"/>.</param>
     /// <param name="skills">Optional skill context; defaults to <see cref="SkillContext.Empty"/>.</param>
     /// <param name="session">Optional pre-seeded session context; defaults to <see cref="SessionContext.Empty"/>.</param>
+    /// <param name="instructionsBlock">Optional resolved instruction files to inject as a separate message before the prompt.</param>
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
@@ -162,10 +164,11 @@ public sealed partial class Agent
         UserSpecificContext? user = null,
         TimeProvider? timeProvider = null,
         SkillContext? skills = null,
-        SessionContext? session = null) =>
+        SessionContext? session = null,
+        string? instructionsBlock = null) =>
         new()
         {
-            Query = new QueryContext { Prompt = initialPrompt },
+            Query = new QueryContext { Prompt = initialPrompt, InstructionsBlock = instructionsBlock },
             Temporal = new TemporalContext { CurrentDateUtc = (timeProvider ?? TimeProvider.System).GetUtcNow() },
             Tools = tools ?? ToolContext.Empty,
             Environment = environment ?? EnvironmentalContext.Empty,
@@ -330,9 +333,17 @@ public sealed partial class Agent
             await onSessionStarted(new SessionStartedHookContext(sessionId, ctx), ct);
         }
 
-        // 1. Seed conversation with the user prompt if the history is empty.
+        // 1. Seed conversation with project instructions (if any) and the user prompt.
         if (ctx.Conversation.Messages.Count == 0)
         {
+            if (!string.IsNullOrEmpty(ctx.Query.InstructionsBlock))
+            {
+                ctx.Conversation.Append(new ChatMessage(ChatRole.User, ctx.Query.InstructionsBlock)
+                {
+                    AdditionalProperties = new() { [InstructionsMessageMarkerKey] = true }
+                });
+            }
+
             ctx.Conversation.Append(new ChatMessage(ChatRole.User, ctx.Query.Prompt));
         }
 

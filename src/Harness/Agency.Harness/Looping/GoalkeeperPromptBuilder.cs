@@ -96,6 +96,14 @@ internal static class GoalkeeperPromptBuilder
                 msg.Contents.OfType<FunctionCallContent>().Any(c => ControlPlaneToolNames.Contains(c.Name)) ||
                 msg.Contents.OfType<FunctionResultContent>().Any(r => controlPlaneCallIds.Contains(r.CallId));
 
+            bool isInstructionsMessage =
+                msg.AdditionalProperties?.ContainsKey(global::Agency.Harness.Agent.InstructionsMessageMarkerKey) ?? false;
+
+            if (isInstructionsMessage)
+            {
+                continue;
+            }
+
             string role = msg.Role == ChatRole.Assistant ? "ASSISTANT" :
                           msg.Role == ChatRole.User ? "USER" : msg.Role.Value.ToUpperInvariant();
             sb.Append('[').Append(role).Append("] ");

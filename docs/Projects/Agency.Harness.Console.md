@@ -91,23 +91,6 @@ internal static class UserIdPlaceholderHook
 ```
 
 ```csharp
-// File: src/Harness/Agency.Harness.Console/MemoryIndexHook.cs
-using Agency.Harness.Hooks;
-using Agency.Llm.Common.Tools;
-
-// OnSessionStarted hook: calls the "memory" MCP server's list_global_keys tool and appends a
-// domain|key index (no values) to ctx.Knowledge.Facts, so the model can see what's stored without
-// having to guess whether calling recall is worthwhile. No-op (AgentHooks.None) when no
-// list_global_keys tool is resolvable — e.g. the "memory" MCP server isn't configured or failed
-// to connect.
-internal static class MemoryIndexHook
-{
-    internal const string ListGlobalKeysToolName = "list_global_keys";
-    internal static AgentHooks Build(ITool? listGlobalKeys);
-}
-```
-
-```csharp
 // File: src/Harness/Agency.Harness.Console/McpConfigResolver.cs
 using Agency.Harness.Tools;
 
@@ -293,9 +276,7 @@ if (embeddingsConfigured)
     builder.Services.AddScoped<DocumentContextHydrationService>();
 }
 
-// MCP (opt-in, skipped under Test) — also composes MemoryIndexHook onto AgentOptions.UserHooks
-// when the "memory" server's list_global_keys tool is resolvable; Skills (catalog + watcher +
-// /skill-name commands)  (unchanged) …
+// MCP (opt-in, skipped under Test); Skills (catalog + watcher + /skill-name commands)  (unchanged) …
 
 builder.Services.AddAgencyAgent();                          // Models + IAgentFactory + scoped default Agent (Agency.Harness)
 builder.Services.AddAgencyLoop(builder.Configuration);      // binds LoopOptions from "Loop" section
@@ -318,7 +299,6 @@ await Log.CloseAndFlushAsync();   // after the session finishes
 - **Embeddings (`AddAgencyEmbeddingsOpenAI`) are registered whenever `Embedding:BaseUrl` is present**, decoupled from memory, so the vector store can embed without memory enabled.
 - The **vector store** (`SqliteKVStore` or `PostgresKVStore` per `VectorStore:Provider`), the `SemanticKernelTextSplitter` (`ITextSplitter`), `IngestionCommandService`, and `DocumentContextHydrationService` are registered only when `embeddingsConfigured`. `IProjectSessionState` is registered unconditionally so session identity exists even without embeddings.
 - After `host.Build()`, the vector-store schema is initialised (`SqliteKVStore.InitializeSchemaAsync` / `PostgresKVStore.InitializeSchemaAsync` with `Embedding:Dimensions`) when `embeddingsConfigured`, independently of the memory schema init.
-- `MemoryIndexHook` is composed onto `AgentOptions.UserHooks` via a DI-resolving `IPostConfigureOptions<AgentOptions>` registration (same pattern `Agency.Memory.Distiller`'s `AddAgencyMemory` uses for `BaselineHooks`), registered right after the MCP pool. It looks up the `list_global_keys` tool by name from `McpClientPool.Tools`; when absent (no "memory" MCP server configured, or it failed to connect), `MemoryIndexHook.Build` returns `AgentHooks.None` and the feature is silently inert.
 
 ### Configuration
 
@@ -339,11 +319,6 @@ await Log.CloseAndFlushAsync();   // after the session finishes
   "Memory": { "Enabled": false, "Provider": "postgres" },
   "Mcp": {
     "Servers": [
-      {
-        "Name": "memory", "Transport": "Stdio", "Command": "dotnet",
-        "Arguments": [ "${RepoRoot}/src/Mcp/Agency.Mcp.Memory/bin/${Configuration}/net10.0/Agency.Mcp.Memory.dll" ],
-        "EnvironmentVariables": { "Memory__Provider": "sqlite", "Memory__ConnectionString": "Data Source=agency-mcp-memory.db" }
-      },
       {
         "Name": "github", "Transport": "Stdio", "Command": "docker",
         "Arguments": [ "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server" ],
@@ -553,8 +528,7 @@ All files live under `FileExport.OutputDirectory` (default `./logs`, created at 
 - **Permission grants (`permissions.local.json`) are *not* build-config-relative, unlike MCP paths above** — if the console is launched once via `RunConsole.ps1` (Release) and again via an IDE debugger (Debug), each build output lives in a separate `bin/<cfg>/net10.0` folder. A "per-run-directory" default would silently split "Allow Always" grants between the two — the console would appear to re-prompt for something already approved. `[Agency.Harness](Agency.Harness.md)`'s `PermissionEvaluator` avoids this by defaulting `LocalRulesPath` to `%LocalAppData%\Agency\permissions.local.json` (a fixed per-user location) instead of `AppContext.BaseDirectory`; see [Permissions](../permissions-consent-at-the-tool-boundary.md) §12.1 and risk 11 for the incident this fixed.
 - **MCP startup skipped under Test** — MCP servers are external processes absent from the functional-test/CI environment, and their discovered tools would be injected into the agent's tool list, changing the LLM request body and breaking offline HTTP-cache replay. The Test environment therefore never constructs `McpClientOptions`.
 - **`FixedTimeProvider` for deterministic replay** — the agent's "Current date/time (UTC)" system-prompt line would otherwise vary per run, changing request bodies and the resulting HTTP-cache key. Under `DOTNET_ENVIRONMENT=Test` a frozen clock makes console turns byte-identical between local record and CI replay; production registers no `TimeProvider`, so the live clock is used.
-- **Host-owned user identity via a placeholder hook** — the host, not the model, owns the user id. Tools (e.g. the memory MCP server) advertise a required `UserId`, and the model is instructed to pass the literal `{userId}`; `UserIdPlaceholderHook` rewrites it to the real GUID at `OnPreToolUse`. This makes it impossible for the model to fabricate or leak a wrong id, while remaining a no-op for tools that don't use the placeholder.
-- **`MemoryIndexHook` closes a reliability gap in the MCP memory tool** — `Agency.Mcp.Memory`'s `Recall` is a model-invoked tool with no automatic retrieval (unlike the `Agency.Memory.*` pipeline's gated `OnPreIteration` search); nothing forces the model to call it even when a stored fact directly answers the current question, and a small/local model in particular will often just ask the user instead of trying. `MemoryIndexHook` reuses the `OnSessionStarted` hook seam ([Agency.Harness](Agency.Harness.md)) to auto-inject a lightweight `domain|key` index (via `ListGlobalKeys`, no values — auto-injecting values would reintroduce the context-rot problem the CoALA pipeline avoids by ranking relevance before injecting) into `Knowledge.Facts` every turn, so the model can see what's available instead of guessing. Because `OnSessionStarted` fires once per turn rather than once per session, the hook replaces its own prior fact (matched by a fixed prefix) on each firing instead of appending, to avoid duplicating the index turn over turn. See [Memory §6.12](../memory-from-amnesiac-to-collaborator.md#612-a-second-independent-memory-implementation-mcp-scoped-memory) for the full rationale.
+- **Host-owned user identity via a placeholder hook** — the host, not the model, owns the user id. Tools can advertise a required `UserId`, and the model is instructed to pass the literal `{userId}`; `UserIdPlaceholderHook` rewrites it to the real GUID at `OnPreToolUse`. This makes it impossible for the model to fabricate or leak a wrong id, while remaining a no-op for tools that don't use the placeholder.
 - **`Agent:UserId` is generated once and persisted** — `UserIdConfiguration.EnsureUserId` writes a new id back into `appsettings.json` and into the in-memory config for the current run, so memory partitions are stable across restarts without manual setup. Persistence is skipped under Test to keep the test config untouched and replay deterministic.
 - **`MarkdownRenderer` is a line-based translator, not a CommonMark parser** — `Print` walks one line at a time matching prefix constructs (code fences, headings, blockquotes, lists, rules) and converting inline spans to Spectre markup. GFM pipe tables are the one *multi-line* construct: `TryParseTable` keys off the delimiter row (`| --- | :--: |`) following a header — keying on the delimiter, not the mere presence of `|`, stops ordinary prose containing a pipe from being mis-parsed. `BuildTable` emits a Spectre `Table`, normalising ragged rows to the header column count (Spectre throws when cell count ≠ column count). Unrecognised lines fall through to verbatim text.
 - **`/dump-context` reconstructs tool grouping from the MCP pool** — `ToolDefinition` carries no origin and the registry is a flat name-keyed map, so the command resolves `McpClientPool` and uses `ToolNamesByServer` to bucket tools into *Built-in* vs each *server · MCP* group. It is display-only and reconstructs, for human readability, provenance the wire format discards.

@@ -1,4 +1,5 @@
 using ModelContextProtocol.Client;
+using Agency.Harness.Instructions;
 
 namespace Agency.Harness.Tools;
 
@@ -29,36 +30,48 @@ public sealed class McpClientPool : IAsyncDisposable
     /// </summary>
     public IReadOnlyList<string> DisabledServers { get; }
 
+    /// <summary>Gets instruction file resources discovered from every connected MCP server.</summary>
+    public IReadOnlyList<InstructionSource> InstructionSources { get; }
+
     private McpClientPool(
         List<McpClient> clients,
         List<ITool> tools,
         Dictionary<string, IReadOnlyList<string>> toolNamesByServer,
         Dictionary<string, string> failedServers,
-        List<string> disabledServers)
+        List<string> disabledServers,
+        List<InstructionSource> instructionSources)
     {
         this._clients = clients;
         this.Tools = tools;
         this.ToolNamesByServer = toolNamesByServer;
         this.FailedServers = failedServers;
         this.DisabledServers = disabledServers;
+        this.InstructionSources = instructionSources;
     }
 
     /// <summary>
     /// Creates a new <see cref="McpClientPool"/> by connecting to each server in <paramref name="options"/>
-    /// and listing its available tools.
+    /// and listing its available tools and instruction resources.
     /// </summary>
     /// <param name="options">The MCP server configurations to connect to.</param>
+    /// <param name="instructionFilenames">Ordered list of filenames to search for when probing MCP resources for instructions. Defaults to ["AGENTS.md"].</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>An initialized pool whose <see cref="Tools"/> are ready for registration.</returns>
-    public static async Task<McpClientPool> CreateAsync(McpClientOptions options, CancellationToken ct = default)
+    /// <returns>An initialized pool whose <see cref="Tools"/> and <see cref="InstructionSources"/> are ready for use.</returns>
+    public static async Task<McpClientPool> CreateAsync(
+        McpClientOptions options,
+        IReadOnlyList<string>? instructionFilenames = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        instructionFilenames ??= new[] { "AGENTS.md" };
 
         List<McpClient> clients = [];
         List<ITool> tools = [];
         var toolNamesByServer = new Dictionary<string, IReadOnlyList<string>>();
         var failedServers = new Dictionary<string, string>();
         List<string> disabledServers = [];
+        List<InstructionSource> instructionSources = [];
 
         foreach (McpServerConfig server in options.Servers)
         {
@@ -81,6 +94,8 @@ public sealed class McpClientPool : IAsyncDisposable
                     names.Add(tool.Name);
                 }
 
+                await ProbeForInstructionResources(client, server.Name, instructionFilenames, instructionSources, ct);
+
                 clients.Add(client);
                 toolNamesByServer[server.Name] = names;
             }
@@ -91,7 +106,70 @@ public sealed class McpClientPool : IAsyncDisposable
             }
         }
 
-        return new McpClientPool(clients, tools, toolNamesByServer, failedServers, disabledServers);
+        return new McpClientPool(clients, tools, toolNamesByServer, failedServers, disabledServers, instructionSources);
+    }
+
+    /// <summary>
+    /// Probes an MCP server for instruction resources matching the configured filenames.
+    /// </summary>
+    private static async Task ProbeForInstructionResources(
+        McpClient client,
+        string serverName,
+        IReadOnlyList<string> instructionFilenames,
+        List<InstructionSource> results,
+        CancellationToken ct)
+    {
+        try
+        {
+            var resources = await client.ListResourcesAsync(cancellationToken: ct);
+            foreach (var resource in resources)
+            {
+                bool isMatch = false;
+                foreach (var filename in instructionFilenames)
+                {
+                    if (resource.Name.Equals(filename, StringComparison.OrdinalIgnoreCase))
+                    {
+                        isMatch = true;
+                        break;
+                    }
+                }
+
+                if (!isMatch)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var readResult = await client.ReadResourceAsync(resource.Uri, cancellationToken: ct);
+                    if (readResult.Contents is { Count: > 0 })
+                    {
+                        foreach (var content in readResult.Contents)
+                        {
+                            var aiContent = ModelContextProtocol.AIContentExtensions.ToAIContent(content);
+                            if (aiContent is TextContent textContent)
+                            {
+                                results.Add(new InstructionSource(
+                                    resource.Uri.ToString(),
+                                    textContent.Text,
+                                    InstructionSourceKind.Mcp,
+                                    serverName));
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // If reading this resource fails, skip it and continue to the next resource.
+                }
+
+            }
+        }
+        catch (Exception)
+        {
+            // Some MCP servers may not support the Resources capability; treat as no instruction resources.
+        }
     }
 
     private static IClientTransport CreateTransport(McpServerConfig server) =>

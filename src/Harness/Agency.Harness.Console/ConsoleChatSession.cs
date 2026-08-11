@@ -114,13 +114,16 @@ internal sealed partial class ConsoleChatSession : IDisposable
         // Ensure a chat session exists (it is created lazily on the first real turn,
         // but a user could invoke a /skill command before any LLM turn has started).
         IProjectSessionState? sessionState = this.ServiceProvider.GetService<IProjectSessionState>();
+        var resolvedInstructions = this.ServiceProvider.GetService<ResolvedInstructions>();
+        System.Console.WriteLine($"[ConsoleChatSession] ResolvedInstructions available: {resolvedInstructions is not null}, block length: {resolvedInstructions?.InstructionsBlock.Length ?? 0}");
         this._chatSession ??= new(
             this._agent,
             this._options,
             this.toolContext,
             new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
             this._skillContext,
-            session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
+            session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId },
+            instructionsBlock: resolvedInstructions?.InstructionsBlock);
         this._loopRunner ??= this.CreateLoopRunner(this._chatSession);
 
         long prevIn = this._chatSession.TotalUsage.InputTokens;
@@ -188,10 +191,12 @@ internal sealed partial class ConsoleChatSession : IDisposable
             this.WriteHeader();
 
             IProjectSessionState? sessionState = this.ServiceProvider.GetService<IProjectSessionState>();
+            var resolvedInstructions = this.ServiceProvider.GetService<ResolvedInstructions>();
             this._chatSession = new(this._agent, this._options, this.toolContext,
                 new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
                 this._skillContext,
-                session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
+                session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId },
+                instructionsBlock: resolvedInstructions?.InstructionsBlock);
             this._loopRunner = this.CreateLoopRunner(this._chatSession);
 
             bool shouldExitSession = false;
@@ -277,7 +282,8 @@ internal sealed partial class ConsoleChatSession : IDisposable
                         this._chatSession = new(this._agent, this._options, this.toolContext,
                             new UserSpecificContext { Id = this._options.UserId ?? System.Environment.UserName },
                             this._skillContext,
-                            session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId });
+                            session: sessionState is null ? null : new SessionContext { Id = sessionState.SessionId },
+                            instructionsBlock: resolvedInstructions?.InstructionsBlock);
                         this._loopRunner = this.CreateLoopRunner(this._chatSession);
                         continue;
                         case CommandContinuation.Continue:

@@ -65,7 +65,6 @@ Agency.Harness.AssistantTurnEvent.Equals(Agency.Harness.AssistantTurnEvent? othe
 Agency.Harness.AssistantTurnEvent.Message.get -> Microsoft.Extensions.AI.ChatMessage!
 Agency.Harness.AssistantTurnEvent.Message.init -> void
 Agency.Harness.ChatSession
-Agency.Harness.ChatSession.ChatSession(Agency.Harness.Agent! agent, Agency.Harness.AgentOptions! options, Agency.Harness.Contexts.ToolContext? toolContext = null, Agency.Harness.Contexts.UserSpecificContext? user = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null) -> void
 Agency.Harness.ChatSession.DisposeAsync() -> System.Threading.Tasks.ValueTask
 Agency.Harness.ChatSession.IsStarted.get -> bool
 Agency.Harness.ChatSession.Reset() -> void
@@ -745,7 +744,6 @@ override sealed Agency.Harness.SessionStartedEvent.Equals(Agency.Harness.AgentEv
 override sealed Agency.Harness.ToolInvokedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
 override sealed Agency.Harness.TurnStartedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
 override sealed Agency.Harness.VerdictEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
-static Agency.Harness.Agent.CreateContext(string! initialPrompt, Agency.Harness.Contexts.ToolContext? tools = null, Agency.Harness.Contexts.EnvironmentalContext? environment = null, Agency.Harness.Contexts.UserSpecificContext? user = null, System.TimeProvider? timeProvider = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null) -> Agency.Harness.Contexts.Context!
 static Agency.Harness.AgentEvent.operator !=(Agency.Harness.AgentEvent? left, Agency.Harness.AgentEvent? right) -> bool
 static Agency.Harness.AgentEvent.operator ==(Agency.Harness.AgentEvent? left, Agency.Harness.AgentEvent? right) -> bool
 static Agency.Harness.AgentResultEvent.operator !=(Agency.Harness.AgentResultEvent? left, Agency.Harness.AgentResultEvent? right) -> bool
@@ -856,7 +854,6 @@ static Agency.Harness.StopConditions.TokensExceeded(long total) -> Agency.Harnes
 static Agency.Harness.SystemPromptBuilder.Build(Agency.Harness.Contexts.Context! ctx) -> string!
 static Agency.Harness.ToolInvokedEvent.operator !=(Agency.Harness.ToolInvokedEvent? left, Agency.Harness.ToolInvokedEvent? right) -> bool
 static Agency.Harness.ToolInvokedEvent.operator ==(Agency.Harness.ToolInvokedEvent? left, Agency.Harness.ToolInvokedEvent? right) -> bool
-static Agency.Harness.Tools.McpClientPool.CreateAsync(Agency.Harness.Tools.McpClientOptions! options, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Agency.Harness.Tools.McpClientPool!>!
 static Agency.Harness.TurnStartedEvent.operator !=(Agency.Harness.TurnStartedEvent? left, Agency.Harness.TurnStartedEvent? right) -> bool
 static Agency.Harness.TurnStartedEvent.operator ==(Agency.Harness.TurnStartedEvent? left, Agency.Harness.TurnStartedEvent? right) -> bool
 static Agency.Harness.VerdictEvent.operator !=(Agency.Harness.VerdictEvent? left, Agency.Harness.VerdictEvent? right) -> bool

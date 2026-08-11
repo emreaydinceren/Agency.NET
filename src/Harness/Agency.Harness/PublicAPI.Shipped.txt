@@ -136,8 +136,6 @@ Agency.Harness.Contexts.KnowledgeContext.Records.init -> void
 Agency.Harness.Contexts.MemoryContext
 Agency.Harness.Contexts.MemoryContext.<Clone>$() -> Agency.Harness.Contexts.MemoryContext!
 Agency.Harness.Contexts.MemoryContext.Equals(Agency.Harness.Contexts.MemoryContext? other) -> bool
-Agency.Harness.Contexts.MemoryContext.LongTermMemory.get -> System.Collections.Generic.IReadOnlyList<string!>!
-Agency.Harness.Contexts.MemoryContext.LongTermMemory.init -> void
 Agency.Harness.Contexts.MemoryContext.MemoryContext() -> void
 Agency.Harness.Contexts.MemoryContext.Records.get -> System.Collections.Generic.IReadOnlyList<Agency.Harness.Contexts.MemoryRecord!>!
 Agency.Harness.Contexts.MemoryContext.Records.init -> void

@@ -42,39 +42,6 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("reasoning", result, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ── LongTermMemory ─────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// When <see cref="MemoryContext.LongTermMemory"/> entries are provided, every entry's text
-    /// appears in the built prompt.
-    /// </summary>
-    [Fact]
-    public void Build_IncludesLongTermMemory_WhenProvided()
-    {
-        var ctx = MinimalContext();
-        ctx = ctx with
-        {
-            Memory = new MemoryContext { LongTermMemory = ["User prefers concise answers.", "User is a C# expert."] },
-        };
-
-        string result = SystemPromptBuilder.Build(ctx);
-
-        Assert.Contains("User prefers concise answers.", result);
-        Assert.Contains("User is a C# expert.", result);
-    }
-
-    /// <summary>
-    /// When no long-term memory context is supplied, the built prompt has no "Long-term memory"
-    /// section.
-    /// </summary>
-    [Fact]
-    public void Build_OmitsLongTermMemorySection_WhenEmpty()
-    {
-        string result = SystemPromptBuilder.Build(MinimalContext());
-
-        Assert.DoesNotContain("Long-term memory", result, StringComparison.OrdinalIgnoreCase);
-    }
-
     // ── TemporalContext ────────────────────────────────────────────────────────
 
     /// <summary>

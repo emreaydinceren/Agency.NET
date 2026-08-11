@@ -8,7 +8,8 @@ namespace Agency.Harness.Console;
 /// An <c>OnSessionStarted</c> hook that primes every turn with a lightweight index of what's already
 /// stored in the "memory" MCP server (domain/key pairs only, no values), so the model doesn't have to
 /// gamble on whether calling <c>recall</c> is worthwhile — it can see what's available up front and
-/// fetch only the entries relevant to the current turn.
+/// fetch only the entries relevant to the current turn. Also injects write-side guidance telling the
+/// model when to proactively offer memorization (preferences, patterns, durable facts the user shares).
 /// </summary>
 /// <remarks>
 /// Deliberately does not inject the stored values themselves: that would re-introduce the unbounded
@@ -19,7 +20,9 @@ internal static class MemoryIndexHook
 {
     private const string FactPrefix = "Memory (persists across sessions): ";
     private const string WritePolicy =
-        "save durable facts about this user with memorize as you learn them, and fetch them with recall. ";
+        "save durable facts about this user with memorize as you learn them, and fetch them with recall. " +
+        "When the user shares a clear preference, pattern, technique, or durable fact that would be " +
+        "regrettable to lose or that recurs across sessions, offer to memorize it. ";
     internal const string ListGlobalKeysToolName = "list_global_keys";
 
     /// <summary>

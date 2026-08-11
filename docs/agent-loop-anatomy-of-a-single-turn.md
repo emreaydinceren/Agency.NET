@@ -223,9 +223,9 @@ on every iteration (D3)." Two collections:
 - `Records` (`:18`) — `IReadOnlyList<MemoryRecord>`, each with `ContentType == Fact`, "Set by
   `RetrievalEngine` in `OnPreIteration`; rendered as `## Facts`."
 
-**`MemoryContext`** (`MemoryContext.cs`) — "Long-term memory items for the current session." The
-mirror image of `KnowledgeContext`:
-- `LongTermMemory` (`:12`) — strings summarized into the prompt.
+**`MemoryContext`** (`MemoryContext.cs`) — "Episodic and fact memory records injected into the system prompt."
+Mirror image of `KnowledgeContext`:
+
 - `Records` (`:20`) — `MemoryRecord`s with `ContentType == Memory`, "rendered as `## Memories`."
 
 **`MemoryRecord`** (`MemoryRecord.cs`) — a positional record,
@@ -234,11 +234,10 @@ projection of a memory store record … Carries only the fields that `SystemProm
 to render the `## Facts` and `## Memories` sections." `UpdatedAt` drives the "Updated 3 weeks ago"
 recency string.
 
-`★ The two "knowledge" shapes:` both `Knowledge` and `Memory` carry a legacy string list **and**
-a newer `Records` list. The string lists (`Facts`, `LongTermMemory`) render under
-`## Knowledge` / `## Long-term memory`; the `Records` lists render under `## Facts` / `## Memories`
-with humanised recency. The same `MemoryRecord` type lives in both — the *property it sits on*
-decides whether it's a fact or an episode, not the record itself.
+`★ The two "memory" shapes:` `Knowledge` and `Memory` both carry `Records` lists with `MemoryRecord` items.
+The `Records` lists render under `## Facts` (for `Knowledge`) and `## Memories` (for `Memory`) with humanised
+recency. The same `MemoryRecord` type lives in both — the *property it sits on* decides whether it's a fact
+or an episode, not the record itself.
 
 **`FocusContext`** (`FocusContext.cs`) — "Narrows the retrieval query toward a particular task
 domain, as set by `SetFocusTool`. Focus terms are appended to the query text before embedding,
@@ -325,14 +324,13 @@ It walks the context in a fixed order and emits Markdown:
 | `ctx.Tools.Registry is IProgressiveDiscovery` | deferred-tools instruction | `:30-34` |
 | `ctx.Skills.List()` where `!DisableModelInvocation` | `## Skills` | `:37-53` |
 | `ctx.Knowledge.Facts` | `## Knowledge` | `:56-64` |
-| `ctx.Memory.LongTermMemory` | `## Long-term memory` | `:67-75` |
-| `ctx.Knowledge.Records` (`ContentType == Fact`) | `## Facts` | `:78-87` |
-| `ctx.Memory.Records` (`ContentType == Memory`) | `## Memories` | `:90-99` |
-| both `Records` lists empty | literal `No relevant memories yet.` | `:103-107` |
-| `ctx.Temporal.CurrentDateUtc` | `Current date/time (UTC): …` | `:110-114` |
-| `ctx.Environment.OperatingSystem` | `Operating system: …` | `:117-120` |
-| `ctx.Environment.ContextWindowSize` + `ctx.TotalUsage.InputTokens` | `Context window: …` | `:122-133` |
-| `ctx.User.Name` | `User: …` | `:136-139` |
+| `ctx.Knowledge.Records` (`ContentType == Fact`) | `## Facts` | `:68-76` |
+| `ctx.Memory.Records` (`ContentType == Memory`) | `## Memories` | `:80-88` |
+| both `Records` lists empty | literal `No relevant memories yet.` | `:93-97` |
+| `ctx.Temporal.CurrentDateUtc` | `Current date/time (UTC): …` | `:100-104` |
+| `ctx.Environment.OperatingSystem` | `Operating system: …` | `:107-109` |
+| `ctx.Environment.ContextWindowSize` + `ctx.TotalUsage.InputTokens` | `Context window: …` | `:111-122` |
+| `ctx.User.Name` | `User: …` | `:125-128` |
 
 ![The Read Path — Context Into Prompt](attachments/context-read-path.svg)
 
@@ -483,7 +481,6 @@ The skills side of this is detailed in [Skills](skills-a-playbook-in-one-markdow
 | | `Facts` | `IReadOnlyList<string>` | `get; init;` | `[]` |
 | | `Records` | `IReadOnlyList<MemoryRecord>` | `get; init;` | `[]` |
 | `MemoryContext` | `Empty` | `MemoryContext` | `static get;` | `new()` |
-| | `LongTermMemory` | `IReadOnlyList<string>` | `get; init;` | `[]` |
 | | `Records` | `IReadOnlyList<MemoryRecord>` | `get; init;` | `[]` |
 | `MemoryRecord` | `Title` / `Value` / `UpdatedAt` | `string` / `string` / `DateTimeOffset` | positional `init` | — |
 | `FocusContext` | `Empty` | `FocusContext` | `static get;` | `new()` |

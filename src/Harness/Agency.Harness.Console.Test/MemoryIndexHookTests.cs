@@ -119,6 +119,8 @@ public sealed class MemoryIndexHookTests
         string fact = Assert.Single(ctx.Knowledge.Facts);
         Assert.Contains("memorize", fact, StringComparison.Ordinal);
         Assert.Contains("Nothing is stored for this user yet.", fact, StringComparison.Ordinal);
+        Assert.Contains("preference", fact, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("regrettable to lose", fact, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -138,6 +140,25 @@ public sealed class MemoryIndexHookTests
         Assert.Contains("memorize", fact, StringComparison.Ordinal);
         Assert.Contains("Personal|FavouriteDessert", fact, StringComparison.Ordinal);
         Assert.DoesNotContain("Nothing is stored", fact, StringComparison.Ordinal);
+        Assert.Contains("preference", fact, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("regrettable to lose", fact, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The write-side guidance includes an explicit "offer to memorize" heuristic that encourages
+    /// proactive capture of user preferences, patterns, and durable facts that might otherwise be lost.
+    /// </summary>
+    [Fact]
+    public async Task OnSessionStarted_WriteGuidanceIncludesOfferBehavior()
+    {
+        var tool = new FakeListGlobalKeysTool("{}");
+        AgentHooks hooks = MemoryIndexHook.Build(tool);
+        Context ctx = MakeContext();
+
+        await FireOnSessionStarted(hooks, ctx);
+
+        string fact = Assert.Single(ctx.Knowledge.Facts);
+        Assert.Contains("offer to memorize", fact, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>No resolved user id → the tool is never called (nothing valid to scope the lookup to).</summary>

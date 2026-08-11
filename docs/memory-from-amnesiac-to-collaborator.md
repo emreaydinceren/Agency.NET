@@ -553,6 +553,34 @@ The point worth taking away: the hook seam isn't exclusive to `Agency.Memory.*`.
 
 ---
 
+### 6.13 Distiller vs. MCP memory — use case and benefits, side by side
+
+Two very different pieces of engineering answer the same question ("does the agent remember?") for two different situations. This section is the condensed comparison; §6.6 and §6.12 above are the full implementations.
+
+**The Distiller LLM (`Agency.Memory.Distiller`)**
+
+- **What it is.** A second, purpose-built `IChatClient` (`ChatClientLlmAdapter`, `MaxOutputTokens = 2048`) invoked only from `DistillerBackgroundService.ProcessJobAsync` — never on the hot path. Its only job is turning a slice of conversation turns into `Record` objects via the episode-extraction prompt (`/no_think`, template v2).
+- **Use case.** Passive, ambient knowledge capture — facts that emerge as a byproduct of doing the work, the kind a human colleague would remember without being asked to write them down.
+- **Benefits.**
+  - Zero hot-path cost — the user never waits on an extraction call.
+  - Consistent quality: the system decides what's worth keeping, fed the user's known domains and the 10 most-recent Facts so it dedupes against what's already stored rather than re-saving the same fact reworded.
+  - Crash-safe for free via watermark idempotency — a killed process re-derives the same turn window on restart and never double-writes.
+  - Fights context rot by compressing many turns into a handful of durable, re-usable facts.
+
+**Agency.Mcp.Memory**
+
+- **What it is.** A standalone MCP server over stdio, backed by a flat `IKVStore` (SQLite or Postgres) — not coupled to `Agency.Harness`'s `Context`/hook machinery, so any MCP client can attach to the same store. Four tools: `Memorize`, `Recall`, `Forget`, `ListGlobalKeys`, addressed by a `{domain}|{key}` composite key. No embeddings, no similarity search.
+- **Use case.** Deliberate, addressable notes — facts the agent explicitly decides are worth filing under a specific `domain/key` ("remember my API key format is X"), not facts inferred incidentally from conversation.
+- **Benefits.**
+  - Operationally trivial — no embedding model, no vector DB, no background-service fleet; SQLite and nothing else is enough to run it.
+  - Precise, not fuzzy — exact key lookup, so there's no risk of a similarity search pulling back the wrong "close enough" memory.
+  - Portable beyond Agency — a real MCP server, so any MCP-capable host can attach to it, not just this harness.
+  - Self-describing at the protocol level — `ToolDescription.Text` gives any client full usage semantics with no external docs.
+
+**How they complement each other.** Distiller memory is what the system learned by watching; MCP memory is what the agent chose to write down. The Distiller will eventually infer "this user works in C#" from repeated context, unprompted — but a user saying "remember that my deploy key rotates every 90 days" is exactly the kind of precise, addressable fact better trusted to an explicit `Memorize` call than to a background extraction pass guessing at the right phrasing.
+
+---
+
 ## Final Takeaway
 
 If you want the shortest possible summary, it is this:

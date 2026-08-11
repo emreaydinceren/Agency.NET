@@ -345,7 +345,7 @@ public sealed record Context
 |---|---|
 | `QueryContext` | `Prompt` — the initial user message |
 | `KnowledgeContext` | `Facts: IReadOnlyList<string>`, `Records: IReadOnlyList<MemoryRecord>` — re-injected into the system prompt each iteration |
-| `MemoryContext` | `ShortTermMemory`, `LongTermMemory`, `Records` — injected into the system prompt |
+| `MemoryContext` | `Records` — episodic and fact memory injected into the system prompt |
 | `ToolContext` | `Registry: IToolRegistry` |
 | `SkillContext` (public record; members `internal`) | `Catalog: ISkillCatalog`, `List()`, `Find(name)` — wraps a live catalog reference |
 | `FocusContext` | `Title?`, `Domain?`, `Tags` — narrows retrieval toward a task domain |

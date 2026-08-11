@@ -128,6 +128,12 @@ public static class MemoryServiceCollectionExtensions
                     {
                         if (!ctx.MemoryEnabled)
                         {
+                            // Strip any prior framing fact when memory is disabled.
+                            ctx.Knowledge = ctx.Knowledge with
+                            {
+                                Facts = [.. ctx.Knowledge.Facts.Where(
+                                    f => !f.StartsWith(RetrievalMemoryFramingFact.Prefix, StringComparison.Ordinal))],
+                            };
                             return;
                         }
 
@@ -137,6 +143,16 @@ public static class MemoryServiceCollectionExtensions
                         {
                             await engine.RetrieveAsync(ctx, ct).ConfigureAwait(false);
                         }
+
+                        // Inject memory retrieval framing fact to inform the model about retrieved records.
+                        bool hasRecords = ctx.Knowledge.Records.Count > 0 || ctx.Memory.Records.Count > 0;
+                        string framingFact = RetrievalMemoryFramingFact.Build(hasRecords);
+
+                        List<string> facts = [.. ctx.Knowledge.Facts.Where(
+                            f => !f.StartsWith(RetrievalMemoryFramingFact.Prefix, StringComparison.Ordinal))];
+                        facts.Add(framingFact);
+
+                        ctx.Knowledge = ctx.Knowledge with { Facts = facts };
                     };
 
                     // Timer-restart callback: ONLY restart the timer, no other side effects (Spec §14.9).

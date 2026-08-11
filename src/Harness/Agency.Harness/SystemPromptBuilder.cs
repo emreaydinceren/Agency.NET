@@ -66,43 +66,6 @@ public static class SystemPromptBuilder
             }
         }
 
-        // Long-term memory summarized into the system prompt.
-        if (ctx.Memory.LongTermMemory.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("## Long-term memory");
-            foreach (string item in ctx.Memory.LongTermMemory)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- {item}");
-            }
-        }
-
-        // Memory-retrieval records: Facts (from retrieval engine, Spec §6.4 / D.3).
-        // Both Record collections are populated only by the retrieval engine, and MemoryLastRetrievedAt
-        // is stamped on every completed pass — including a zero-hit one — so together they separate
-        // "memory is attached but still empty" from "no memory at all". That distinction is what keeps
-        // the paragraph below honest: it only claims continuity where continuity actually exists.
-        // Without it a cold start renders as nothing but "No relevant memories yet.", which reads as
-        // amnesia and invites the model to disclaim memory it does in fact have.
-        // MemoryEnabled is checked first because /memory can switch memory off mid-session: the Context
-        // outlives the turn, so MemoryLastRetrievedAt stays stamped and Records keep the prior turn's
-        // hits even once retrieval has stopped running. Without this the paragraph would keep promising
-        // continuity on a session the user just opted out of.
-        bool hasRecalledRecords = ctx.Knowledge.Records.Count > 0 || ctx.Memory.Records.Count > 0;
-        bool memoryAttached = ctx.MemoryEnabled
-            && (hasRecalledRecords || ctx.MemoryLastRetrievedAt is not null);
-
-        if (memoryAttached)
-        {
-            sb.AppendLine();
-            sb.AppendLine("## Memory");
-            sb.AppendLine("You are not stateless. Memory of earlier sessions with this user persists and is recalled for you automatically.");
-            sb.AppendLine(hasRecalledRecords
-                ? "Everything under Facts and Memories below is your own recollection: treat it as already known, use it without asking the user to restate it, and never claim you cannot remember previous conversations."
-                : "Nothing has been recalled for this user yet — never take that as evidence that you are unable to remember across conversations.");
-            sb.AppendLine("What matters from this session is captured for you in the background, so the user never has to tell you to remember something.");
-        }
-
         if (ctx.Knowledge.Records.Count > 0)
         {
             sb.AppendLine();
@@ -128,6 +91,7 @@ public static class SystemPromptBuilder
 
         // When both Record collections are empty, note it explicitly so the LLM knows
         // there are no retrieved memories (Spec §13 — "No relevant memories yet.").
+        bool hasRecalledRecords = ctx.Knowledge.Records.Count > 0 || ctx.Memory.Records.Count > 0;
         if (!hasRecalledRecords)
         {
             sb.AppendLine();

@@ -130,6 +130,7 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
                 value            TEXT NOT NULL,
                 tags             TEXT[] NOT NULL DEFAULT '{{}}',
                 importance       DOUBLE PRECISION NOT NULL CHECK (importance >= 0 AND importance <= 1),
+                source           SMALLINT NOT NULL DEFAULT 1,
                 embedding        vector({dim}) NOT NULL,
                 created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -150,6 +151,15 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 
         await using var dropCmd = new NpgsqlCommand(dropOldConstraint, conn);
         await dropCmd.ExecuteNonQueryAsync(ct);
+
+        // Backfill the 'source' column for tables created before it existed (MemorizeNow feature).
+        // CREATE TABLE IF NOT EXISTS above is a no-op against a pre-existing table, so a fresh
+        // ALTER is required to bring older schemas up to date.
+        const string addSourceColumn = @"
+            ALTER TABLE records ADD COLUMN IF NOT EXISTS source SMALLINT NOT NULL DEFAULT 1;";
+
+        await using var addSourceCmd = new NpgsqlCommand(addSourceColumn, conn);
+        await addSourceCmd.ExecuteNonQueryAsync(ct);
 
         // Functional unique index so that NULL session_id is treated as '' (one global scope per user/domain/key)
         const string idxSql = @"

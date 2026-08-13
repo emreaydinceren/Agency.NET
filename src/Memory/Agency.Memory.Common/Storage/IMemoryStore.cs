@@ -136,4 +136,33 @@ public interface IMemoryStore
     /// <param name="ct">Cancellation token.</param>
     /// <returns><see langword="true"/> if a record was deleted; <see langword="false"/> if not found.</returns>
     Task<bool> DeleteByIdAsync(string recordId, string userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Explicitly persists a fact to memory immediately (agent-driven, via the MemorizeNow tool).
+    /// Derives the key from <paramref name="title"/> (slugified), sets <see cref="MemorySource.AgentSignaled"/>,
+    /// and scopes the record globally (not tied to <paramref name="sessionId"/>).
+    /// Overwrites silently if a record with the same <c>(UserId, Domain, Key)</c> already exists.
+    /// </summary>
+    /// <param name="userId">The owning user. Required.</param>
+    /// <param name="sessionId">The session that triggered the save. Required.</param>
+    /// <param name="title">Natural-language headline (required); also the source for the derived slug.</param>
+    /// <param name="value">The full explanation (required). Gets embedded and searched.</param>
+    /// <param name="domain">The semantic category (required); case-folded to lowercase.</param>
+    /// <param name="importance">High, Normal, or Low; mapped to 0.9, 0.6, or 0.3 respectively.</param>
+    /// <param name="tags">0-4 cross-domain labels (required; an empty array is allowed).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The composite key: <c>"{domain}|{slugify(title)}"</c>.</returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="title"/>, <paramref name="value"/>, or <paramref name="domain"/>
+    /// are null/empty, or when <paramref name="tags"/> has more than 4 items.
+    /// </exception>
+    Task<string> MemorizeNowAsync(
+        string userId,
+        string sessionId,
+        string title,
+        string value,
+        string domain,
+        Importance importance,
+        string[] tags,
+        CancellationToken ct = default);
 }

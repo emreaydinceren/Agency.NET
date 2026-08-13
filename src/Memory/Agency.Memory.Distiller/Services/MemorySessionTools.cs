@@ -5,9 +5,9 @@ using Agency.Memory.Distiller.Tools;
 namespace Agency.Memory.Distiller.Services;
 
 /// <summary>
-/// Registers the per-session memory tools (<c>MarkGoalComplete</c>, <c>SetFocus</c>) into the
-/// agent's tool registry at session start, bound to the live <see cref="Context"/>'s
-/// user/session/turn state.
+/// Registers the per-session memory tools (<c>MarkGoalComplete</c>, <c>SetFocus</c>,
+/// <c>MemorizeNow</c>) into the agent's tool registry at session start, bound to the live
+/// <see cref="Context"/>'s user/session/turn state.
 /// </summary>
 /// <remarks>
 /// Called from the <c>OnSessionStarted</c> hook so the tools are visible to the LLM from
@@ -17,12 +17,12 @@ namespace Agency.Memory.Distiller.Services;
 internal static class MemorySessionTools
 {
     /// <summary>
-    /// Registers <c>MarkGoalComplete</c> and <c>SetFocus</c> tools into <paramref name="ctx"/>'s
-    /// tool registry, binding them to the session identity in <paramref name="ctx"/>.
+    /// Registers <c>MarkGoalComplete</c>, <c>SetFocus</c>, and <c>MemorizeNow</c> tools into
+    /// <paramref name="ctx"/>'s tool registry, binding them to the session identity in <paramref name="ctx"/>.
     /// </summary>
     /// <param name="ctx">The live session context whose <see cref="Context.Tools"/> registry receives the tools.</param>
     /// <param name="channels">Registry providing per-session channel writers for <c>MarkGoalComplete</c>.</param>
-    /// <param name="store">Memory store used by <c>SetFocus</c> to enumerate known domains.</param>
+    /// <param name="store">Memory store used by <c>SetFocus</c> to enumerate known domains and by <c>MemorizeNow</c> to persist facts.</param>
     /// <param name="ct">Cancellation token passed to <c>SetFocus</c>'s async definition resolution.</param>
     internal static async Task RegisterInto(Context ctx, ChannelSessionRegistry channels, IMemoryStore store, CancellationToken ct = default)
     {
@@ -34,5 +34,7 @@ internal static class MemorySessionTools
 
         await ctx.Tools.Registry.RegisterAsync(
             new SetFocusTool(store, userId, () => ctx), ct).ConfigureAwait(false);
+
+        ctx.Tools.Registry.Register(new MemorizeNowTool(store, userId, sessionId));
     }
 }

@@ -67,11 +67,11 @@ public sealed class EpisodeExtractionPromptTests
         Assert.Contains("Goal achieved: debug session finished", rendered);
     }
 
-    /// <summary>Verifies that the prompt version constant is 2 (Spec §18.5; bumped for the TI-8.2 no-think directive).</summary>
+    /// <summary>Verifies that the prompt version constant is 3 (Spec §18.5; bumped for the v3 MemorizeNow skip rule).</summary>
     [Fact]
-    public void Version_Is2()
+    public void Version_Is3()
     {
-        Assert.Equal(2, EpisodeExtractionPrompt.Version);
+        Assert.Equal(3, EpisodeExtractionPrompt.Version);
     }
 
     /// <summary>Verifies the rendered prompt carries the thinking-suppression directive (TI-8.2).</summary>
@@ -83,6 +83,60 @@ public sealed class EpisodeExtractionPromptTests
 
         Assert.Contains("/no_think", rendered);
         Assert.Contains("do NOT produce any chain-of-thought", rendered);
+    }
+
+    // ── MemorizeNow skip rule (Task 19 / UT-4) ───────────────────────────────────
+
+    /// <summary>The prompt names the MemorizeNow tool and the exact confirmation pattern
+    /// ("✓ Memorized: {domain}|{key}") the LLM should recognise in the transcript.</summary>
+    [Fact]
+    public void Render_IncludesMemorizeNowSkipRule_ReferencesToolAndResultPattern()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("MemorizeNow", rendered);
+        Assert.Contains("✓ Memorized: {domain}|{key}", rendered);
+    }
+
+    /// <summary>The prompt explicitly instructs the LLM not to re-extract or re-emit facts already
+    /// persisted via MemorizeNow, and ties that instruction to Source = AgentSignaled provenance.</summary>
+    [Fact]
+    public void Render_IncludesMemorizeNowSkipRule_InstructsNotToReExtractOrReEmit()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("Do not re-extract or", rendered);
+        Assert.Contains("re-emit it here", rendered);
+        Assert.Contains("Source = AgentSignaled", rendered);
+    }
+
+    /// <summary>When the LLM is unsure whether a fact was already saved via MemorizeNow, the rule's
+    /// safe default is to keep (include) it rather than skip it, avoiding silent data loss.</summary>
+    [Fact]
+    public void Render_IncludesMemorizeNowSkipRule_SafeDefaultIsToKeepWhenUnsure()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("include it anyway", rendered);
+        Assert.Contains("the safe", rendered);
+    }
+
+    /// <summary>The skip rule lives alongside the other Quality-bar rules (contradiction/expansion),
+    /// confirming it was added to the section the LLM already reads for dedup guidance.</summary>
+    [Fact]
+    public void Render_MemorizeNowSkipRule_IsPartOfQualityBarSection()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        int qualityBarIndex = rendered.IndexOf("## Quality bar", StringComparison.Ordinal);
+        int skipRuleIndex = rendered.IndexOf("Skip MemorizeNow-signaled facts", StringComparison.Ordinal);
+        int contextIndex = rendered.IndexOf("## Context", StringComparison.Ordinal);
+
+        Assert.True(qualityBarIndex >= 0 && skipRuleIndex > qualityBarIndex && skipRuleIndex < contextIndex);
     }
 
     // ── Parsing ────────────────────────────────────────────────────────────────

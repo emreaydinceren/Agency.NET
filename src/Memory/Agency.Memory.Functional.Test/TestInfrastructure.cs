@@ -121,7 +121,7 @@ internal static class TestInfrastructure
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             string url = baseUrl.TrimEnd('/') + "/models";
             using var response = await http.GetAsync(url, ct);
             return null;

@@ -353,11 +353,13 @@ default.
   plus a required human approval, not something that happens as a side effect of a Gitea tag push.
 - **No "unpublish" workflow.** Cleanup after a mistaken publish is a manual per-package delete
   (see Dry-run steps above), not a single revert.
-- **RT39's test-install step assumes `NUGETPUBLISHTOKEN` also works for read.** It registers the
-  Gitea feed as a NuGet source with `--username emre --password $NUGETPUBLISHTOKEN` to restore the
-  just-published package back out. This is the standard Gitea package-registry auth pattern, but it
-  hasn't been exercised against the live feed yet — if the first real run 401s on the restore, the
-  token's scope (or the username) is the first thing to check.
+- **RT39's test-install step needs `NUGETPUBLISHTOKEN` to work for read as well as write —
+  verified live, no longer an open assumption.** It registers the Gitea feed as a NuGet source with
+  `--username emre --password $NUGETPUBLISHTOKEN` to restore the just-published package back out.
+  This was flagged here as untested until the `v0.1.163` release (2026-08-11, Gitea Actions run id
+  541 / run_number 500), where the step ran green against the live feed across all 29 packages — so
+  the token's scope and the `emre` username are both confirmed sufficient for restore. If a future
+  run does 401 on this step, suspect a token rotation rather than a design flaw.
 - **Gitea Actions masquerades as GitHub Actions.** The Gitea runner sets `GITHUB_ACTIONS=true` and
   `GITHUB_*` env vars, so tools that detect "am I running in GitHub Actions" (including NBGV's own
   cloud-build detection, and this repo's `ContinuousIntegrationBuild` MSBuild condition) fire on

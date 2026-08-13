@@ -11,8 +11,13 @@ namespace Agency.Memory.Consolidator.Prompts;
 internal static class ConsolidatorReconciliationPrompt
 {
     /// <summary>The current prompt version. Bump when the template changes (Spec §18.5).</summary>
-    /// <remarks>v3: added same-Domain/Key merge priority rule to prevent LLM skipping obvious near-duplicates.</remarks>
-    internal const int Version = 3;
+    /// <remarks>
+    /// v3: added same-Domain/Key merge priority rule to prevent LLM skipping obvious near-duplicates.
+    /// v4: added AgentSignaled merge-priority rule — when merging Records with differing
+    /// provenance, prefer the AgentSignaled one's content (Task 12). Records are now rendered
+    /// with their Source so the rule has a signal to act on.
+    /// </remarks>
+    internal const int Version = 4;
 
     /// <summary>
     /// Renders the full reconciliation prompt for the given user and record set.
@@ -84,6 +89,15 @@ internal static class ConsolidatorReconciliationPrompt
         sb.AppendLine("  same Domain AND Key they describe the same fact slot. If their Values overlap");
         sb.AppendLine("  in meaning, MERGE them — do not leave duplicates in the same slot.");
         sb.AppendLine("  The merged Value should preserve the most specific detail from either record.");
+        sb.AppendLine("- **AgentSignaled facts take merge priority.** When merging two Records with");
+        sb.AppendLine("  overlapping meaning whose Source differs, prefer the content of the Record with");
+        sb.AppendLine("  Source: AgentSignaled over one with Source: Distilled or Source: Consolidated —");
+        sb.AppendLine("  the agent chose that phrasing deliberately. Carry Source: AgentSignaled forward");
+        sb.AppendLine("  onto the merged Record. If both Records are AgentSignaled, reconcile normally and");
+        sb.AppendLine("  pick whichever phrasing is clearer. If neither is AgentSignaled, merge using");
+        sb.AppendLine("  ordinary semantic judgment. Use Source to inform merge priority only — do not");
+        sb.AppendLine("  mention provenance in any user-facing summary; keep those brief (e.g. \"Merged X");
+        sb.AppendLine("  and Y into Z\").");
         sb.AppendLine("- **Be conservative.** When in doubt, leave a Record alone. False merges lose");
         sb.AppendLine("  information; false deletes lose information; false updates corrupt");
         sb.AppendLine("  information. The cost of inaction is small.");
@@ -153,6 +167,7 @@ internal static class ConsolidatorReconciliationPrompt
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Domain/Key**: {r.Domain} / {r.Key}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Tags**: {tagsCsv}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Importance**: {r.Importance:F1}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Source**: {r.Source}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Age**: {age}");
         sb.AppendLine();
         sb.AppendLine(valuePreview);

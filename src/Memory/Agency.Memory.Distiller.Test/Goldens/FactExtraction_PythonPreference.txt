@@ -74,6 +74,13 @@ You may produce two kinds of Records:
   the new richer one with the same `(Domain, Key)`.
 - **If nothing is worth recording, return an empty `records` array.** It is
   better to skip a session than to pollute the store.
+- **Skip MemorizeNow-signaled facts.** If the conversation excerpt shows the
+  agent calling the `MemorizeNow` tool with a result such as
+  `✓ Memorized: {domain}|{key}`, that fact is already persisted in the
+  long-term store with `Source = AgentSignaled`. Do not re-extract or
+  re-emit it here — this avoids double-capture. If you are unsure whether a
+  fact was already saved via MemorizeNow, include it anyway (the safe
+  default is to keep, not skip).
 
 ## Context
 

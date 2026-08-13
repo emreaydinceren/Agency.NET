@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
 
@@ -167,5 +168,71 @@ internal sealed class InMemoryMemoryStore : IMemoryStore
         }
 
         return Task.FromResult(removed);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> MemorizeNowAsync(
+        string userId,
+        string sessionId,
+        string title,
+        string value,
+        string domain,
+        Importance importance,
+        string[] tags,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentNullException.ThrowIfNull(tags);
+        if (tags.Length > 4)
+        {
+            throw new ArgumentException("tags must contain 0-4 items.", nameof(tags));
+        }
+
+        double importanceValue = importance switch
+        {
+            Importance.High => 0.9,
+            Importance.Normal => 0.6,
+            Importance.Low => 0.3,
+            _ => throw new ArgumentException($"Unknown importance: {importance}", nameof(importance)),
+        };
+
+        string loweredDomain = domain.ToLowerInvariant();
+        string key = Slugify(title);
+        var now = DateTimeOffset.UtcNow;
+
+        var record = Common.Records.Record.Create(
+            id: Guid.NewGuid().ToString(),
+            userId: userId,
+            sessionId: null, // Global scope — agent-signaled facts transcend sessions.
+            contentType: ContentType.Fact,
+            domain: loweredDomain,
+            key: key,
+            title: title,
+            value: value,
+            tags: tags,
+            importance: importanceValue,
+            createdAt: now,
+            updatedAt: now,
+            source: MemorySource.AgentSignaled);
+
+        await this.UpsertAsync(record, ct);
+
+        return $"{loweredDomain}|{key}";
+    }
+
+    /// <summary>
+    /// Converts a natural-language string into a lowercase, hyphen-separated slug. Mirrors
+    /// <c>Agency.Memory.Sql.Postgres.Utilities.StringSlugifier.Slugify</c>, duplicated here because
+    /// this test project does not reference the Postgres store.
+    /// </summary>
+    private static string Slugify(string input)
+    {
+        string lowered = input.ToLowerInvariant();
+        string hyphenated = Regex.Replace(lowered, @"[\s_]+", "-");
+        string stripped = Regex.Replace(hyphenated, "[^a-z0-9-]", string.Empty);
+        string deduped = Regex.Replace(stripped, "-{2,}", "-");
+        return deduped.Trim('-');
     }
 }

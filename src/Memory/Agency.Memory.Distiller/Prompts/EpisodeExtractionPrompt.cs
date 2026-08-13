@@ -17,8 +17,12 @@ namespace Agency.Memory.Distiller.Prompts;
 internal static class EpisodeExtractionPrompt
 {
     /// <summary>Prompt template version. Bump when the template changes (Spec §18.5).</summary>
-    /// <remarks>v2 (TI-8.2): added the prompt-level thinking-suppression directive.</remarks>
-    internal const int Version = 2;
+    /// <remarks>
+    /// v2 (TI-8.2): added the prompt-level thinking-suppression directive.
+    /// v3: added the MemorizeNow skip rule — do not re-extract facts already
+    /// persisted via the agent-invoked MemorizeNow tool (Source=AgentSignaled).
+    /// </remarks>
+    internal const int Version = 3;
 
     /// <summary>
     /// Renders the full episode-extraction prompt string.
@@ -120,8 +124,10 @@ You may produce two kinds of Records:
 
 ## Quality bar
 
-- **Do not duplicate** facts already known (see ""Recent Known Facts"" below). If a
-  candidate fact is already captured, omit it.
+- **Do not duplicate** facts already known (see ""Recent Known Facts"" below).
+  - If a candidate fact has the exact same `(Domain, Key)` as a recent fact, omit it (no new record).
+  - If the candidate fact is richer/contradictory, overwrite using the same `(Domain, Key)` instead.
+  - Carefully check title and domain against recent facts before extracting.
 - **Do not record trivia** (""user said hello"", ""agent acknowledged""). Memory is
   for what would be regrettable to lose, not for the conversation transcript.
 - **Contradiction = overwrite.** If a fact contradicts an existing one (e.g., the
@@ -131,6 +137,13 @@ You may produce two kinds of Records:
   the new richer one with the same `(Domain, Key)`.
 - **If nothing is worth recording, return an empty `records` array.** It is
   better to skip a session than to pollute the store.
+- **Skip MemorizeNow-signaled facts.** If the conversation excerpt shows the
+  agent calling the `MemorizeNow` tool with a result such as
+  `✓ Memorized: {{domain}}|{{key}}`, that fact is already persisted in the
+  long-term store with `Source = AgentSignaled`. Do not re-extract or
+  re-emit it here — this avoids double-capture. If you are unsure whether a
+  fact was already saved via MemorizeNow, include it anyway (the safe
+  default is to keep, not skip).
 
 ## Context
 
@@ -186,7 +199,37 @@ Respond with strictly valid JSON. No prose, no markdown fences around the JSON.
             string role = m.Role == ChatRole.User ? "User"
                 : m.Role == ChatRole.Assistant ? "Assistant"
                 : m.Role.Value;
-            string text = string.Concat(m.Contents.OfType<TextContent>().Select(static t => t.Text));
+
+            var parts = new List<string>();
+
+            // Text content
+            var textParts = m.Contents.OfType<TextContent>().Select(static t => t.Text).ToList();
+            if (textParts.Count > 0)
+            {
+                parts.Add(string.Concat(textParts));
+            }
+
+            // Tool calls
+            var toolCalls = m.Contents.OfType<FunctionCallContent>().ToList();
+            if (toolCalls.Count > 0)
+            {
+                foreach (var call in toolCalls)
+                {
+                    parts.Add($"[Tool: {call.Name}]");
+                }
+            }
+
+            // Tool results
+            var toolResults = m.Contents.OfType<FunctionResultContent>().ToList();
+            if (toolResults.Count > 0)
+            {
+                foreach (var result in toolResults)
+                {
+                    parts.Add($"[Tool Result: {result.Result}]");
+                }
+            }
+
+            string text = string.Join(" ", parts);
             return $"**[{role}]**: {text}";
         }));
     }

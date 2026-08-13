@@ -79,6 +79,9 @@ public sealed class RetrievalEngineTests
 
         public Task<bool> DeleteByIdAsync(string recordId, string userId, CancellationToken ct = default) =>
             throw new NotImplementedException();
+
+        public Task<string> MemorizeNowAsync(string userId, string sessionId, string title, string value, string domain, Importance importance, string[] tags, CancellationToken ct = default) =>
+            throw new NotImplementedException();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -387,5 +390,36 @@ public sealed class RetrievalEngineTests
         // The session-matched record (A) must be ranked first.
         Assert.Equal("Title a", ctx.Knowledge.Records[0].Title);
         Assert.Equal("Title b", ctx.Knowledge.Records[1].Title);
+    }
+
+    /// <summary>
+    /// UT-7: with similarity, recency, and session all held equal between two candidates, the
+    /// High-importance (0.9) record must outrank the Low-importance (0.3) one — isolating
+    /// importance as the deciding factor rather than combining it with other terms.
+    /// </summary>
+    [Fact]
+    public async Task Retrieve_ImportanceAlone_DeterminesOrder_WhenSimilarityAndRecencyEqual()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var now = DateTimeOffset.UtcNow;
+
+        var highFact = MakeFact("high", importance: 0.9, updatedAt: now);
+        var lowFact = MakeFact("low", importance: 0.3, updatedAt: now);
+
+        var hits = new List<SearchHit>
+        {
+            new(lowFact, Similarity: 0.8),
+            new(highFact, Similarity: 0.8),
+        };
+
+        var store = new FakeMemoryStore(hits);
+        var engine = new RetrievalEngine(store, new FakeEmbeddingGenerator(), DefaultOptions(topK: 2, overFetch: 1));
+        var ctx = MakeContext();
+
+        await engine.RetrieveAsync(ctx, ct);
+
+        Assert.Equal(2, ctx.Knowledge.Records.Count);
+        Assert.Equal("Title high", ctx.Knowledge.Records[0].Title);
+        Assert.Equal("Title low", ctx.Knowledge.Records[1].Title);
     }
 }

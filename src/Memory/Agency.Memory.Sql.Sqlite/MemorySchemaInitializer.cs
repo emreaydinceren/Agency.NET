@@ -110,6 +110,7 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
                 value            TEXT NOT NULL,
                 tags             TEXT NOT NULL DEFAULT '[]',
                 importance       REAL NOT NULL CHECK (importance >= 0 AND importance <= 1),
+                source           INTEGER NOT NULL DEFAULT 1,
                 embedding        TEXT NOT NULL,
                 created_at       TEXT NOT NULL,
                 updated_at       TEXT NOT NULL,

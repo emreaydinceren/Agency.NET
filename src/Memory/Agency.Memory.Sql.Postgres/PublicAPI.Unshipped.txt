@@ -1,1 +1,4 @@
 #nullable enable
+Agency.Memory.Sql.Postgres.PostgresMemoryStore.MemorizeNowAsync(string! userId, string! sessionId, string! title, string! value, string! domain, Agency.Memory.Common.Records.Importance importance, string![]! tags, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+Agency.Memory.Sql.Postgres.Utilities.StringSlugifier
+static Agency.Memory.Sql.Postgres.Utilities.StringSlugifier.Slugify(string! input) -> string!

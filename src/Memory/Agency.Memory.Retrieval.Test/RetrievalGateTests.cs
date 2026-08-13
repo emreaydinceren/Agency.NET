@@ -53,6 +53,9 @@ public sealed class RetrievalGateTests
 
         public Task<bool> DeleteByIdAsync(string recordId, string userId, CancellationToken ct = default) =>
             throw new NotImplementedException();
+
+        public Task<string> MemorizeNowAsync(string userId, string sessionId, string title, string value, string domain, Importance importance, string[] tags, CancellationToken ct = default) =>
+            throw new NotImplementedException();
     }
 
     private static Context MakeContext(string userId = "user1") =>

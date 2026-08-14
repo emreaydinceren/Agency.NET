@@ -112,7 +112,15 @@ jobs:
         # CycloneDX reads the restore/lock graph directly, aggregating every packable project's
         # direct and transitive NuGet dependencies into one manifest — a machine-readable
         # inventory adopters can run through their own compliance/vulnerability tooling.
+        #
+        # Unlike the restore step, CycloneDX can't be pointed at NuGet.GitHub.config — it walks
+        # the standard NuGet config hierarchy and finds src/NuGet.Config's home-lab feeds,
+        # unreachable from a GitHub runner (first hit: v0.1.163, run 31775304718). Overwriting
+        # the config is safe here: only the artifact upload follows, nothing after it restores,
+        # and `publish` is a separate job on a fresh container that receives artifacts, not this
+        # workspace.
         run: |
+          cp NuGet.GitHub.config NuGet.Config
           dotnet tool install --global CycloneDX
           export PATH="$HOME/.dotnet/tools:$PATH"
           dotnet-CycloneDX Agency.slnx -o ./sbom -F Json -fn sbom.json

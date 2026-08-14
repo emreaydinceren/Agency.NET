@@ -1,4 +1,13 @@
-# Agency
+<h1 align="center" style="border-bottom: none">
+    <b>
+        Agency.NET
+    </b>
+    ⭐️  AI Agent Toolkit in C#  ⭐️ <br/>
+</h1>
+
+<p align="center">
+Open-source AI agent framework for .NET — RAG pipelines, tool-using agents, agent memory, permissions, and verifiable task completion in idiomatic C#.
+</p>
 
 **Build AI agents in C# that remember, finish the job, and stay observable — not amnesiac chatbots that stop the moment they *feel* done.**
 
@@ -10,7 +19,7 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Docs](https://img.shields.io/badge/docs-site-blue.svg)](https://emreaydinceren.github.io/Agency.NET/)
 
-Agency is the **C#-native answer to the Python-first agent frameworks** (LangChain, LlamaIndex, AutoGen): a layered toolkit for **RAG pipelines and autonomous agents** on .NET 10 — no Python sidecar, no control flow buried under five layers of magic. The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thinking; the harness — prompting, tools, memory, permissions, and the *"is it actually done?"* check — is everything else, and it's what Agency gives you.
+Agency is the **C#-native take on the Python-first agent frameworks** (LangChain, LlamaIndex, AutoGen): a layered toolkit for **RAG pipelines and autonomous agents** on .NET 10 — no Python sidecar, no control flow buried under five layers of magic. The mental model is one line: **`AGENT = LLM + HARNESS`**. The LLM does the thinking; the harness — prompting, tools, memory, permissions, and the *"is it actually done?"* check — is everything else, and it's what Agency gives you.
 
 > **Status:** Pre-1.0, under active development. Interfaces are stabilizing but may still shift between minor versions — pin package versions if you depend on this.
 
@@ -18,17 +27,19 @@ Agency is the **C#-native answer to the Python-first agent frameworks** (LangCha
 
 ## ⚡ Try it in 60 seconds
 
-**One command. No Docker, no database, no cloud account.** Point Agency at any OpenAI-compatible model — a local [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/) (no API key needed), or a cloud endpoint — and you're chatting with a real, tool-using agent:
+**One script. No Docker, no database, no cloud account.** Point Agency at any OpenAI-compatible model — a local [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/) (no API key needed), or a cloud endpoint — and you're chatting with a real, tool-using agent:
 
 ```powershell
 git clone https://github.com/emreaydinceren/Agency.NET
 cd Agency.NET/src
-.\RunConsole.ps1
+./RunConsole.ps1
 ```
 
-That's the whole setup. 🤖 `RunConsole.ps1` is a friendly guide: it asks three quick questions — *where your model lives, which model, and an API key if you need one* — then builds the console and drops you straight into the REPL. Just press **Enter** to take the smart defaults; it even **auto-detects** a local LM Studio or Ollama already running on your machine.
+That's the whole setup. 🤖 `RunConsole.ps1` is a friendly guide: it asks a few quick questions — *where your model lives, which chat and embedding models, and an API key if you need one* — then builds the console and drops you straight into the REPL. Press **Enter** to take the smart defaults; it even **auto-detects** a local LM Studio or Ollama already running on your machine.
 
-> 💡 **All you need is the [.NET 10 SDK](https://dotnet.microsoft.com/download) and an LLM endpoint.** Want the agent to reach GitHub too? The script can wire up the official GitHub MCP server when you have Docker and a token — completely optional, and the console runs great without it.
+Ask it something, then type **`/dump-context`** — it prints the exact system prompt, message history, and tool list that was sent to the model for that turn. Nothing about the agent is hidden from you.
+
+> 💡 **All you need is the [.NET 10 SDK](https://dotnet.microsoft.com/download) and an LLM endpoint** — on Windows, macOS, or Linux (on macOS/Linux, run it with [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)). Want the agent to reach GitHub too? The script can wire up the official GitHub MCP server when you have Docker and a token — completely optional, and the console runs great without it.
 
 ---
 
@@ -61,35 +72,38 @@ That's the whole loop: the model thinks, calls a real tool, observes the result,
 
 ## What makes Agency different
 
-Most frameworks give you a loop and a tool registry. Agency is about the 80% that decides whether you can leave an agent running unattended:
+Most frameworks give you a loop and a tool registry. Agency is about everything else that decides whether you can leave an agent running unattended:
 
 - 🛡️ **"Done" means verifiably done** — an independent **Goalkeeper** model checks the transcript against your plain-language goal after every turn, under a hard code-enforced turn/cost/token ceiling. Not "the model went quiet." ([deep dive](docs/loop-kit-driving-an-agent-until-done.md))
 - 🧠 **Memory that compounds** — crash-safe, user-partitioned CoALA memory attached purely via hooks: recall is near-free on the hot path; distillation and consolidation run in the background. ([deep dive](docs/memory-from-amnesiac-to-collaborator.md))
 - 🔎 **Semantic search that knows its place** — you curate the documents; the model gets exactly one read-only, scope-locked `semantic_search` tool over them. ([deep dive](docs/retrieval-rag-semantic-search.md))
-- ⚙️ Plus: an allow/deny/rewrite **permission gate** at the tool boundary, **OpenTelemetry on every layer**, **MCP in both directions**, and deterministic tests (`TimeProvider` injected everywhere).
+- 🔍 **No black box** — `/dump-context` prints the exact system prompt, message history, and tool list (grouped by MCP server) that was sent in the last turn. Inspect the loop instead of trusting it.
+- ⚙️ Plus: an allow/deny/rewrite **permission gate**, **OpenTelemetry on every layer**, **MCP in both directions**, and deterministic tests (`TimeProvider` injected everywhere).
 
-> 📚 **Docs:** the [published documentation site](https://emreaydinceren.github.io/Agency.NET/) has a searchable API reference generated from the XML doc comments, plus every deep dive below — or browse in-repo starting at the [documentation portal](docs/Home.md) · trace one full agent turn in the interactive [Code Walkthrough](docs/walkthrough/code-walkthrough.html) (open it locally, or [on the site](https://emreaydinceren.github.io/Agency.NET/docs/walkthrough/code-walkthrough.html) — GitHub only shows the source) · new to agents? read the [Console User Manual](docs/Agent%20Console%20User%20Manual.md).
+> 📚 **Docs:**
+>
+> - The [published documentation site](https://emreaydinceren.github.io/Agency.NET/) — searchable API reference generated from the XML doc comments, plus every deep dive linked below. Or browse in-repo from the [documentation portal](docs/Home.md).
+> - Trace one full agent turn in the interactive [Code Walkthrough](https://emreaydinceren.github.io/Agency.NET/docs/walkthrough/code-walkthrough.html) (GitHub shows only its [source](docs/walkthrough/code-walkthrough.html) — use the site, or open it locally).
+> - New to agents? Read the [Console User Manual](docs/Agent%20Console%20User%20Manual.md).
 
 ---
 
 ## Why Agency
 
-AI agents are easy to demo and hard to ship. The 20% that wins a hackathon is the model; the 80% that decides whether a deployed agent is trustworthy is the *harness* around it — and that 80% is what Agency is about. Treat this repository as a worked study in building that harness well: each subsystem is a deliberate answer to a real production problem, and the [deep-dive docs](docs/Home.md) explain every decision in two passes — a plain-English tour and an implementation walkthrough with `file:line` references and the alternatives that were rejected.
+AI agents are easy to demo and hard to ship. The 20% that wins a hackathon is the model; the 80% that decides whether a deployed agent is trustworthy is the *harness* around it — and that 80% is what Agency is about. Each subsystem is a deliberate answer to a real production problem, and the [deep-dive docs](docs/Home.md) explain every decision in two passes — a plain-English tour and an implementation walkthrough with `file:line` references and the alternatives that were rejected.
 
-**The hard problems, and the deliberate answer to each:**
+The three biggest of those problems — amnesia, self-graded "done", and a model that guesses because it can't read your documents — each get a full section [below](#three-headline-capabilities). The same problem → decision discipline runs through the rest of the stack:
 
 | The problem you actually hit in production | The design decision |
 | --- | --- |
-| A model grades its own work generously and declares victory while the build is still red. | "Done" is decided by an **independent Goalkeeper** running in code the worker can't reach or skip — never by the model simply falling silent. |
-| "Keep going until done" becomes an infinite loop or a runaway bill. | A **hard, code-enforced ceiling** (turn count + USD + token budgets) the model cannot argue past. *Soft where it reasons, hard where it gates.* |
-| Adding memory makes every turn slow because the agent re-reads everything. | The **hot path is sacred**: recall is an O(1) gated check; all distillation and consolidation is pushed to a background cold path the user never waits on. |
 | A crash mid-write corrupts memory or double-counts what was learned. | **Watermarked, idempotent** distillation — an interrupted job re-derives its exact turn window on restart and resumes without duplicating or skipping. |
-| One user's data bleeds into another user's recall. | `UserId` is the **only hard partition**; sessions are a soft ranking signal. Cross-session reach is a feature; cross-user reach is impossible by construction. |
 | A new capability means forking the core agent loop. | Every extension is a **hook**, wired by dependency inversion — `Agent.cs` holds no reference to memory, permissions, or Loop Kit, so each is opt-in with *zero* hot-path cost when off. |
 | You can't tell what the agent did, what it spent, or why it stopped. | **OpenTelemetry on every layer** — SQL, embeddings, LLM calls, tool calls, and loop verdicts emit traces and metrics through named sources, with worker vs. referee spend tagged apart. |
 | The tests "work on my machine" but sleep for five minutes to exercise a timeout. | Time is injected (`TimeProvider`), LLM clients are faked, and tests are categorized — the system is **deterministically testable**, idle triggers and timeouts included. |
 
-The .NET ecosystem has a real gap. Most production-grade RAG and agent tooling lives in Python; the C# alternatives are usually thin wrappers around Python services, or abstraction-first frameworks where the actual control flow disappears under five layers of indirection.
+The .NET ecosystem has a real gap. Most production-grade RAG and agent tooling lives in Python; the C# alternatives are usually thin wrappers around Python services, or abstraction-first frameworks that bury the control flow you'll eventually have to debug.
+
+**And Semantic Kernel or the Microsoft Agent Framework?** Solid frameworks — and Agency deliberately shares their foundation: the agent speaks `IChatClient` from `Microsoft.Extensions.AI`, so adopting Agency doesn't fork you off the .NET AI ecosystem. The difference is the kind of project each one is. The Microsoft stack is building blocks — stable packages you assemble your own system on top of, extending it where its extension points allow. Agency is a complete, working agent stack in one codebase: clone it, step through it, and bend it toward whatever motivates you. That freedom is the reason this project isn't built on top of them: the experimental features I wanted — an independent done-check refereeing every turn, memory the model can't write to — cut across the whole loop, and I couldn't have shipped them from inside someone else's extension points. Take the NuGet packages as-is, or treat the repo as your starting point; either way, all the code is in one place, and it's written to be read. (SK still earns its keep inside Agency: its `TextChunker` drives semantic chunking.)
 
 Agency takes a different engineering stance:
 
@@ -105,8 +119,6 @@ If you've ever wanted a *readable* reference implementation of a memory-augmente
 
 ## Three headline capabilities
 
-The bullets from the top of the page, in full — the things that turn a demo into something you can leave running unattended.
-
 ### 🧠 Memory that compounds
 
 A stateless LLM is *an amnesiac with a tool belt* — it starts every session from zero, burning tokens rediscovering facts it already learned. Agency closes the **memory wall** with a full read/write memory pipeline built on the **CoALA** four-pillar model (Working, Semantic, Procedural, Episodic) — and it attaches to the agent loop through *hooks*, so the loop itself never knows memory exists.
@@ -119,7 +131,7 @@ A stateless LLM is *an amnesiac with a tool belt* — it starts every session fr
 
 The result: the 10th task is easier than the first. Work creates memory; memory improves future work.
 
-> **The design call — and the primitives behind it.** The whole subsystem is organized around one commitment: keep the expensive, judgment-heavy work out of the model's hands *and* off the latency path. Three concrete decisions implement it. **(1) Capture is system-owned** — the agent gets no "save" tool, only a timing signal; a background distiller decides what to keep, so the model can't bloat the store with self-serving recall. **(2) The hot path never blocks on memory** — writes are dropped into a per-session `Channel<DistillationJob>` drained by an event-driven background service, and the inactivity trigger uses an injected `TimeProvider.CreateTimer` so tests drive expiry with a `FakeTimeProvider` instead of really sleeping. **(3) The harness doesn't even reference memory** — `MemoryHookFactory` speaks in `Func<…>` callbacks and is wired via `IPostConfigureOptions<AgentOptions>` (so it composes *after* the host's own hooks without clobbering them); `Agency.Harness` therefore has a zero-dependency relationship to every `Agency.Memory.*` package, and a single config flag collapses the whole stack to a null-hook fast path. Crash-safety then falls out of one persisted watermark that makes re-running a distill job a no-op. ([Full reasoning →](docs/memory-from-amnesiac-to-collaborator.md))
+> **The design call:** keep the expensive, judgment-heavy work out of the model's hands *and* off the latency path. Capture is system-owned, writes drain through a background channel the user never waits on, and `Agency.Harness` holds zero references to the memory packages — one config flag collapses the whole stack to a null-hook fast path. ([Full reasoning →](docs/memory-from-amnesiac-to-collaborator.md))
 
 ### 🛡️ Loop Kit — "done" means *verifiably* done
 
@@ -134,7 +146,7 @@ The result: the 10th task is easier than the first. Work creates memory; memory 
 
 The difference is *"I edited some files"* versus *"the build is green and I proved it."*
 
-> **The design call — and why it stays small.** The load-bearing idea is one distinction: *soft* (model-driven, flexible, skippable) versus *hard* (code-driven, rigid, unskippable). Planning is soft — a bad plan costs one wasted turn. The done-check is hard — a skipped one ships broken work silently — so it lives in the driver as a literal `turn >= MaxTurns` counter the model can't reach. Three details make it trustworthy: the Goalkeeper runs on a **separate `IChatClient`** (the tests hand the worker and the judge two different fakes precisely to prove independence); an unparseable verdict **fails toward Continue**, so a misread referee costs one extra turn but never ships early; and the per-loop timeout uses an injected `TimeProvider`, so even "wait for the wall clock" is deterministically testable. Why a *separate, cheap* model at all? Because generating proof (running the build, doing the diff) is expensive and stays with the worker, while *reading* that proof is cheap — which is the only reason a check can afford to run after every single turn. The whole feature is one tool pair, one driver, and a small verdict type; `Agent.cs` is untouched. *Compose, don't fork.* ([Full reasoning →](docs/loop-kit-driving-an-agent-until-done.md))
+> **The design call:** *soft* where the model reasons — planning, where a bad plan costs one wasted turn — and *hard* where the code gates: the done-check lives in driver code as a literal `turn >= MaxTurns` counter the model can't reach. The Goalkeeper runs on a **separate `IChatClient`**, an unparseable verdict fails toward Continue so a misread referee never ships early, and `Agent.cs` is untouched — *compose, don't fork*. ([Full reasoning →](docs/loop-kit-driving-an-agent-until-done.md))
 
 ### 🔎 Semantic search that knows its place
 
@@ -146,7 +158,7 @@ An agent that can't read *your* files is guessing — it only knows the public i
 - **The model is told what exists before it asks.** A cheap document *inventory* — just the titles in scope — is pushed into the system prompt each turn (`- [project:handbook] onboarding.md`). The model sees the shelf labels for free, then decides whether the expensive *search* is worth pulling.
 - **Search matches meaning, not letters.** Documents are chunked on paragraph boundaries (with overlap so meaning survives the seams), embedded into vectors, and ranked by pure cosine distance — so "forgot my password" finds "reset your credentials" with zero shared words.
 
-> **The design call — and why it's safe by construction.** The load-bearing idea is a division of dangerous verbs: the *human* owns every write, the *model* holds exactly one read that is both read-only **and** scope-locked. `UserId`, `SessionId`, and the loaded-project list come from the host's own session state, never from anything the model said — so it chooses the *query*, never the *scope*. Two details make it fall out cleanly: a chunk's "applies everywhere" scope is a literal `"*"` sentinel rather than SQL `NULL` (because `NULL` never compares equal to `NULL`, a global row would be invisible to a plain `=`), which keeps the entire three-scope union three readable equality clauses; and the whole data plane is **opt-in behind one config key** (`Embedding:BaseUrl`) and decoupled from memory — absent the key, there's no embedder, no store, no tool, zero overhead. The push/pull split is the efficiency trick: telling the model what exists is cheap and happens every turn; actually searching is expensive and happens only when the model decides it's worth it. ([Full reasoning →](docs/retrieval-rag-semantic-search.md))
+> **The design call:** divide the dangerous verbs — the *human* owns every write, the *model* holds exactly one read that is read-only **and** scope-locked. Scope comes from the host's session state, never from anything the model said, so it chooses the *query* but never the *reach* — and absent one config key (`Embedding:BaseUrl`), none of it loads. ([Full reasoning →](docs/retrieval-rag-semantic-search.md))
 
 ---
 
@@ -169,16 +181,16 @@ Grouped by what they're for — the production guarantees that are genuinely har
 
 ### Production guarantees (the parts that are hard)
 
-- **Explicit, debuggable agent loop** — a readable think → act → observe loop driven by a structured `Context`, composable `StopConditions`, and a stream of typed `AgentEvent`s. No control flow hidden under attributes; an interactive REPL ships in the box.
-- **Loop Kit — verifiable completion** — drive an agent turn-after-turn until an independent **Goalkeeper** confirms the job meets a checkable bar, bounded by a hard turn/cost/token ceiling. Opt-in via `AddAgencyLoop`; armed by the model with `enable_goalkeeper` or by the host with a `GoalSpec`.
-- **Deterministic testability** — time is injected via `TimeProvider` (so timeouts and idle triggers are tested with a `FakeTimeProvider`, not real sleeps), LLM clients are faked, and tests are split by `[Trait("Category", "Functional")]` so CI stays fast and offline.
-- **OpenTelemetry on every layer** — every SQL query, embedding call, vector op, LLM request, agent turn, tool call, loop verdict, and ingestion run emits traces and metrics through named `ActivitySource` / `Meter` instances, with worker vs. referee spend tagged apart.
-- **Governance at the tool boundary** — lifecycle hooks (`OnSessionStarted`, `OnPreIteration`, `OnPreToolUse`, `OnPostToolUse`, `OnAssistantTurn`, `OnStop`, `OnSessionEnd`) let you intercept the loop. `OnPreToolUse` can **Allow**, **Deny** (with a reason), or **Rewrite** a call's arguments before it runs; `Compose` chains hooks with most-restrictive-wins. Pre-built hooks ship for command denylisting and audit logging — and the entire memory pipeline attaches through this one seam.
-- **Crash-safe, partitioned memory** — opt-in CoALA-model memory: gated retrieval on the hot path, background distillation/consolidation/hygiene on the cold path, watermarked idempotent writes, composite re-ranking, and `UserId`-partitioned isolation. One flag turns it off and the harness behaves byte-for-byte as if memory never existed.
+- **Explicit, debuggable agent loop** — a readable think → act → observe loop driven by a structured `Context` and a stream of typed `AgentEvent`s. No control flow hidden under attributes; an interactive REPL ships in the box.
+- **Loop Kit — verifiable completion** — an independent **Goalkeeper** drives the agent until the job meets a checkable bar, under a hard turn/cost/token ceiling. Opt-in via `AddAgencyLoop`.
+- **Deterministic testability** — time injected via `TimeProvider`, LLM clients faked, tests categorized so CI stays fast and offline.
+- **OpenTelemetry on every layer** — traces and metrics on everything from SQL query to loop verdict, worker vs. referee spend tagged apart.
+- **Governance at the tool boundary** — lifecycle hooks at every seam of the loop; `OnPreToolUse` can **Allow**, **Deny**, or **Rewrite** a call before it runs, and `Compose` chains hooks most-restrictive-wins.
+- **Crash-safe, partitioned memory** — opt-in CoALA memory: gated recall on the hot path, background distillation and consolidation on the cold path, `UserId`-partitioned isolation. One flag turns it all off.
 
 ### Agent capabilities
 
-- **Scoped semantic search over your documents** — ingest files and folders from the REPL (`/add-file`, `/add-folder`) into **global / session / project** scopes, then load and unload named projects on demand (`/project-load`). The model gets one read-only `semantic_search` tool that unions every accessible scope behind a hard `user_id` partition, plus a per-turn document *inventory* in the system prompt so it knows what's available before it asks. Opt-in behind a single `Embedding:BaseUrl` config key.
+- **Scoped semantic search over your documents** — REPL-driven ingestion (`/add-file`, `/add-folder`, `/project-load`) into **global / session / project** scopes; the model gets one read-only `semantic_search` tool over every scope you've loaded, behind a hard `user_id` partition. Opt-in behind a single `Embedding:BaseUrl` config key.
 - **Budget & token guardrails** — stop the loop on step count, no-more-tool-calls, accumulated USD cost, or total tokens. Compose any combination with `StopConditions.Any(...)`.
 - **Stateful, structured context** — context is assembled from typed sub-contexts (query, temporal, environmental, user, knowledge, memory) rather than a raw prompt string. Domain facts and recalled memories are re-injected into the system prompt on **every** loop iteration, so grounding never drifts out of the window.
 - **Multi-turn sessions with per-turn timeouts** — `ChatSession` / `Agent.ChatAsync` preserve conversation history across turns; `AgentOptions.TurnTimeoutSeconds` bounds each turn.
@@ -194,7 +206,7 @@ Grouped by what they're for — the production guarantees that are genuinely har
 
 ## Quick start
 
-> The **agent, hooks, and MCP** snippets below (steps 3–6) are verified against the current public API — their constructor signatures and method names match the source. The **ingestion** (step 2), **memory**, and **Loop Kit** wiring snippets show the intended shape only; verify their type names and constructors against the current source before copying them. The runnable reference host is `src/Harness/Agency.Harness.Console` (launch it with `.\RunConsole.ps1`).
+> The **agent, hooks, and MCP** snippets below (steps 3–6) are verified against the current public API — their constructor signatures and method names match the source. The **ingestion** (step 2), **memory**, and **Loop Kit** wiring snippets show the intended shape only; verify their type names and constructors against the current source before copying them. The runnable reference host is `src/Harness/Agency.Harness.Console` (launch it with `./RunConsole.ps1`).
 
 ### 1. Install
 
@@ -382,7 +394,7 @@ When the flag is `false`, none of these services register, the baseline hooks st
 
 ### 9. Try the REPL — and search your own documents
 
-The quickest way in is the **`.\RunConsole.ps1`** quickstart from [Try it in 60 seconds](#-try-it-in-60-seconds) above — it configures your LLM and launches the console for you. Prefer to wire it up yourself? Run the project directly:
+The quickest way in is the **`./RunConsole.ps1`** quickstart from [Try it in 60 seconds](#-try-it-in-60-seconds) above — it configures your LLM and launches the console for you. Prefer to wire it up yourself? Run the project directly:
 
 ```bash
 dotnet run --project src/Harness/Agency.Harness.Console
@@ -515,22 +527,23 @@ Loop Kit emits its own instruments under `Agency.Harness.Loop`, with a `role` ta
 dotnet test src/Agency.slnx --filter "Category!=Functional"
 
 # Functional tests — require a running LLM endpoint (e.g. LM Studio on localhost)
-dotnet test --filter "Category=Functional"
+dotnet test src/Agency.slnx --filter "Category=Functional"
 ```
 
 Functional tests are tagged `[Trait("Category", "Functional")]` so CI excludes them by default and they run on demand. Time-dependent behaviour (turn timeouts, the memory inactivity trigger, the hygiene sweeper) is tested with an injected `FakeTimeProvider` rather than real delays, so the suite stays fast and deterministic.
 
 ## Roadmap
 
-Agency targets `net10.0` exclusively; older runtimes (.NET 8, .NET 9, .NET Framework) are not supported, and there is no plan to multi-target. .NET 10 is the current LTS release, and single-TFM keeps `Directory.Build.props` free of `#if NET8_0_OR_GREATER`-style branching so every project can use the newest C# language surface — primary constructors, collection expressions, file-scoped namespaces — without a compatibility shim holding it back. It also keeps the dependency graph on its newest footing: `Microsoft.Extensions.AI` and the official Anthropic and OpenAI SDKs move fast, and tracking one current runtime avoids pinning the harness to an older BCL just to preserve support for a version most of the ecosystem has already moved past.
+Agency targets `net10.0` (the current LTS) exclusively, with no plan to multi-target — a single TFM keeps every project on the newest C# language surface and the fast-moving `Microsoft.Extensions.AI`, Anthropic, and OpenAI SDKs on their newest footing.
 
 The next increments are the forward problems that actually matter for long-running agents — not provider wrappers:
 
 - [ ] **Persist an armed Loop Kit goal across `--resume`** — the `Verdict` `[JsonDerivedType]` seam is already in place; this lights it up.
 - [ ] **Transcript compaction** for loops that outgrow the context window on multi-hour runs.
+- [ ] **Optimize for server-side prompt caching** — put a `cache_control` breakpoint after the stable prefix (tools + system) and move the per-turn facts and memories behind it, so repeat turns read the cached prompt at a fraction of the input price instead of re-billing it in full.
 - [ ] **Procedural memory** — promote Skills into a fourth recalled pillar, completing the CoALA model.
-- [ ] **SQLite parity for the memory store** — the read/write pipeline is Postgres-first today; `IMemoryStore` is already backend-neutral.
 - [ ] Additional vector backends (Qdrant, Weaviate) behind the existing `IVectorStore`.
+- [ ] **A multi-persona chat app** — a richer UX beyond the console REPL, where you chat with several agent personas in one place.
 
 ## Contributing
 

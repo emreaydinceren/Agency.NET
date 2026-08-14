@@ -116,6 +116,15 @@ public sealed record Context
     /// <summary>Gets the accumulated token usage for this session.</summary>
     public LlmTokenUsage TotalUsage { get; internal set; } = new(0, 0);
 
+    /// <summary>
+    /// Gets or sets the request submitted on the most recent loop iteration, serialized as UTF-8
+    /// JSON (see <see cref="LlmRequestSnapshot"/>), or <see langword="null"/> before the first LLM
+    /// call. Overwritten every iteration. Serialized rather than held by reference so it is immune
+    /// to later mutation of the live conversation, and consumable by hosts other than the console
+    /// renderer.
+    /// </summary>
+    internal byte[]? LastLlmRequest { get; set; }
+
     // ── Memory retrieval state ────────────────────────────────────────────────
 
     /// <summary>

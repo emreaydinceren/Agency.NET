@@ -75,7 +75,7 @@ internal static class CommandRegistry
         RegisterCommand("/quit", "Exit the current chat session.", (_, _) => CommandContinuation.ExitSession);
         RegisterCommand("/help", "Show help information.", (_, _) => HelpCommand.Run());
         RegisterAsyncCommand("/model", "Show model picker, or switch directly by passing a model name.", ModelsCommand.RunSelectModelCommandAsync, argumentHint: "[model name]");
-        RegisterCommand("/dump-context", "Print the full context sent to the model (not added to history).",
+        RegisterCommand("/dump-context", "Print the exact request last submitted to the model (not added to history).",
             (_, session) => DumpContextCommand.Run(session));
         RegisterAsyncCommand("/add-file", "Ingest a file into the vector store.", AddFileCommand.RunAsync, argumentHint: "<path>");
         RegisterAsyncCommand("/add-folder", "Ingest all files in a folder into the vector store.", AddFolderCommand.RunAsync, argumentHint: "<path>");

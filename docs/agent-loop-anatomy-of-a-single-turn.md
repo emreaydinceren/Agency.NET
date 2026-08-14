@@ -113,6 +113,8 @@ while (true)                                         // Agent.cs:568
 
     string systemPrompt = SystemPromptBuilder.Build(ctx);  // :580  ── reads the whole ctx
 
+    ctx.LastLlmRequest = LlmRequestSnapshotCodec.Serialize(...);  // ── record what is about to be sent
+
     var response = await this._llm.GetResponseAsync(
         ctx.Conversation.Messages, options, ct);     // :599  ── THINK (reads messages)
 
@@ -469,6 +471,7 @@ The skills side of this is detailed in [Skills](skills-a-playbook-in-one-markdow
 | `TotalCostUsd` | `decimal` | `get; internal set;` | `0` | 3 loop-owned |
 | `TotalUsage` | `LlmTokenUsage` | `get; internal set;` | `new(0, 0)` | 3 loop-owned |
 | `MemoryLastRetrievedAt` | `DateTimeOffset?` | `get; set;` | `null` | 2 swap |
+| `LastLlmRequest` | `byte[]?` | `internal get; set;` | `null` | 3 loop-owned |
 | `PendingToolBatch` | `PendingToolBatch?` | `internal get; set;` | `null` | 3 loop-owned |
 | `ActiveSkillState` | `ActiveSkillState` | `internal get;` (in-place) | `new()` | 3 loop-owned |
 
@@ -520,6 +523,7 @@ the loop step from §4 in parentheses.
 | `MemoryLastRetrievedAt` | retrieval gate (memory subsystem) | retrieval engine, `OnPreIteration` |
 | `ActiveSkillState` | gate `IsAllowed` `Agent.cs` tool path | `Set :865`, `Clear :204` |
 | `PendingToolBatch` | resume / abandonment `ChatSession.cs:112` | set `:929`, cleared on resume |
+| `LastLlmRequest` | `ChatSession.LastLlmRequest` → console `/dump-context` | serialized each iteration, just before the LLM call (THINK) |
 
 ### 13. Accuracy footnotes
 
@@ -535,6 +539,14 @@ the loop step from §4 in parentheses.
   `Context` directly (§9).
 - **`required` members.** Exactly two members in the whole graph are `required`: `Context.Query`
   (`:57`) and `QueryContext.Prompt`. The user's first message is the one mandatory input.
+- **`PendingToolBatch` is no longer the only serialized slot.** `LastLlmRequest` holds the request
+  submitted on the most recent iteration, serialized to UTF-8 JSON by `LlmRequestSnapshotCodec`
+  before the LLM call. It is stored serialized rather than by reference for a reason worth
+  internalising: `ctx.Conversation.Messages` is the *live* backing list, so a captured reference
+  keeps growing, and `ChatMessage` is mutable — only a serialized copy is a genuine record of what
+  was sent. It also means anything an `OnPreIteration` hook wrote into the system prompt is
+  faithfully preserved, which is what makes the console's `/dump-context` a recording rather than a
+  reconstruction.
 
 ---
 

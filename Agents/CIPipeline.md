@@ -135,6 +135,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | Copied-out `PackageSmokeTest` harness fails every package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''` (restore) or `CS0103: The name 'Console' does not exist` (build) | `Agency.PackageSmokeTest.csproj` had no explicit `TargetFramework`/`ImplicitUsings`; it relied on `src/Directory.Build.props` via MSBuild's directory-props auto-import, which stops working once the project is `cp -r`'d to a `mktemp -d` outside `src/` | Set `TargetFramework`/`ImplicitUsings` explicitly in the harness `.csproj` itself — don't rely on ancestor `Directory.Build.props` for a project designed to be copied out of the tree |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1301: The local source '.../src/gitea-local' doesn't exist` | `dotnet add package --source <name>` never resolves a NuGet.Config source *name* — it only accepts a literal URL/path, and silently falls back to treating the name as a relative local directory when it isn't an absolute URI | Ship a NuGet.Config alongside the copied-out harness (`cp NuGet.Config "$work/harness/"`) and drop `--source` entirely, letting restore use the ambient config the normal way |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1302: ... requires HTTPS sources` right after the previous bug's fix | `dotnet nuget update source` rewrites the whole source entry and drops any attribute it doesn't manage itself, silently stripping the checked-in `allowInsecureConnections="true"` off `gitea-local` | Pass `--allow-insecure-connections` on the `dotnet nuget update source` call so the attribute survives the rewrite |
+| A functional test fails on a response that answers **a different prompt** — goalkeeper `VERDICT:` text returned for a distiller prompt, a one-word answer to a 1,500-token prompt, or an empty completion (`finish_reason: stop`, no content, no `tool_calls`) | **LM Studio KV-cache bleed.** Its prompt cache reuses attention state by *prefix*, and under concurrent clients a request can be served a slot belonging to another conversation. The proxy then persists that answer, so a transient server fault becomes a permanent cassette | Reload the model (`lms unload <id> && lms load <id>`) — this clears the corrupt state; quarantine the poisoned cassettes; re-record. See the 2026-08-13 reflection |
 | `LoopConsoleIntegrationTests` (or any LLM-driven console test) fails all 3 attempts after an *unrelated-looking* change, and the **number** of failing tests differs between runs | A native tool's `ToolDefinition` description was edited. Progressive discovery reveals native tools in full, so that text is in the `tools` array of **every** request → cache-key change → miss on every LLM-driven test | Treat `ToolDefinition` text as cached-request-body content: it needs a cassette re-record, same as a prompt edit. See the 2026-08-04 reflection |
 
 ## Reflection — 2026-06-11: the CRLF/LF cache-key trap
@@ -444,6 +445,148 @@ secondary evaluator's prompt often are not.
 - **Varying failure counts across otherwise identical runs point at the cache, not the code.** The
   proxy forwards misses live rather than erroring, so an invalidated cassette impersonates a flaky
   model. Here it was 1, then 1, then 3 failing tests with the tests themselves unchanged.
-- Reproducing locally needs the proxy (`runner-host.example:12345`) and LM Studio (`llm.test:1234`);
-  from a dev box that cannot reach them, CI is the only oracle — so spend the round-trips on
+- Reproducing locally needs the proxy (`runner-host.example:12345`) and LM Studio (`llm.test:1234`).
+  **Check whether you can reach them before concluding you can't** — the primary Windows dev box
+  *is* the host for both, and the cassette directory sits in the sibling `Agency.HttpCacheProxy`
+  checkout on that same disk. Treating CI as "the only oracle" turns a 60-second local test run
+  into a multi-hour round-trip loop. If they genuinely are unreachable, spend the CI round-trips on
   *single-variable* experiments rather than on bundled guesses.
+
+## Reflection — 2026-08-13: LM Studio answered one prompt with another prompt's continuation
+
+**Failure:** PR #205 was red on the functional step for six consecutive runs (543–548) with the
+same four tests: `T_CON_LOOP_2/_3/_4` and
+`EndToEndRecallTests.EndToEnd_FactWrittenInSessionN_RecalledInSessionNPlus1`. A baseline probe
+(PR #206 = `main` + an inert newline) reproduced all four, which correctly established that the
+PR was not the cause — and then wrongly ended the investigation at "environmental, needs a
+cassette re-record on a host I can't reach."
+
+They turned out to be **two** unrelated failures wearing the same clothes. `T_CON_LOOP_3`, `_4`
+and the recall test were poisoned cassettes, fixed below. `T_CON_LOOP_2` was not: it is genuine
+model non-compliance, covered in its own reflection further down. Four tests failing together in
+the same step is not evidence of one cause.
+
+**Root cause:** LM Studio's prompt cache reuses attention state keyed by prompt **prefix**. When two
+requests are in flight it can serve a request from a KV slot belonging to a *different*
+conversation, so the model emits a continuation of someone else's context. The functional suite ran
+`Agency.Harness.Console.Test` (goalkeeper) and `Agency.Memory.Functional.Test` (distiller)
+concurrently, so distiller calls came back as goalkeeper output — `'V' is an invalid start of a
+value` is literally `VERDICT: continue`. The proxy then persisted each bad reply, converting a
+transient server fault into a permanent cassette. 167 of 802 cached chat responses were corrupt:
+41 with no content *and* no `tool_calls`, 126 prose where JSON was required.
+
+**The decisive experiment** — three variants of the same distiller prompt, sent straight at
+LM Studio with the proxy bypassed:
+
+| Variant | Result |
+|---|---|
+| golden prompt verbatim | `VERDICT: continue …` (goalkeeper format) |
+| same prompt, nonce **prepended** | `{"records": []}` — correct |
+| same prompt, nonce **appended** | `VERDICT: done …` — still wrong |
+| prompt with the leading `/no_think` line removed | `Blue` — the answer to an unrelated colour question sent minutes earlier |
+
+Changing the *prefix* fixes it; changing the *tail* does not. That asymmetry is the signature of
+prefix-keyed cache reuse, and `Blue` is the proof that the leaked state came from another
+conversation entirely. After `lms unload && lms load`, the same prompt returned valid JSON 6/6.
+
+**The second bug, hiding under the first.** `RunConfiguration.MaxCpuCount=1` had been added to the
+workflow to stop concurrent functional assemblies (the earlier `ErrorDeviceLost` fix) and was
+believed to have done so. It had not: timestamps in the CI log show Console.Test and
+Memory.Functional.Test lines alternating seconds apart. That setting is a **VSTest** knob governing
+parallelism *within one invocation*, but `dotnet test <solution>` invokes VSTest once per project
+and **MSBuild** parallelizes across projects. The knob was one layer below where the parallelism
+lived. `-maxcpucount:1` is the one that serializes projects; both are now passed.
+
+**Lessons for future agents:**
+- **A response that answers a *different* prompt is a server bug, not a model-quality problem.**
+  Goalkeeper `VERDICT:` text returned for a distiller prompt, or a one-word reply to a
+  1,500-token prompt, means state bleed. Reload the model; don't rewrite the prompt.
+- **Prepend a nonce to test for prefix-cache reuse.** If a prepended nonce fixes the answer and an
+  appended one doesn't, you are being served a cached prefix. This is a two-minute test that
+  discriminates "the model is weak" from "the server is lying".
+- **Verify a serialization fix actually serialized.** Grep the log for interleaved assembly names
+  before trusting the setting. A knob at the wrong layer looks exactly like a knob that works,
+  because nothing errors.
+- **"Environmental" is a hypothesis, not a verdict.** It was true that the PR was innocent and true
+  that the cassettes were poisoned — and still the wrong stopping point, because the *reason* they
+  were poisoned was a live, reproducible, fixable bug. A correct exoneration of the code is not a
+  diagnosis.
+
+**Open follow-up (proxy repo, not this one).** `ProxyMiddleware` caches on
+`upstreamResponse.IsSuccessStatusCode` alone, and a degenerate completion is a perfectly good
+HTTP 200 — which is why one bad reply becomes permanent. A narrow guard in
+`Agency.HttpCacheProxy` — refuse to `Set()` a `chat/completions` response whose
+`choices[0].message` has neither `content` nor `tool_calls` — would make this class of poisoning
+impossible rather than merely recoverable.
+
+### Triage script for a poisoned cache
+
+Cassette bodies are base64 under `Body`. To find the unusable ones, decode each and flag any
+`chat/completions` response where `choices[0].message` has neither `content` nor `tool_calls`
+(never a valid answer), plus any reply that discusses records/consolidation yet contains no `{`
+(the distiller and consolidator prompts both require a bare JSON object). Move the hits to
+`cache-quarantine/` rather than deleting — the sweep is heuristic, and a wrongly-removed cassette
+just re-records on the next run, so quarantining costs one test run while deleting costs the
+evidence. Audit the quarantine afterwards: anything in there carrying real `tool_calls` or
+well-formed JSON means the heuristic was too aggressive.
+
+**Then restart the proxy — moving files on disk is not enough.** `ResponseCache` keeps an
+in-memory tier, so a removed cassette keeps being served from RAM and the test fails identically
+with the *same* token counts and the same impossible ~300,000 tok/s. That number is the tell: any
+throughput far above what the GPU can produce means you are reading a cache, so if it persists
+after a purge you are reading the *other* cache. This is already listed in the failure-mode table
+above; it is easy to purge the disk, watch nothing change, and conclude the purge was aimed at the
+wrong files.
+
+**Cassette mtime is last *use*, not last *record*.** `ResponseCache.TryGet` calls `TouchBlob`,
+which rewrites `LastWriteTimeUtc` on every hit so the pruning service can measure "days unused".
+Two consequences when triaging: dating cassettes by mtime tells you nothing about when a bad
+response was recorded, and — usefully — the mtime *is* a reliable record of which cassettes a
+given run touched. To re-roll one specific interaction, snapshot the time, run the test, then move
+every cassette with `LastWriteTime >= start`. Selecting by response content instead is what fails:
+if the predicate misses whatever the run actually cached, the next attempt silently replays it and
+a dozen "independent" retries are really one sample.
+
+## Reflection — 2026-08-13: `T_CON_LOOP_2` is model non-compliance, not a cache problem
+
+**Failure:** `T_CON_LOOP_2_RefactorLoopSkill_ArmsGoalkeeper_GoalBoxRenders` fails its third
+assertion (`Loop Achieved`). It failed 3/3 attempts on the `main` baseline probe, so it is
+pre-existing and unrelated to whatever PR is currently red.
+
+**What it actually asserts.** The test sends one message asking the agent to use the
+`refactor-loop` skill, whose Step 1 says the first action must be `enable_goalkeeper`. The model
+calls `skill` correctly, receives the body — and then just writes the marker and stops. No goal is
+armed, so no loop result renders. Note that `allowed-tools` in a skill is a permission
+*pre-approval* list (`Agent.cs` → `ActiveSkillState.Set`), not a narrowing of the offered tools:
+the model keeps full freedom to answer instead of calling anything.
+
+**Ruling out the cache took three tries, and the first two were self-deceiving.** Attempts to
+re-record kept "failing identically", which looked like determinism. It was not — every retry was
+a cache hit:
+
+| Approach | Why it silently measured nothing |
+|---|---|
+| discard cassettes *newly created* by the failing run | the offending blob already existed, so nothing was new and 8 "rolls" were 1 sample |
+| discard cassettes whose *content* matched the bad reply | the cached reply's formatting differed from the predicate, so it survived and was replayed |
+| discard cassettes by **write time** | correct — `TouchBlob` stamps every hit, so this catches created *and* replayed blobs |
+
+Only the third produced genuine live calls (visible as ~94 tok/s instead of ~200,000). Across
+**9 genuine rolls the model never once armed the goalkeeper.**
+
+**Why it used to pass.** The cache still holds compliant recordings for this exact test —
+`enable_goalkeeper` with `{"condition":"the word SKILL_ARMED appears in the conversation"}` — at
+`prompt_tokens` 1755 and 1768. The current request is 1847 tokens. Tool definitions on `main` grew
+by roughly 80 tokens, which changed the cache key and retired every compliant cassette; the live
+answer at the new size is non-compliant. This is the 2026-08-04 reflection's lesson recurring: tool
+metadata is cached request content.
+
+**Two of its three assertions are also false-positive magnets** and would pass even with nothing
+armed: `output.Contains("Goal")` matches the echoed skill heading "Arm the **Goal**keeper", and
+`output.Contains("SKILL_ARMED")` matches the model repeating the marker from the prompt. Only the
+`Loop Achieved` assertion has teeth. If this test is kept, assert on the rendered box prefix
+(`┌─ Goal`) so it cannot pass on echoed text.
+
+**Options, none of them free:** pin a compliant recording (not reachable in 9 rolls); run the
+console loop tests against a model that reliably follows a tool-call instruction delivered in a
+tool result; or narrow the test to the wiring that `T_CON_LOOP_1/_3/_4` already cover and stop
+asserting model judgement. The choice is a product call, not a CI call.

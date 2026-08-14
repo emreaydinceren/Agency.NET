@@ -131,11 +131,15 @@ jobs:
             [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."
           done
 
+      # Both serialization knobs are required — see the matching comment in ci-pr.yaml.
+      # -maxcpucount:1 serializes MSBuild across PROJECTS; RunConfiguration.MaxCpuCount=1
+      # serializes VSTest within an invocation. Without the former, two functional assemblies
+      # hit LM Studio at once and its KV slots cross-contaminate.
       - name: 🧪 Run Functional Tests
         working-directory: src
         run: |
           for i in 1 2 3; do
-            if dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud" --collect:"XPlat Code Coverage" --results-directory ./coverage -- RunConfiguration.MaxCpuCount=1; then
+            if dotnet test --configuration Release --no-build --verbosity normal -maxcpucount:1 --filter "Category=Functional&Category!=Cloud" --collect:"XPlat Code Coverage" --results-directory ./coverage -- RunConfiguration.MaxCpuCount=1; then
               break
             fi
             [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."

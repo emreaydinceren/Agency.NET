@@ -117,11 +117,20 @@ jobs:
             [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."
           done
 
+      # Both serialization knobs are required, and they act on different layers:
+      #   -maxcpucount:1            → MSBuild runs the VSTest target for one PROJECT at a time
+      #   RunConfiguration.MaxCpuCount=1 → VSTest runs one assembly at a time within an invocation
+      # `dotnet test <solution>` invokes VSTest once per project, so the VSTest setting alone left
+      # Console.Test (goalkeeper) and Memory.Functional.Test (distiller) hitting LM Studio
+      # concurrently. Two live requests share its KV slots, and it answers one prompt with the
+      # other's continuation — a distiller call comes back as goalkeeper "VERDICT:" text. The proxy
+      # then persists that reply, so a transient bleed becomes a permanent cassette.
+      # See Agents/CIPipeline.md, reflection 2026-08-13.
       - name: 🧪 Run Functional Tests
         working-directory: src
         run: |
           for i in 1 2 3; do
-            if dotnet test --configuration Release --no-build --verbosity normal --filter "Category=Functional&Category!=Cloud" --collect:"XPlat Code Coverage" --results-directory ./coverage -- RunConfiguration.MaxCpuCount=1; then
+            if dotnet test --configuration Release --no-build --verbosity normal -maxcpucount:1 --filter "Category=Functional&Category!=Cloud" --collect:"XPlat Code Coverage" --results-directory ./coverage -- RunConfiguration.MaxCpuCount=1; then
               break
             fi
             [ $i -eq 3 ] && exit 1 || echo "Attempt $i failed, retrying..."

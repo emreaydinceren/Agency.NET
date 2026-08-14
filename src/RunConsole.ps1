@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Visitor-facing quickstart script for the Agency demo console app.
 .DESCRIPTION
@@ -8,15 +8,15 @@
     reuse those saved answers automatically and skip straight to build/launch
     - pass -Reconfigure to run through the questions again.
 
-    Run from src\: .\RunConsole.ps1
+    Run from src/: ./RunConsole.ps1
 
-    Force re-running the interactive setup: .\RunConsole.ps1 -Reconfigure
+    Force re-running the interactive setup: ./RunConsole.ps1 -Reconfigure
 
     Non-interactive / CI usage:
-        .\RunConsole.ps1 -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
+        ./RunConsole.ps1 -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
 
     Preview what would happen without building or launching anything:
-        .\RunConsole.ps1 -DryRun -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
+        ./RunConsole.ps1 -DryRun -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
 #>
 
 param(
@@ -58,8 +58,8 @@ if ($SetupFailed) {
 
 # ── Build & launch ────────────────────────────────────────────────────────────
 
-$consoleProjectRelative = "Harness\Agency.Harness.Console\Agency.Harness.Console.csproj"
-$consoleOutputDir = Join-Path $scriptDir "Harness\Agency.Harness.Console\bin\Release\net10.0"
+$consoleProjectRelative = "Harness/Agency.Harness.Console/Agency.Harness.Console.csproj"
+$consoleOutputDir = Join-Path $scriptDir "Harness/Agency.Harness.Console/bin/Release/net10.0"
 $buildCommandDisplay = "dotnet build `"$consoleProjectRelative`" --configuration Release"
 # Launch from the build-output directory: shared-appsettings.json is a linked file that only lands
 # next to appsettings.json in the output, and the host resolves config relative to its working

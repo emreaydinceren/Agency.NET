@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Interactive configuration step for the Agency demo console app.
 .DESCRIPTION
@@ -8,15 +8,15 @@
     is written to appsettings or user-secrets. Does not build or launch
     anything - see RunConsole.ps1 for that.
 
-    Can be run directly to (re)configure: .\SetupConsole.ps1
+    Can be run directly to (re)configure: ./SetupConsole.ps1
     Normally you don't need to call this yourself - RunConsole.ps1 calls it
     automatically the first time, and reuses your saved answers after that.
 
     Non-interactive / CI usage:
-        .\SetupConsole.ps1 -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
+        ./SetupConsole.ps1 -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
 
     Preview what would happen without saving anything:
-        .\SetupConsole.ps1 -DryRun -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
+        ./SetupConsole.ps1 -DryRun -NonInteractive -BaseUrl <url> -Model <model> -ApiKey <key>
 #>
 
 param(

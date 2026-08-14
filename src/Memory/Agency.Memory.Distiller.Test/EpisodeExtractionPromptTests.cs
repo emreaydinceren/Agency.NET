@@ -67,11 +67,11 @@ public sealed class EpisodeExtractionPromptTests
         Assert.Contains("Goal achieved: debug session finished", rendered);
     }
 
-    /// <summary>Verifies that the prompt version constant is 2 (Spec §18.5; bumped for the TI-8.2 no-think directive).</summary>
+    /// <summary>Verifies that the prompt version constant is 3 (Spec §18.5; bumped for the v3 MemorizeNow skip rule).</summary>
     [Fact]
-    public void Version_Is2()
+    public void Version_Is3()
     {
-        Assert.Equal(2, EpisodeExtractionPrompt.Version);
+        Assert.Equal(3, EpisodeExtractionPrompt.Version);
     }
 
     /// <summary>Verifies the rendered prompt carries the thinking-suppression directive (TI-8.2).</summary>
@@ -83,6 +83,60 @@ public sealed class EpisodeExtractionPromptTests
 
         Assert.Contains("/no_think", rendered);
         Assert.Contains("do NOT produce any chain-of-thought", rendered);
+    }
+
+    // ── MemorizeNow skip rule (Task 19 / UT-4) ───────────────────────────────────
+
+    /// <summary>The prompt names the MemorizeNow tool and the exact confirmation pattern
+    /// ("✓ Memorized: {domain}|{key}") the LLM should recognise in the transcript.</summary>
+    [Fact]
+    public void Render_IncludesMemorizeNowSkipRule_ReferencesToolAndResultPattern()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("MemorizeNow", rendered);
+        Assert.Contains("✓ Memorized: {domain}|{key}", rendered);
+    }
+
+    /// <summary>The prompt explicitly instructs the LLM not to re-extract or re-emit facts already
+    /// persisted via MemorizeNow, and ties that instruction to Source = AgentSignaled provenance.</summary>
+    [Fact]
+    public void Render_IncludesMemorizeNowSkipRule_InstructsNotToReExtractOrReEmit()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("Do not re-extract or", rendered);
+        Assert.Contains("re-emit it here", rendered);
+        Assert.Contains("Source = AgentSignaled", rendered);
+    }
+
+    /// <summary>When the LLM is unsure whether a fact was already saved via MemorizeNow, the rule's
+    /// safe default is to keep (include) it rather than skip it, avoiding silent data loss.</summary>
+    [Fact]
+    public void Render_IncludesMemorizeNowSkipRule_SafeDefaultIsToKeepWhenUnsure()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        Assert.Contains("include it anyway", rendered);
+        Assert.Contains("the safe", rendered);
+    }
+
+    /// <summary>The skip rule lives alongside the other Quality-bar rules (contradiction/expansion),
+    /// confirming it was added to the section the LLM already reads for dedup guidance.</summary>
+    [Fact]
+    public void Render_MemorizeNowSkipRule_IsPartOfQualityBarSection()
+    {
+        DistillationJob job = MakeJob();
+        string rendered = EpisodeExtractionPrompt.Render(job, MakeTurns(), FocusContext.Empty, [], []);
+
+        int qualityBarIndex = rendered.IndexOf("## Quality bar", StringComparison.Ordinal);
+        int skipRuleIndex = rendered.IndexOf("Skip MemorizeNow-signaled facts", StringComparison.Ordinal);
+        int contextIndex = rendered.IndexOf("## Context", StringComparison.Ordinal);
+
+        Assert.True(qualityBarIndex >= 0 && skipRuleIndex > qualityBarIndex && skipRuleIndex < contextIndex);
     }
 
     // ── Parsing ────────────────────────────────────────────────────────────────
@@ -134,6 +188,73 @@ public sealed class EpisodeExtractionPromptTests
         IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(json, "u1", "my-session");
 
         Assert.Equal("my-session", records[0].SessionId);
+    }
+
+    /// <summary>
+    /// A conversational preamble before the object is tolerated. Small models routinely emit
+    /// "Here is the JSON:" despite the prompt demanding JSON only; failing the parse dead-letters
+    /// the whole distillation over a cosmetic wrapper.
+    /// </summary>
+    [Fact]
+    public void Parse_ProsePreambleBeforeJson_ExtractsRecords()
+    {
+        const string response = """
+            Here is the JSON you requested:
+
+            {"records":[{"ContentType":"Fact","Title":"Python preference","Domain":"Preferences","Key":"Language","Tags":[],"Scope":"Global","Importance":0.7,"Value":"User prefers Python."}]}
+            """;
+
+        IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(response, "u1", "s1");
+
+        Assert.Single(records);
+        Assert.Equal("Python preference", records[0].Title);
+    }
+
+    /// <summary>Trailing prose after the object is tolerated for the same reason.</summary>
+    [Fact]
+    public void Parse_TrailingProseAfterJson_ExtractsRecords()
+    {
+        const string response = """
+            {"records":[{"ContentType":"Fact","Title":"Python preference","Domain":"Preferences","Key":"Language","Tags":[],"Scope":"Global","Importance":0.7,"Value":"User prefers Python."}]}
+
+            Let me know if you would like anything adjusted.
+            """;
+
+        IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(response, "u1", "s1");
+
+        Assert.Single(records);
+        Assert.Equal("Python preference", records[0].Title);
+    }
+
+    /// <summary>
+    /// Braces inside a string value must not close the object early — Memory records carry Markdown
+    /// and code snippets in Value, so naive brace counting would truncate them mid-record.
+    /// </summary>
+    [Fact]
+    public void Parse_BracesInsideStringValue_DoesNotTruncateObject()
+    {
+        const string response = """
+            Here you go:
+            {"records":[{"ContentType":"Fact","Title":"Init snippet","Domain":"Code","Key":"Init","Tags":[],"Scope":"Global","Importance":0.5,"Value":"Call new Foo { Bar = 1 } and escape a quote like \" here."}]}
+            """;
+
+        IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(response, "u1", "s1");
+
+        Assert.Single(records);
+        Assert.Equal("Call new Foo { Bar = 1 } and escape a quote like \" here.", records[0].Value);
+    }
+
+    /// <summary>
+    /// A truncated object is left alone so the JSON error surfaces, rather than being silently
+    /// accepted as a partial record.
+    /// </summary>
+    [Fact]
+    public void Parse_UnbalancedJson_ThrowsExtractionParseException()
+    {
+        const string response = """Here is the JSON: {"records":[{"ContentType":"Fact","Title":"Truncated" """;
+
+        Assert.Throws<ExtractionParseException>(() =>
+            EpisodeExtractionParser.Parse(response, "u1", "s1"));
     }
 
     /// <summary>Verifies that invalid JSON throws ExtractionParseException.</summary>

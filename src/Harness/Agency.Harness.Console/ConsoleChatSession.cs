@@ -3,6 +3,7 @@ using Agency.Harness.Console.Services;
 using Agency.Harness.Contexts;
 using Agency.Harness.Looping;
 using Agency.Harness.Permissions;
+using Agency.Memory.Common.Events;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -57,6 +58,7 @@ internal sealed partial class ConsoleChatSession : IDisposable
     private readonly AgentOptions _options;
     private readonly ILogger<ConsoleChatSession> _logger;
     private readonly ToolContext toolContext;
+    private readonly List<IDisposable> _memorySubscriptions;
     private readonly SkillContext _skillContext;
     private Agent _agent;
     private ChatSession? _chatSession;
@@ -83,6 +85,59 @@ internal sealed partial class ConsoleChatSession : IDisposable
         this.output = chatOutput;
         this._inputReader = new ConsoleInputReader(this.output);
         this.commandManager = new CommandManager(CommandRegistry.Commands, this);
+
+        // Surface autonomous memory activity. Retrieval is a hook rather than a tool, so without
+        // this the user sees an answer shaped by recalled context with nothing indicating recall
+        // occurred. Absent when memory is disabled (no bus registered).
+        this._memorySubscriptions = SubscribeToMemoryEvents(serviceProvider, this.output);
+    }
+
+    /// <summary>
+    /// Subscribes to the memory event bus so recall and autonomous edits are announced in the
+    /// transcript. Returns an empty list when memory is disabled (the bus is not registered).
+    /// </summary>
+    private static List<IDisposable> SubscribeToMemoryEvents(IServiceProvider sp, IChatOutput output)
+    {
+        var subscriptions = new List<IDisposable>();
+        if (sp.GetService<IAsyncEventBus>() is not { } bus)
+        {
+            return subscriptions;
+        }
+
+        subscriptions.Add(bus.Subscribe<MemoryRecalledEvent>((evt, _) =>
+        {
+            string parts = string.Join(", ", new[]
+            {
+                evt.FactCount > 0 ? Pluralize(evt.FactCount, "fact") : null,
+                evt.MemoryCount > 0 ? Pluralize(evt.MemoryCount, "memory", "memories") : null,
+            }.Where(static p => p is not null));
+
+            WriteAsideMarkup(output, $"[grey]  ↻ recalled {Markup.Escape(parts)}[/]");
+            return Task.CompletedTask;
+        }));
+
+        subscriptions.Add(bus.Subscribe<MemoryMutatedEvent>((evt, _) =>
+        {
+            WriteAsideMarkup(output, $"[grey]  ✎ memory {Markup.Escape(evt.Operation.ToLowerInvariant())}[/]");
+            return Task.CompletedTask;
+        }));
+
+        return subscriptions;
+    }
+
+    private static string Pluralize(int count, string singular, string? plural = null) =>
+        count == 1 ? $"{count} {singular}" : $"{count} {plural ?? singular + "s"}";
+
+    /// <summary>
+    /// Writes a line from outside the turn-rendering loop. The spinner runs on its own thread and
+    /// writes directly to the console, so it must be stopped and restarted around the write or the
+    /// two interleave mid-line.
+    /// </summary>
+    private static void WriteAsideMarkup(IChatOutput output, string markup)
+    {
+        output.StopSpinner();
+        output.WriteLineMarkup(markup);
+        output.StartSpinner();
     }
 
     internal void SetAgent(Agent agent)
@@ -780,6 +835,11 @@ internal sealed partial class ConsoleChatSession : IDisposable
         // deadlock here. Revisit if ConsoleChatSession is ever reused in a host with a captured
         // SynchronizationContext (e.g. ASP.NET classic, WPF/WinForms).
         this._chatSession?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+        foreach (IDisposable subscription in this._memorySubscriptions)
+        {
+            subscription.Dispose();
+        }
     }
 
     /// <summary>Logs that a console chat session is starting.</summary>

@@ -1,1 +1,32 @@
 #nullable enable
+Agency.Memory.Common.Events.MemoryRecalledEvent
+Agency.Memory.Common.Events.MemoryRecalledEvent.Deconstruct(out string! UserId, out int FactCount, out int MemoryCount) -> void
+Agency.Memory.Common.Events.MemoryRecalledEvent.Equals(Agency.Memory.Common.Events.MemoryRecalledEvent? other) -> bool
+Agency.Memory.Common.Events.MemoryRecalledEvent.FactCount.get -> int
+Agency.Memory.Common.Events.MemoryRecalledEvent.FactCount.init -> void
+Agency.Memory.Common.Events.MemoryRecalledEvent.MemoryCount.get -> int
+Agency.Memory.Common.Events.MemoryRecalledEvent.MemoryCount.init -> void
+Agency.Memory.Common.Events.MemoryRecalledEvent.MemoryRecalledEvent(string! UserId, int FactCount, int MemoryCount) -> void
+Agency.Memory.Common.Events.MemoryRecalledEvent.UserId.get -> string!
+Agency.Memory.Common.Events.MemoryRecalledEvent.UserId.init -> void
+override Agency.Memory.Common.Events.MemoryRecalledEvent.<Clone>$() -> Agency.Memory.Common.Events.MemoryRecalledEvent!
+override Agency.Memory.Common.Events.MemoryRecalledEvent.Equals(object? obj) -> bool
+override Agency.Memory.Common.Events.MemoryRecalledEvent.GetHashCode() -> int
+override Agency.Memory.Common.Events.MemoryRecalledEvent.ToString() -> string!
+override sealed Agency.Memory.Common.Events.MemoryRecalledEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
+static Agency.Memory.Common.Events.MemoryRecalledEvent.operator !=(Agency.Memory.Common.Events.MemoryRecalledEvent? left, Agency.Memory.Common.Events.MemoryRecalledEvent? right) -> bool
+static Agency.Memory.Common.Events.MemoryRecalledEvent.operator ==(Agency.Memory.Common.Events.MemoryRecalledEvent? left, Agency.Memory.Common.Events.MemoryRecalledEvent? right) -> bool
+Agency.Memory.Common.Records.Importance
+Agency.Memory.Common.Records.Importance.High = 0 -> Agency.Memory.Common.Records.Importance
+Agency.Memory.Common.Records.Importance.Low = 2 -> Agency.Memory.Common.Records.Importance
+Agency.Memory.Common.Records.Importance.Normal = 1 -> Agency.Memory.Common.Records.Importance
+Agency.Memory.Common.Records.MemorySource
+Agency.Memory.Common.Records.MemorySource.AgentSignaled = 0 -> Agency.Memory.Common.Records.MemorySource
+Agency.Memory.Common.Records.MemorySource.Consolidated = 2 -> Agency.Memory.Common.Records.MemorySource
+Agency.Memory.Common.Records.MemorySource.Distilled = 1 -> Agency.Memory.Common.Records.MemorySource
+Agency.Memory.Common.Records.MemorySource.HygieneManual = 3 -> Agency.Memory.Common.Records.MemorySource
+Agency.Memory.Common.Records.Record.Source.get -> Agency.Memory.Common.Records.MemorySource
+Agency.Memory.Common.Records.Record.Source.init -> void
+*REMOVED*static Agency.Memory.Common.Records.Record.Create(string! id, string! userId, string? sessionId, Agency.Memory.Common.Records.ContentType contentType, string! domain, string! key, string! title, string! value, System.Collections.Generic.IReadOnlyList<string!>! tags, double importance, System.DateTimeOffset createdAt, System.DateTimeOffset updatedAt, System.DateTimeOffset? lastAccessedAt = null, System.ReadOnlyMemory<float> embedding = default(System.ReadOnlyMemory<float>)) -> Agency.Memory.Common.Records.Record!
+static Agency.Memory.Common.Records.Record.Create(string! id, string! userId, string? sessionId, Agency.Memory.Common.Records.ContentType contentType, string! domain, string! key, string! title, string! value, System.Collections.Generic.IReadOnlyList<string!>! tags, double importance, System.DateTimeOffset createdAt, System.DateTimeOffset updatedAt, System.DateTimeOffset? lastAccessedAt = null, System.ReadOnlyMemory<float> embedding = default(System.ReadOnlyMemory<float>), Agency.Memory.Common.Records.MemorySource source = Agency.Memory.Common.Records.MemorySource.Distilled) -> Agency.Memory.Common.Records.Record!
+Agency.Memory.Common.Storage.IMemoryStore.MemorizeNowAsync(string! userId, string! sessionId, string! title, string! value, string! domain, Agency.Memory.Common.Records.Importance importance, string![]! tags, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!

@@ -78,3 +78,24 @@ public sealed record MemoryMutatedEvent(
     string UserId,
     string Operation,
     string Detail) : AgentEvent;
+
+/// <summary>
+/// Emitted by the retrieval hook when a turn's gated vector search recalls one or more records
+/// into the agent's context.
+/// </summary>
+/// <remarks>
+/// Retrieval is a hook rather than a tool, so it leaves no tool call for the user to see even
+/// though it silently shapes the answer. This event is the counterpart to
+/// <see cref="MemoryMutatedEvent"/> on the read side (TI-8.3): memory the agent recalls without
+/// being asked should be as visible as memory it rewrites without being asked. Counts only —
+/// the recalled content is already in the system prompt and is deliberately not repeated here,
+/// so hosts can surface that recall happened without echoing its payload.
+/// Not emitted when the search returns nothing.
+/// </remarks>
+/// <param name="UserId">The user whose memory was searched.</param>
+/// <param name="FactCount">Number of Fact records injected into the context.</param>
+/// <param name="MemoryCount">Number of episodic Memory records injected into the context.</param>
+public sealed record MemoryRecalledEvent(
+    string UserId,
+    int FactCount,
+    int MemoryCount) : AgentEvent;

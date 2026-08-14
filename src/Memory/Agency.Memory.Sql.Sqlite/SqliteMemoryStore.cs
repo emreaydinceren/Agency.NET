@@ -4,6 +4,7 @@ using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Agency.Embeddings.Common;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
@@ -112,17 +113,18 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
             const string sql = @"
                 INSERT INTO records (
                     id, user_id, session_id, content_type, domain, key,
-                    title, value, tags, importance, embedding,
+                    title, value, tags, importance, source, embedding,
                     created_at, updated_at, last_accessed_at)
                 VALUES (
                     @id, @user_id, @session_id, @content_type, @domain, @key,
-                    @title, @value, @tags, @importance, @embedding,
+                    @title, @value, @tags, @importance, @source, @embedding,
                     @now, @now, @last_accessed_at)
                 ON CONFLICT (user_id, COALESCE(session_id, ''), domain, key) DO UPDATE SET
                     title            = excluded.title,
                     value            = excluded.value,
                     tags             = excluded.tags,
                     importance       = excluded.importance,
+                    source           = excluded.source,
                     embedding        = excluded.embedding,
                     updated_at       = @now
                 RETURNING id, created_at, updated_at;";
@@ -139,6 +141,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
             cmd.Parameters.AddWithValue("@value", record.Value);
             cmd.Parameters.AddWithValue("@tags", tagsJson);
             cmd.Parameters.AddWithValue("@importance", record.Importance);
+            cmd.Parameters.AddWithValue("@source", (int)record.Source);
             cmd.Parameters.AddWithValue("@embedding", embeddingText);
             cmd.Parameters.AddWithValue("@now", now);
             cmd.Parameters.AddWithValue("@last_accessed_at", (object?)lastAccessedAtStr ?? DBNull.Value);
@@ -222,7 +225,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
                 while (await reader.ReadAsync(ct))
                 {
                     var r = ReadRecord(reader);
-                    double distance = reader.GetDouble(14);
+                    double distance = reader.GetDouble(15);
                     double similarity = 1.0 - distance;
                     hits.Add(new SearchHit(r, similarity));
                 }
@@ -273,7 +276,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
         if (sessionId is null)
         {
             sql = @"SELECT id, user_id, session_id, content_type, domain, key,
-                           title, value, tags, importance, embedding,
+                           title, value, tags, importance, source, embedding,
                            created_at, updated_at, last_accessed_at
                     FROM records
                     WHERE user_id = @user_id AND session_id IS NULL AND domain = @domain AND key = @key
@@ -282,7 +285,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
         else
         {
             sql = @"SELECT id, user_id, session_id, content_type, domain, key,
-                           title, value, tags, importance, embedding,
+                           title, value, tags, importance, source, embedding,
                            created_at, updated_at, last_accessed_at
                     FROM records
                     WHERE user_id = @user_id AND session_id = @session_id AND domain = @domain AND key = @key
@@ -378,7 +381,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
     {
         const string sql = @"
             SELECT id, user_id, session_id, content_type, domain, key,
-                   title, value, tags, importance, embedding,
+                   title, value, tags, importance, source, embedding,
                    created_at, updated_at, last_accessed_at
             FROM records
             WHERE user_id = @user_id;";
@@ -496,11 +499,11 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
             const string insertSql = @"
                 INSERT INTO records (
                     id, user_id, session_id, content_type, domain, key,
-                    title, value, tags, importance, embedding,
+                    title, value, tags, importance, source, embedding,
                     created_at, updated_at, last_accessed_at)
                 VALUES (
                     @id, @user_id, @session_id, @content_type, @domain, @key,
-                    @title, @value, @tags, @importance, @embedding,
+                    @title, @value, @tags, @importance, @source, @embedding,
                     @now, @now, NULL)
                 RETURNING id, created_at, updated_at;";
 
@@ -515,6 +518,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
             insertCmd.Parameters.AddWithValue("@value", newRecord.Value);
             insertCmd.Parameters.AddWithValue("@tags", tagsJson);
             insertCmd.Parameters.AddWithValue("@importance", newRecord.Importance);
+            insertCmd.Parameters.AddWithValue("@source", (int)newRecord.Source);
             insertCmd.Parameters.AddWithValue("@embedding", embeddingText);
             insertCmd.Parameters.AddWithValue("@now", now);
 
@@ -612,7 +616,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
             SET {setClauses}
             WHERE id = @id AND user_id = @user_id
             RETURNING id, user_id, session_id, content_type, domain, key,
-                      title, value, tags, importance, embedding,
+                      title, value, tags, importance, source, embedding,
                       created_at, updated_at, last_accessed_at;";
 
         await using var conn = await this.OpenConnectionAsync(ct);
@@ -674,6 +678,58 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
         return rows > 0;
     }
 
+    /// <inheritdoc/>
+    public async Task<string> MemorizeNowAsync(
+        string userId,
+        string sessionId,
+        string title,
+        string value,
+        string domain,
+        Importance importance,
+        string[] tags,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentNullException.ThrowIfNull(tags);
+        if (tags.Length > 4)
+        {
+            throw new ArgumentException("tags must contain 0-4 items.", nameof(tags));
+        }
+
+        double importanceValue = importance switch
+        {
+            Importance.High => 0.9,
+            Importance.Normal => 0.6,
+            Importance.Low => 0.3,
+            _ => throw new ArgumentException($"Unknown importance: {importance}", nameof(importance)),
+        };
+
+        string loweredDomain = domain.ToLowerInvariant();
+        string key = Slugify(title);
+        var now = DateTimeOffset.UtcNow;
+
+        var record = Record.Create(
+            id: string.Empty,
+            userId: userId,
+            sessionId: null, // Global scope — agent-signaled facts transcend sessions.
+            contentType: ContentType.Fact,
+            domain: loweredDomain,
+            key: key,
+            title: title,
+            value: value,
+            tags: tags,
+            importance: importanceValue,
+            createdAt: now,
+            updatedAt: now,
+            source: MemorySource.AgentSignaled);
+
+        await this.UpsertAsync(record, ct);
+
+        return $"{loweredDomain}|{key}";
+    }
+
     /// <summary>Logs that a record was upserted.</summary>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Upserted record {Id} for user {UserId}")]
     private partial void LogUpsertedRecord(string id, string userId);
@@ -720,7 +776,7 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
 
         return $@"
             SELECT id, user_id, session_id, content_type, domain, key,
-                   title, value, tags, importance, embedding,
+                   title, value, tags, importance, source, embedding,
                    created_at, updated_at, last_accessed_at,
                    vec_distance_cosine(embedding, @query_vec) AS distance
             FROM records
@@ -742,11 +798,12 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
         string tagsRaw = reader.IsDBNull(8) ? "[]" : reader.GetString(8);
         string[] tags = JsonSerializer.Deserialize<string[]>(tagsRaw) ?? [];
         double importance = reader.GetDouble(9);
-        string embeddingRaw = reader.GetString(10);
+        var source = (MemorySource)Convert.ToInt32(reader.GetValue(10), CultureInfo.InvariantCulture);
+        string embeddingRaw = reader.GetString(11);
         float[] embeddingArr = string.IsNullOrEmpty(embeddingRaw) ? [] : VectorFunctions.ParseVector(embeddingRaw);
-        var createdAt = ParseTimestamp(reader.GetString(11));
-        var updatedAt = ParseTimestamp(reader.GetString(12));
-        DateTimeOffset? lastAccessedAt = reader.IsDBNull(13) ? null : ParseTimestamp(reader.GetString(13));
+        var createdAt = ParseTimestamp(reader.GetString(12));
+        var updatedAt = ParseTimestamp(reader.GetString(13));
+        DateTimeOffset? lastAccessedAt = reader.IsDBNull(14) ? null : ParseTimestamp(reader.GetString(14));
 
         return Record.Create(
             id: id,
@@ -762,7 +819,8 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
             createdAt: createdAt,
             updatedAt: updatedAt,
             lastAccessedAt: lastAccessedAt,
-            embedding: embeddingArr.AsMemory());
+            embedding: embeddingArr.AsMemory(),
+            source: source);
     }
 
     private async Task BumpLastWrittenAtAsync(
@@ -818,4 +876,32 @@ public sealed partial class SqliteMemoryStore : IMemoryStore
         var dt = DateTimeOffset.Parse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
         return new DateTimeOffset(dt.UtcDateTime, TimeSpan.Zero);
     }
+
+    /// <summary>
+    /// Converts a natural-language string into a lowercase, hyphen-separated slug. Mirrors
+    /// <c>Agency.Memory.Sql.Postgres.Utilities.StringSlugifier.Slugify</c>, duplicated here because
+    /// this project does not reference the Postgres store.
+    /// </summary>
+    private static string Slugify(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            throw new ArgumentException("Input cannot be null or whitespace.", nameof(input));
+        }
+
+        string lowered = input.ToLowerInvariant();
+        string hyphenated = SlugWhitespaceOrUnderscoreRegex().Replace(lowered, "-");
+        string stripped = SlugNonSlugCharacterRegex().Replace(hyphenated, string.Empty);
+        string deduped = SlugConsecutiveHyphensRegex().Replace(stripped, "-");
+        return deduped.Trim('-');
+    }
+
+    [GeneratedRegex(@"[\s_]+")]
+    private static partial Regex SlugWhitespaceOrUnderscoreRegex();
+
+    [GeneratedRegex("[^a-z0-9-]")]
+    private static partial Regex SlugNonSlugCharacterRegex();
+
+    [GeneratedRegex("-{2,}")]
+    private static partial Regex SlugConsecutiveHyphensRegex();
 }

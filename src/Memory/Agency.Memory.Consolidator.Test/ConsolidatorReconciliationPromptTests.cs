@@ -20,7 +20,8 @@ public class ConsolidatorReconciliationPromptTests
         string value = "User prefers Python.",
         double importance = 0.7,
         string[]? tags = null,
-        DateTimeOffset? updatedAt = null) =>
+        DateTimeOffset? updatedAt = null,
+        MemorySource source = MemorySource.Distilled) =>
         Agency.Memory.Common.Records.Record.Create(
             id: id,
             userId: userId,
@@ -33,7 +34,8 @@ public class ConsolidatorReconciliationPromptTests
             tags: tags ?? ["language", "python"],
             importance: importance,
             createdAt: _now.AddDays(-7),
-            updatedAt: updatedAt ?? _now.AddDays(-3));
+            updatedAt: updatedAt ?? _now.AddDays(-3),
+            source: source);
 
     /// <summary>
     /// The rendered prompt includes userId, maxIterations, fact threshold, memory threshold, and the records dump.
@@ -139,12 +141,12 @@ public class ConsolidatorReconciliationPromptTests
     }
 
     /// <summary>
-    /// Prompt version constant is 3 (bumped for the same-Domain/Key merge priority rule).
+    /// Prompt version constant is 4 (bumped for the AgentSignaled merge-priority rule, Task 12).
     /// </summary>
     [Fact]
-    public void Version_IsThree()
+    public void Version_IsFour()
     {
-        Assert.Equal(3, ConsolidatorReconciliationPrompt.Version);
+        Assert.Equal(4, ConsolidatorReconciliationPrompt.Version);
     }
 
     /// <summary>
@@ -163,5 +165,92 @@ public class ConsolidatorReconciliationPromptTests
 
         Assert.Contains("Importance < 0.1", prompt);
         Assert.Contains("Age > 30 days", prompt);
+    }
+
+    // ── AgentSignaled merge-priority rule (Task 20 / UT-5) ───────────────────────
+
+    /// <summary>The prompt states that AgentSignaled content is preferred over Distilled/Consolidated
+    /// content when merging Records with overlapping meaning but differing Source.</summary>
+    [Fact]
+    public void Render_IncludesAgentSignaledPriorityRule_StatesPreferenceOverOtherSources()
+    {
+        string prompt = ConsolidatorReconciliationPrompt.Render(
+            userId: "user1",
+            records: [MakeRecord("id-1")],
+            maxIterations: 20,
+            factThreshold: 0.85,
+            memoryThreshold: 0.75);
+
+        Assert.Contains("AgentSignaled facts take merge priority", prompt);
+        Assert.Contains("prefer the content of the Record with", prompt);
+        Assert.Contains("Source: AgentSignaled over one with Source: Distilled or Source: Consolidated", prompt);
+    }
+
+    /// <summary>The merged Record carries Source: AgentSignaled forward, so a later reconciliation
+    /// pass still treats it as agent-signaled.</summary>
+    [Fact]
+    public void Render_IncludesAgentSignaledPriorityRule_CarriesSourceForwardOntoMergedRecord()
+    {
+        string prompt = ConsolidatorReconciliationPrompt.Render(
+            userId: "user1",
+            records: [MakeRecord("id-1")],
+            maxIterations: 20,
+            factThreshold: 0.85,
+            memoryThreshold: 0.75);
+
+        Assert.Contains("Carry Source: AgentSignaled forward", prompt);
+        Assert.Contains("onto the merged Record", prompt);
+    }
+
+    /// <summary>When both Records share the same provenance (both AgentSignaled, or neither is),
+    /// the rule falls back to ordinary semantic/clarity judgment rather than a provenance tie-break.</summary>
+    [Fact]
+    public void Render_IncludesAgentSignaledPriorityRule_FallsBackToOrdinaryJudgment_WhenProvenanceTies()
+    {
+        string prompt = ConsolidatorReconciliationPrompt.Render(
+            userId: "user1",
+            records: [MakeRecord("id-1")],
+            maxIterations: 20,
+            factThreshold: 0.85,
+            memoryThreshold: 0.75);
+
+        Assert.Contains("If both Records are AgentSignaled, reconcile normally and", prompt);
+        Assert.Contains("pick whichever phrasing is clearer", prompt);
+        Assert.Contains("If neither is AgentSignaled, merge using", prompt);
+        Assert.Contains("ordinary semantic judgment", prompt);
+    }
+
+    /// <summary>Provenance is an internal merge signal only — the rule explicitly forbids mentioning
+    /// it in the user-facing MemoryMutatedEvent summary, keeping those summaries brief.</summary>
+    [Fact]
+    public void Render_IncludesAgentSignaledPriorityRule_ForbidsProvenanceInUserFacingSummary()
+    {
+        string prompt = ConsolidatorReconciliationPrompt.Render(
+            userId: "user1",
+            records: [MakeRecord("id-1")],
+            maxIterations: 20,
+            factThreshold: 0.85,
+            memoryThreshold: 0.75);
+
+        Assert.Contains("do not", prompt);
+        Assert.Contains("mention provenance in any user-facing summary", prompt);
+        Assert.Contains("keep those brief", prompt);
+    }
+
+    /// <summary>Each rendered Record now carries its Source (e.g. AgentSignaled), which is the signal
+    /// the merge-priority rule reasons over.</summary>
+    [Fact]
+    public void Render_RecordsDump_IncludesSourceField_ForAgentSignaledRecord()
+    {
+        var records = new[] { MakeRecord("id-1", source: MemorySource.AgentSignaled) };
+
+        string prompt = ConsolidatorReconciliationPrompt.Render(
+            userId: "user1",
+            records: records,
+            maxIterations: 20,
+            factThreshold: 0.85,
+            memoryThreshold: 0.75);
+
+        Assert.Contains("**Source**: AgentSignaled", prompt);
     }
 }

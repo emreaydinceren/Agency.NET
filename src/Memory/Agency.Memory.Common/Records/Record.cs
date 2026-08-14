@@ -37,6 +37,9 @@ public sealed record Record
     /// <summary>Gets the importance score in [0, 1]. Fixed at write time.</summary>
     public required double Importance { get; init; }
 
+    /// <summary>Gets the provenance of this record. Defaults to <see cref="MemorySource.Distilled"/>.</summary>
+    public MemorySource Source { get; init; } = MemorySource.Distilled;
+
     /// <summary>Gets the UTC timestamp when this record was first created.</summary>
     public required DateTimeOffset CreatedAt { get; init; }
 
@@ -69,6 +72,7 @@ public sealed record Record
     /// <param name="updatedAt">The last-updated timestamp.</param>
     /// <param name="lastAccessedAt">The last-retrieval timestamp, or <see langword="null"/>.</param>
     /// <param name="embedding">The embedding vector, or empty if not yet embedded.</param>
+    /// <param name="source">The provenance of this record. Defaults to <see cref="MemorySource.Distilled"/>.</param>
     /// <returns>A new <see cref="Record"/> with validated fields.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="importance"/> is outside [0, 1].</exception>
     public static Record Create(
@@ -85,7 +89,8 @@ public sealed record Record
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
         DateTimeOffset? lastAccessedAt = null,
-        ReadOnlyMemory<float> embedding = default)
+        ReadOnlyMemory<float> embedding = default,
+        MemorySource source = MemorySource.Distilled)
     {
         if (importance < 0.0 || importance > 1.0)
         {
@@ -108,6 +113,7 @@ public sealed record Record
             UpdatedAt = updatedAt,
             LastAccessedAt = lastAccessedAt,
             Embedding = embedding,
+            Source = source,
         };
     }
 }

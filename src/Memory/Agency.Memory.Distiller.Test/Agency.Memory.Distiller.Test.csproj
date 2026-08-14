@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
+    <UserSecretsId>AgencySecrets</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -9,10 +10,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="Npgsql" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Agency.Memory.Distiller\Agency.Memory.Distiller.csproj" />
     <ProjectReference Include="..\Agency.Memory.Common\Agency.Memory.Common.csproj" />
+    <ProjectReference Include="..\Agency.Memory.Sql.Postgres\Agency.Memory.Sql.Postgres.csproj" />
     <ProjectReference Include="..\..\Harness\Agency.Harness\Agency.Harness.csproj" />
   </ItemGroup>
 

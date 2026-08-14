@@ -110,6 +110,7 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
                 value            TEXT NOT NULL,
                 tags             TEXT NOT NULL DEFAULT '[]',
                 importance       REAL NOT NULL CHECK (importance >= 0 AND importance <= 1),
+                source           INTEGER NOT NULL DEFAULT 1,
                 embedding        TEXT NOT NULL,
                 created_at       TEXT NOT NULL,
                 updated_at       TEXT NOT NULL,
@@ -118,6 +119,17 @@ public sealed class MemorySchemaInitializer : IMemorySchemaInitializer
 
         await using var cmd = new SqliteCommand(tableSql, conn);
         await cmd.ExecuteNonQueryAsync(ct);
+
+        // Backfill source column for existing tables (CREATE TABLE IF NOT EXISTS is a no-op on existing tables)
+        const string addSourceSql = @"
+            ALTER TABLE records
+            ADD COLUMN source INTEGER NOT NULL DEFAULT 1;";
+        try
+        {
+            await using var addSourceCmd = new SqliteCommand(addSourceSql, conn);
+            await addSourceCmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException) { /* Column already exists */ }
 
         // Functional unique index so NULL session_id is treated as '' (one global scope per user/domain/key)
         const string idxSql = @"

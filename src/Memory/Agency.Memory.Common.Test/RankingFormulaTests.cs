@@ -126,4 +126,45 @@ public sealed class RankingFormulaTests
 
         Assert.True(scoreNegative >= 0.0, $"Negative similarity should be clamped to 0, got {scoreNegative}");
     }
+
+    /// <summary>
+    /// UT-7: with similarity, recency, and session-match all held equal, a High-importance
+    /// record (0.9, as mapped by MemorizeNow) must score strictly higher than a Low-importance
+    /// record (0.3), and the gap must equal wᵢ · (0.9 - 0.3) under the default weights.
+    /// </summary>
+    [Fact]
+    public void Score_HighImportance_0_9_RanksAboveLowImportance_0_3_AllElseEqual()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var highFact = MakeRecord(importance: 0.9, updatedAt: now, sessionId: null);
+        var lowFact = MakeRecord(importance: 0.3, updatedAt: now, sessionId: null);
+        var weights = RankingWeights.Default;
+
+        double scoreHigh = RankingFormula.Score(
+            similarity: 0.8, record: highFact, currentSessionId: null, now: now, weights: weights, halfLifeDays: 7.0);
+        double scoreLow = RankingFormula.Score(
+            similarity: 0.8, record: lowFact, currentSessionId: null, now: now, weights: weights, halfLifeDays: 7.0);
+
+        Assert.True(scoreHigh > scoreLow, $"Expected High-importance score ({scoreHigh}) > Low-importance score ({scoreLow})");
+        Assert.True(Math.Abs((scoreHigh - scoreLow) - (weights.Importance * (0.9 - 0.3))) < 1e-9,
+            $"Expected the score gap to equal wᵢ·(0.9-0.3)={weights.Importance * 0.6}, got {scoreHigh - scoreLow}");
+    }
+
+    /// <summary>
+    /// UT-7: Normal importance (0.6) ranks strictly between High (0.9) and Low (0.3) when
+    /// similarity, recency, and session-match are all held equal.
+    /// </summary>
+    [Fact]
+    public void Score_NormalImportance_0_6_RanksBetweenHighAndLow()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var weights = RankingWeights.Default;
+
+        double scoreHigh = RankingFormula.Score(0.8, MakeRecord(0.9, now), null, now, weights, 7.0);
+        double scoreNormal = RankingFormula.Score(0.8, MakeRecord(0.6, now), null, now, weights, 7.0);
+        double scoreLow = RankingFormula.Score(0.8, MakeRecord(0.3, now), null, now, weights, 7.0);
+
+        Assert.True(scoreHigh > scoreNormal, $"Expected High ({scoreHigh}) > Normal ({scoreNormal})");
+        Assert.True(scoreNormal > scoreLow, $"Expected Normal ({scoreNormal}) > Low ({scoreLow})");
+    }
 }

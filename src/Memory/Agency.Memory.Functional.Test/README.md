@@ -79,7 +79,6 @@ dotnet test src/Agency.slnx --filter "Category!=Functional"
 
 | Task | Class | Requires |
 |------|-------|----------|
-| G.1 | `EndToEndRecallTests` | Postgres + LM Studio |
 | G.2 | `EndToEndForgetMeTests` | Postgres only |
 | G.3 | `EndToEndLatencyTests` | Postgres only |
 | G.4 | `EndToEndCrashRecoveryTests` | Postgres only |

@@ -1,1 +1,2 @@
 #nullable enable
+Agency.Memory.Sql.Sqlite.SqliteMemoryStore.MemorizeNowAsync(string! userId, string! sessionId, string! title, string! value, string! domain, Agency.Memory.Common.Records.Importance importance, string![]! tags, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!

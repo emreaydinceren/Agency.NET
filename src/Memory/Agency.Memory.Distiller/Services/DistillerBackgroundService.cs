@@ -398,8 +398,18 @@ internal sealed partial class DistillerBackgroundService : BackgroundService
 
         IReadOnlyList<Record> records = EpisodeExtractionParser.Parse(llmResponse, job.UserId, job.SessionId);
 
+        // Dedup: skip records that exactly match (Domain, Title) from recent facts
+        // (safeguard in case the LLM doesn't follow dedup guidance)
+        // Use Title instead of Key because the LLM might generate Keys differently than MemorizeNow
+        var recentDomainTitles = new HashSet<(string, string)>(
+            recentFacts.Select(r => (r.Domain, r.Title)),
+            new DomainTitleComparer());
+        var dedupedRecords = records
+            .Where(r => !recentDomainTitles.Contains((r.Domain, r.Title)))
+            .ToList();
+
         int count = 0;
-        foreach (Record record in records)
+        foreach (Record record in dedupedRecords)
         {
             // Embed: Title + "\n\n" + Value (Spec §6.2 Implementation notes).
             string embeddingText = record.Title + "\n\n" + record.Value;
@@ -534,4 +544,17 @@ internal sealed partial class DistillerBackgroundService : BackgroundService
     /// <summary>Logs that writing a job to the dead-letter store failed.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "Failed to write to dead-letter for session {SessionId}.")]
     private partial void LogDeadLetterWriteFailed(Exception ex, string sessionId);
+
+    /// <summary>Comparer for (Domain, Title) tuples with case-insensitive comparison for both.</summary>
+    private sealed class DomainTitleComparer : IEqualityComparer<(string domain, string title)>
+    {
+        public bool Equals((string domain, string title) x, (string domain, string title) y)
+            => StringComparer.OrdinalIgnoreCase.Equals(x.domain, y.domain)
+            && StringComparer.OrdinalIgnoreCase.Equals(x.title, y.title);
+
+        public int GetHashCode((string domain, string title) obj)
+            => HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.domain),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.title));
+    }
 }

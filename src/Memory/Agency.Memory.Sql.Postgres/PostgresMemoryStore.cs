@@ -5,6 +5,7 @@ using Agency.Embeddings.Common;
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Records;
 using Agency.Memory.Common.Storage;
+using Agency.Memory.Sql.Postgres.Utilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -98,11 +99,11 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
             const string sql = @"
                 INSERT INTO records (
                     id, user_id, session_id, content_type, domain, key,
-                    title, value, tags, importance, embedding,
+                    title, value, tags, importance, source, embedding,
                     created_at, updated_at, last_accessed_at)
                 VALUES (
                     COALESCE(@id, gen_random_uuid()), @user_id, @session_id, @content_type, @domain, @key,
-                    @title, @value, @tags, @importance, @embedding,
+                    @title, @value, @tags, @importance, @source, @embedding,
                     now(), now(), @last_accessed_at)
                 ON CONFLICT (user_id, COALESCE(session_id, ''), domain, key)
                 DO UPDATE SET
@@ -110,6 +111,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
                     value            = EXCLUDED.value,
                     tags             = EXCLUDED.tags,
                     importance       = EXCLUDED.importance,
+                    source           = EXCLUDED.source,
                     embedding        = EXCLUDED.embedding,
                     updated_at       = now()
                 RETURNING id::text, created_at, updated_at;";
@@ -134,6 +136,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
             cmd.Parameters.AddWithValue("value", record.Value);
             cmd.Parameters.Add(new NpgsqlParameter<string[]>("tags", record.Tags.ToArray()));
             cmd.Parameters.AddWithValue("importance", record.Importance);
+            cmd.Parameters.AddWithValue("source", (short)record.Source);
             cmd.Parameters.Add(new NpgsqlParameter("embedding", new Vector(embedding.ToArray())));
             cmd.Parameters.AddWithValue("last_accessed_at", (object?)record.LastAccessedAt?.UtcDateTime ?? DBNull.Value);
 
@@ -216,7 +219,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
                 while (await reader.ReadAsync(ct))
                 {
                     var r = ReadRecord(reader);
-                    double distance = reader.GetDouble(14);
+                    double distance = reader.GetDouble(15);
                     double similarity = 1.0 - distance;
                     hits.Add(new SearchHit(r, similarity));
                 }
@@ -267,7 +270,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
         if (sessionId is null)
         {
             sql = @"SELECT id::text, user_id, session_id, content_type, domain, key,
-                           title, value, tags, importance, embedding,
+                           title, value, tags, importance, source, embedding,
                            created_at, updated_at, last_accessed_at
                     FROM records
                     WHERE user_id = @user_id AND session_id IS NULL AND domain = @domain AND key = @key
@@ -276,7 +279,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
         else
         {
             sql = @"SELECT id::text, user_id, session_id, content_type, domain, key,
-                           title, value, tags, importance, embedding,
+                           title, value, tags, importance, source, embedding,
                            created_at, updated_at, last_accessed_at
                     FROM records
                     WHERE user_id = @user_id AND session_id = @session_id AND domain = @domain AND key = @key
@@ -375,7 +378,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
         // HTTP cache key) vary run-to-run even when the underlying rows are identical.
         const string sql = @"
             SELECT id::text, user_id, session_id, content_type, domain, key,
-                   title, value, tags, importance, embedding,
+                   title, value, tags, importance, source, embedding,
                    created_at, updated_at, last_accessed_at
             FROM records
             WHERE user_id = @user_id
@@ -483,11 +486,11 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
             const string insertSql = @"
                 INSERT INTO records (
                     id, user_id, session_id, content_type, domain, key,
-                    title, value, tags, importance, embedding,
+                    title, value, tags, importance, source, embedding,
                     created_at, updated_at, last_accessed_at)
                 VALUES (
                     @id, @user_id, @session_id, @content_type, @domain, @key,
-                    @title, @value, @tags, @importance, @embedding,
+                    @title, @value, @tags, @importance, @source, @embedding,
                     now(), now(), NULL)
                 RETURNING id::text, created_at, updated_at;";
 
@@ -506,6 +509,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
             insertCmd.Parameters.AddWithValue("value", newRecord.Value);
             insertCmd.Parameters.Add(new NpgsqlParameter<string[]>("tags", newRecord.Tags.ToArray()));
             insertCmd.Parameters.AddWithValue("importance", newRecord.Importance);
+            insertCmd.Parameters.AddWithValue("source", (short)newRecord.Source);
             insertCmd.Parameters.Add(new NpgsqlParameter("embedding", new Vector(embedding.ToArray())));
 
             string assignedId;
@@ -582,7 +586,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
                 updated_at = now()
             WHERE id = @id AND user_id = @user_id
             RETURNING id::text, user_id, session_id, content_type, domain, key,
-                      title, value, tags, importance, embedding,
+                      title, value, tags, importance, source, embedding,
                       created_at, updated_at, last_accessed_at;";
 
         await using var conn = await this._dataSource.OpenConnectionAsync(ct);
@@ -630,6 +634,58 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
         return rows > 0;
     }
 
+    /// <inheritdoc/>
+    public async Task<string> MemorizeNowAsync(
+        string userId,
+        string sessionId,
+        string title,
+        string value,
+        string domain,
+        Importance importance,
+        string[] tags,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentNullException.ThrowIfNull(tags);
+        if (tags.Length > 4)
+        {
+            throw new ArgumentException("tags must contain 0-4 items.", nameof(tags));
+        }
+
+        double importanceValue = importance switch
+        {
+            Importance.High => 0.9,
+            Importance.Normal => 0.6,
+            Importance.Low => 0.3,
+            _ => throw new ArgumentException($"Unknown importance: {importance}", nameof(importance)),
+        };
+
+        string loweredDomain = domain.ToLowerInvariant();
+        string key = StringSlugifier.Slugify(title);
+        var now = DateTimeOffset.UtcNow;
+
+        var record = Record.Create(
+            id: string.Empty,
+            userId: userId,
+            sessionId: null, // Global scope — agent-signaled facts transcend sessions.
+            contentType: ContentType.Fact,
+            domain: loweredDomain,
+            key: key,
+            title: title,
+            value: value,
+            tags: tags,
+            importance: importanceValue,
+            createdAt: now,
+            updatedAt: now,
+            source: MemorySource.AgentSignaled);
+
+        await this.UpsertAsync(record, ct);
+
+        return $"{loweredDomain}|{key}";
+    }
+
     /// <summary>Logs that a record was upserted.</summary>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Upserted record {Id} for user {UserId}")]
     private partial void LogUpsertedRecord(string id, string userId);
@@ -668,7 +724,7 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
 
         return $@"
             SELECT id::text, user_id, session_id, content_type, domain, key,
-                   title, value, tags, importance, embedding,
+                   title, value, tags, importance, source, embedding,
                    created_at, updated_at, last_accessed_at,
                    embedding <=> @query_vec AS distance
             FROM records
@@ -689,11 +745,12 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
         string value = reader.GetString(7);
         string[] tags = reader.GetValue(8) as string[] ?? [];
         double importance = reader.GetDouble(9);
-        var vector = reader.GetValue(10) as Vector;
+        var source = (MemorySource)(short)reader.GetValue(10);
+        var vector = reader.GetValue(11) as Vector;
         float[] embedding = vector?.ToArray() ?? [];
-        var createdAt = new DateTimeOffset(reader.GetDateTime(11), TimeSpan.Zero);
-        var updatedAt = new DateTimeOffset(reader.GetDateTime(12), TimeSpan.Zero);
-        DateTimeOffset? lastAccessedAt = reader.IsDBNull(13) ? null : new DateTimeOffset(reader.GetDateTime(13), TimeSpan.Zero);
+        var createdAt = new DateTimeOffset(reader.GetDateTime(12), TimeSpan.Zero);
+        var updatedAt = new DateTimeOffset(reader.GetDateTime(13), TimeSpan.Zero);
+        DateTimeOffset? lastAccessedAt = reader.IsDBNull(14) ? null : new DateTimeOffset(reader.GetDateTime(14), TimeSpan.Zero);
 
         return Record.Create(
             id: id,
@@ -709,7 +766,8 @@ public sealed partial class PostgresMemoryStore : IMemoryStore
             createdAt: createdAt,
             updatedAt: updatedAt,
             lastAccessedAt: lastAccessedAt,
-            embedding: embedding.AsMemory());
+            embedding: embedding.AsMemory(),
+            source: source);
     }
 
     private async Task BumpLastWrittenAtAsync(

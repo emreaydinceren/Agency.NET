@@ -155,6 +155,21 @@ internal static class TelemetryServiceCollectionExtensions
         {
             b.ClearProviders();
             b.SetMinimumLevel(ToMsLogLevel(logLevel));
+
+            // Mirror the Serilog category overrides onto the Microsoft.Extensions.Logging filter
+            // layer. ClearProviders() drops providers but NOT filter rules, and the Generic Host
+            // binds appsettings' "Logging:LogLevel" section into LoggerFilterOptions — so a rule
+            // like "Microsoft": "Warning" discards Microsoft.Extensions.AI Trace records before
+            // Serilog is ever consulted, silently defeating CategoryOverrides. M.E.L resolves
+            // rules by longest-prefix match, so the more specific category added here wins.
+            foreach ((string category, string levelName) in options.FileExport.Logs.CategoryOverrides)
+            {
+                LogEventLevel filterLevel = Enum.TryParse(levelName, ignoreCase: true, out LogEventLevel parsedFilter)
+                    ? parsedFilter
+                    : LogEventLevel.Warning;
+                b.AddFilter(category, ToMsLogLevel(filterLevel));
+            }
+
             b.AddProvider(new SerilogLoggerProvider(Log.Logger, dispose: false));
         });
     }

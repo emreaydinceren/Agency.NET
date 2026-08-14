@@ -314,19 +314,60 @@ public sealed class MemorizeNowToolTests
         Assert.Equal("MemorizeNow", tool.Definition.Name);
     }
 
-    /// <summary>The description guides the agent on when to call the tool, warns against saving
-    /// secrets, and explains the three importance levels — so the agent can self-serve without
-    /// external documentation.</summary>
+    /// <summary>The description must document every parameter the schema requires, so the agent can
+    /// fill the call in without external documentation.</summary>
+    [Theory]
+    [InlineData("title")]
+    [InlineData("value")]
+    [InlineData("domain")]
+    [InlineData("importance")]
+    [InlineData("tags")]
+    public void Definition_Description_ExplainsHowToChooseEachParameter(string parameter)
+    {
+        MemorizeNowTool tool = CreateTool(CreateStrictStoreMock().Object);
+
+        Assert.Contains($"- {parameter}:", tool.Definition.Description, StringComparison.Ordinal);
+    }
+
+    /// <summary>The three importance levels must be spelled out with their meanings. Importance is
+    /// structural — it weighs retrieval ranking and shields the record from pruning — so an agent
+    /// that cannot tell the levels apart silently degrades recall for every later session.</summary>
     [Fact]
-    public void Definition_Description_CoversUsageGuidance_SecretsWarning_AndImportanceLevels()
+    public void Definition_Description_ExplainsTheThreeImportanceLevels()
     {
         MemorizeNowTool tool = CreateTool(CreateStrictStoreMock().Object);
         string description = tool.Definition.Description;
 
-        Assert.Contains("Call MemorizeNow in the same turn", description);
-        Assert.Contains("Secrets, tokens, credentials", description);
-        Assert.Contains("High (reshapes future decisions)", description);
-        Assert.Contains("Normal (useful reference)", description);
-        Assert.Contains("Low (edge case)", description);
+        Assert.Contains("High (reshapes future decisions)", description, StringComparison.Ordinal);
+        Assert.Contains("Normal (useful reference", description, StringComparison.Ordinal);
+        Assert.Contains("Low (edge case", description, StringComparison.Ordinal);
+    }
+
+    /// <summary>The value is re-injected into every future session, so the ban on writing secrets
+    /// into it is a content rule for the parameter — not policy about when to call the tool — and
+    /// has to stay at the call site even though the system prompt repeats it.</summary>
+    [Fact]
+    public void Definition_Description_ForbidsWritingSecretsIntoTheValue()
+    {
+        MemorizeNowTool tool = CreateTool(CreateStrictStoreMock().Object);
+
+        Assert.Contains(
+            "Never write secrets, tokens, credentials, or personal data here",
+            tool.Definition.Description,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>Deciding <i>whether</i> a fact is worth saving belongs in the system prompt
+    /// (<c>RetrievalMemoryFramingFact</c>), which the model reads before it has chosen a tool. A
+    /// description is read only after that choice, so policy here is both too late to be useful and
+    /// a second copy that can drift out of step with the prompt's.</summary>
+    [Fact]
+    public void Definition_Description_LeavesWhenToCallToTheSystemPrompt()
+    {
+        MemorizeNowTool tool = CreateTool(CreateStrictStoreMock().Object);
+        string description = tool.Definition.Description;
+
+        Assert.DoesNotContain("Call MemorizeNow in the same turn", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("Do NOT use MemorizeNow for", description, StringComparison.Ordinal);
     }
 }

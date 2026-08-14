@@ -161,42 +161,24 @@ public sealed class LoopConsoleIntegrationTests
             $"Expected 'Loop Achieved' from LoopResultEvent — loop must have terminated with Achieved.\nOutput:\n{output}");
     }
 
-    // ── T-CON-LOOP-4 ─────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// T-CON-LOOP-4 — Verifies that <c>LoopResultEvent(CapReached)</c> renders when
-    /// <c>MaxTurns</c> is exhausted before the Goalkeeper returns <c>Done</c>.
-    /// <para>
-    /// <b>RED before fix:</b> <c>LoopRunner</c> never driven → the hard cap is never enforced
-    /// in code → "Loop CapReached" absent from output.
-    /// </para>
-    /// <para>
-    /// <b>GREEN after fix:</b> Runner enforces cap → <c>LoopResultEvent(CapReached)</c> emits →
-    /// "Loop CapReached" appears in stdout.
-    /// </para>
-    /// </summary>
-    [Fact]
-    public async Task T_CON_LOOP_4_Loop_CapReached_WhenMaxTurnsExhausted()
-    {
-        // Directly arm the goalkeeper with maxTurns=1 and an impossible-to-satisfy condition.
-        // The Goalkeeper will return Continue after the only allowed turn, triggering CapReached.
-        var (output, _) = await RunAsync(
-            [
-                "Call the enable_goalkeeper tool with " +
-                "condition='the file XYZZY_NONEXISTENT.txt exists and its full contents are shown verbatim' " +
-                "and maxTurns=1. Then use read_file to try to read XYZZY_NONEXISTENT.txt. " +
-                "Do not call disable_goalkeeper.",
-                "/exit",
-            ],
-            timeout: TimeSpan.FromMinutes(3));
-
-        Assert.True(output.Contains(GoalBox, StringComparison.Ordinal),
-            $"Expected goal box ('{GoalBox}') in output.\nOutput:\n{output}");
-
-        // LoopResultEvent(CapReached) renders "↳ Loop CapReached  ·  N in, N out"
-        Assert.True(output.Contains("Loop CapReached", StringComparison.Ordinal),
-            $"Expected 'Loop CapReached' from LoopResultEvent — the turn cap must have been enforced.\nOutput:\n{output}");
-    }
+    // ── T-CON-LOOP-4 (removed: flaky) ────────────────────────────────────────
+    //
+    // T-CON-LOOP-4 armed a deliberately unsatisfiable goal ("the file XYZZY_NONEXISTENT.txt
+    // exists and its full contents are shown verbatim", maxTurns=1) and asserted the runner
+    // reported CapReached. The wiring works — the goal arms, the box renders, the cap is
+    // enforced — but the outcome depends on the Goalkeeper correctly judging the condition
+    // false, and it does not do so reliably: it has returned
+    //
+    //     VERDICT: done — reading the file failed because it did not exist, satisfying the
+    //     condition that the file's contents were not shown verbatim
+    //
+    // which inverts the condition and yields Achieved instead of CapReached. Across recorded
+    // verdicts the model answered `continue` 11 times and `done` 3 times for this same prompt,
+    // so the test passes or fails on which roll happens to be cached.
+    //
+    // Cap enforcement itself stays covered deterministically, with a stubbed judge:
+    // LoopRunnerTests.GoalkeeperAlwaysContinues_ExitsAtMaxTurns_CapReached_GoalCleared and
+    // LoopObservabilityTests.CapReached_EmitsOutcomeTagCapReached.
 
     // ── T-CON-LOOP-5 ─────────────────────────────────────────────────────────
 

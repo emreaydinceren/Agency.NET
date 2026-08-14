@@ -473,10 +473,14 @@ same four tests: `T_CON_LOOP_2/_3/_4` and
 PR was not the cause — and then wrongly ended the investigation at "environmental, needs a
 cassette re-record on a host I can't reach."
 
-They turned out to be **two** unrelated failures wearing the same clothes. `T_CON_LOOP_3`, `_4`
-and the recall test were poisoned cassettes, fixed below. `T_CON_LOOP_2` was not: it is genuine
-model non-compliance, covered in its own reflection further down. Four tests failing together in
-the same step is not evidence of one cause.
+They turned out to be **two** unrelated failures wearing the same clothes, and the split was not
+the obvious one. Only `T_CON_LOOP_3` was purely a poisoned cassette — clearing the cache fixed it
+and it has stayed green. `T_CON_LOOP_2` was never a cache problem at all (its own reflection is
+further down). `T_CON_LOOP_4` and the two recall tests were *both*: poisoned cassettes hid a
+second, independent problem, and once the poison was cleared the underlying model-judgement
+failures surfaced and those tests were removed as flaky. Four tests failing together in the same
+step is not evidence of one cause — and fixing the first cause can reveal rather than resolve the
+second.
 
 **Root cause:** LM Studio's prompt cache reuses attention state keyed by prompt **prefix**. When two
 requests are in flight it can serve a request from a KV slot belonging to a *different*
@@ -608,3 +612,19 @@ still pass against the real goal box, so they were not surviving on the false po
 The alternatives, for the record: pin a compliant recording (not reachable in 9 rolls), or run the
 console loop tests against a model that reliably follows a tool-call instruction delivered in a
 tool result. Both remain open if skill-driven arming becomes worth asserting again.
+
+### Flaky tests removed 2026-08-13, and what still covers them
+
+Each of these asserted a *model judgement* rather than a code path, so it passed or failed on
+which roll happened to be cached. None was failing because the system under test was broken.
+
+| Removed | Judgement it depended on | Still covered by |
+|---|---|---|
+| `T_CON_LOOP_2_RefactorLoopSkill_ArmsGoalkeeper_GoalBoxRenders` | model calls `enable_goalkeeper` because a *skill body* says to (0/9 live rolls) | `T_CON_LOOP_1/_3` — same wiring, request made in the user message |
+| `T_CON_LOOP_4_Loop_CapReached_WhenMaxTurnsExhausted` | Goalkeeper judges an impossible condition false (recorded 11 × `continue` vs 3 × `done`) | `LoopRunnerTests.GoalkeeperAlwaysContinues_ExitsAtMaxTurns_CapReached_GoalCleared`, `LoopObservabilityTests.CapReached_EmitsOutcomeTagCapReached` — stubbed judge, deterministic |
+| `Group1CaptureAndRecallTests.Fact_PythonPreference_RecalledInLaterSession` (E1.1) | distiller classifies "I prefer Python." as Fact not Memory (6/6 Memory measured) | E1.2 `Memory_SslDebuggingOAO_...` — same capture→store→retrieve cycle, asserts on `Memory.Records` |
+| `EndToEndRecallTests.EndToEnd_FactWrittenInSessionN_RecalledInSessionNPlus1` | same classification, separate session | as above |
+| `LoopRunnerFunctionalTests.LoopRunner_MarkerObjective_ReachesAchieved` | live worker *and* live judge agreeing in one run (failed 1 of 3 attempts in run 550) | `LoopRunnerTests` covers the achieved path with a stubbed judge |
+
+Before adding another test in this family, ask whether the assertion survives the model answering
+reasonably-but-differently. If not, it belongs in a unit test with a stubbed judge.

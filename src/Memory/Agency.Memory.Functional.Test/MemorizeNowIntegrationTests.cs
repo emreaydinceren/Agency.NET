@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Agency.Harness;
 using Agency.Harness.Contexts;
+using Agency.Harness.Memory;
 using Agency.Llm.Common.Tools;
 using Agency.Memory.Common.Events;
 using Agency.Memory.Common.Jobs;
@@ -144,8 +145,8 @@ public sealed class MemorizeNowIntegrationTests : IAsyncLifetime
     /// <summary>
     /// FT-1 — Happy path: the agent calls MemorizeNow, the tool validates and persists the
     /// fact to Postgres with the correct key/importance/scope/provenance, and on the next
-    /// turn the retrieval gate opens and the fact is injected into the <c>## Facts</c>
-    /// section of the system prompt (Design.md § FT-1).
+    /// turn the retrieval gate opens and the fact is injected into the <c>## Facts from Memory</c>
+    /// section of the <c>&lt;memory&gt;</c> block (Design.md § FT-1).
     /// </summary>
     [Fact]
     public async Task FT1_HappyPath_AgentPersists_ThenNextTurnRecalls()
@@ -228,10 +229,10 @@ public sealed class MemorizeNowIntegrationTests : IAsyncLifetime
             ctx.Knowledge.Records,
             r => r.Title == "Python 3.10 async perf");
 
-        string systemPrompt = SystemPromptBuilder.Build(ctx);
-        Assert.Contains("## Facts", systemPrompt);
-        Assert.Contains("Python 3.10 async perf", systemPrompt);
-        Assert.Contains("Python 3.10+ is 40% faster at async startup than 3.9", systemPrompt);
+        string memoryBlock = MemoryRenderer.Build(ctx);
+        Assert.Contains("## Facts from Memory", memoryBlock);
+        Assert.Contains("Python 3.10 async perf", memoryBlock);
+        Assert.Contains("Python 3.10+ is 40% faster at async startup than 3.9", memoryBlock);
     }
 
     // ── FT-2 ─────────────────────────────────────────────────────────────────

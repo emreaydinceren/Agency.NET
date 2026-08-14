@@ -129,11 +129,13 @@ public static class MemoryServiceCollectionExtensions
                     {
                         if (!ctx.MemoryEnabled)
                         {
-                            // Strip any prior framing fact when memory is disabled.
+                            // Strip any prior framing fact when memory is disabled. The Facts filter
+                            // covers contexts carried over from before the policy moved to its own slot.
                             ctx.Knowledge = ctx.Knowledge with
                             {
                                 Facts = [.. ctx.Knowledge.Facts.Where(
                                     f => !f.StartsWith(RetrievalMemoryFramingFact.Prefix, StringComparison.Ordinal))],
+                                MemoryPolicy = null,
                             };
                             return;
                         }
@@ -159,14 +161,17 @@ public static class MemoryServiceCollectionExtensions
                         }
 
                         // Inject memory retrieval framing fact to inform the model about retrieved records.
+                        // It goes in its own KnowledgeContext slot rather than into Facts: it is policy
+                        // about the memory system, not a domain fact, and sharing the ## Knowledge
+                        // heading with the records let it bury them.
                         bool hasRecords = ctx.Knowledge.Records.Count > 0 || ctx.Memory.Records.Count > 0;
-                        string framingFact = RetrievalMemoryFramingFact.Build(hasRecords);
 
-                        List<string> facts = [.. ctx.Knowledge.Facts.Where(
-                            f => !f.StartsWith(RetrievalMemoryFramingFact.Prefix, StringComparison.Ordinal))];
-                        facts.Add(framingFact);
-
-                        ctx.Knowledge = ctx.Knowledge with { Facts = facts };
+                        ctx.Knowledge = ctx.Knowledge with
+                        {
+                            Facts = [.. ctx.Knowledge.Facts.Where(
+                                f => !f.StartsWith(RetrievalMemoryFramingFact.Prefix, StringComparison.Ordinal))],
+                            MemoryPolicy = RetrievalMemoryFramingFact.Build(hasRecords),
+                        };
                     };
 
                     // Timer-restart callback: ONLY restart the timer, no other side effects (Spec §14.9).

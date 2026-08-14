@@ -5,8 +5,12 @@ Agency.Harness.Contexts.Context.MemoryEnabled.get -> bool
 Agency.Harness.Contexts.Context.MemoryEnabled.set -> void
 Agency.Harness.ChatSession.ChatSession(Agency.Harness.Agent! agent, Agency.Harness.AgentOptions! options, Agency.Harness.Contexts.ToolContext? toolContext = null, Agency.Harness.Contexts.UserSpecificContext? user = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null, string? instructionsBlock = null) -> void
 static Agency.Harness.Agent.CreateContext(string! initialPrompt, Agency.Harness.Contexts.ToolContext? tools = null, Agency.Harness.Contexts.EnvironmentalContext? environment = null, Agency.Harness.Contexts.UserSpecificContext? user = null, System.TimeProvider? timeProvider = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null, string? instructionsBlock = null) -> Agency.Harness.Contexts.Context!
+Agency.Harness.Contexts.KnowledgeContext.MemoryPolicy.get -> string?
+Agency.Harness.Contexts.KnowledgeContext.MemoryPolicy.init -> void
 Agency.Harness.Contexts.QueryContext.InstructionsBlock.get -> string?
 Agency.Harness.Contexts.QueryContext.InstructionsBlock.init -> void
+Agency.Harness.Memory.MemoryRenderer
+static Agency.Harness.Memory.MemoryRenderer.Build(Agency.Harness.Contexts.Context! ctx) -> string!
 Agency.Harness.Instructions.IInstructionResolver
 Agency.Harness.Instructions.IInstructionResolver.ResolveAsync(string! workingDirectory, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Agency.Harness.Instructions.InstructionContext!>
 Agency.Harness.Instructions.InstructionContext

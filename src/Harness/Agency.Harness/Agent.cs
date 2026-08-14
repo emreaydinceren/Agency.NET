@@ -108,6 +108,7 @@ public sealed partial class Agent
 
     private const string RedactedPayload = "(redacted; set Agent:LogToolPayloads=true to log)";
     internal const string InstructionsMessageMarkerKey = "Agency.Harness.InstructionsBlock";
+    internal const string MemoryMessageMarkerKey = "Agency.Harness.MemoryBlock";
 
     /// <summary>
     /// Returns the tool input rendered for logging: the raw JSON when <see cref="AgentOptions.LogToolPayloads"/>
@@ -595,6 +596,43 @@ public sealed partial class Agent
     }
 
     /// <summary>
+    /// Returns the message list for one request: the conversation, plus the <c>&lt;memory&gt;</c>
+    /// block when anything was recalled.
+    /// </summary>
+    /// <param name="ctx">The current session context.</param>
+    /// <returns>
+    /// The conversation messages unchanged when there is no memory block, otherwise a new list
+    /// with the block inserted.
+    /// </returns>
+    /// <remarks>
+    /// The block is composed per request and never appended to <see cref="Context.Conversation"/>:
+    /// it is the result of a vector search over the current message, so it differs every turn and
+    /// persisting it would leave a trail of stale recall in the transcript.
+    /// </remarks>
+    private static IReadOnlyList<ChatMessage> ComposeRequestMessages(Context ctx)
+    {
+        string memoryBlock = Memory.MemoryRenderer.Build(ctx);
+        if (memoryBlock.Length == 0)
+        {
+            return ctx.Conversation.Messages;
+        }
+
+        var composed = new List<ChatMessage>(ctx.Conversation.Messages);
+        var memoryMessage = new ChatMessage(ChatRole.User, memoryBlock)
+        {
+            AdditionalProperties = new() { [MemoryMessageMarkerKey] = true },
+        };
+
+        // Sit immediately before the current question, where the project-instructions block also
+        // lands. Appending after it would be more recent still, but mid-tool-loop the tail is an
+        // assistant tool call and its results, and a user message wedged in there reads as the
+        // user interrupting.
+        int lastUserIndex = composed.FindLastIndex(static m => m.Role == ChatRole.User);
+        composed.Insert(lastUserIndex < 0 ? composed.Count : lastUserIndex, memoryMessage);
+        return composed;
+    }
+
+    /// <summary>
     /// The core agent iteration loop: check stop conditions, call LLM, execute tools.
     /// Shared by <see cref="RunAsync"/> and <see cref="ResumeIteratorAsync"/> so the two
     /// paths cannot drift (spec §6.3 implementation note).
@@ -617,6 +655,11 @@ public sealed partial class Agent
 
             // 2. Build a fresh system prompt every iteration.
             string systemPrompt = SystemPromptBuilder.Build(ctx);
+
+            // 2.5. Compose the messages for this request. Recall is injected here rather than into
+            // ctx.Conversation because it is rebuilt from a vector search over the current message
+            // every iteration - appending it to the transcript would accumulate stale blocks.
+            IReadOnlyList<ChatMessage> requestMessages = ComposeRequestMessages(ctx);
 
             // 3. Build ChatOptions with model, system prompt, max tokens, and tools.
             var options = new ChatOptions
@@ -645,7 +688,7 @@ public sealed partial class Agent
                 ClientType = this._clientType,
                 MaxOutputTokens = options.MaxOutputTokens,
                 SystemPrompt = systemPrompt,
-                Messages = ctx.Conversation.Messages,
+                Messages = requestMessages,
                 Tools = toolDefs,
             });
 
@@ -666,7 +709,7 @@ public sealed partial class Agent
                     emptyChoicesAttempt++;
                     try
                     {
-                        response = await this._llm.GetResponseAsync(ctx.Conversation.Messages, options, ct);
+                        response = await this._llm.GetResponseAsync(requestMessages, options, ct);
                         break;
                     }
                     catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "index")

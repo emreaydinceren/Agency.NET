@@ -586,7 +586,13 @@ armed: `output.Contains("Goal")` matches the echoed skill heading "Arm the **Goa
 `Loop Achieved` assertion has teeth. If this test is kept, assert on the rendered box prefix
 (`┌─ Goal`) so it cannot pass on echoed text.
 
-**Options, none of them free:** pin a compliant recording (not reachable in 9 rolls); run the
+**Resolution.** The test was removed, and the surviving loop tests now assert on the rendered box
+prefix (`┌─ Goal`, via the `GoalBox` constant) instead of the bare word. The wiring T-CON-LOOP-2
+was meant to cover — tool registered, `LoopOptions` bound, `ConsoleChatSession` driving
+`LoopRunner` — is covered by `T_CON_LOOP_1/_3/_4`, which ask for the call in the *user message*
+rather than a skill body. Worth noting the tightened assertions did not cost anything: all three
+still pass against the real goal box, so they were not surviving on the false positive.
+
+The alternatives, for the record: pin a compliant recording (not reachable in 9 rolls), or run the
 console loop tests against a model that reliably follows a tool-call instruction delivered in a
-tool result; or narrow the test to the wiring that `T_CON_LOOP_1/_3/_4` already cover and stop
-asserting model judgement. The choice is a product call, not a CI call.
+tool result. Both remain open if skill-driven arming becomes worth asserting again.

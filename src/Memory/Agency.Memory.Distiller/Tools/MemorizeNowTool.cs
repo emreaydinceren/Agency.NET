@@ -27,7 +27,7 @@ internal sealed class MemorizeNowTool : ITool
             "properties": {
                 "title": {
                     "type": "string",
-                    "description": "Short natural-language headline (2-4 words) naming the fact. Not a slug, and not text to repeat in your reply -- the record key is derived from this automatically."
+                    "description": "Natural-language headline (2-4 words), e.g. 'Python 3.10+ async is 40% faster'. Not a slug -- the record key is derived from this automatically."
                 },
                 "value": {
                     "type": "string",
@@ -73,16 +73,11 @@ internal sealed class MemorizeNowTool : ITool
     public ToolDefinition Definition => new(
         Name: "MemorizeNow",
         Description: """
-            Persist one fact to long-term memory immediately. The record is global -- every future
-            session sees it at once, rather than waiting for the Distiller's end-of-session pass.
+            Explicitly persist a fact to long-term memory immediately (not waiting for session end).
 
-            Call MemorizeNow in the same turn any of these happens -- do not defer to session end:
-            - The user says remember, always, never, or from now on about a fact or preference.
-            - You hold a conclusion that took debugging or research to reach -- a root cause, a
-              working configuration, a confirmed behavior. Losing it means repeating that work.
-            - Something you verified contradicts what you expected or what documentation claims.
-            - You are about to tell the user to note something for the future -- save it here instead.
-            Do not just state the fact in your reply and move on -- call the tool.
+            Use MemorizeNow when you discover or verify something that will reshape future decisions,
+            is hard-won (required research or debugging), or when the user asks you to remember
+            something specific.
 
             Do NOT use MemorizeNow for:
             - Session state or task-specific observations -- the transcript already captures those for
@@ -93,13 +88,14 @@ internal sealed class MemorizeNowTool : ITool
             - Secrets, tokens, credentials, API keys, or personally identifiable information.
 
             All parameters are required (tags may be an empty array):
-            - title: natural-language headline (2-4 words); the record key is derived from it.
+            - title: natural-language headline (2-4 words).
             - value: the full explanation (what, why, when/how) -- self-contained for a future session.
             - domain: semantic category for clustering; case-folded to lowercase.
             - importance: High (reshapes future decisions) | Normal (useful reference) | Low (edge case).
             - tags: 0-4 cross-domain labels for discovery.
 
             Calling this twice with the same domain and title overwrites the prior record silently.
+            Returns a confirmation with the composite key and metadata.
             """,
         InputSchema: _inputSchema);
 

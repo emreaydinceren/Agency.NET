@@ -323,7 +323,7 @@ public sealed class MemorizeNowToolTests
         MemorizeNowTool tool = CreateTool(CreateStrictStoreMock().Object);
         string description = tool.Definition.Description;
 
-        Assert.Contains("Use MemorizeNow when", description);
+        Assert.Contains("Call MemorizeNow in the same turn", description);
         Assert.Contains("Secrets, tokens, credentials", description);
         Assert.Contains("High (reshapes future decisions)", description);
         Assert.Contains("Normal (useful reference)", description);

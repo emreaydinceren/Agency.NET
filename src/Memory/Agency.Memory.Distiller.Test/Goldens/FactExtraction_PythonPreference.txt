@@ -63,8 +63,10 @@ You may produce two kinds of Records:
 
 ## Quality bar
 
-- **Do not duplicate** facts already known (see "Recent Known Facts" below). If a
-  candidate fact is already captured, omit it.
+- **Do not duplicate** facts already known (see "Recent Known Facts" below).
+  - If a candidate fact has the exact same `(Domain, Key)` as a recent fact, omit it (no new record).
+  - If the candidate fact is richer/contradictory, overwrite using the same `(Domain, Key)` instead.
+  - Carefully check title and domain against recent facts before extracting.
 - **Do not record trivia** ("user said hello", "agent acknowledged"). Memory is
   for what would be regrettable to lose, not for the conversation transcript.
 - **Contradiction = overwrite.** If a fact contradicts an existing one (e.g., the

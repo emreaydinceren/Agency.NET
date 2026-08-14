@@ -85,6 +85,17 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 - A request is cacheable **iff its bytes are identical on every run and every OS**. Anything
   per-run-variable (GUIDs, timestamps, unsorted collections) is uncacheable — those tests must
   degrade gracefully (`Assert.Skip`), e.g. the Group 3 consolidation tests.
+- **Cassettes recorded on Windows do not match CI's requests unless you set three env vars.**
+  `ExecutePowershellTool` builds its `ToolDefinition` description from the live environment —
+  `Environment.OSVersion`, `Environment.CurrentDirectory` and `Path.PathSeparator` — and native
+  tool descriptions go into the `tools` array of *every* request, so a dev-box recording and a CI
+  request differ by construction. The tool reads `AGENCY_TOOL_OS_OVERRIDE`,
+  `AGENCY_TOOL_CWD_OVERRIDE` and `AGENCY_TOOL_PATHSEP_OVERRIDE` precisely so a local re-record can
+  emit CI's bytes; CI leaves them unset. **Set all three to the runner's values before recording,
+  or your local run will pass, CI will still fail, and the two will keep rolling independently
+  against separate cache keys.** The values are not written down anywhere — read them off the
+  runner (`/_/src/Harness/Agency.Harness.Console/bin/Release/net10.0` is the console's working
+  directory in the container, `:` the separator) and record them here once confirmed.
 
 ## Publishing (ci-main only)
 
@@ -135,6 +146,7 @@ key = SHA256( "{Method}|{PathAndQuery}|{SHA256(request body)}" )
 | Copied-out `PackageSmokeTest` harness fails every package with `NuGet.Frameworks.FrameworkException: Invalid framework identifier ''` (restore) or `CS0103: The name 'Console' does not exist` (build) | `Agency.PackageSmokeTest.csproj` had no explicit `TargetFramework`/`ImplicitUsings`; it relied on `src/Directory.Build.props` via MSBuild's directory-props auto-import, which stops working once the project is `cp -r`'d to a `mktemp -d` outside `src/` | Set `TargetFramework`/`ImplicitUsings` explicitly in the harness `.csproj` itself — don't rely on ancestor `Directory.Build.props` for a project designed to be copied out of the tree |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1301: The local source '.../src/gitea-local' doesn't exist` | `dotnet add package --source <name>` never resolves a NuGet.Config source *name* — it only accepts a literal URL/path, and silently falls back to treating the name as a relative local directory when it isn't an absolute URI | Ship a NuGet.Config alongside the copied-out harness (`cp NuGet.Config "$work/harness/"`) and drop `--source` entirely, letting restore use the ambient config the normal way |
 | "🔍 Inspect & test-install published packages" fails every package with `NU1302: ... requires HTTPS sources` right after the previous bug's fix | `dotnet nuget update source` rewrites the whole source entry and drops any attribute it doesn't manage itself, silently stripping the checked-in `allowInsecureConnections="true"` off `gitea-local` | Pass `--allow-insecure-connections` on the `dotnet nuget update source` call so the attribute survives the rewrite |
+| A functional test fails with `HttpRequestException: Name or service not known (<proxy host>)` on *some* attempts but not others | The runner container intermittently fails to resolve the proxy's bare hostname. Environmental, not a code or cassette fault — the 3-attempt retry loop usually absorbs it | Confirm it failed on fewer than 3 attempts before investigating anything else; if it becomes frequent, give the proxy a name the container resolves reliably (the host is not part of the cache key, so this does **not** invalidate cassettes) |
 | A functional test fails on a response that answers **a different prompt** — goalkeeper `VERDICT:` text returned for a distiller prompt, a one-word answer to a 1,500-token prompt, or an empty completion (`finish_reason: stop`, no content, no `tool_calls`) | **LM Studio KV-cache bleed.** Its prompt cache reuses attention state by *prefix*, and under concurrent clients a request can be served a slot belonging to another conversation. The proxy then persists that answer, so a transient server fault becomes a permanent cassette | Reload the model (`lms unload <id> && lms load <id>`) — this clears the corrupt state; quarantine the poisoned cassettes; re-record. See the 2026-08-13 reflection |
 | `LoopConsoleIntegrationTests` (or any LLM-driven console test) fails all 3 attempts after an *unrelated-looking* change, and the **number** of failing tests differs between runs | A native tool's `ToolDefinition` description was edited. Progressive discovery reveals native tools in full, so that text is in the `tools` array of **every** request → cache-key change → miss on every LLM-driven test | Treat `ToolDefinition` text as cached-request-body content: it needs a cassette re-record, same as a prompt edit. See the 2026-08-04 reflection |
 

@@ -131,6 +131,16 @@ A stateless LLM is *an amnesiac with a tool belt* — it starts every session fr
 
 The result: the 10th task is easier than the first. Work creates memory; memory improves future work.
 
+<p align="center">
+  <img src="assets/MemorySave.png" alt="Console session where the agent notes a fact and saves it to memory" width="720"><br>
+  <sub><b>1. Save</b> — the agent notes something worth keeping mid-conversation.</sub>
+</p>
+
+<p align="center">
+  <img src="assets/MemoryRecall.png" alt="Console session where the agent recalls the previously saved fact unprompted" width="720"><br>
+  <sub><b>2. Recall</b> — a later turn pulls it back in without being told again.</sub>
+</p>
+
 > **The design call:** keep the expensive, judgment-heavy work out of the model's hands *and* off the latency path. Capture is bounded — the agent signals timing, and its one direct write (`MemorizeNow`) is a narrow idempotent upsert the distiller skips; writes drain through a background channel the user never waits on; and `Agency.Harness` holds zero references to the memory packages, so one config flag collapses the whole stack to a null-hook fast path. ([Full reasoning →](docs/memory-from-amnesiac-to-collaborator.md))
 
 ### 🛡️ Loop Kit — "done" means *verifiably* done

@@ -55,7 +55,8 @@ public static class SystemPromptBuilder
             sb.AppendLine("To use a skill, call the `skill` tool with its name.");
         }
 
-        // KnowledgeContext re-injected every iteration (D3).
+        // KnowledgeContext re-injected every iteration (D3). Host-supplied domain facts only —
+        // everything recall-related now renders into the <memory> message (see MemoryRenderer).
         if (ctx.Knowledge.Facts.Count > 0)
         {
             sb.AppendLine();
@@ -64,38 +65,6 @@ public static class SystemPromptBuilder
             {
                 sb.AppendLine(CultureInfo.InvariantCulture, $"- {fact}");
             }
-        }
-
-        if (ctx.Knowledge.Records.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("## Facts");
-            foreach (MemoryRecord record in ctx.Knowledge.Records)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  {record.Value}");
-            }
-        }
-
-        // Memory-retrieval records: Episodic memories (from retrieval engine, Spec §6.4 / D.3).
-        if (ctx.Memory.Records.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("## Memories");
-            foreach (MemoryRecord record in ctx.Memory.Records)
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- **{record.Title}** (Updated {Humanize(DateTimeOffset.UtcNow - record.UpdatedAt)})");
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  {record.Value}");
-            }
-        }
-
-        // When both Record collections are empty, note it explicitly so the LLM knows
-        // there are no retrieved memories (Spec §13 — "No relevant memories yet.").
-        bool hasRecalledRecords = ctx.Knowledge.Records.Count > 0 || ctx.Memory.Records.Count > 0;
-        if (!hasRecalledRecords)
-        {
-            sb.AppendLine();
-            sb.AppendLine("No relevant memories yet.");
         }
 
         // Temporal grounding.

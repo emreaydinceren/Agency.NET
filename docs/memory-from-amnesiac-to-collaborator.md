@@ -187,7 +187,7 @@ That single design choice (decoupling via hooks) is what lets memory be an *opt-
 The implementation keeps coming back to five rules. Worth holding them in mind:
 
 - **P1 — The hot path is sacred.** Anything the user waits on does the minimum; everything expensive moves to the cold path.
-- **P2 — Capture is system-owned.** The agent never has a "save this memory" tool. It can only signal *timing*; what to remember is decided afterward by the distiller.
+- **P2 — Capture is bounded, not forbidden.** By default the agent signals *timing* and the distiller decides what to keep. The one exception is `MemorizeNow` (§6.7), which persists a single fact immediately — for a hard-won conclusion that would otherwise be lost before the next distillation pass. The original worry behind this principle, that a model left to write freely will bloat the store with self-serving recall, is now held by three constraints instead of by withholding the tool: the write is an **idempotent upsert on `(domain, title)`**, so saving the same thing twice collapses to one record rather than accumulating; it is tagged **`Source = AgentSignaled`**, so agent-chosen facts stay distinguishable from distilled ones for auditing and for the Consolidator; and the distiller **skips re-extracting** anything already memorized this way, so a fact cannot be double-captured. The agent may write — but only idempotently and traceably.
 - **P3 — Soft signals over hard isolation.** The only hard partition is `user_id`. Session relevance is a ranking nudge, not a wall.
 - **P4 — Some decisions are language-shaped.** Reconciling duplicates and contradictions is given to an LLM (the Consolidator) — but never on the hot path.
 - **P5 — One source of truth.** One `Record` type, one store, one conversation manager that owns the turns. No data is copied where it could drift.
@@ -260,7 +260,7 @@ Read the two diagrams together and the **feedback loop** becomes visible: the co
 | **Working memory** (RAM / context window) | the live `Context` + `ctx.Conversation` inside the loop box (Diagram A) |
 | **Semantic memory** (facts) | `ContentType.Fact` records → injected at ② into `ctx.Knowledge` → rendered as `## Facts` |
 | **Episodic memory** (lived experience) | `ContentType.Memory` records → injected at ② into `ctx.Memory` → rendered as `## Memories` |
-| **Procedural memory** (skills) | *out of scope for v1* — the only agent tools at ⑦ are `MarkGoalComplete` (a timing signal) and `SetFocus` (biases retrieval); neither stores a skill |
+| **Procedural memory** (skills) | *out of scope for v1* — the agent tools at ⑦ are `MarkGoalComplete` (a timing signal), `SetFocus` (biases retrieval) and `MemorizeNow` (writes one `Fact`); none of them stores a skill |
 
 `★ How to read these diagrams:` the boxed `⟦ … ⟧` markers are the *only* places memory does anything; everything else is the pre-existing agent loop. Of those markers, just two sit on the hot path (② retrieval, ⑤ timer) — and ② is gated to near-zero cost on repeat iterations. That visual sparseness on the hot path *is* the design goal **P1 (hot path is sacred)**, drawn out.
 
@@ -429,11 +429,19 @@ score = wₛ·similarity + wᵣ·recency + wᵢ·importance + wₘ·sessionMatch
 
 The model never sees a similarity score, a UUID, or a raw timestamp — only a human sentence and a humanised recency string (`Humanize`, `SystemPromptBuilder.cs:123`). From the agent's point of view, "the user prefers Python" is simply a fact that was always true. The entire retrieval machinery is invisible to it.
 
+**Invisible to the model, but not necessarily to the user.** That invisibility has a cost worth naming: because recall is a *hook* rather than a tool, there is no tool-call line in the transcript, so the user sees an answer silently shaped by remembered context with nothing indicating that anything was recalled. The fix keeps the hook design intact rather than promoting retrieval to a tool: after a successful retrieval the engine publishes a **`MemoryRecalledEvent(UserId, FactCount, MemoryCount)`** on the async bus (`MemoryServiceCollectionExtensions.cs:155`), and only when something actually matched. It carries **counts, not content** — enough for a host to say *that* recall happened without duplicating the records already in the system prompt, and without leaking record text into a UI that may have different privacy rules. The console subscribes and renders a single grey aside (`ConsoleChatSession.cs:107-115`):
+
+```text
+  ↻ recalled 1 fact
+```
+
+A host that wants no such indicator simply doesn't subscribe; the memory subsystem neither knows nor cares.
+
 ---
 
 ### 6.6 The write path, end to end (learning)
 
-This is the **Distillation Pipeline** from §3. Its defining property comes straight from **P2 (capture is system-owned)**: the agent has *no* "save this" tool. It can only signal *timing*. Everything else — what's worth remembering, how to phrase it, how important it is — is decided after the fact by the Distiller, off the hot path.
+This is the **Distillation Pipeline** from §3, and it is still how the overwhelming majority of records get written. Its defining property comes from **P2 (capture is bounded)**: the agent's ordinary influence over capture is *timing* only. What's worth remembering, how to phrase it, how important it is — all decided after the fact by the Distiller, off the hot path. The exception is `MemorizeNow` (§6.7), which bypasses this pipeline entirely and writes one `Fact` synchronously; the distiller's prompt then skips re-extracting it, so the two paths never double-capture the same thing.
 
 **The three triggers.** Exactly three events enqueue a `DistillationJob`. Nothing else:
 
@@ -467,15 +475,26 @@ Step 2 is the **idempotency guarantee**. The watermark (`LastDistilledTurnIndex`
 
 ---
 
-### 6.7 The two agent-facing tools
+### 6.7 The three agent-facing tools
 
-Per **P2**, the agent gets *exactly two* memory tools — and neither writes a memory directly. They are registered per-session by `MemorySessionTools.RegisterInto` (`Services/MemorySessionTools.cs`), called from the same `OnSessionStarted` hook that registers the conversation log:
+Per **P2**, the agent gets *exactly three* memory tools — two that only influence *when* and *what* is captured, and one narrow, bounded write. They are registered per-session by `MemorySessionTools.RegisterInto` (`Services/MemorySessionTools.cs:33-38`), called from the same `OnSessionStarted` hook that registers the conversation log:
 
 - **`MarkGoalComplete(summary?)`** — enqueues a `GoalCompletion` distillation job and returns immediately. Crucially, it **does not stop the loop** (`MarkGoalCompleteTool.cs`): the agent can keep helping; the watermark prevents the eventual second distillation from reprocessing. It's a *timing signal*, not a commit.
 
 - **`SetFocus(title?, domain?, tags?)`** — sets `ctx.Focus`, which the retrieval engine appends to its query (§6.5, step 1) to bias recall toward the current task. Its tool *description is generated dynamically* (`SetFocusTool.GetDefinitionAsync:68`): it queries the store for the user's existing `Domain` values and lists them, so the model reuses established vocabulary ("Debugging") instead of coining a synonym ("BugFixing") that would fragment retrieval. Setting the same focus twice is a no-op that returns the prior values.
 
-Both tools are baked per-session with `userId`/`sessionId` captured at registration, so there is never ambiguity about *which* session is being marked complete or focused.
+- **`MemorizeNow(title, value, domain, importance, tags)`** — the one direct write, and the exception carved out of **P2**. It persists a single fact immediately instead of waiting for the next distillation pass, for the case that motivated it: a conclusion that took real work to reach (a root cause, a confirmed configuration) and would be lost if the session ended first. All five parameters are required (`MemorizeNowTool.cs`), with `importance` constrained to `High | Normal | Low` rather than a free float, so the model cannot quietly inflate every fact to 1.0.
+
+  Four properties keep it from becoming the store-bloat vector P2 originally feared:
+
+  - **The key is derived, not model-chosen** — `{domain.ToLowerInvariant()}` + `StringSlugifier.Slugify(title)` (`PostgresMemoryStore.cs:665-666`), so the agent cannot invent colliding or unstable keys.
+  - **The write is an idempotent upsert** on `(domain, title)` — saving the same fact twice overwrites rather than accumulates.
+  - **Records are tagged `Source = AgentSignaled`** — agent-chosen facts stay distinguishable from distilled ones, for auditing and for the Consolidator.
+  - **The distiller skips re-extracting them** (`EpisodeExtractionPrompt.cs:140`) — no double-capture when the same turn is distilled later.
+
+  It writes at **global scope** (`sessionId` is not stamped), so the fact is visible from every future session immediately — the point of memorizing it at all. The tool returns a confirmation the console renders verbatim: `✓ Memorized: {domain}|{key}` plus `Source`/`Importance`/`Tags`.
+
+All three tools are baked per-session with `userId`/`sessionId` captured at registration, so there is never ambiguity about *which* session is being marked complete, focused, or written to.
 
 ---
 
@@ -530,7 +549,7 @@ To tie Part II back to the four pillars, here is one fact's life cycle through t
 
 ![Memory — one fact's life cycle](attachments/memory-trace.svg)
 
-The user never re-stated the preference. The agent never called a "remember" tool. The recall happened because a background scribe distilled a fact in March, and a gated search re-grounded the agent in June — exactly the stateless-to-stateful shift this document opened with.
+The user never re-stated the preference, and in *this* trace the agent never called a "remember" tool — the fact arrived entirely by distillation, and a gated search re-grounded the agent in June. That is still the default path, and the stateless-to-stateful shift this document opened with. `MemorizeNow` (§6.7) is the shortcut for when waiting is the wrong bet: it would have written the same fact the moment it was learned, tagged `AgentSignaled`, with the distiller then skipping it. Same destination, different latency.
 
 ---
 
@@ -543,7 +562,7 @@ If you want the shortest possible summary, it is this:
 It does that by:
 
 - recalling useful memory through hooks before a turn (the read path, gated so it only pays when something changed),
-- writing new memory in the background after a turn (the write path, system-owned and crash-safe),
+- writing new memory in the background after a turn (the write path, distiller-owned and crash-safe, with `MemorizeNow` as the one bounded synchronous exception),
 - ranking on more than similarity, and cleaning up with a language-aware Consolidator and a mechanical Hygiene Sweeper,
 - and keeping the whole feature optional and modular — one flag turns it off and the harness behaves as if memory never existed.
 

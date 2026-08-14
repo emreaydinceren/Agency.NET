@@ -633,6 +633,22 @@ public sealed partial class Agent
                     .ToList();
             }
 
+            // 3.5. Record the assembled request so hosts can show exactly what was submitted -
+            // including anything OnPreIteration hooks (e.g. memory retrieval) just wrote into the
+            // system prompt, which no pre-flight projection of the next turn could see. Captured
+            // outside the retry loops below so one logical request yields one capture.
+            ctx.LastLlmRequest = LlmRequestSnapshotCodec.Serialize(new LlmRequestSnapshot
+            {
+                CapturedAt = this._timeProvider.GetUtcNow(),
+                Iteration = ctx.IterationCount,
+                ModelId = this._model,
+                ClientType = this._clientType,
+                MaxOutputTokens = options.MaxOutputTokens,
+                SystemPrompt = systemPrompt,
+                Messages = ctx.Conversation.Messages,
+                Tools = toolDefs,
+            });
+
             // 4. Call the LLM, retrying on a malformed or degenerate response - known flakiness
             // patterns for some local OpenAI-compatible backends (e.g. LM Studio).
             var llmSw = Stopwatch.StartNew();

@@ -4,6 +4,7 @@ using Agency.Llm.Common.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -22,17 +23,74 @@ internal static class DumpContextCommand
             return CommandContinuation.Continue;
         }
 
-        // Live context once a turn has started; otherwise a preview of what the next turn would send
-        // (system prompt, tools, environment, user) with an empty conversation.
-        Context ctx = chat.PreviewContext();
+        // The request recorded by the agent loop immediately before it was submitted. Null until
+        // the first turn has run - nothing has been sent, so there is nothing to report.
+        byte[]? captured = chat.LastLlmRequest;
+        if (captured is null)
+        {
+            output.WriteLine("No request has been sent to the model yet.");
+            return CommandContinuation.Continue;
+        }
+
+        LlmRequestSnapshot? snapshot = LlmRequestSnapshotCodec.Deserialize(captured);
+        if (snapshot is null)
+        {
+            output.WriteLine("The recorded request could not be read.");
+            return CommandContinuation.Continue;
+        }
+
+        // Attribute each tool to its origin: an MCP server (by name) or the built-in set.
+        // The MCP pool is the only place that knows which server contributed which tool.
+        var mcpPool = session.ServiceProvider.GetService<McpClientPool>();
+        var serverByTool = new Dictionary<string, string>(StringComparer.Ordinal);
+        var serverOrder = new List<string>();
+        if (mcpPool is not null)
+        {
+            foreach ((string server, IReadOnlyList<string> names) in mcpPool.ToolNamesByServer)
+            {
+                serverOrder.Add(server);
+                foreach (string name in names)
+                {
+                    serverByTool[name] = server;
+                }
+            }
+        }
+
+        Render(output, snapshot, serverByTool, serverOrder);
+        return CommandContinuation.Continue;
+    }
+
+    /// <summary>
+    /// Renders a captured request. Takes only an <see cref="IChatOutput"/> and plain data so it can
+    /// be exercised without a live session.
+    /// </summary>
+    /// <param name="output">The sink to write to.</param>
+    /// <param name="snapshot">The deserialized request as it was submitted.</param>
+    /// <param name="serverByTool">Maps tool name to the MCP server that contributed it.</param>
+    /// <param name="serverOrder">MCP server names in configured order.</param>
+    internal static void Render(
+        IChatOutput output,
+        LlmRequestSnapshot snapshot,
+        IReadOnlyDictionary<string, string> serverByTool,
+        IReadOnlyList<string> serverOrder)
+    {
+        // === HEADER ===
+        string maxTokens = snapshot.MaxOutputTokens is { } max
+            ? $" · max {max.ToString(CultureInfo.InvariantCulture)} tokens"
+            : string.Empty;
+        output.WriteLineMarkup(
+            $"[dim]iteration {snapshot.Iteration} · {Markup.Escape(snapshot.ModelId)} " +
+            $"({Markup.Escape(snapshot.ClientType)}){Markup.Escape(maxTokens)} · captured " +
+            $"{snapshot.CapturedAt.ToString("u", CultureInfo.InvariantCulture)}[/]");
+        output.WriteLine();
 
         // === SYSTEM PROMPT ===
         output.WriteLineMarkup("[bold yellow]══ SYSTEM PROMPT ══[/]");
-        output.WriteLine(SystemPromptBuilder.Build(ctx));
+        output.WriteLine(snapshot.SystemPrompt);
         output.WriteLine();
 
         // === MESSAGES ===
-        IReadOnlyList<ChatMessage> messages = ctx.Conversation.Messages;
+        IReadOnlyList<ChatMessage> messages = snapshot.Messages;
         output.WriteLineMarkup($"[bold yellow]══ MESSAGES ({messages.Count}) ══[/]");
         for (int i = 0; i < messages.Count; i++)
         {
@@ -51,7 +109,7 @@ internal static class DumpContextCommand
                         break;
                     case FunctionResultContent frc:
                         output.WriteLineMarkup(
-                            $"  [grey]tool-result[/] [dim]{Markup.Escape(frc.CallId)}[/] {Markup.Escape(frc.Result?.ToString() ?? string.Empty)}");
+                            $"  [grey]tool-result[/] [dim]{Markup.Escape(frc.CallId)}[/] {Markup.Escape(FormatToolResult(frc.Result))}");
                         break;
                     default:
                         output.WriteLineMarkup($"  [dim]({content.GetType().Name})[/]");
@@ -63,32 +121,14 @@ internal static class DumpContextCommand
         output.WriteLine();
 
         // === TOOLS ===
-        IReadOnlyList<ToolDefinition> tools = ctx.Tools.Registry.ListDefinitions();
+        IReadOnlyList<ToolDefinition> tools = snapshot.Tools;
         output.WriteLineMarkup($"[bold yellow]══ TOOLS ({tools.Count}) ══[/]");
-
-        // Attribute each tool to its origin: an MCP server (by name) or the built-in set.
-        // The MCP pool is the only place that knows which server contributed which tool.
-        var mcpPool = session.ServiceProvider.GetService<McpClientPool>();
-        var serverByTool = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (mcpPool is not null)
-        {
-            foreach ((string server, IReadOnlyList<string> names) in mcpPool.ToolNamesByServer)
-            {
-                foreach (string name in names)
-                {
-                    serverByTool[name] = server;
-                }
-            }
-        }
 
         const string builtIn = "Built-in";
 
         // Group order: built-in first, then each MCP server in configured order.
         var groupOrder = new List<string> { builtIn };
-        if (mcpPool is not null)
-        {
-            groupOrder.AddRange(mcpPool.ToolNamesByServer.Keys);
-        }
+        groupOrder.AddRange(serverOrder);
 
         var byGroup = tools
             .GroupBy(t => serverByTool.TryGetValue(t.Name, out string? s) ? s : builtIn)
@@ -137,9 +177,20 @@ internal static class DumpContextCommand
 
             output.WriteLine();
         }
-
-        return CommandContinuation.Continue;
     }
+
+    /// <summary>
+    /// Renders a tool result for display. <see cref="FunctionResultContent.Result"/> is an untyped
+    /// <see cref="object"/>, so it comes back from the captured request as a <see cref="JsonElement"/>;
+    /// a string result must be unwrapped or it would render with its JSON quotes.
+    /// </summary>
+    private static string FormatToolResult(object? result) => result switch
+    {
+        null => string.Empty,
+        JsonElement { ValueKind: JsonValueKind.String } element => element.GetString() ?? string.Empty,
+        JsonElement element => element.GetRawText(),
+        _ => result.ToString() ?? string.Empty,
+    };
 
     /// <summary>Left-pads every line of an already-rendered markup block by <paramref name="spaces"/> spaces.</summary>
     private static string Indent(string markup, int spaces)

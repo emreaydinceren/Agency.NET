@@ -72,6 +72,12 @@ public sealed class ChatSession : IAsyncDisposable
     public bool IsStarted => this._ctx is not null;
 
     /// <summary>
+    /// Gets the request submitted on the most recent loop iteration, serialized as UTF-8 JSON
+    /// (see <see cref="LlmRequestSnapshot"/>), or <see langword="null"/> if no turn has run yet.
+    /// </summary>
+    internal byte[]? LastLlmRequest => this._ctx?.LastLlmRequest;
+
+    /// <summary>
     /// Returns the context that would be sent to the model: the live conversation context once
     /// the first turn has started, or — before then — a freshly built preview reflecting the
     /// system-prompt inputs, tools, environment, and user for the next turn. Built with the same

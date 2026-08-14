@@ -202,7 +202,7 @@ Here are the commands you'll commonly see:
 | `/clear` | Wipes the screen **and** starts a fresh conversation (the AI forgets what you said before). |
 | `/exit` or `/quit` | Ends the session and closes the app. |
 | `/model` | Opens a picker to switch which AI model you're talking to (see [Section 7](#7-switching-the-ai-model-model)). |
-| `/dump-context` | Shows you *everything* currently being sent to the AI behind the scenes (see [Section 10](#10-peeking-under-the-hood-dump-context)). |
+| `/dump-context` | Shows you *exactly* what was last sent to the AI behind the scenes (see [Section 10](#10-peeking-under-the-hood-dump-context)). |
 | `/mcp-list` | Lists every configured MCP server and its status — on, off (even one that's off because it never started), or failed to connect — and how many of its tools are enabled (see [Section 12](#12-skills-and-other-extras)). |
 | `/mcp-toggle <server>` | Switches one MCP server's tools on or off, and remembers your choice across restarts (see [Section 12](#12-skills-and-other-extras)). |
 | `/add-file <path>` | Gives the agent one of your documents to search later (see [Section 8](#8-giving-the-agent-your-own-documents)). |
@@ -368,14 +368,27 @@ Curious what the AI actually "sees"? Type:
 ❯ /dump-context
 ```
 
-This prints the full **context** being sent to the model right now: its instructions (the *system
-prompt*), the whole conversation so far, and the list of tools it has. This is purely a **read-only peek** —
-it doesn't change anything or count as a message. It's a great way to demystify what's going on.
+This prints the **exact request the app last sent to the model**: its instructions (the *system
+prompt*), the conversation as it stood at that moment, and the list of tools it was offered. This is
+purely a **read-only peek** — it doesn't change anything or count as a message. It's a great way to
+demystify what's going on.
+
+The app records each request at the moment it goes out, so what you see is a recording, not a guess.
+That matters: things get added to the instructions *while* a turn is running — the memories the app
+looked up for you, for instance — and a preview made before the turn couldn't have known about them.
+
+Two things follow from that:
+
+- Before you've sent anything, there's nothing to show, and the command tells you so. Send a message first.
+- What you see is the **last** request of the previous turn. If the AI used a tool, that's the request
+  it made *after* getting the tool's answer — which is why the tool result appears at the end of the
+  conversation. The line at the top tells you which round it was (`iteration 2`), which model it went
+  to, and when it was captured.
 
 > **📘 Note — "context"**
 > The **context** is everything the AI is shown for a given reply: its standing instructions, the recent
 > conversation, any documents it pulled in, and the menu of tools it can use. The model has no memory
-> beyond what's in the context, which is why `/dump-context` is the honest picture of "what it knows right now."
+> beyond what's in the context, which is why `/dump-context` is the honest picture of "what it was told."
 
 ---
 

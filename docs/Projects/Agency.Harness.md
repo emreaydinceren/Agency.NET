@@ -68,7 +68,7 @@ public sealed class Agent
 
 #### `ChatSession`
 
-Higher-level stateful wrapper — the preferred surface for REPL hosts and HTTP endpoints. Implements `IAsyncDisposable`; dispose fires the `OnSessionEnd` hook once. It also drives the permission park/resume protocol. The Loop Kit `LoopRunner` reads three internal members of the session — `WorkerModel`, `WorkerClientType` (for the `role`-tagged token metrics and the self-preference warning), and `PreviewContext()` (the transcript handed to the Goalkeeper).
+Higher-level stateful wrapper — the preferred surface for REPL hosts and HTTP endpoints. Implements `IAsyncDisposable`; dispose fires the `OnSessionEnd` hook once. It also drives the permission park/resume protocol. The Loop Kit `LoopRunner` reads three internal members of the session — `WorkerModel`, `WorkerClientType` (for the `role`-tagged token metrics and the self-preference warning), and `PreviewContext()` (the transcript handed to the Goalkeeper). A fourth internal member, `LastLlmRequest`, surfaces `Context.LastLlmRequest` — the serialized request from the most recent loop iteration — for hosts that want to show exactly what was submitted (the console's `/dump-context`).
 
 ```csharp
 // File: src/Harness/Agency.Harness/ChatSession.cs

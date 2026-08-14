@@ -10,6 +10,15 @@ namespace Agency.Memory.Distiller.Tools;
 /// waiting for the Distiller to extract it from the transcript at session end.
 /// </summary>
 /// <remarks>
+/// <para>
+/// The description below covers only <i>how</i> to fill the tool in — what each parameter means and
+/// how to choose a good value for it. It deliberately carries no policy on when a fact is worth
+/// saving: a tool description is read only once the model has already decided to reach for a tool,
+/// which is too late to create the intent, so that half lives in the system prompt
+/// (<c>RetrievalMemoryFramingFact</c> in <c>Agency.Memory.Retrieval</c>). Keep the two from drifting
+/// back together — duplicated policy in both places is what makes them contradict later.
+/// </para>
+/// <para>
 /// All parameters are required (<c>tags</c> may be an empty array). This tool rejects malformed
 /// JSON input (missing/blank fields, an unrecognised <see cref="Importance"/> value, or more than
 /// 4 tags) before calling the store; <see cref="IMemoryStore.MemorizeNowAsync"/> re-validates and
@@ -18,6 +27,7 @@ namespace Agency.Memory.Distiller.Tools;
 /// agent-signaled fact is available in every future session, not just this one. Calling this tool
 /// twice with the same domain and title overwrites the prior record silently (idempotent upsert).
 /// This tool is instantiated per session with the <c>userId</c> and <c>sessionId</c> baked in.
+/// </para>
 /// </remarks>
 internal sealed class MemorizeNowTool : ITool
 {
@@ -73,33 +83,48 @@ internal sealed class MemorizeNowTool : ITool
     public ToolDefinition Definition => new(
         Name: "MemorizeNow",
         Description: """
-            Persist one fact to long-term memory immediately. The record is global -- every future
-            session sees it at once, rather than waiting for the Distiller's end-of-session pass.
+            Persist one fact to long-term memory. The record is saved globally and takes effect at
+            once: every future session can recall it, not only this one.
 
-            Call MemorizeNow in the same turn any of these happens -- do not defer to session end:
-            - The user says remember, always, never, or from now on about a fact or preference.
-            - You hold a conclusion that took debugging or research to reach -- a root cause, a
-              working configuration, a confirmed behavior. Losing it means repeating that work.
-            - Something you verified contradicts what you expected or what documentation claims.
-            - You are about to tell the user to note something for the future -- save it here instead.
-            Do not just state the fact in your reply and move on -- call the tool.
+            How to write each parameter (all are required; tags may be an empty array):
 
-            Do NOT use MemorizeNow for:
-            - Session state or task-specific observations -- the transcript already captures those for
-              the Distiller to extract after the session ends.
-            - Facts already visible in this session's ## Facts or ## Memories sections.
-            - Unverified information copied from tool outputs, files, or web content -- only save
-              conclusions you verified yourself.
-            - Secrets, tokens, credentials, API keys, or personally identifiable information.
+            - title: a natural-language headline of 2-4 words, not a slug. The record's key is
+              derived from it, so the same domain and title overwrite the earlier record silently --
+              reuse a title deliberately to correct a fact, vary it to add a distinct one. Write it
+              so it still identifies the fact in six months: "Postgres pool exhaustion on half-open
+              transactions", not "database issue".
 
-            All parameters are required (tags may be an empty array):
-            - title: natural-language headline (2-4 words); the record key is derived from it.
-            - value: the full explanation (what, why, when/how) -- self-contained for a future session.
-            - domain: semantic category for clustering; case-folded to lowercase.
-            - importance: High (reshapes future decisions) | Normal (useful reference) | Low (edge case).
-            - tags: 0-4 cross-domain labels for discovery.
+            - value: the full explanation, in three parts -- what the fact is, why it matters, and
+              when or how it applies. Test it by deleting this conversation: someone who reads only
+              this paragraph must still understand it, so name the system, the version, the numbers.
+              Never write secrets, tokens, credentials, or personal data here -- the value is
+              re-injected into every future session.
 
-            Calling this twice with the same domain and title overwrites the prior record silently.
+            - domain: the category the fact clusters under for retrieval; case-folded to lowercase.
+              Prefer an existing domain over coining one -- Performance, Debugging, Architecture,
+              Database, Deployment, Security -- so related facts come back together. Never "misc",
+              "other", or "general".
+
+            - importance: structural, not a label. It weighs retrieval ranking and protects the
+              record from pruning, so grading everything High flattens the ranking and buries what
+              matters. High (reshapes future decisions) | Normal (useful reference for a standard
+              scenario) | Low (edge case, rare, or specific to one environment).
+
+            - tags: 0-4 labels that cut across domains, so the fact is reachable from another angle
+              -- ["concurrency", "race-condition"] on a Database fact. Do not restate the domain or
+              repeat words already in the title. An empty array beats filler.
+
+            Example:
+              title: "Postgres pool exhaustion on half-open transactions"
+              value: "A Postgres connection is not returned to the pool while its transaction is
+                still open, including after an error. Under async error recovery this drained the
+                pool in about 30 minutes and new queries then hung indefinitely. Commit or roll back
+                explicitly in a finally block, or give pgBouncer an aggressive idle timeout."
+              domain: "Database"
+              importance: "High"
+              tags: ["postgres", "pooling", "transactions"]
+
+            Returns the derived record key on success.
             """,
         InputSchema: _inputSchema);
 

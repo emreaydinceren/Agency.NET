@@ -119,6 +119,7 @@ public static class MemoryServiceCollectionExtensions
                     IConversationManagerRegistry conversationRegistry =
                         sp.GetRequiredService<IConversationManagerRegistry>();
                     ChannelSessionRegistry channelRegistry = sp.GetRequiredService<ChannelSessionRegistry>();
+                    IAsyncEventBus eventBus = sp.GetRequiredService<IAsyncEventBus>();
 
                     // Build retrieval engine with the resolved dependencies.
                     var engine = new RetrievalEngine(store, embedder, memoryOptions);
@@ -142,6 +143,19 @@ public static class MemoryServiceCollectionExtensions
                         if (shouldRetrieve)
                         {
                             await engine.RetrieveAsync(ctx, ct).ConfigureAwait(false);
+
+                            // Announce that recall happened (counts only — the records themselves are
+                            // already in the system prompt). Retrieval is a hook, not a tool, so this
+                            // event is the only signal a host can surface that the answer was shaped by
+                            // remembered context. Silent when nothing matched.
+                            int factCount = ctx.Knowledge.Records.Count;
+                            int memoryCount = ctx.Memory.Records.Count;
+                            if (factCount > 0 || memoryCount > 0)
+                            {
+                                await eventBus.PublishAsync(
+                                    new MemoryRecalledEvent(ctx.User.Id ?? string.Empty, factCount, memoryCount),
+                                    ct).ConfigureAwait(false);
+                            }
                         }
 
                         // Inject memory retrieval framing fact to inform the model about retrieved records.

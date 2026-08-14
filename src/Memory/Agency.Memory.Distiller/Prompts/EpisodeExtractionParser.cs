@@ -32,6 +32,16 @@ internal static class EpisodeExtractionParser
     {
         string cleaned = StripCodeFences(llmResponse.Trim());
 
+        // Smaller models routinely wrap the object in conversation ("Here is the JSON:" before,
+        // "Let me know if you need more." after) despite the prompt demanding JSON only. Demanding
+        // that the whole body parse turns that into a dead-lettered distillation, so take the first
+        // balanced object instead. A response with no object at all still falls through to the
+        // JsonException path below and reports the original text's failure.
+        if (TryExtractJsonObject(cleaned, out string extracted))
+        {
+            cleaned = extracted;
+        }
+
         ExtractionRoot root;
         try
         {
@@ -103,6 +113,78 @@ internal static class EpisodeExtractionParser
         }
 
         return text;
+    }
+
+    /// <summary>
+    /// Extracts the first balanced <c>{...}</c> object from <paramref name="text"/>, ignoring any
+    /// prose before or after it.
+    /// </summary>
+    /// <remarks>
+    /// Brace counting is string-aware: a <c>{</c> or <c>}</c> inside a JSON string literal does not
+    /// change the depth, so a record whose <c>Value</c> contains braces (Markdown, code snippets)
+    /// is not truncated mid-object. Escapes are honoured so <c>\"</c> does not end a string.
+    /// </remarks>
+    /// <param name="text">Text that may contain a JSON object surrounded by prose.</param>
+    /// <param name="json">The extracted object, or <see cref="string.Empty"/> when none was found.</param>
+    /// <returns><see langword="true"/> when a balanced object was found.</returns>
+    private static bool TryExtractJsonObject(string text, out string json)
+    {
+        json = string.Empty;
+
+        int start = text.IndexOf('{', StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return false;
+        }
+
+        bool inString = false;
+        bool escaped = false;
+        int depth = 0;
+
+        for (int i = start; i < text.Length; i++)
+        {
+            char c = text[i];
+
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (inString && c == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                inString = !inString;
+                continue;
+            }
+
+            if (inString)
+            {
+                continue;
+            }
+
+            if (c == '{')
+            {
+                depth++;
+            }
+            else if (c == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    json = text[start..(i + 1)];
+                    return true;
+                }
+            }
+        }
+
+        // Unbalanced (e.g. a truncated response) — leave the text alone so the JSON error surfaces.
+        return false;
     }
 
     private static void ValidateRequiredFields(ExtractionRecord r)

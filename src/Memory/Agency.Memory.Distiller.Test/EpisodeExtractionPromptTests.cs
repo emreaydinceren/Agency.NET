@@ -190,6 +190,73 @@ public sealed class EpisodeExtractionPromptTests
         Assert.Equal("my-session", records[0].SessionId);
     }
 
+    /// <summary>
+    /// A conversational preamble before the object is tolerated. Small models routinely emit
+    /// "Here is the JSON:" despite the prompt demanding JSON only; failing the parse dead-letters
+    /// the whole distillation over a cosmetic wrapper.
+    /// </summary>
+    [Fact]
+    public void Parse_ProsePreambleBeforeJson_ExtractsRecords()
+    {
+        const string response = """
+            Here is the JSON you requested:
+
+            {"records":[{"ContentType":"Fact","Title":"Python preference","Domain":"Preferences","Key":"Language","Tags":[],"Scope":"Global","Importance":0.7,"Value":"User prefers Python."}]}
+            """;
+
+        IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(response, "u1", "s1");
+
+        Assert.Single(records);
+        Assert.Equal("Python preference", records[0].Title);
+    }
+
+    /// <summary>Trailing prose after the object is tolerated for the same reason.</summary>
+    [Fact]
+    public void Parse_TrailingProseAfterJson_ExtractsRecords()
+    {
+        const string response = """
+            {"records":[{"ContentType":"Fact","Title":"Python preference","Domain":"Preferences","Key":"Language","Tags":[],"Scope":"Global","Importance":0.7,"Value":"User prefers Python."}]}
+
+            Let me know if you would like anything adjusted.
+            """;
+
+        IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(response, "u1", "s1");
+
+        Assert.Single(records);
+        Assert.Equal("Python preference", records[0].Title);
+    }
+
+    /// <summary>
+    /// Braces inside a string value must not close the object early — Memory records carry Markdown
+    /// and code snippets in Value, so naive brace counting would truncate them mid-record.
+    /// </summary>
+    [Fact]
+    public void Parse_BracesInsideStringValue_DoesNotTruncateObject()
+    {
+        const string response = """
+            Here you go:
+            {"records":[{"ContentType":"Fact","Title":"Init snippet","Domain":"Code","Key":"Init","Tags":[],"Scope":"Global","Importance":0.5,"Value":"Call new Foo { Bar = 1 } and escape a quote like \" here."}]}
+            """;
+
+        IReadOnlyList<MemoryRecord> records = EpisodeExtractionParser.Parse(response, "u1", "s1");
+
+        Assert.Single(records);
+        Assert.Equal("Call new Foo { Bar = 1 } and escape a quote like \" here.", records[0].Value);
+    }
+
+    /// <summary>
+    /// A truncated object is left alone so the JSON error surfaces, rather than being silently
+    /// accepted as a partial record.
+    /// </summary>
+    [Fact]
+    public void Parse_UnbalancedJson_ThrowsExtractionParseException()
+    {
+        const string response = """Here is the JSON: {"records":[{"ContentType":"Fact","Title":"Truncated" """;
+
+        Assert.Throws<ExtractionParseException>(() =>
+            EpisodeExtractionParser.Parse(response, "u1", "s1"));
+    }
+
     /// <summary>Verifies that invalid JSON throws ExtractionParseException.</summary>
     [Fact]
     public void Parse_InvalidJson_ThrowsExtractionParseException()

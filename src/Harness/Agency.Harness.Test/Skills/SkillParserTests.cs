@@ -349,6 +349,107 @@ public sealed class SkillParserTests
     }
 
     // ---------------------------------------------------------------------------
+    // Block scalars (">" folded, "|" literal)
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// A folded block scalar (<c>description: &gt;</c>) joins its continuation lines with spaces
+    /// into a single-line value, rather than the fold indicator itself becoming the description
+    /// (the regression this covers: a bare "&gt;" was previously stored verbatim as the value).
+    /// </summary>
+    [Fact]
+    public void Parse_FoldedBlockScalarDescription_JoinsLinesWithSpaces()
+    {
+        string text =
+            "---\n" +
+            "description: >\n" +
+            "  Lint and fix Markdown files according to markdownlint rules. Use this\n" +
+            "  skill whenever the user wants to lint a document.\n" +
+            "when_to_use: after edits\n" +
+            "---\n" +
+            "Body.";
+
+        Skill skill = ParseText(text);
+
+        Assert.Equal(
+            "Lint and fix Markdown files according to markdownlint rules. Use this skill whenever the user wants to lint a document.",
+            skill.Description);
+        Assert.Equal("after edits", skill.WhenToUse);
+    }
+
+    /// <summary>A blank line inside a folded block scalar starts a new paragraph, joined with a single newline.</summary>
+    [Fact]
+    public void Parse_FoldedBlockScalarWithBlankLine_StartsNewParagraph()
+    {
+        string text =
+            "---\n" +
+            "description: >\n" +
+            "  First paragraph line one\n" +
+            "  line two.\n" +
+            "\n" +
+            "  Second paragraph.\n" +
+            "---\n" +
+            "Body.";
+
+        Skill skill = ParseText(text);
+
+        Assert.Equal("First paragraph line one line two.\nSecond paragraph.", skill.Description);
+    }
+
+    /// <summary>A literal block scalar (<c>|</c>) preserves line breaks exactly instead of folding them.</summary>
+    [Fact]
+    public void Parse_LiteralBlockScalar_PreservesLineBreaks()
+    {
+        string text =
+            "---\n" +
+            "description: |\n" +
+            "  Line one.\n" +
+            "  Line two.\n" +
+            "---\n" +
+            "Body.";
+
+        Skill skill = ParseText(text);
+
+        Assert.Equal("Line one.\nLine two.", skill.Description);
+    }
+
+    /// <summary>A block scalar field is followed correctly by a normal scalar field on the next unindented line.</summary>
+    [Fact]
+    public void Parse_BlockScalarFollowedByNormalField_BothParsedCorrectly()
+    {
+        string text =
+            "---\n" +
+            "description: >\n" +
+            "  Folded description text.\n" +
+            "arguments: query\n" +
+            "---\n" +
+            "Run $query.";
+
+        Skill skill = ParseText(text);
+
+        Assert.Equal("Folded description text.", skill.Description);
+        Assert.Equal(["query"], skill.Arguments);
+    }
+
+    /// <summary>Trailing blank lines inside a block scalar are stripped from the resulting value.</summary>
+    [Fact]
+    public void Parse_BlockScalarWithTrailingBlankLines_TrimsThem()
+    {
+        string text =
+            "---\n" +
+            "description: >\n" +
+            "  Trimmed text.\n" +
+            "\n" +
+            "\n" +
+            "---\n" +
+            "Body.";
+
+        Skill skill = ParseText(text);
+
+        Assert.Equal("Trimmed text.", skill.Description);
+    }
+
+    // ---------------------------------------------------------------------------
     // allowed-tools — space-separated syntax (Task 9)
     // ---------------------------------------------------------------------------
 

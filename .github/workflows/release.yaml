@@ -180,6 +180,9 @@ jobs:
         # inherits that same prerelease version rather than a clean one.
         id: version
         run: |
+          # nbgv shells out to git, which flags this checkout as dubious ownership inside the
+          # container (same fix sync-github.yaml already uses for the same reason).
+          git config --global --add safe.directory '*'
           dotnet tool install --global nbgv
           export PATH="$HOME/.dotnet/tools:$PATH"
           TAG="v$(nbgv get-version -v NuGetPackageVersion)"

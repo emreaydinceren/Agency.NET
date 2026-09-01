@@ -46,6 +46,7 @@ internal sealed class MemoryMergeTool : ITool
 
     private readonly IMemoryStore _store;
     private readonly string _userId;
+    private readonly Dictionary<string, MemorySource> _sourceById;
     private readonly Func<string> _idFactory;
 
     /// <summary>
@@ -53,15 +54,26 @@ internal sealed class MemoryMergeTool : ITool
     /// </summary>
     /// <param name="store">The memory store for atomic merge operations.</param>
     /// <param name="userId">The owning user — ensures the merge only touches that user's records.</param>
+    /// <param name="existingRecords">
+    /// The record set the reconciliation prompt was rendered from. Used to look up each merge
+    /// input's <see cref="MemorySource"/> so the merged record's provenance is resolved
+    /// deterministically in code (see <see cref="ResolveMergedSource"/>) rather than trusting the
+    /// LLM to type it correctly — the tool's input schema has no field for the LLM to express it.
+    /// </param>
     /// <param name="idFactory">
     /// Optional generator for the merged record's id. When <see langword="null"/> a random GUID is
     /// used (production behaviour). Tests inject a deterministic factory so the id echoed back into
     /// later agent turns is stable and the request bodies stay replayable from the HTTP cache.
     /// </param>
-    internal MemoryMergeTool(IMemoryStore store, string userId, Func<string>? idFactory = null)
+    internal MemoryMergeTool(
+        IMemoryStore store,
+        string userId,
+        IReadOnlyList<Record>? existingRecords = null,
+        Func<string>? idFactory = null)
     {
         this._store = store ?? throw new ArgumentNullException(nameof(store));
         this._userId = userId ?? throw new ArgumentNullException(nameof(userId));
+        this._sourceById = (existingRecords ?? []).ToDictionary(r => r.Id, r => r.Source);
         this._idFactory = idFactory ?? (() => Guid.NewGuid().ToString());
     }
 
@@ -95,7 +107,8 @@ internal sealed class MemoryMergeTool : ITool
             }
         }
 
-        Record? newRecord = ParseRecord(newRecordEl, this._userId);
+        MemorySource mergedSource = ResolveMergedSource(ids);
+        Record? newRecord = ParseRecord(newRecordEl, this._userId, mergedSource);
         if (newRecord is null)
         {
             return new ToolResult("newRecord is missing required fields (contentType, domain, key, title, value).", IsError: true);
@@ -112,7 +125,25 @@ internal sealed class MemoryMergeTool : ITool
         }
     }
 
-    private Record? ParseRecord(JsonElement el, string userId)
+    /// <summary>
+    /// Deterministically resolves the merged record's provenance: <see cref="MemorySource.AgentSignaled"/>
+    /// wins whenever one of the merge inputs carries it (Spec §18.2's merge-priority rule — the agent
+    /// chose that phrasing deliberately), otherwise the merge product is <see cref="MemorySource.Consolidated"/>.
+    /// </summary>
+    private MemorySource ResolveMergedSource(IReadOnlyList<string> ids)
+    {
+        foreach (string id in ids)
+        {
+            if (this._sourceById.TryGetValue(id, out MemorySource source) && source == MemorySource.AgentSignaled)
+            {
+                return MemorySource.AgentSignaled;
+            }
+        }
+
+        return MemorySource.Consolidated;
+    }
+
+    private Record? ParseRecord(JsonElement el, string userId, MemorySource source)
     {
         if (!el.TryGetProperty("contentType", out JsonElement ctEl)
             || !el.TryGetProperty("domain", out JsonElement domainEl)
@@ -167,6 +198,7 @@ internal sealed class MemoryMergeTool : ITool
             tags: tags,
             importance: importance,
             createdAt: now,
-            updatedAt: now);
+            updatedAt: now,
+            source: source);
     }
 }

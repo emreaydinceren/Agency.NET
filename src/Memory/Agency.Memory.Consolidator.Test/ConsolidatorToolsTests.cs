@@ -111,6 +111,97 @@ public class ConsolidatorToolsTests
         Assert.DoesNotContain("id-old", capturedId);
     }
 
+    /// <summary>
+    /// When one of the merge inputs is AgentSignaled, the merged record's Source is deterministically
+    /// AgentSignaled — resolved in code from the pre-merge record snapshot, not left to the LLM
+    /// (the tool's newRecord schema has no field for the LLM to specify Source).
+    /// </summary>
+    [Fact]
+    public async Task MemoryMerge_OneInputIsAgentSignaled_MergedRecordSourceIsAgentSignaled()
+    {
+        MemRecord capturedRecord = null!;
+        var store = new Mock<IMemoryStore>(MockBehavior.Strict);
+        store.Setup(s => s.MergeAsync(
+            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<MemRecord>(),
+            It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<string>, MemRecord, CancellationToken>((_, r, _) => capturedRecord = r)
+            .ReturnsAsync((IReadOnlyList<string> _, MemRecord r, CancellationToken _) => r);
+
+        var existingRecords = new[]
+        {
+            MakeRecord("id-agent-signaled") with { Source = MemorySource.AgentSignaled },
+            MakeRecord("id-distilled") with { Source = MemorySource.Distilled },
+        };
+        var tool = new MemoryMergeTool(store.Object, "user1", existingRecords);
+
+        var input = JsonDocument.Parse("""
+        {
+            "recordIds": ["id-agent-signaled", "id-distilled"],
+            "newRecord": {
+                "contentType": "Fact",
+                "domain": "Test",
+                "key": "merged-key",
+                "title": "Merged",
+                "value": "merged value",
+                "tags": [],
+                "importance": 0.8,
+                "scope": "Global"
+            }
+        }
+        """).RootElement;
+
+        var result = await tool.InvokeAsync(input, CancellationToken.None);
+
+        Assert.False(result.IsError, result.Content);
+        Assert.Equal(MemorySource.AgentSignaled, capturedRecord.Source);
+    }
+
+    /// <summary>
+    /// When neither merge input is AgentSignaled, the merged record's Source is Consolidated —
+    /// not the Distilled default that plain <c>Record.Create</c> would otherwise apply.
+    /// </summary>
+    [Fact]
+    public async Task MemoryMerge_NoInputIsAgentSignaled_MergedRecordSourceIsConsolidated()
+    {
+        MemRecord capturedRecord = null!;
+        var store = new Mock<IMemoryStore>(MockBehavior.Strict);
+        store.Setup(s => s.MergeAsync(
+            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<MemRecord>(),
+            It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<string>, MemRecord, CancellationToken>((_, r, _) => capturedRecord = r)
+            .ReturnsAsync((IReadOnlyList<string> _, MemRecord r, CancellationToken _) => r);
+
+        var existingRecords = new[]
+        {
+            MakeRecord("id-distilled-1") with { Source = MemorySource.Distilled },
+            MakeRecord("id-distilled-2") with { Source = MemorySource.Distilled },
+        };
+        var tool = new MemoryMergeTool(store.Object, "user1", existingRecords);
+
+        var input = JsonDocument.Parse("""
+        {
+            "recordIds": ["id-distilled-1", "id-distilled-2"],
+            "newRecord": {
+                "contentType": "Fact",
+                "domain": "Test",
+                "key": "merged-key",
+                "title": "Merged",
+                "value": "merged value",
+                "tags": [],
+                "importance": 0.8,
+                "scope": "Global"
+            }
+        }
+        """).RootElement;
+
+        var result = await tool.InvokeAsync(input, CancellationToken.None);
+
+        Assert.False(result.IsError, result.Content);
+        Assert.Equal(MemorySource.Consolidated, capturedRecord.Source);
+    }
+
     // ── Memory_Update ─────────────────────────────────────────────────────────
 
     /// <summary>

@@ -263,7 +263,15 @@ internal sealed class ConsoleInputReader(IChatOutput output)
                         .ToList();
                     output.WriteLine();
                     string? picked = ConsolePicker.Show(commands, 0, cancellationToken: ct);
-                    output.WriteMarkup(markup);
+
+                    // The picker erases its own lines but leaves the cursor wherever that left
+                    // off — one row below the input row, on top of what used to be the bottom
+                    // rule. Redraw the rule and re-home the cursor exactly as the initial prompt
+                    // setup does above, instead of re-emitting the markup at the wrong position
+                    // (which stacked a duplicate prompt line on every open/cancel cycle).
+                    AnsiConsole.Console.Write(rule);
+                    AnsiConsole.Cursor.MoveUp(2);
+                    AnsiConsole.Cursor.MoveRight(leftMargin);
                     if (picked is not null)
                     {
                         buffer.Clear();

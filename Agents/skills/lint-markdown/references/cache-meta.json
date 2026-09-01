@@ -1,0 +1,6 @@
+{
+  "source_url": "https://raw.githubusercontent.com/DavidAnson/markdownlint/refs/tags/v0.40.0/doc/Rules.md",
+  "cached_at": "2026-08-14",
+  "refresh_interval_days": 15,
+  "notes": "Check source URL every 15 days for updates. Compare fetched content with Rules.md; if different, overwrite Rules.md and update cached_at."
+}

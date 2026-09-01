@@ -107,6 +107,11 @@ internal static class SkillParser
         string? currentListKey = null;
         var currentListValues = new List<string>();
 
+        string? currentScalarKey = null;
+        bool currentScalarFolded = false;
+        int? currentScalarIndent = null;
+        var currentScalarLines = new List<string>();
+
         void FlushList()
         {
             if (currentListKey is not null && currentListValues.Count > 0)
@@ -120,9 +125,43 @@ internal static class SkillParser
             currentListValues.Clear();
         }
 
+        void FlushScalar()
+        {
+            if (currentScalarKey is not null)
+            {
+                scalars[currentScalarKey] = JoinBlockScalar(currentScalarLines, currentScalarFolded);
+            }
+
+            currentScalarKey = null;
+            currentScalarIndent = null;
+            currentScalarLines.Clear();
+        }
+
         foreach (string rawLine in yamlLines)
         {
             string line = rawLine.TrimEnd();
+
+            // Inside a block scalar (">" folded or "|" literal) — consume indented lines until dedent.
+            if (currentScalarKey is not null)
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    currentScalarLines.Add(string.Empty);
+                    continue;
+                }
+
+                int leadingSpaces = line.Length - line.TrimStart(' ').Length;
+                currentScalarIndent ??= leadingSpaces;
+
+                if (leadingSpaces >= currentScalarIndent.Value)
+                {
+                    currentScalarLines.Add(line[currentScalarIndent.Value..]);
+                    continue;
+                }
+
+                // Dedented line — the block scalar ends; fall through to parse this line normally.
+                FlushScalar();
+            }
 
             // YAML block list item (  - value).
             if (line.TrimStart().StartsWith("- ", StringComparison.Ordinal) && currentListKey is not null)
@@ -148,7 +187,13 @@ internal static class SkillParser
             string key = line[..colonIndex].Trim();
             string value = line[(colonIndex + 1)..].Trim();
 
-            if (string.IsNullOrEmpty(value))
+            if (IsBlockScalarIndicator(value, out bool folded))
+            {
+                // Start of a block scalar — subsequent indented lines belong to this key.
+                currentScalarKey = key;
+                currentScalarFolded = folded;
+            }
+            else if (string.IsNullOrEmpty(value))
             {
                 // Start of a block list — subsequent "- item" lines belong to this key.
                 currentListKey = key;
@@ -160,8 +205,78 @@ internal static class SkillParser
         }
 
         FlushList();
+        FlushScalar();
 
         return (scalars, listKeys, body);
+    }
+
+    /// <summary>
+    /// Recognises the YAML block scalar indicators <c>&gt;</c> (folded) and <c>|</c> (literal), with
+    /// optional chomping modifiers (<c>-</c> strip, <c>+</c> keep). Explicit indentation indicators
+    /// (e.g. <c>&gt;2</c>) are not supported — the block's indentation is inferred from its first line.
+    /// </summary>
+    private static bool IsBlockScalarIndicator(string value, out bool folded)
+    {
+        switch (value)
+        {
+            case ">" or ">-" or ">+":
+                folded = true;
+                return true;
+            case "|" or "|-" or "|+":
+                folded = false;
+                return true;
+            default:
+                folded = false;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Joins the dedented lines of a block scalar into a single string. Trailing blank lines are
+    /// stripped (approximating YAML's default "clip" chomping). Folded scalars (<c>&gt;</c>) join
+    /// lines within a paragraph with spaces and separate paragraphs (blank-line-delimited) with a
+    /// single newline; literal scalars (<c>|</c>) preserve line breaks as-is.
+    /// </summary>
+    private static string JoinBlockScalar(List<string> lines, bool folded)
+    {
+        int end = lines.Count;
+        while (end > 0 && lines[end - 1].Length == 0)
+        {
+            end--;
+        }
+
+        List<string> trimmed = lines.Take(end).ToList();
+
+        if (!folded)
+        {
+            return string.Join("\n", trimmed);
+        }
+
+        var paragraphs = new List<string>();
+        var current = new List<string>();
+
+        foreach (string line in trimmed)
+        {
+            if (line.Length == 0)
+            {
+                if (current.Count > 0)
+                {
+                    paragraphs.Add(string.Join(' ', current));
+                    current.Clear();
+                }
+
+                continue;
+            }
+
+            current.Add(line);
+        }
+
+        if (current.Count > 0)
+        {
+            paragraphs.Add(string.Join(' ', current));
+        }
+
+        return string.Join('\n', paragraphs);
     }
 
     /// <summary>Returns the scalar value for <paramref name="key"/>, or <see langword="null"/> if absent.</summary>

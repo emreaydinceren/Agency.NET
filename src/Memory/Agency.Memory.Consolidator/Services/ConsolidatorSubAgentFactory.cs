@@ -89,7 +89,7 @@ internal static partial class ConsolidatorSubAgentFactory
             int deletes = 0;
 
             // Build tools for this run.
-            var mergeToolInstance = new MemoryMergeTool(store, userId, mergeIdFactory);
+            var mergeToolInstance = new MemoryMergeTool(store, userId, records, mergeIdFactory);
             var updateToolInstance = new MemoryUpdateTool(store, userId);
             var deleteToolInstance = new MemoryDeleteTool(store, userId);
             var doneTool = new MemoryDoneTool(onDone: () => { done = true; });

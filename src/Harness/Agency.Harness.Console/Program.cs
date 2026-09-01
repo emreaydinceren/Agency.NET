@@ -343,8 +343,15 @@ internal class Program
             }
 
             // 5.7 Skills — discover skill directories at startup and make the catalog available as a singleton.
-            //     Config key: Skills:Directories (string[]). Defaults to ["./.agency/skills", "~/.agency/skills"]
+            //     Config key: Skills:Directories (string[]). Defaults to
+            //     ["<repoRoot>/Agents/skills", "<repoRoot>/.agency/skills", "~/Agents/skills", "~/.agency/skills"]
             //     in project-first order so project skills override personal skills (first-occurrence wins).
+            //     Agents/skills is the standardized location (no tool-specific dotfolder); .agency/skills is
+            //     kept as a fallback for skills that haven't been migrated yet. Project roots are resolved
+            //     from the repo root (same ${RepoRoot} lookup as MCP server paths), not the process's
+            //     current directory — the console is launched from its build-output folder (RunConsole.ps1
+            //     Push-Location's into bin/.../net10.0 so the linked shared-appsettings.json resolves), so
+            //     CWD-relative paths would silently miss project skills.
             //
             //     A ReloadableSkillCatalog is used so that SkillContext and SkillTool pick up SKILL.md
             //     changes live (they read through the shared reference). A SkillWatcher drives reloads
@@ -357,12 +364,16 @@ internal class Program
             string[] configuredSkillDirs = builder.Configuration
                 .GetSection("Skills:Directories")
                 .Get<string[]>() ?? [];
+            string repoRootForSkills = McpConfigResolver.FindRepoRoot(AppContext.BaseDirectory) ?? AppContext.BaseDirectory;
+            string userProfileDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string[] skillRoots = configuredSkillDirs.Length > 0
                 ? configuredSkillDirs
                 :
                 [
-                    Path.Combine(Directory.GetCurrentDirectory(), ".agency", "skills"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agency", "skills"),
+                    Path.Combine(repoRootForSkills, "Agents", "skills"),
+                    Path.Combine(repoRootForSkills, ".agency", "skills"),
+                    Path.Combine(userProfileDir, "Agents", "skills"),
+                    Path.Combine(userProfileDir, ".agency", "skills"),
                 ];
             ReloadableSkillCatalog reloadableCatalog = new(skillRoots);
             builder.Services.AddSingleton<ISkillCatalog>(reloadableCatalog);

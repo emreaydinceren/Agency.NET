@@ -1,12 +1,14 @@
 name: Release (nuget.org)
 
-# Publishes to nuget.org on a `v*` tag push. Deliberately separate from ci.yaml: this is the
+# Publishes to nuget.org after every successful "CI (GitHub)" run on main — i.e. every sync
+# from Gitea that passes CI queues a release. Deliberately separate from ci.yaml: this is the
 # only workflow that ever holds a nuget.org-scoped credential, so the credential's blast radius
-# is this one gated workflow, not every push/PR build.
+# is this one gated workflow, not every push/PR build. The `publish` job's `nuget-release`
+# environment (required-reviewer protection) is what actually gates publishing — queuing a run
+# here is automatic, but nothing reaches nuget.org without a human approving that job.
 #
-# Versioning is NBGV (Nerdbank.GitVersioning), not the tag itself — `nbgv tag` is the only
-# supported way to cut a release, and the "Assert tag matches computed version" step below fails
-# the build if a tag was hand-typed and disagrees with NBGV's computed version.
+# Versioning is NBGV (Nerdbank.GitVersioning): the version packed is whatever NBGV computes from
+# git commit height at the triggering commit, with no separate tag or manual check involved.
 #
 # Publishing uses NuGet Trusted Publishing (OIDC): the `publish` job exchanges a short-lived
 # GitHub OIDC token for a ~1-hour nuget.org API key via `NuGet/login` — no long-lived NuGet
@@ -19,14 +21,17 @@ name: Release (nuget.org)
 #      or API key).
 
 on:
-  push:
-    tags: ['v*']
+  workflow_run:
+    workflows: ['CI (GitHub)']
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   build-test-pack:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/dotnet/sdk:10.0
@@ -55,21 +60,12 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
+          # Pin to the exact commit CI ran against — workflow_run otherwise defaults to the
+          # branch tip at trigger time, which can race ahead if another push lands first.
+          ref: ${{ github.event.workflow_run.head_sha }}
           # NBGV computes the version from git height since the last version.json bump —
           # a shallow clone can't count that and silently produces a wrong (0.0.x) version.
           fetch-depth: 0
-
-      - name: 🔖 Assert tag matches computed version
-        run: |
-          dotnet tool install --global nbgv
-          export PATH="$HOME/.dotnet/tools:$PATH"
-          COMPUTED_VERSION=$(nbgv get-version -v NuGetPackageVersion)
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$COMPUTED_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Tag v$TAG_VERSION does not match NBGV's computed version $COMPUTED_VERSION — always create release tags with 'nbgv tag', never by hand."
-            exit 1
-          fi
-          echo "Tag v$TAG_VERSION matches computed version $COMPUTED_VERSION"
 
       - name: 📦 Restore dependencies
         working-directory: src
@@ -143,8 +139,8 @@ jobs:
 
     permissions:
       # id-token: write is scoped to only this job for the OIDC nuget.org login; contents: write
-      # is scoped here too, for the GitHub Release the SBOM step below creates — everywhere else
-      # in the workflow keeps the workflow-level `contents: read` default.
+      # is scoped here too, for pushing the release tag and creating the GitHub Release below —
+      # everywhere else in the workflow keeps the workflow-level `contents: read` default.
       id-token: write
       contents: write
 
@@ -168,6 +164,29 @@ jobs:
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
+      - name: 📥 Checkout (for tagging the released commit)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          # NBGV computes the version from git height since the last version.json bump — a
+          # shallow clone can't count that and silently produces a wrong (0.0.x) version.
+          fetch-depth: 0
+
+      - name: 🔖 Tag the released commit
+        # There's no release tag from a trigger anymore (this workflow now runs off CI success,
+        # not a `v*` tag push) — create one here, after publish, so a tag/GitHub-Release only ever
+        # exists for a commit that was actually pushed to nuget.org. version.json's
+        # publicReleaseRefSpec only matches tags, so this build was a `-g<sha>` prerelease; the tag
+        # inherits that same prerelease version rather than a clean one.
+        id: version
+        run: |
+          dotnet tool install --global nbgv
+          export PATH="$HOME/.dotnet/tools:$PATH"
+          TAG="v$(nbgv get-version -v NuGetPackageVersion)"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: 📥 Download SBOM
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -180,5 +199,6 @@ jobs:
         # live, since nuget.org has no field for an arbitrary extra file.
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
           files: sbom/sbom.json
           generate_release_notes: true

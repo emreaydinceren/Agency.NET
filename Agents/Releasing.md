@@ -2,9 +2,10 @@
 
 How to actually ship packages: why publish is gated the way it is, the exact chain of components
 involved, and the runbook for both a real release and a disposable dry-run test. Covers both feeds
-— the private Gitea feed (publishes on every push) and the public nuget.org feed (gated by a tag +
-the guarded Gitea→GitHub sync + a human approval) — plus the Gitea/GitHub relationship that makes
-the two-feed, two-forge setup work at all. This doc is self-contained for that purpose; it doesn't
+— the private Gitea feed (publishes on every push) and the public nuget.org feed (publishes on
+every GitHub CI pass on `main`, gated by the guarded Gitea→GitHub sync + a required human
+approval, no tag needed to trigger it) — plus the Gitea/GitHub relationship that makes the
+two-feed, two-forge setup work at all. This doc is self-contained for that purpose; it doesn't
 assume access to any planning notes outside the repo.
 
 ## Branch model — one trunk, releases are tags
@@ -43,9 +44,18 @@ publishing from ordinary `main` pushes — the private Gitea feed is low-risk, s
 *everything that passes CI*: a plain push lands a `-g<sha>` prerelease, a `v*` tag lands the
 matching clean stable version (via `version.json`'s `publicReleaseRefSpec`). The tag-gated model
 described above is retained here for history; **it no longer reflects `ci-main.yaml`'s actual
-behavior.** A tag-based gate still applies to the nuget.org publish path (RT15/RT17, see "How to
-cut a real release" step 8 below) — that one stays deliberate, since a public release is
-effectively unpublishable.
+behavior.**
+
+**As of 2026-08-31, the nuget.org publish path (RT15/RT17) dropped its tag gate too.**
+`.github/workflows/release.yaml` now triggers automatically off every successful `CI (GitHub)`
+run on `main` (a `workflow_run` trigger), the same "publish everything that passes CI" model as
+the Gitea feed — see "How to cut a real release" step 8 below. Since a public release is
+effectively unpublishable (nuget.org has no delete, only unlist), the one remaining brake is the
+`nuget-release` environment's required human approval: every run still pauses there before
+anything actually reaches nuget.org. The trade-off this creates: because there's no tag to gate
+the *trigger*, and `version.json`'s `publicReleaseRefSpec` only grants a clean version to a
+pre-existing tag, nuget.org releases through this pipeline are now always `-g<sha>` prereleases —
+see the "Known gotchas" entry on this for what it means for cutting an eventual clean `1.0.0`.
 
 ## The components in play
 
@@ -127,26 +137,42 @@ releases clean. This is a deliberate, already-made call, not an open question.
    packable projects (currently ~30).
 8. The steps above only reach the private Gitea feed. To also reach the public nuget.org feed,
    run the guarded outbound sync (`sync-github.yaml`, `workflow_dispatch` on Gitea Actions — see
-   "Contribution lifecycle" below) so `main` **and the new tag** reach GitHub. GitHub's
-   `.github/workflows/release.yaml` (RT15/RT17) then triggers automatically on the `v*` tag: it
-   re-asserts the tag matches NBGV's computed version, restores/builds/tests/packs from scratch
-   on GitHub's own runner, then the `publish` job pauses at the `nuget-release` environment for a
-   required human approval before exchanging a short-lived GitHub OIDC token for a nuget.org API
-   key and pushing — no long-lived nuget.org secret is stored anywhere. See that workflow's header
-   comment for the one-time nuget.org/GitHub setup this requires.
-9. The `publish` job also generates a CycloneDX SBOM (RT46) and creates the GitHub Release for the
-   tag itself, attaching the SBOM to it and filling in the release notes automatically from
-   `.github/release.yml`'s PR-label grouping (RT19) — nothing to do by hand for either. A fuller
-   automated pipeline (git-cliff-generated `CHANGELOG.md`, `<PackageReleaseNotes>` wired into the
-   pack step) was evaluated and built, but dropped as more ongoing upkeep than a solo, pre-1.0,
-   not-yet-widely-used project justifies. Revisit if release cadence or external contributions
-   pick up.
+   "Contribution lifecycle" below) so `main` reaches GitHub — the tag from step 3 doesn't need to
+   go along; nuget.org publishing is no longer tag-triggered. That push runs GitHub's
+   `.github/workflows/ci.yaml` (`CI (GitHub)`); once it succeeds, `.github/workflows/release.yaml`
+   (RT15/RT17) triggers automatically via a `workflow_run` event, no separate dispatch needed. It
+   checks out the exact commit CI validated (pinned via `github.event.workflow_run.head_sha`),
+   restores/builds/tests/packs from scratch on GitHub's own runner, then the `publish` job pauses
+   at the `nuget-release` environment for a required human approval before exchanging a
+   short-lived GitHub OIDC token for a nuget.org API key and pushing — no long-lived nuget.org
+   secret is stored anywhere. See that workflow's header comment for the one-time nuget.org/GitHub
+   setup this requires. Because there's no tag gating the trigger, this queues on *every* GitHub
+   CI pass on `main` — see "Known gotchas" for what that means day to day.
+9. Only once the `nuget push` step actually succeeds does the `publish` job create its own
+   `v<version>` tag (pushed straight to GitHub) and the matching GitHub Release — both now trail
+   the publish instead of preceding it, so one only ever exists for a commit that really reached
+   nuget.org. It also generates a CycloneDX SBOM (RT46) and attaches it to that Release, filling
+   in the release notes automatically from `.github/release.yml`'s PR-label grouping (RT19) —
+   nothing to do by hand for either. A fuller automated pipeline (git-cliff-generated
+   `CHANGELOG.md`, `<PackageReleaseNotes>` wired into the pack step) was evaluated and built, but
+   dropped as more ongoing upkeep than a solo, pre-1.0, not-yet-widely-used project justifies.
+   Revisit if release cadence or external contributions pick up.
 
 ## Cutting the first release — v0.1.0
 
 This is a concrete walkthrough of "How to cut a real release" above, for the one release that
 matters most: the first one (RT3). The steps are the same steps, just spelled out plainly with
 the decisions already made and the current state confirmed.
+
+**Update (2026-08-31): the nuget.org trigger changed, and this walkthrough's premise needs a
+caveat.** Steps 6-8 below described a tag-triggered clean `0.1.0` publish. Since `release.yaml`
+now triggers off GitHub CI success instead of a tag (see "How to cut a real release" step 8
+above), `version.json`'s `publicReleaseRefSpec` never matches at publish time — every nuget.org
+release through this pipeline ships as a `-g<sha>` prerelease, never a clean `x.y.z`. A genuinely
+clean `0.1.0` first release is no longer reachable through the automated flow as written; see the
+"Known gotchas" entry on this for the options (temporarily reverting the trigger for one
+deliberate cut, or accepting the first real nuget.org release will read `0.1.<height>-g<sha>`).
+The steps below describe what the pipeline actually does today.
 
 **Decisions already made, so you don't have to re-litigate them:**
 
@@ -179,22 +205,28 @@ them — none has been flagged as broken.
    problem caught after nuget.org has the package is not, since nuget.org has no delete, only
    unlist.
 5. Once Gitea is green, run the guarded sync (`sync-github.yaml`, triggered by hand on Gitea
-   Actions) to mirror `main` and the new tag to GitHub. This is the only path anything takes to
-   reach GitHub — it's a scripted push, not a plain mirror, because it also strips internal
-   hostnames, IPs, and your personal email out of the mirrored history on every single run.
-6. On GitHub, the tag triggers `release.yaml` automatically. It re-checks the tag against NBGV's
-   computed version, then rebuilds and re-tests everything from scratch — it doesn't trust
+   Actions) to mirror `main` to GitHub — the tag doesn't need to ride along; nuget.org publishing
+   no longer keys off it. This is the only path anything takes to reach GitHub — it's a scripted
+   push, not a plain mirror, because it also strips internal hostnames, IPs, and your personal
+   email out of the mirrored history on every single run.
+6. That push runs GitHub's `CI (GitHub)` workflow. Once it succeeds, `release.yaml` triggers
+   automatically (a `workflow_run` event) — no tag check, no manual dispatch. It checks out the
+   exact commit CI validated and rebuilds and re-tests everything from scratch — it doesn't trust
    whatever Gitea already built.
 7. The workflow then stops and waits for you to approve the `nuget-release` environment in the
    GitHub Actions UI. This is the one deliberate human checkpoint in the whole pipeline — nothing
-   reaches nuget.org without you clicking approve.
-8. Once approved, the workflow pushes every package to nuget.org, creates a GitHub Release for
-   the tag, attaches the generated SBOM to it, and fills in categorized release notes
-   automatically from the PR labels. None of that last part needs a manual step.
+   reaches nuget.org without you clicking approve. Because the trigger is automatic now, expect a
+   pending approval after *every* successful sync, not just the one you mean to publish — reject
+   or ignore the ones you don't want shipped.
+8. Once approved, the workflow pushes every package to nuget.org, then — only after that push
+   succeeds — creates its own `v<version>` tag and a matching GitHub Release, attaches the
+   generated SBOM to it, and fills in categorized release notes automatically from the PR labels.
+   None of that last part needs a manual step. The version it ships is a `-g<sha>` prerelease (see
+   the update note above), not the clean `0.1.0` this walkthrough originally targeted.
 9. Confirm it actually worked, not just that the workflow said "success": in a scratch folder,
-   run `dotnet add package AgencyDotNet.Configuration --version 0.1.0` and check that it restores
-   and the assembly loads. This — "installable from nuget.org" — is RT3's real acceptance bar,
-   not "the workflow turned green."
+   run `dotnet add package AgencyDotNet.Configuration --version <the -g<sha> version that shipped>`
+   and check that it restores and the assembly loads. This — "installable from nuget.org" — is
+   RT3's real acceptance bar, not "the workflow turned green."
 10. Update the tracker: mark RT3 done, record the version that actually shipped, and note that
     this run is also the first real, live exercise of RT15 (nuget.org publish), RT46 (SBOM), and
     RT19 (release notes) — all three were built and reviewed beforehand, but never run for real
@@ -349,8 +381,22 @@ default.
   `nbgv get-version -v NuGetPackageVersion` anyway, so a mismatch is caught, not shipped.
 - **Publishing here ≠ a public release, automatically.** The steps in this doc (through "How to
   cut a real release" step 7) only reach Emre's private Gitea feed. Public nuget.org publishing
-  (RT15/RT17) is a separate, deliberate step — see step 8 — gated by the guarded outbound sync
-  plus a required human approval, not something that happens as a side effect of a Gitea tag push.
+  (RT15/RT17) is a separate step — see step 8 — that now queues automatically on every GitHub CI
+  pass on `main` once the guarded outbound sync lands there, but is still gated by a required
+  human approval before anything actually reaches nuget.org.
+- **Every GitHub CI pass on `main` now queues a nuget.org release, pending approval.** Since
+  `release.yaml` moved from a `v*`-tag trigger to a `workflow_run` trigger (2026-08-31), there's
+  no longer a way to sync to GitHub *without* also queuing a release — you'll see a pending
+  `nuget-release` approval after every sync, whether or not you intend to publish. Reject or leave
+  it pending for syncs you don't want shipped; approve only the ones you actually mean to publish.
+- **nuget.org releases through this pipeline can no longer be clean versions.** `version.json`'s
+  `publicReleaseRefSpec` only grants a clean `x.y.z` when the build runs against a pre-existing
+  tag matching it. Since the trigger no longer waits for a tag — and the workflow's own tag isn't
+  created until *after* a successful publish — every version NBGV computes at pack time is a
+  `-g<sha>` prerelease. If a genuinely clean nuget.org release is ever needed (e.g. an eventual
+  `1.0.0`), either temporarily restore a tag-based trigger for that one deliberate cut, or accept
+  the prerelease suffix as permanent under this design and treat the highest prerelease as the de
+  facto latest.
 - **No "unpublish" workflow.** Cleanup after a mistaken publish is a manual per-package delete
   (see Dry-run steps above), not a single revert.
 - **RT39's test-install step needs `NUGETPUBLISHTOKEN` to work for read as well as write —

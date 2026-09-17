@@ -48,7 +48,11 @@ public sealed class AgentFactory : IAgentFactory
     /// configured, or <paramref name="modelName"/> is not specified and <see cref="AgentOptions.DefaultModel"/>
     /// is not configured.
     /// </exception>
-    public Agent CreateAgent(string? clientName, string? modelName)
+    public Agent CreateAgent(string? clientName, string? modelName) =>
+        this.CreateAgent(clientName, modelName, configureClientOptions: null);
+
+    /// <inheritdoc/>
+    public Agent CreateAgent(string? clientName, string? modelName, Func<LlmClientOptions, LlmClientOptions>? configureClientOptions)
     {
         clientName = !string.IsNullOrEmpty(clientName)
             ? clientName
@@ -65,7 +69,7 @@ public sealed class AgentFactory : IAgentFactory
             this.options.ConfiguredHooks,
             this.options.UserHooks);
 
-        var (chatClient, clientType) = this.models.CreateChatClient(clientName);
+        var (chatClient, clientType) = this.models.CreateChatClient(clientName, configureClientOptions);
         return new Agent(chatClient, modelName, clientType, null, hooks, permissions: this.permissions, logger: this.logger, timeProvider: this.timeProvider, logToolPayloads: this.options.LogToolPayloads);
     }
 }

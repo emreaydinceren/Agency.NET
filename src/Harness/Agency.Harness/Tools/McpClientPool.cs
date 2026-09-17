@@ -33,6 +33,13 @@ public sealed class McpClientPool : IAsyncDisposable
     /// <summary>Gets instruction file resources discovered from every connected MCP server.</summary>
     public IReadOnlyList<InstructionSource> InstructionSources { get; }
 
+    /// <summary>
+    /// Gets whether <see cref="DisposeAsync"/> has already run. Lets a caller that owns this pool
+    /// alongside other disposable resources (e.g. a per-session object graph) verify its disposal
+    /// actually happened, rather than merely that disposing it did not throw.
+    /// </summary>
+    public bool IsDisposed { get; private set; }
+
     private McpClientPool(
         List<McpClient> clients,
         List<ITool> tools,
@@ -81,9 +88,11 @@ public sealed class McpClientPool : IAsyncDisposable
                 continue;
             }
 
+            IClientTransport? transport = null;
+            McpResponseLoggingHandler? diagnostics = null;
             try
             {
-                IClientTransport transport = CreateTransport(server);
+                (transport, diagnostics) = CreateTransport(server);
                 McpClient client = await McpClient.CreateAsync(transport, cancellationToken: ct);
 
                 IList<McpClientTool> serverTools = await client.ListToolsAsync(cancellationToken: ct);
@@ -101,7 +110,18 @@ public sealed class McpClientPool : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                failedServers[server.Name] = ex.Message;
+                if (diagnostics is not null && transport is IAsyncDisposable disposableTransport)
+                {
+                    await disposableTransport.DisposeAsync();
+                }
+
+                string message = ex.Message;
+                if (diagnostics?.FirstStatus is { } firstStatus)
+                {
+                    message = $"{message} (first attempt: {(int)firstStatus} {firstStatus})";
+                }
+
+                failedServers[server.Name] = message;
                 continue;
             }
         }
@@ -172,30 +192,68 @@ public sealed class McpClientPool : IAsyncDisposable
         }
     }
 
-    private static IClientTransport CreateTransport(McpServerConfig server) =>
+    /// <summary>
+    /// Builds the Http transport options for a server. Extracted as a pure function because
+    /// <see cref="HttpClientTransport"/> exposes only its <c>Name</c> - the options it was
+    /// constructed with cannot be read back, so this is the only seam a unit test can assert on.
+    /// </summary>
+    internal static HttpClientTransportOptions BuildHttpTransportOptions(McpServerConfig server) =>
+        new()
+        {
+            Name = server.Name,
+            Endpoint = new Uri(server.Url ?? throw new InvalidOperationException(
+                $"Url is required for Http transport (server '{server.Name}').")),
+            AdditionalHeaders = server.Headers
+        };
+
+    /// <summary>
+    /// Builds the Stdio transport options for a server. Pure, for the same reason as
+    /// <see cref="BuildHttpTransportOptions"/>.
+    /// </summary>
+    internal static StdioClientTransportOptions BuildStdioTransportOptions(McpServerConfig server) =>
+        new()
+        {
+            Name = server.Name,
+            Command = server.Command ?? throw new InvalidOperationException(
+                $"Command is required for Stdio transport (server '{server.Name}')."),
+            Arguments = server.Arguments,
+            EnvironmentVariables = server.EnvironmentVariables
+        };
+
+    /// <summary>
+    /// Creates the transport for a server. For Http, an <see cref="HttpClient"/> carrying a
+    /// <see cref="McpResponseLoggingHandler"/> is installed so the first attempt's response status
+    /// (e.g. a <c>401</c> the SDK's AutoDetect fallback would otherwise hide behind a later <c>404</c>)
+    /// can be recovered by the caller after a connection failure.
+    /// </summary>
+    private static (IClientTransport Transport, McpResponseLoggingHandler? Diagnostics) CreateTransport(
+        McpServerConfig server) =>
         server.Transport switch
         {
-            McpTransportKind.Stdio => new StdioClientTransport(new StdioClientTransportOptions
-            {
-                Name = server.Name,
-                Command = server.Command ?? throw new InvalidOperationException(
-                    $"Command is required for Stdio transport (server '{server.Name}')."),
-                Arguments = server.Arguments,
-                EnvironmentVariables = server.EnvironmentVariables
-            }),
-            McpTransportKind.Http => new HttpClientTransport(new HttpClientTransportOptions
-            {
-                Name = server.Name,
-                Endpoint = new Uri(server.Url ?? throw new InvalidOperationException(
-                    $"Url is required for Http transport (server '{server.Name}')."))
-            }),
+            McpTransportKind.Stdio => (new StdioClientTransport(BuildStdioTransportOptions(server)), null),
+            McpTransportKind.Http => CreateHttpTransport(server),
             _ => throw new NotSupportedException(
                 $"Transport kind '{server.Transport}' is not supported.")
         };
 
+    private static (IClientTransport Transport, McpResponseLoggingHandler Diagnostics) CreateHttpTransport(
+        McpServerConfig server)
+    {
+        var diagnostics = new McpResponseLoggingHandler { InnerHandler = new HttpClientHandler() };
+        var httpClient = new HttpClient(diagnostics);
+        var transport = new HttpClientTransport(BuildHttpTransportOptions(server), httpClient, loggerFactory: null, ownsHttpClient: true);
+        return (transport, diagnostics);
+    }
+
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
+        if (this.IsDisposed)
+        {
+            return;
+        }
+
+        this.IsDisposed = true;
         foreach (McpClient client in this._clients)
         {
             await client.DisposeAsync();

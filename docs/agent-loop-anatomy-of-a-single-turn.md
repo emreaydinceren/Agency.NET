@@ -115,8 +115,12 @@ while (true)                                         // Agent.cs:568
 
     ctx.LastLlmRequest = LlmRequestSnapshotCodec.Serialize(...);  // ── record what is about to be sent
 
-    var response = await this._llm.GetResponseAsync(
-        ctx.Conversation.Messages, options, ct);     // :599  ── THINK (reads messages)
+    // THINK (reads messages). The loop streams: it enumerates GetStreamingResponseAsync,
+    // yields an AssistantTextDeltaEvent / AssistantThoughtDeltaEvent per chunk as it arrives,
+    // then reassembles the updates with ToChatResponseAsync() into the same ChatResponse
+    // everything below already consumed — so nothing downstream changed.
+    var response = await StreamAndReassemble(
+        this._llm.GetStreamingResponseAsync(ctx.Conversation.Messages, options, ct));
 
     ctx.TotalUsage = new(                            // :607  ── accumulate usage
         ctx.TotalUsage.InputTokens  + turnUsage.InputTokens,

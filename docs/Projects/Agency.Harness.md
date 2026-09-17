@@ -142,8 +142,18 @@ public sealed record SessionStartedEvent(string SessionId) : AgentEvent;
 /// <summary>Emitted after each LLM response is appended to the conversation.</summary>
 public sealed record AssistantTurnEvent(ChatMessage Message) : AgentEvent;
 
-/// <summary>Emitted after a tool has been invoked and its result is ready.</summary>
-public sealed record ToolInvokedEvent(string ToolName, JsonElement Input, ToolResult Result) : AgentEvent;
+/// <summary>Emitted per streamed text chunk, before the assistant turn completes.</summary>
+public sealed record AssistantTextDeltaEvent(string Text) : AgentEvent;
+
+/// <summary>Emitted per streamed reasoning chunk. Never mixed into AssistantTextDeltaEvent.</summary>
+public sealed record AssistantThoughtDeltaEvent(string Text) : AgentEvent;
+
+/// <summary>Emitted per tool call immediately before parallel dispatch begins.</summary>
+public sealed record ToolStartedEvent(string CallId, string ToolName, JsonElement Input) : AgentEvent;
+
+/// <summary>Emitted after a tool has been invoked and its result is ready.
+/// CallId is an appended member with a default, so existing 3-arg construction still compiles.</summary>
+public sealed record ToolInvokedEvent(string ToolName, JsonElement Input, ToolResult Result, string CallId = "") : AgentEvent;
 
 /// <summary>Emitted after each complete iteration (LLM call + optional tool calls).</summary>
 public sealed record IterationCompletedEvent(int Iteration, LlmTokenUsage TurnUsage, TimeSpan LlmDuration) : AgentEvent;
@@ -167,7 +177,8 @@ public sealed record AgentResultEvent(
     LlmTokenUsage     TotalUsage,
     decimal           TotalCostUsd) : AgentEvent;
 
-public enum AgentResultStatus { Success, MaxStepsReached, BudgetExceeded, Error, AwaitingPermission }
+// Truncated is appended last, so existing numeric values are unchanged.
+public enum AgentResultStatus { Success, MaxStepsReached, BudgetExceeded, Error, AwaitingPermission, Truncated }
 
 public sealed record LlmTokenUsage(long InputTokens, long OutputTokens)
 {
@@ -291,6 +302,17 @@ public interface IAgentFactory
     /// AgentOptions.DefaultClientName / DefaultModel when either is null or empty.
     /// </summary>
     Agent CreateAgent(string? clientName, string? modelName);
+
+    /// <summary>
+    /// As above, but applies a transform to the resolved LlmClientOptions before the chat client
+    /// is built — the seam per-session reasoning effort travels through (LlmClientOptions is a
+    /// record, so callers pass `o => o with { ThinkingBudgetTokens = … }`). A default interface
+    /// method delegating to the two-argument overload, so existing implementers are unaffected.
+    /// </summary>
+    Agent CreateAgent(
+        string? clientName,
+        string? modelName,
+        Func<LlmClientOptions, LlmClientOptions>? configureClientOptions) => CreateAgent(clientName, modelName);
 }
 // AgentFactory : IAgentFactory — ctor(Models, ILogger<Agent>, IOptions<AgentOptions>,
 //   IPermissionEvaluator? = null, TimeProvider? = null). Permission evaluator and clock are
@@ -343,7 +365,7 @@ public sealed record Context
 
 | Sub-Context | Key Members |
 |---|---|
-| `QueryContext` | `Prompt` — the initial user message |
+| `QueryContext` | `Prompt` — the initial user message; `InstructionsBlock`; `IdentityPrompt` — replaces **only** the opening identity line of the system prompt (default: *"You are an autonomous agent operating inside the Agency runtime."*), leaving the ReAct instruction and grounding sections intact. Because `SystemPromptBuilder.Build` runs **every iteration**, the override is present on every iteration, not just the first |
 | `KnowledgeContext` | `Facts: IReadOnlyList<string>`, `Records: IReadOnlyList<MemoryRecord>` — re-injected into the system prompt each iteration |
 | `MemoryContext` | `Records` — episodic and fact memory injected into the system prompt |
 | `ToolContext` | `Registry: IToolRegistry` |
@@ -717,6 +739,12 @@ public sealed class McpServerConfig
     public string[]?                    Arguments            { get; set; }  // Stdio only
     public Dictionary<string, string?>? EnvironmentVariables { get; set; }  // Stdio only
     public string?                      Url                  { get; set; }  // Http only
+    // Additional HTTP headers sent with every request to an Http-transport server — required by
+    // servers that authenticate the transport itself (e.g. a per-session bearer token). Forwarded
+    // verbatim to HttpClientTransportOptions.AdditionalHeaders. Ignored for Stdio, which
+    // authenticates via EnvironmentVariables. Absence stays absence: null must NOT become {}.
+    public Dictionary<string, string>?  Headers              { get; set; }  // Http only
+    public bool                         Enabled              { get; set; } = true;
 }
 
 public sealed class McpClientOptions
@@ -920,11 +948,13 @@ The loop implemented internally in `Agent` follows this pattern:
 3. Each iteration:
    a. OnPreIteration hook
    b. Build system prompt via SystemPromptBuilder.Build(ctx)
-   c. Call IChatClient.GetResponseAsync; append assistant message; yield AssistantTurnEvent → OnAssistantTurn hook
+   c. Call IChatClient.GetStreamingResponseAsync; yield AssistantTextDeltaEvent / AssistantThoughtDeltaEvent
+      per chunk; reassemble via ToChatResponseAsync(); append assistant message;
+      yield AssistantTurnEvent → OnAssistantTurn hook
    d. Yield IterationCompletedEvent
-   e. If finish_reason == Length → emit Error AgentResultEvent and stop
+   e. If finish_reason == Length → emit Truncated AgentResultEvent and stop
    f. Evaluate StopCondition → OnStop hook → AgentResultEvent → break
-   g. For each FunctionCallContent (in parallel):
+   g. Yield one ToolStartedEvent per call, then for each FunctionCallContent (in parallel):
       - OnPreToolUse → Allow / Deny (block) / Rewrite (replace input) / Ask (flag for permission)
       - Permission gate (post-rewrite): rule Deny > active-skill pre-approval > hook Ask > rule Allow > unresolved
         · pended calls accumulate; non-pended execute and OnPostToolUse fires
@@ -937,6 +967,16 @@ The loop implemented internally in `Agent` follows this pattern:
 **Permission park/resume.** When an unresolved or hook-Ask call pends, the loop stores a `PendingToolBatch` on the `Context` (completed siblings' results + the calls awaiting approval), emits `PermissionRequestedEvent`s, and ends the turn with `AwaitingPermission`. The host answers via `ChatSession.ResumeWithPermissionsAsync` with one `PermissionResponse` per `RequestId`; the agent records any `*Always` grants, executes or `[Blocked]`-denies the pended calls, fires `OnPostToolBatch` over the full reconstructed batch, appends all results, and continues the loop. Sending a new message while parked implicitly denies all pending calls (abandonment).
 
 On session disposal (`ChatSession.DisposeAsync`), `Agent.RaiseSessionEndAsync` fires `OnSessionEnd` exactly once.
+
+**Streaming.** Step (c) enumerates `GetStreamingResponseAsync` and reassembles the updates with `ToChatResponseAsync()` into the same `ChatResponse` the rest of the loop already consumed, so the tool loop, usage extraction, `FinishReason` check and every stop condition are untouched. Usage arrives on a **trailing** update, so `ctx.TotalUsage` is only correct once the stream has fully drained.
+
+Note the structural constraint: C# forbids `yield return` inside a `try` block with a `catch` clause (CS1626), and the LLM call sits inside two retry loops. The deltas are therefore yielded from *outside* the `try` via a manual enumerator, with only `MoveNextAsync()` inside it — the same shape `ChatIteratorAsync` already uses.
+
+**Turn correctness.** Three behaviours guard the transcript and make failures distinguishable:
+
+- **Repair on cancel.** A turn cancelled between the assistant message being appended and the tool results being appended would otherwise leave a `FunctionCallContent` with no matching `FunctionResultContent` — an invalid transcript whose damage surfaces on the *next* turn, a latent failure away from its cause. A `finally` appends a synthetic `[Cancelled]` result for every dangling call, so the next turn still works.
+- **Timeout is not cancellation.** The turn timeout gets its own `CancellationTokenSource` (constructed with the injected `TimeProvider`, so tests can advance a fake clock) linked alongside the caller's token. On unwind the loop inspects which one fired: timeout-fired-and-caller-did-not is rethrown as `TimeoutException`; anything else is rethrown unchanged. Without this, "the model hung" and "the human hit Stop" are indistinguishable.
+- **Truncation is not an error.** `FinishReason == Length` yields `AgentResultStatus.Truncated` rather than `Error`. `LoopRunner` treats `Truncated` as a hard failure alongside `Error`, because retrying against the same token ceiling would very likely truncate again.
 
 ### Practical Usage
 

@@ -52,6 +52,16 @@ The `"default"` model placeholder is overridden at call time by setting `ChatOpt
 
 When `LlmClientOptions.SuppressThinking` is `true`, `BuildOpenAIClient` registers a `SuppressThinkingPipelinePolicy` at `PipelinePosition.PerCall`. This policy intercepts every outbound request, deserialises the JSON body, appends `"enable_thinking": false` and `"thinking_budget_tokens": 0`, and rewrites the request content before it leaves the process. This is a request-level guarantee — it overrides even prompt-level directives such as `/no_think`.
 
+The same policy also carries the **per-client reasoning effort** fields. When `SuppressThinking` is *not* set, it writes only the fields that are non-null: `LlmClientOptions.EnableThinking` → `enable_thinking`, and `ThinkingBudgetTokens` → `thinking_budget_tokens`. `SuppressThinking = true` keeps its original unconditional behaviour exactly, so existing callers are unaffected.
+
+> **`reasoning_effort` is deliberately never emitted.** It was measured model-dependent in both presence and level — byte-identical output across `minimal`…`high` on one model, ~6% apart on another — so it is not a usable effort mechanism.
+
+### Model catalogue enrichment
+
+`GetModelsAsync` first calls the standard `/v1/models`, which yields `Id` and `Name` only. It then attempts one **richer catalogue endpoint** (LM Studio's native `/api/v0/models`, held in a single `private const`) inside a `try/catch` that **swallows everything**, merging by `Id` to populate `Model.Kind`, `ContextLength` and `IsLoaded`.
+
+> **Enrichment must never fail a catalogue fetch.** A server answering only `/v1/models`, returning `404`, or returning malformed JSON all yield the same result: models with those three fields `null`. Per principle **P2**, no feature may be load-bearing on a vendor-specific endpoint; per **P3**, `null` means *unknown*, never *false*. See [ADR 0005](../adr/0005-vendor-metadata-as-optional-fields.md).
+
 ```csharp
 // Example: suppress thinking for a Qwen3 endpoint
 using Agency.Llm.Common;

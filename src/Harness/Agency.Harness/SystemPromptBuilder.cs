@@ -22,7 +22,7 @@ public static class SystemPromptBuilder
         var sb = new StringBuilder();
 
         // Stable identity / persona.
-        sb.AppendLine("You are an autonomous agent operating inside the Agency runtime.");
+        sb.AppendLine(ctx.Query.IdentityPrompt ?? "You are an autonomous agent operating inside the Agency runtime.");
         sb.AppendLine();
 
         // ReAct reasoning instruction (D11) — chain-of-thought before tool use.

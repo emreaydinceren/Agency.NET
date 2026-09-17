@@ -41,6 +41,9 @@ Short "Context → Decision → Consequences" records for consequential design t
 | ADR | Decision |
 |---|---|
 | [0001](adr/0001-no-strong-naming.md) | No assembly strong naming |
+| [0003](adr/0003-acp-as-the-integration-seam.md) | ACP as the integration seam, rather than an in-process library |
+| [0004](adr/0004-inference-gate-on-the-port.md) | The inference gate sits on the inference port |
+| [0005](adr/0005-vendor-metadata-as-optional-fields.md) | Vendor model metadata as optional fields |
 
 ---
 

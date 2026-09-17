@@ -54,6 +54,7 @@ Each node is a project; each arrow points from a project to a compile-time depen
 ### Harness
 - [Agency.Harness](Agency.Harness.md) — the agent loop, hooks, permissions, tools (incl. `semantic_search`), and session state.
 - [Agency.Harness.Console](Agency.Harness.Console.md) — the interactive REPL host, ingestion commands, and DI wiring.
+- [Agency.Acp](Agency.Acp.md) — the Agent Client Protocol adapter: JSON-RPC 2.0 over stdio, so any ACP client can drive an agent.
 
 ### Memory
 - [Agency.Memory.Common](Agency.Memory.Common.md) — memory record contracts and ranking.

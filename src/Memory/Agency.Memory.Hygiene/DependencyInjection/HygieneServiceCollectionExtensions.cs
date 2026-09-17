@@ -1,5 +1,6 @@
 using Agency.Memory.Common.Options;
 using Agency.Memory.Common.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -23,19 +24,27 @@ public static class HygieneServiceCollectionExtensions
     /// Registers <see cref="HygieneSweeperBackgroundService"/> as a hosted service.
     /// </summary>
     /// <param name="services">The service collection to register into.</param>
+    /// <param name="configuration">
+    /// Optional configuration root. When supplied, <see cref="MemoryOptions"/> is bound from its
+    /// <c>Memory</c> section before <paramref name="configure"/> runs — configuration binds first,
+    /// the action applies after, so a code-based override still wins.
+    /// </param>
     /// <param name="configure">Optional action to configure <see cref="MemoryOptions"/>.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddAgencyHygiene(
         this IServiceCollection services,
+        IConfiguration? configuration = null,
         Action<MemoryOptions>? configure = null)
     {
+        OptionsBuilder<MemoryOptions> optionsBuilder = services.AddOptions<MemoryOptions>();
+        if (configuration is not null)
+        {
+            optionsBuilder.Bind(configuration.GetSection("Memory"));
+        }
+
         if (configure is not null)
         {
             services.Configure(configure);
-        }
-        else
-        {
-            services.AddOptions<MemoryOptions>();
         }
 
         services.AddHostedService<HygieneSweeperBackgroundService>(sp => new HygieneSweeperBackgroundService(

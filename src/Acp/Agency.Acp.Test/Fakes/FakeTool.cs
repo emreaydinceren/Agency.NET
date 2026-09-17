@@ -1,0 +1,46 @@
+using System.Text.Json;
+using Agency.Llm.Common.Tools;
+
+namespace Agency.Acp.Test.Fakes;
+
+/// <summary>
+/// A configurable test double for <see cref="ITool"/> that records invocations and returns a
+/// predetermined <see cref="ToolResult"/>. Mirrors <c>Agency.Harness.Test.Fakes.FakeTool</c>, which
+/// is not visible from this assembly.
+/// </summary>
+internal sealed class FakeTool : ITool
+{
+    private readonly Func<JsonElement, ToolResult> _handler;
+
+    /// <param name="name">The tool name registered in the registry.</param>
+    /// <param name="handler">Optional custom handler; defaults to returning a plain text result.</param>
+    /// <param name="description">Optional description; defaults to <c>"Fake tool: {name}"</c>.</param>
+    /// <param name="schema">Optional JSON input schema; defaults to the empty object <c>"{}"</c>.</param>
+    public FakeTool(string name, Func<JsonElement, ToolResult>? handler = null, string? description = null, string? schema = null)
+    {
+        this.Definition = new ToolDefinition(
+            name,
+            description ?? $"Fake tool: {name}",
+            JsonDocument.Parse(schema ?? "{}").RootElement);
+
+        this._handler = handler ?? (_ => new ToolResult($"Result from {name}"));
+    }
+
+    /// <inheritdoc/>
+    public ToolDefinition Definition { get; }
+
+    /// <summary>Gets the number of times this tool was invoked.</summary>
+    public int InvokeCount { get; private set; }
+
+    /// <summary>Gets the input arguments received on each invocation, in order.</summary>
+    public List<JsonElement> ReceivedInputs { get; } = [];
+
+    /// <inheritdoc/>
+    public Task<ToolResult> InvokeAsync(JsonElement input, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        this.InvokeCount++;
+        this.ReceivedInputs.Add(input);
+        return Task.FromResult(this._handler(input));
+    }
+}

@@ -98,6 +98,20 @@ Logging of request and response details is enabled via `UseLogging()`.
 | [Agency.Harness](Agency.Harness.md) | `Models.cs` calls `new ClaudeClient(options).CreateChatClient()` when the provider is `"CLAUDE"` |
 | [Agency.Harness.Console](Agency.Harness.Console.md) | Selects the Claude provider via configuration (`Agent:Provider = "Claude"`) |
 
+### Reasoning effort
+
+When `LlmClientOptions.ThinkingBudgetTokens` (or `EnableThinking`) is set, `ClaudeClient` installs an internal `ThinkingRequestHandler : DelegatingHandler` via `ClientOptions.Handlers`, which maps those values onto Anthropic's native shape:
+
+```json
+"thinking": { "type": "enabled", "budget_tokens": 4096 }
+```
+
+Effort is **per-client, not per-request** (spec §6.7, ADR decision G-4): `LlmClientOptions` is a `record`, so a caller builds one client per distinct effort level with `opts with { ThinkingBudgetTokens = … }`. These are thin factories, so one instance per level is cheap. Changing effort mid-session means rebuilding the client and `Agent` and calling `ChatSession.SetAgent`, which preserves conversation history — the same path a model change takes.
+
+Where the surface supports no thinking dialect at all, the effort ladder is **empty** rather than decorative.
+
+> The Claude-side mapping is exercised indirectly through `LlmClientOptions` round-tripping; it has **no dedicated automated test** of the emitted `thinking` block. Worth adding before relying on it.
+
 ## Design Notes
 
 - `ClaudeClient` is a **factory**, not a long-lived client. Each call to `CreateChatClient()` constructs a new `AnthropicClient` and middleware pipeline; callers should cache the returned `IChatClient`.

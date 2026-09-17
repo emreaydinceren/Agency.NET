@@ -269,11 +269,17 @@ public sealed class GoalkeeperTests
         }
 
         /// <inheritdoc/>
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
             IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            ChatResponse response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
+        }
 
         /// <inheritdoc/>
         public object? GetService(Type serviceType, object? key = null) => null;

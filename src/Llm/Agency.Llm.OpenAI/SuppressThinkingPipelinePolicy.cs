@@ -5,12 +5,13 @@ using System.Text.Json;
 namespace Agency.Llm.OpenAI;
 
 /// <summary>
-/// Injects <c>enable_thinking: false</c> and <c>thinking_budget_tokens: 0</c> into every
-/// chat-completion request body, preventing reasoning-capable models (e.g. Qwen3 MoE) from
-/// entering extended thinking mode regardless of prompt-level directives such as
-/// <c>/no_think</c>.
+/// Injects <c>enable_thinking</c> and/or <c>thinking_budget_tokens</c> into every
+/// chat-completion request body, controlling extended thinking on reasoning-capable models
+/// (e.g. Qwen3 MoE) regardless of prompt-level directives such as <c>/no_think</c>. Either
+/// value may be <see langword="null"/>, in which case that field is left out of the request
+/// body entirely (spec P3: unspecified stays absent, never a claim).
 /// </summary>
-internal sealed class SuppressThinkingPipelinePolicy : PipelinePolicy
+internal sealed class SuppressThinkingPipelinePolicy(bool? enableThinking, int? thinkingBudgetTokens) : PipelinePolicy
 {
     public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
@@ -24,7 +25,7 @@ internal sealed class SuppressThinkingPipelinePolicy : PipelinePolicy
         await ProcessNextAsync(message, pipeline, currentIndex).ConfigureAwait(false);
     }
 
-    private static void Inject(PipelineMessage message)
+    private void Inject(PipelineMessage message)
     {
         if (message.Request.Content is null)
         {
@@ -49,8 +50,16 @@ internal sealed class SuppressThinkingPipelinePolicy : PipelinePolicy
                 prop.WriteTo(writer);
             }
 
-            writer.WriteBoolean("enable_thinking", false);
-            writer.WriteNumber("thinking_budget_tokens", 0);
+            if (enableThinking is { } enableThinkingValue)
+            {
+                writer.WriteBoolean("enable_thinking", enableThinkingValue);
+            }
+
+            if (thinkingBudgetTokens is { } thinkingBudgetTokensValue)
+            {
+                writer.WriteNumber("thinking_budget_tokens", thinkingBudgetTokensValue);
+            }
+
             writer.WriteEndObject();
         }
 

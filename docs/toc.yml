@@ -106,9 +106,19 @@
           href: Projects/Agency.Harness.md
         - name: Agency.Harness.Console
           href: Projects/Agency.Harness.Console.md
+        - name: Agency.Acp
+          href: Projects/Agency.Acp.md
 
 - name: Architecture Decision Records
-  href: adr/0001-no-strong-naming.md
+  items:
+    - name: 0001 — No assembly strong naming
+      href: adr/0001-no-strong-naming.md
+    - name: 0003 — ACP as the integration seam
+      href: adr/0003-acp-as-the-integration-seam.md
+    - name: 0004 — The inference gate on the inference port
+      href: adr/0004-inference-gate-on-the-port.md
+    - name: 0005 — Vendor model metadata as optional fields
+      href: adr/0005-vendor-metadata-as-optional-fields.md
 
 - name: Code Walkthrough
   href: walkthrough/code-walkthrough.html

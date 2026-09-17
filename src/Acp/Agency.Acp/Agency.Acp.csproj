@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <Description>Agent Client Protocol (ACP) host for the Agency AI Toolkit: exposes the agent harness over newline-delimited JSON-RPC 2.0 on stdio so any ACP client can drive an Agency agent.</Description>
+    <PackageTags>agency.net;ai;agent;acp;jsonrpc;stdio;dotnet</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Agency.Configuration\Agency.Configuration.csproj" />
+    <ProjectReference Include="..\..\Harness\Agency.Harness\Agency.Harness.csproj" />
+    <ProjectReference Include="..\..\Llm\Agency.Llm.Common\Agency.Llm.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dotacp.protocol" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+</Project>

@@ -64,9 +64,16 @@ public static class HygieneServiceCollectionExtensions
     // Requires IMemoryStore to already be registered.
     public static IServiceCollection AddAgencyHygiene(
         this IServiceCollection services,
+        IConfiguration? configuration = null,
         Action<MemoryOptions>? configure = null);
 }
 ```
+
+> **Pass `configuration` or nothing binds.** `MemoryOptions` is bound from the `Memory` configuration
+> section only when an `IConfiguration` is supplied — previously the options were registered with
+> `AddOptions<T>()` and **no `.Bind(...)`**, so configured values were silently ignored and the
+> defaults always won. **Configuration binds first; the `Action<T>` override applies after.**
+> `configuration` was inserted **before** `configure`, so positional callers must be updated.
 
 ## Registration
 

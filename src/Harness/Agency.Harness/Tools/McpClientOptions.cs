@@ -52,6 +52,14 @@ public sealed class McpServerConfig
     public string? Url { get; set; }
 
     /// <summary>
+    /// Gets or sets additional HTTP headers sent with every request to an Http-transport server.
+    /// Required by servers that authenticate the transport itself (e.g. a bearer token minted
+    /// per session). Ignored for <see cref="McpTransportKind.Stdio"/>, which authenticates via
+    /// <see cref="EnvironmentVariables"/> instead.
+    /// </summary>
+    public Dictionary<string, string>? Headers { get; set; }
+
+    /// <summary>
     /// Gets or sets whether this server is connected at startup. When <see langword="false"/>, the server
     /// is not connected at all - no subprocess is spawned and no transport is created. Written by
     /// <c>/mcp-toggle</c> to persist a disabled server across restarts.

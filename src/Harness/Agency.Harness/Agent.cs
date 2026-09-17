@@ -235,13 +235,24 @@ public sealed partial class Agent
             await onUserPromptSubmit(ctx, ct);
         }
 
-        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         int? timeout = options?.TurnTimeoutSeconds;
-        if (timeout is > 0)
+
+        // A separate CTS for the timeout (rather than CancelAfter on the caller-linked CTS) is what
+        // makes "the model hung" distinguishable from "the human hit Stop" below: unwinding, we can
+        // ask which one actually fired. CancellationTokenSource has no way to report *why* a linked
+        // token was cancelled otherwise. The TimeProvider-accepting constructor (added in .NET 8) is
+        // required so tests can advance a FakeTimeProvider instead of sleeping in real time.
+        using CancellationTokenSource? timeoutCts = timeout is > 0
+            ? new CancellationTokenSource(TimeSpan.FromSeconds(timeout.Value), this._timeProvider)
+            : null;
+        if (timeoutCts is not null)
         {
-            turnCts.CancelAfter(TimeSpan.FromSeconds(timeout.Value));
-            activity?.SetTag("agent.turn.timeout_seconds", timeout.Value);
+            activity?.SetTag("agent.turn.timeout_seconds", timeout!.Value);
         }
+
+        using CancellationTokenSource turnCts = timeoutCts is not null
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token)
+            : CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         var enumerator = this.RunAsync(ctx, turnCts.Token).GetAsyncEnumerator(turnCts.Token);
         Exception? turnError = null;
@@ -278,6 +289,17 @@ public sealed partial class Agent
 
             if (turnError is not null)
             {
+                if (turnError is OperationCanceledException
+                    && timeoutCts is not null
+                    && timeoutCts.IsCancellationRequested
+                    && !ct.IsCancellationRequested)
+                {
+                    turnError = new TimeoutException(
+                        $"Agent turn exceeded the configured timeout of {timeout!.Value} second(s).", turnError);
+                }
+
+                RepairIncompleteToolCalls(ctx);
+
                 _errorCounter.Add(1, tags);
                 activity?.SetStatus(ActivityStatusCode.Error, turnError.Message);
                 this.LogChatTurnFailed(turnError, this._model, this._clientType);
@@ -535,7 +557,7 @@ public sealed partial class Agent
                     ? new FunctionResultContent(pendingCall.CallId, $"[Error] {result.Content}")
                     : new FunctionResultContent(pendingCall.CallId, result.Content);
 
-                evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, result);
+                evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, result) { CallId = pendingCall.CallId };
             }
             else
             {
@@ -552,7 +574,7 @@ public sealed partial class Agent
                     : $"[Blocked] The user denied permission for this tool call{pathSuffix}.{scopeNote}";
                 var deniedResult = new ToolResult(reason, IsError: true);
                 resultContent = new FunctionResultContent(pendingCall.CallId, reason);
-                evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, deniedResult);
+                evt = new ToolInvokedEvent(pendingCall.ToolName, pendingCall.Input, deniedResult) { CallId = pendingCall.CallId };
             }
 
             resumedResults[pendingCall.BatchIndex] = resultContent;
@@ -704,40 +726,100 @@ public sealed partial class Agent
             LlmTokenUsage iterationUsage = new(0, 0);
             while (true)
             {
+                // Streaming call. Finding (D2 spec): `yield return` cannot appear inside a
+                // try/catch with a catch clause (CS1626), so the empty-choices retry below cannot
+                // wrap the whole streaming call the way the old GetResponseAsync retry did. Instead,
+                // only `MoveNextAsync()` is wrapped in try/catch; delta events are yielded outside
+                // it, matching the manual-enumerator shape already used in ChatIteratorAsync.
+                //
+                // Retry semantics: once at least one delta has been yielded to the caller for this
+                // attempt, a subsequent stream fault can no longer be retried cleanly - the caller
+                // has already seen partial output, and reissuing the call would duplicate those
+                // deltas. So a fault is only retried when it occurs before any delta was emitted;
+                // otherwise it is surfaced immediately as the same exhausted-retries error, rather
+                // than silently duplicating output.
                 while (true)
                 {
                     emptyChoicesAttempt++;
+                    var streamedUpdates = new List<ChatResponseUpdate>();
+                    bool anyDeltaYielded = false;
+                    Exception? streamError = null;
+
+                    IAsyncEnumerator<ChatResponseUpdate> enumerator =
+                        this._llm.GetStreamingResponseAsync(requestMessages, options, ct).GetAsyncEnumerator(ct);
                     try
                     {
-                        response = await this._llm.GetResponseAsync(requestMessages, options, ct);
+                        while (true)
+                        {
+                            bool moved;
+                            try
+                            {
+                                moved = await enumerator.MoveNextAsync();
+                            }
+                            catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "index")
+                            {
+                                streamError = ex;
+                                break;
+                            }
+
+                            if (!moved)
+                            {
+                                break;
+                            }
+
+                            ChatResponseUpdate update = enumerator.Current;
+                            streamedUpdates.Add(update);
+
+                            foreach (AIContent content in update.Contents)
+                            {
+                                switch (content)
+                                {
+                                    case TextContent { Text.Length: > 0 } textContent:
+                                        anyDeltaYielded = true;
+                                        yield return new AssistantTextDeltaEvent(textContent.Text);
+                                        break;
+                                    case TextReasoningContent { Text.Length: > 0 } reasoningContent:
+                                        anyDeltaYielded = true;
+                                        yield return new AssistantThoughtDeltaEvent(reasoningContent.Text);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        await enumerator.DisposeAsync();
+                    }
+
+                    if (streamError is null)
+                    {
+                        response = await AsAsyncEnumerable(streamedUpdates).ToChatResponseAsync(ct);
                         break;
                     }
-                    catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "index")
-                    {
-                        // Known upstream issue: some OpenAI-compatible backends (e.g. LM Studio) occasionally
-                        // return a 200 response with an empty `choices` array - typically when grammar-constrained
-                        // tool-call generation fails, or the backend is mid-swap between models under VRAM
-                        // pressure. The OpenAI SDK's ChatCompletion.Role getter indexes into that empty array and
-                        // throws instead of the backend surfacing a proper error. Back off briefly before retrying
-                        // so a transient backend hiccup has time to clear instead of hitting it again instantly.
-                        if (emptyChoicesAttempt >= maxEmptyChoicesAttempts)
-                        {
-                            this.LogEmptyChoicesExhausted(this._model, this._clientType, maxEmptyChoicesAttempts);
-                            throw new InvalidOperationException(
-                                $"The LLM backend for model '{this._model}' ({this._clientType}) returned " +
-                                $"{maxEmptyChoicesAttempts} consecutive malformed responses with no completion choices, " +
-                                "instead of a normal reply or an error. This is a known compatibility issue with some " +
-                                "OpenAI-compatible local servers (e.g. LM Studio) - the backend is reachable and " +
-                                "returning HTTP 200, but failing to actually generate a response for this request " +
-                                "(often for tool-calling requests). Check that the backend server is running and " +
-                                "responsive, and consider restarting it; if the problem persists, it may not be fixable " +
-                                "from this client.",
-                                ex);
-                        }
 
-                        this.LogEmptyChoicesRetry(this._model, this._clientType, emptyChoicesAttempt, maxEmptyChoicesAttempts);
-                        await Task.Delay(TimeSpan.FromMilliseconds(250 * emptyChoicesAttempt), this._timeProvider, ct);
+                    // Known upstream issue: some OpenAI-compatible backends (e.g. LM Studio) occasionally
+                    // return a 200 response with an empty `choices` array - typically when grammar-constrained
+                    // tool-call generation fails, or the backend is mid-swap between models under VRAM
+                    // pressure. The OpenAI SDK's ChatCompletion.Role getter indexes into that empty array and
+                    // throws instead of the backend surfacing a proper error. Back off briefly before retrying
+                    // so a transient backend hiccup has time to clear instead of hitting it again instantly.
+                    if (anyDeltaYielded || emptyChoicesAttempt >= maxEmptyChoicesAttempts)
+                    {
+                        this.LogEmptyChoicesExhausted(this._model, this._clientType, maxEmptyChoicesAttempts);
+                        throw new InvalidOperationException(
+                            $"The LLM backend for model '{this._model}' ({this._clientType}) returned " +
+                            $"{maxEmptyChoicesAttempts} consecutive malformed responses with no completion choices, " +
+                            "instead of a normal reply or an error. This is a known compatibility issue with some " +
+                            "OpenAI-compatible local servers (e.g. LM Studio) - the backend is reachable and " +
+                            "returning HTTP 200, but failing to actually generate a response for this request " +
+                            "(often for tool-calling requests). Check that the backend server is running and " +
+                            "responsive, and consider restarting it; if the problem persists, it may not be fixable " +
+                            "from this client.",
+                            streamError);
                     }
+
+                    this.LogEmptyChoicesRetry(this._model, this._clientType, emptyChoicesAttempt, maxEmptyChoicesAttempts);
+                    await Task.Delay(TimeSpan.FromMilliseconds(250 * emptyChoicesAttempt), this._timeProvider, ct);
                 }
 
                 lastAssistant = response.Messages.LastOrDefault(static m => m.Role == ChatRole.Assistant)
@@ -808,7 +890,7 @@ public sealed partial class Agent
                     $"This turn consumed {ctx.TotalUsage.InputTokens:N0} input tokens{windowHint} — " +
                     "increase the model's context window or reduce the input size.";
                 AgentResultEvent resultEvent = new AgentResultEvent(
-                    AgentResultStatus.Error,
+                    AgentResultStatus.Truncated,
                     truncationMessage,
                     ctx.TotalUsage,
                     ctx.TotalCostUsd);
@@ -853,6 +935,15 @@ public sealed partial class Agent
                 yield break;
             }
 
+            // Announce each call, correlated by the provider's own CallId, before dispatch begins -
+            // this is a plain yield (no enclosing try/catch), so Finding 1's CS1626 restriction
+            // does not apply here.
+            foreach (FunctionCallContent startingCall in toolCalls)
+            {
+                yield return new ToolStartedEvent(
+                    startingCall.CallId, startingCall.Name, ToJsonElement(startingCall.Arguments));
+            }
+
             var resultMessages = new FunctionResultContent?[toolCalls.Count];
 
             // Pended calls are collected into this pre-sized array by batch index so parallel
@@ -878,7 +969,7 @@ public sealed partial class Agent
                     {
                         ToolResult blocked = new($"[Blocked] {deny.Reason}", IsError: true);
                         resultMessages[index] = new FunctionResultContent(call.CallId, blocked.Content);
-                        return new ToolInvokedEvent(call.Name, input, blocked);
+                        return new ToolInvokedEvent(call.Name, input, blocked) { CallId = call.CallId };
                     }
 
                     if (decision is PreToolUseDecision.Ask ask)
@@ -925,7 +1016,7 @@ public sealed partial class Agent
                             // Rule deny beats everything — no park, just block.
                             ToolResult blocked = new($"[Blocked] {permDeny.Reason}", IsError: true);
                             resultMessages[index] = new FunctionResultContent(call.CallId, blocked.Content);
-                            return new ToolInvokedEvent(call.Name, input, blocked);
+                            return new ToolInvokedEvent(call.Name, input, blocked) { CallId = call.CallId };
                         }
 
                         // Active-skill pre-approval: deny rules have been checked above; if the
@@ -945,7 +1036,7 @@ public sealed partial class Agent
                             pendingSlots[index] = new PendingToolCall(
                                 Guid.NewGuid(), index, call.CallId, call.Name,
                                 input, keyValue, proposedRule, PermissionRequestSource.Hook, hookReason);
-                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty)) { CallId = call.CallId };
                         }
                         else if (permDecision is PermissionDecision.Ask ruleAsk)
                         {
@@ -954,7 +1045,7 @@ public sealed partial class Agent
                                 Guid.NewGuid(), index, call.CallId, call.Name,
                                 input, ruleAsk.KeyValue, ruleAsk.ProposedRule,
                                 PermissionRequestSource.UnresolvedRule, null);
-                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty)) { CallId = call.CallId };
                         }
 
                         // Allow (or active-skill pre-approved) — fall through to InvokeAsync.
@@ -973,7 +1064,7 @@ public sealed partial class Agent
                             pendingSlots[index] = new PendingToolCall(
                                 Guid.NewGuid(), index, call.CallId, call.Name,
                                 input, null, call.Name, PermissionRequestSource.Hook, hookReason);
-                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty));
+                            return new ToolInvokedEvent(call.Name, input, new ToolResult(string.Empty)) { CallId = call.CallId };
                         }
                     }
                 }
@@ -1047,7 +1138,7 @@ public sealed partial class Agent
                     : new FunctionResultContent(call.CallId, result.Content);
 
                 resultMessages[index] = resultContent;
-                return new ToolInvokedEvent(call.Name, input, result);
+                return new ToolInvokedEvent(call.Name, input, result) { CallId = call.CallId };
             });
 
             ToolInvokedEvent[] toolEvents = await Task.WhenAll(toolTasks);
@@ -1170,6 +1261,42 @@ public sealed partial class Agent
         return string.IsNullOrEmpty(text) ? null : text;
     }
 
+    /// <summary>Content of the synthetic tool result appended for a <see cref="FunctionCallContent"/>
+    /// left dangling by a cancelled or failed turn (see <see cref="RepairIncompleteToolCalls"/>).</summary>
+    internal const string CancelledToolResultMessage =
+        "[Cancelled] The user cancelled this turn before the tool returned.";
+
+    /// <summary>
+    /// Appends a synthetic <see cref="FunctionResultContent"/> for every <see cref="FunctionCallContent"/>
+    /// in the conversation that lacks a matching result — the state a cancelled or failed turn can leave
+    /// behind when it unwinds between the assistant message being appended and the tool results being
+    /// appended. Left unrepaired, the dangling call makes the transcript invalid for the next request.
+    /// </summary>
+    private static void RepairIncompleteToolCalls(Context ctx)
+    {
+        IReadOnlyList<ChatMessage> messages = ctx.Conversation.Messages;
+
+        var resultCallIds = new HashSet<string>(
+            messages
+                .Where(static m => m.Role == ChatRole.Tool)
+                .SelectMany(static m => m.Contents.OfType<FunctionResultContent>())
+                .Select(static r => r.CallId));
+
+        List<string> missingCallIds = messages
+            .Where(static m => m.Role == ChatRole.Assistant)
+            .SelectMany(static m => m.Contents.OfType<FunctionCallContent>())
+            .Select(static c => c.CallId)
+            .Where(id => !resultCallIds.Contains(id))
+            .Distinct()
+            .ToList();
+
+        foreach (string callId in missingCallIds)
+        {
+            ctx.Conversation.Append(new ChatMessage(
+                ChatRole.Tool, [new FunctionResultContent(callId, CancelledToolResultMessage)]));
+        }
+    }
+
     private static readonly JsonElement _emptyElement =
         JsonSerializer.SerializeToElement(
             new Dictionary<string, object?>(),
@@ -1183,6 +1310,20 @@ public sealed partial class Agent
         }
 
         return JsonSerializer.SerializeToElement(arguments);
+    }
+
+    /// <summary>
+    /// Wraps an already-materialized list of updates as an <see cref="IAsyncEnumerable{T}"/> so it
+    /// can be fed to <c>ChatResponseExtensions.ToChatResponseAsync</c>, which only accepts that
+    /// shape. The list was collected by manually enumerating the original stream (see the
+    /// streaming retry loop above), so no further async work happens here.
+    /// </summary>
+    private static async IAsyncEnumerable<ChatResponseUpdate> AsAsyncEnumerable(List<ChatResponseUpdate> updates)
+    {
+        foreach (ChatResponseUpdate update in updates)
+        {
+            yield return update;
+        }
     }
 
     /// <summary>Logs that an agent chat turn is starting.</summary>

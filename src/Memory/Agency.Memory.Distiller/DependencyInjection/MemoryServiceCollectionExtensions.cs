@@ -8,6 +8,7 @@ using Agency.Memory.Common.Storage;
 using Agency.Memory.Distiller.Services;
 using Agency.Memory.Retrieval;
 using Agency.Embeddings.Common;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -40,31 +41,43 @@ public static class MemoryServiceCollectionExtensions
     /// Registers all Agency memory pipeline services and configures baseline hooks.
     /// </summary>
     /// <param name="services">The service collection to register into.</param>
+    /// <param name="configuration">
+    /// Optional configuration root. When supplied, <see cref="MemoryOptions"/> is bound from its
+    /// <c>Memory</c> section and <see cref="DistillerOptions"/> from its <c>Distiller</c> section
+    /// before <paramref name="configureMemory"/> / <paramref name="configureDistiller"/> run —
+    /// configuration binds first, the action applies after, so code-based overrides still win.
+    /// </param>
     /// <param name="configureMemory">Optional action to configure <see cref="MemoryOptions"/>.</param>
     /// <param name="configureDistiller">Optional action to configure <see cref="DistillerOptions"/>.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddAgencyMemory(
         this IServiceCollection services,
+        IConfiguration? configuration = null,
         Action<MemoryOptions>? configureMemory = null,
         Action<DistillerOptions>? configureDistiller = null)
     {
-        // Options registration.
+        // Options registration. Bind from configuration first (if supplied) so a code-based
+        // configureMemory/configureDistiller action — registered after — still has the final say.
+        OptionsBuilder<MemoryOptions> memoryOptionsBuilder = services.AddOptions<MemoryOptions>();
+        if (configuration is not null)
+        {
+            memoryOptionsBuilder.Bind(configuration.GetSection("Memory"));
+        }
+
         if (configureMemory is not null)
         {
             services.Configure(configureMemory);
         }
-        else
+
+        OptionsBuilder<DistillerOptions> distillerOptionsBuilder = services.AddOptions<DistillerOptions>();
+        if (configuration is not null)
         {
-            services.AddOptions<MemoryOptions>();
+            distillerOptionsBuilder.Bind(configuration.GetSection("Distiller"));
         }
 
         if (configureDistiller is not null)
         {
             services.Configure(configureDistiller);
-        }
-        else
-        {
-            services.AddOptions<DistillerOptions>();
         }
 
         // In-process event bus.

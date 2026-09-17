@@ -259,7 +259,11 @@ if (embeddingsConfigured)
 }
 
 // Memory (opt-in via Memory:Enabled) registers the chosen store provider, the consolidator/
-// distiller/hygiene background services, and a baseline AgentHooks singleton  (unchanged) …
+// distiller/hygiene background services, and a baseline AgentHooks singleton.
+// builder.Configuration is passed to AddAgencyMemory/AddAgencyHygiene so Memory:* and
+// Distiller:* actually bind — without it those options silently fall back to defaults.
+// The consolidator and distiller chat clients are built via Models.CreateChatClient, which
+// honours each client's ClientType, rather than by constructing an OpenAIClient directly.
 
 // Vector store / ingestion / retrieval. Option bindings are unconditional (always validated);
 // the store, splitter, and ingestion services are gated on embeddingsConfigured.
@@ -514,7 +518,7 @@ All files live under `FileExport.OutputDirectory` (default `./logs`, created at 
 | [Agency.VectorStore.Sql.Sqlite](Agency.VectorStore.Sql.Sqlite.md) | `SqliteKVStore` (default provider) — registered and schema-initialised when `VectorStore:Provider` = `sqlite` |
 | [Agency.VectorStore.Sql.Postgres](Agency.VectorStore.Sql.Postgres.md) | `PostgresKVStore` — registered and schema-initialised when `VectorStore:Provider` = `postgres` |
 | [Agency.Llm.Common](Agency.Llm.Common.md) | `Models` enumerates configured LLM clients; the library's `AgentFactory` calls `Models.CreateChatClient` to resolve the `IChatClient`; binds `LlmClientOptions` |
-| [Agency.Llm.OpenAI](Agency.Llm.OpenAI.md) | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"`; also used directly to build consolidator/distiller chat clients when memory is enabled |
+| [Agency.Llm.OpenAI](Agency.Llm.OpenAI.md) | Instantiated by `Models.CreateChatClient` when `ClientType = "OpenAI"` |
 | [Agency.Llm.Claude](Agency.Llm.Claude.md) | Instantiated by `Models.CreateChatClient` when `ClientType = "Claude"` |
 | [Agency.Embeddings.OpenAI](Agency.Embeddings.OpenAI.md) | Registered (`AddAgencyEmbeddingsOpenAI`) whenever `Embedding:BaseUrl` is configured — drives both memory and the vector store |
 | [Agency.Memory.Sql.Postgres](Agency.Memory.Sql.Postgres.md) / [Agency.Memory.Sql.Sqlite](Agency.Memory.Sql.Sqlite.md) | One is registered as the memory store based on `Memory:Provider` |

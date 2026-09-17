@@ -134,7 +134,18 @@ public sealed partial class Models
     /// Creates an <see cref="IChatClient"/> for the named provider and returns the provider's
     /// display name alongside the client (used in telemetry tags).
     /// </summary>
-    public (IChatClient Client, string ClientType) CreateChatClient(string clientName)
+    public (IChatClient Client, string ClientType) CreateChatClient(string clientName) =>
+        this.CreateChatClient(clientName, configureOptions: null);
+
+    /// <summary>
+    /// Resolves <paramref name="clientName"/>'s configured <see cref="LlmClientOptions"/>, applies
+    /// <paramref name="configureOptions"/> when supplied, and builds the client from the result.
+    /// Backs <see cref="AgentFactory"/>'s per-client-effort overload of
+    /// <see cref="IAgentFactory.CreateAgent(string?, string?, Func{LlmClientOptions, LlmClientOptions}?)"/>
+    /// (spec §6.7); internal because nothing outside this assembly needs the transform seam.
+    /// </summary>
+    internal (IChatClient Client, string ClientType) CreateChatClient(
+        string clientName, Func<LlmClientOptions, LlmClientOptions>? configureOptions)
     {
         using var activity = _activitySource.StartActivity(nameof(CreateChatClient));
         activity?.SetTag("agentic.models.client_name", clientName);
@@ -143,9 +154,10 @@ public sealed partial class Models
         {
             if (options.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase))
             {
-                activity?.SetTag("agentic.models.client_type", options.ClientType);
-                this.LogResolvedClient(options.Name, options.ClientType);
-                return this.CreateChatClient(options);
+                LlmClientOptions effective = configureOptions is null ? options : configureOptions(options);
+                activity?.SetTag("agentic.models.client_type", effective.ClientType);
+                this.LogResolvedClient(options.Name, effective.ClientType);
+                return CreateChatClient(effective, this._loggerFactory);
             }
         }
 
@@ -154,12 +166,22 @@ public sealed partial class Models
         throw new InvalidOperationException($"No LLM client configuration found with name '{clientName}'.");
     }
 
-    private (IChatClient Client, string ClientType) CreateChatClient(LlmClientOptions options)
+    /// <summary>
+    /// Dispatches on <see cref="LlmClientOptions.ClientType"/> to build the right provider client
+    /// for <paramref name="options"/>. The single provider switch backing both
+    /// <see cref="CreateChatClient(string)"/> (by configured client name) and any caller that
+    /// already has a (possibly modified, e.g. <c>with { SuppressThinking = true }</c>)
+    /// <see cref="LlmClientOptions"/> in hand and needs to build its client without duplicating
+    /// this switch (e.g. <c>Agency.Harness.Console</c>'s consolidator/distiller client bootstrap).
+    /// </summary>
+    /// <param name="options">The resolved (or ad hoc) client options to build a client for.</param>
+    /// <param name="loggerFactory">Passed through to <see cref="OpenAIClient"/> for HTTP failure logging; optional.</param>
+    internal static (IChatClient Client, string ClientType) CreateChatClient(LlmClientOptions options, ILoggerFactory? loggerFactory = null)
     {
         return options.ClientType.ToUpperInvariant() switch
         {
             "CLAUDE" => (new ClaudeClient(options).CreateChatClient(), "Claude"),
-            "OPENAI" => (new OpenAIClient(options, this._loggerFactory).CreateChatClient(), "OpenAI"),
+            "OPENAI" => (new OpenAIClient(options, loggerFactory).CreateChatClient(), "OpenAI"),
             _ => throw new InvalidOperationException($"Unsupported provider '{options.ClientType}'."),
         };
     }

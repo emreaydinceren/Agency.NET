@@ -540,7 +540,7 @@ internal sealed partial class ConsoleChatSession : IDisposable
 
                 this.output.WriteLine("gray",
                     $"  ↳ +{deltaIn:N0} in, +{deltaOut:N0} out{throughput}  [{result.Status}]");
-                if (result.Status == AgentResultStatus.Error && result.FinalText is { } errorText)
+                if (result.Status is AgentResultStatus.Error or AgentResultStatus.Truncated && result.FinalText is { } errorText)
                 {
                     this.output.WriteLine("red", $"  {errorText}");
                 }

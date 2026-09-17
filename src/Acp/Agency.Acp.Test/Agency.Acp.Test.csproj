@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <!-- dotacp.client depends on StreamJsonRpc, which carries Microsoft.VisualStudio.Threading.Analyzers
+         as a transitive analyzer. That analyzer targets Visual Studio extension / JoinableTaskContext
+         threading (no such context exists in this console/test project) and, once active, flags both
+         new code here and pre-existing, unrelated test code elsewhere in this project (e.g. plain
+         CancellationTokenSource.Cancel() calls, matched as if they were the unrelated protocol
+         CancelAsync). Suppressed project-wide rather than editing untouched files to satisfy an
+         analyzer that arrived as a side effect of this one test's dependencies. -->
+    <NoWarn>$(NoWarn);VSTHRD002;VSTHRD003;VSTHRD103;VSTHRD200</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agency.Acp\Agency.Acp.csproj" />
+    <ProjectReference Include="..\..\Agency.Configuration\Agency.Configuration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <!-- Microsoft.Extensions.Configuration(.Json) are deliberately NOT referenced here: the
+         FrameworkReference below already brings them in via Microsoft.AspNetCore.App, and an
+         explicit PackageReference to either is flagged as prunable (NU1510) once that framework
+         reference is present. -->
+    <!-- End-to-end functional test only: drives the real agency-acp process as a dotacp.client, and
+         hosts an in-process bearer-authenticated MCP tool server the process connects back to. -->
+    <PackageReference Include="dotacp.client" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets the end-to-end test host the MCP tool server with Microsoft.AspNetCore.Builder /
+         WebApplication without switching this project's Sdk to Microsoft.NET.Sdk.Web. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Several test classes construct real Agency.Harness.Agent instances, which record telemetry
+      on process-wide static Meter/ActivitySource fields (Agency.Harness.Agent). Running test
+      collections in parallel (xunit's default) intermittently manifested as spurious exceptions
+      under concurrent Agent construction/execution across collections — the same class of static
+      Meter/MeterListener flakiness already tracked for Agency.Harness.Test. Disabling in-process
+      parallelism here trades a little wall-clock time for determinism.
+    -->
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Deliberately NOT "appsettings.json": Program.BuildHost() (exercised directly by
+      V1GuaranteeTests and friends) calls the bare Host.CreateApplicationBuilder(), which
+      auto-loads any file literally named appsettings.json from this project's own output
+      directory — the same directory this test project's build copies its own files into. A
+      same-named file here previously broke those tests via an unrelated unresolved ${TestProxy:*}
+      placeholder. EndToEndAcpTests reads shared-test-appsettings.json's TestProxy:* keys directly
+      instead, so no local appsettings.json is needed at all.
+    -->
+    <Content Include="..\..\shared-test-appsettings.json" Link="shared-test-appsettings.json" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

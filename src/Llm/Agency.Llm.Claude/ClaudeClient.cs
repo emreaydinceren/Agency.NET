@@ -88,6 +88,13 @@ public sealed class ClaudeClient : IModelProvider
             co.BaseUrl = opts.BaseUrl;
         }
 
+        // SuppressThinking is the OpenAI-side back-compat gate and has no Claude equivalent
+        // today; only EnableThinking/ThinkingBudgetTokens drive the Anthropic thinking block.
+        if (opts.EnableThinking is not null || opts.ThinkingBudgetTokens is not null)
+        {
+            co.Handlers = new List<DelegatingHandler> { new ThinkingRequestHandler(opts.EnableThinking, opts.ThinkingBudgetTokens) };
+        }
+
         return co;
     }
 }

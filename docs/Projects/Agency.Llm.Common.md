@@ -27,7 +27,16 @@ public interface IModelProvider
 // File: src/Llm/Agency.Llm.Common/Model.cs
 using Agency.Llm.Common;
 
-public sealed record Model(string Id, string Name);
+public sealed record Model(string Id, string Name)
+{
+    // Optional enrichment. Providers fill what their server answers and leave the rest null.
+    // null means UNKNOWN, never false — absent data must render as absent, never as a claim.
+    public ModelKind? Kind          { get; init; }
+    public int?       ContextLength { get; init; }
+    public bool?      IsLoaded      { get; init; }
+}
+
+public enum ModelKind { Unknown, Chat, Embedding, Vision }
 ```
 
 ### `LlmClientOptions`
@@ -45,8 +54,18 @@ public record class LlmClientOptions
     public int?      MaxRetries       { get; set; }
     public TimeSpan? Timeout          { get; set; }
     public bool      SuppressThinking { get; set; } = false;
+
+    // Reasoning effort, applied per-client (not per-request): a session builds its client
+    // with `opts with { … }`. OpenAI-style surfaces map EnableThinking onto `enable_thinking`;
+    // Claude-style maps ThinkingBudgetTokens onto `thinking: { type, budget_tokens }`.
+    // `reasoning_effort` is deliberately NOT emitted — measured model-dependent in both
+    // presence and level, byte-identical across minimal…high on one model.
+    public bool?     EnableThinking       { get; set; }
+    public int?      ThinkingBudgetTokens { get; set; }
 }
 ```
+
+`SuppressThinking = true` keeps its existing unconditional behaviour (`enable_thinking: false`, `thinking_budget_tokens: 0`) for back-compat; the two new fields apply only when it is not set.
 
 ### Tool types (`Agency.Llm.Common.Tools`)
 

@@ -267,6 +267,53 @@ public sealed class LoopRunnerTests
         Assert.False(goalState.IsArmed, "GoalState must be cleared after BudgetExceeded");
     }
 
+    // ── T-LOOP-4b: truncated turn is a hard failure, same as Error ────────────
+
+    /// <summary>
+    /// A turn whose inner <see cref="AgentResultEvent.Status"/> is
+    /// <see cref="AgentResultStatus.Truncated"/> must be treated the same as
+    /// <see cref="AgentResultStatus.Error"/>: a hard failure that stops the loop with
+    /// <see cref="LoopOutcome.Error"/> rather than being fed to the Goalkeeper and retried.
+    /// Without this, a turn that truncates on a hard token ceiling would loop indefinitely,
+    /// truncating again on every retry.
+    /// </summary>
+    [Fact]
+    public async Task TruncatedTurn_TreatedAsHardFailure_EmitsErrorOutcome_GoalCleared()
+    {
+        var workerFake = new FakeChatClient();
+        workerFake.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant, "...cut")])
+        {
+            Usage = new UsageDetails { InputTokenCount = 3350, OutputTokenCount = 746 },
+            FinishReason = ChatFinishReason.Length,
+        });
+
+        var goalState = new GoalState();
+        goalState.Arm(new GoalSpec { Condition = "never satisfied", MaxTurns = 5 });
+
+        var goalkeeper = new CountingFakeGoalkeeper();
+
+        var runner = new LoopRunner(
+            MakeSession(workerFake),
+            goalkeeper,
+            goalState,
+            new LoopOptions());
+
+        List<AgentEvent> events = await RunToCompletion(runner, ct: TestContext.Current.CancellationToken);
+
+        // Exactly one worker call — the loop must not retry a truncated turn.
+        Assert.Equal(1, workerFake.GetResponseCallCount);
+
+        // Terminal outcome: Error (same as a plain AgentResultStatus.Error turn).
+        LoopResultEvent loopResult = Assert.Single(events.OfType<LoopResultEvent>());
+        Assert.Equal(LoopOutcome.Error, loopResult.Outcome);
+
+        // Goalkeeper was never consulted — a hard failure is not a judge point.
+        Assert.Equal(0, goalkeeper.EvaluateCallCount);
+
+        // Goal cleared.
+        Assert.False(goalState.IsArmed, "GoalState must be cleared after Error");
+    }
+
     // ── T-LOOP-5: feedback — Continue.Reason becomes next directive ───────────
 
     /// <summary>

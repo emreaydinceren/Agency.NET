@@ -198,7 +198,10 @@ internal sealed partial class LoopRunner(
                 }
 
                 // ── inner turn hard-failed ────────────────────────────────────
-                if (result.Status == AgentResultStatus.Error)
+                // Truncated (hit its token limit mid-generation) is treated the same as Error
+                // here: retrying would very likely truncate again on the same hard ceiling, so
+                // it must stop the loop rather than being fed to the Goalkeeper.
+                if (result.Status is AgentResultStatus.Error or AgentResultStatus.Truncated)
                 {
                     outcomeTag = "error";
                     RecordTurnDuration(turnStartTicks);

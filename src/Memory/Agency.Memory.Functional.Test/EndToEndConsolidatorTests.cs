@@ -134,32 +134,43 @@ public sealed class EndToEndConsolidatorTests : IAsyncLifetime
         //   Turn 3: Memory_Done()
 
         int stubCallIndex = 0;
+        ChatResponse NextResponse()
+        {
+            stubCallIndex++;
+            return stubCallIndex switch
+            {
+                1 => BuildToolCallResponse("Memory_Update", $$$"""
+                    {
+                        "recordId": "{{{newRecord.Id}}}",
+                        "newValue": "User switched to SQLite for local data storage.",
+                        "newImportance": 0.70
+                    }
+                    """),
+                2 => BuildToolCallResponse("Memory_Delete", $$$"""
+                    {
+                        "recordId": "{{{oldRecord.Id}}}"
+                    }
+                    """),
+                _ => BuildTextResponse("Memory_Done"),
+            };
+        }
+
+        // Agency.Harness.Agent drives every turn through GetStreamingResponseAsync, so the mock must
+        // also serve that method — decomposed from the same NextResponse() the GetResponseAsync setup
+        // uses, advancing stubCallIndex exactly once per call (see ToStreamingUpdates below).
         var stubLlm = new Mock<IChatClient>();
         stubLlm
             .Setup(c => c.GetResponseAsync(
                 It.IsAny<IList<ChatMessage>>(),
                 It.IsAny<ChatOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IList<ChatMessage> _, ChatOptions? _, CancellationToken _) =>
-            {
-                stubCallIndex++;
-                return stubCallIndex switch
-                {
-                    1 => BuildToolCallResponse("Memory_Update", $$$"""
-                        {
-                            "recordId": "{{{newRecord.Id}}}",
-                            "newValue": "User switched to SQLite for local data storage.",
-                            "newImportance": 0.70
-                        }
-                        """),
-                    2 => BuildToolCallResponse("Memory_Delete", $$$"""
-                        {
-                            "recordId": "{{{oldRecord.Id}}}"
-                        }
-                        """),
-                    _ => BuildTextResponse("Memory_Done"),
-                };
-            });
+            .ReturnsAsync((IList<ChatMessage> _, ChatOptions? _, CancellationToken _) => NextResponse());
+        stubLlm
+            .Setup(c => c.GetStreamingResponseAsync(
+                It.IsAny<IList<ChatMessage>>(),
+                It.IsAny<ChatOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((IList<ChatMessage> _, ChatOptions? _, CancellationToken _) => ToStreamingUpdates(NextResponse()));
 
         // ── 3. Build consolidator runner and run it ───────────────────────────
 
@@ -257,5 +268,18 @@ public sealed class EndToEndConsolidatorTests : IAsyncLifetime
     {
         var message = new ChatMessage(ChatRole.Assistant, text);
         return new ChatResponse([message]);
+    }
+
+    /// <summary>
+    /// Decomposes a <see cref="ChatResponse"/> into the streamed <see cref="ChatResponseUpdate"/> shape
+    /// <see cref="Agency.Harness.Agent"/> consumes, so the stub <see cref="IChatClient"/>'s
+    /// <c>GetStreamingResponseAsync</c> setup can serve the same scripted response as <c>GetResponseAsync</c>.
+    /// </summary>
+    private static async IAsyncEnumerable<ChatResponseUpdate> ToStreamingUpdates(ChatResponse response)
+    {
+        foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+        {
+            yield return update;
+        }
     }
 }

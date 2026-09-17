@@ -23,7 +23,6 @@ using Agency.Memory.Hygiene.DependencyInjection;
 using Agency.Memory.Common.Storage;
 using Agency.Memory.Sql.Postgres;
 using Agency.Memory.Sql.Sqlite;
-using Agency.Llm.OpenAI;
 using Agency.Llm.Common;
 using Agency.Llm.Common.Tools;
 using Agency.Sql.Postgres;
@@ -189,22 +188,21 @@ internal class Program
                     ?? throw new InvalidOperationException(
                         $"No LLM client configuration found with name '{defaultClientName}'.");
 
-                // Consolidator IChatClient (shared via singleton)
-                Microsoft.Extensions.AI.IChatClient consolidatorClient =
-                    new OpenAIClient(defaultClientOpts).CreateChatClient();
+                // Consolidator + distiller IChatClients, dispatched on ClientType rather than
+                // hardcoded to OpenAI (see BuildMemoryLlmClients / MemoryLlmClientBootstrapTests).
+                var (consolidator, distiller) = BuildMemoryLlmClients(defaultClientOpts);
+                Microsoft.Extensions.AI.IChatClient consolidatorClient = consolidator.Client;
 
                 builder.Services.AddSingleton(consolidatorClient);
 
                 // 5d. Distiller adapter — separate client instance with thinking suppressed.
-                LlmClientOptions distillerClientOpts = defaultClientOpts with { SuppressThinking = true };
-                Microsoft.Extensions.AI.IChatClient distillerClient =
-                    new OpenAIClient(distillerClientOpts).CreateChatClient();
+                Microsoft.Extensions.AI.IChatClient distillerClient = distiller.Client;
 
                 builder.Services.AddAgencyDistillerLlm(distillerClient, defaultModel);
 
                 // 5e. Core memory services (event bus, distiller background service,
                 //     inactivity timer, conversation registry, baseline AgentHooks singleton)
-                builder.Services.AddAgencyMemory();
+                builder.Services.AddAgencyMemory(builder.Configuration);
 
                 // 5f. Consolidator background service
                 builder.Services.AddAgencyConsolidator(opts =>
@@ -213,7 +211,7 @@ internal class Program
                 });
 
                 // 5g. Hygiene sweeper background service
-                builder.Services.AddAgencyHygiene();
+                builder.Services.AddAgencyHygiene(builder.Configuration);
             }
 
             // 5.7 Vector store, ingestion, and retrieval.
@@ -537,6 +535,31 @@ internal class Program
         {
             await Log.CloseAndFlushAsync();
         }
+    }
+
+    /// <summary>
+    /// Builds the consolidator and distiller <see cref="Microsoft.Extensions.AI.IChatClient"/>s from
+    /// the default agent LLM client configuration, dispatching on
+    /// <see cref="LlmClientOptions.ClientType"/> via <see cref="Models.CreateChatClient(LlmClientOptions, Microsoft.Extensions.Logging.ILoggerFactory?)"/>
+    /// rather than hardcoding a provider. Extracted so the dispatch is independently testable — see
+    /// <c>MemoryLlmClientBootstrapTests</c>, which is the RED this fixes: before, both clients were
+    /// constructed with a hardcoded <c>new OpenAIClient(...)</c>, ignoring <see cref="LlmClientOptions.ClientType"/>.
+    /// </summary>
+    /// <param name="defaultClientOpts">The resolved default agent LLM client configuration.</param>
+    /// <returns>
+    /// The consolidator client (built from <paramref name="defaultClientOpts"/> as-is) and the
+    /// distiller client (built from the same options with <see cref="LlmClientOptions.SuppressThinking"/>
+    /// forced to <see langword="true"/>), each paired with the provider display name that built it.
+    /// </returns>
+    internal static (
+        (Microsoft.Extensions.AI.IChatClient Client, string ClientType) Consolidator,
+        (Microsoft.Extensions.AI.IChatClient Client, string ClientType) Distiller)
+        BuildMemoryLlmClients(LlmClientOptions defaultClientOpts)
+    {
+        var consolidator = Models.CreateChatClient(defaultClientOpts);
+        LlmClientOptions distillerClientOpts = defaultClientOpts with { SuppressThinking = true };
+        var distiller = Models.CreateChatClient(distillerClientOpts);
+        return (consolidator, distiller);
     }
 }
 

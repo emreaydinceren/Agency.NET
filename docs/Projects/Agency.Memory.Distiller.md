@@ -30,10 +30,21 @@ public static class MemoryServiceCollectionExtensions
     // IPostConfigureOptions<AgentOptions>.
     public static IServiceCollection AddAgencyMemory(
         this IServiceCollection services,
+        IConfiguration? configuration = null,
         Action<MemoryOptions>? configureMemory = null,
         Action<DistillerOptions>? configureDistiller = null);
 }
 ```
+
+> **Pass `configuration` or nothing binds.** `MemoryOptions` and `DistillerOptions` are bound from the
+> `Memory` and `Distiller` configuration sections only when an `IConfiguration` is supplied. Before
+> this parameter existed the options were registered with `AddOptions<T>()` and **no `.Bind(...)`**, so
+> every configured value — `Memory:RetrievalTopK`, `Distiller:InactivityTimeout` — was silently
+> ignored and the defaults always won. **Configuration binds first; the `Action<T>` overrides apply
+> after**, so code-configured callers keep working unchanged.
+>
+> `configuration` was inserted **before** the two existing `Action<T>` parameters, so any caller
+> passing them positionally must be updated; named or single-argument callers are unaffected.
 
 ```csharp
 // File: src/Memory/Agency.Memory.Distiller/DistillerLlmServiceCollectionExtensions.cs

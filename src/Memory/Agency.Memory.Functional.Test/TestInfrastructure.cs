@@ -240,14 +240,33 @@ internal static class TestInfrastructure
     /// </summary>
     internal static IChatClient StubChatClient(string response)
     {
+        ChatResponse NextResponse() => new([new ChatMessage(ChatRole.Assistant, response)]);
+
         var mock = new Mock<IChatClient>();
         mock.Setup(c => c.GetResponseAsync(
                 It.IsAny<IList<ChatMessage>>(),
                 It.IsAny<ChatOptions?>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() =>
-                new ChatResponse([new ChatMessage(ChatRole.Assistant, response)]));
+            .ReturnsAsync(() => NextResponse());
+        mock.Setup(c => c.GetStreamingResponseAsync(
+                It.IsAny<IList<ChatMessage>>(),
+                It.IsAny<ChatOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => ToStreamingUpdates(NextResponse()));
         return mock.Object;
+    }
+
+    /// <summary>
+    /// Decomposes a <see cref="ChatResponse"/> into the streamed <see cref="ChatResponseUpdate"/> shape
+    /// <see cref="Agency.Harness.Agent"/> consumes, so a stub <see cref="IChatClient"/>'s
+    /// <c>GetStreamingResponseAsync</c> setup can serve the same scripted response as <c>GetResponseAsync</c>.
+    /// </summary>
+    private static async IAsyncEnumerable<ChatResponseUpdate> ToStreamingUpdates(ChatResponse response)
+    {
+        foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+        {
+            yield return update;
+        }
     }
 
     /// <summary>

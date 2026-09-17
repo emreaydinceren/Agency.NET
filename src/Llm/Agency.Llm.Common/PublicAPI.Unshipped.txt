@@ -1,1 +1,16 @@
 #nullable enable
+Agency.Llm.Common.LlmClientOptions.EnableThinking.get -> bool?
+Agency.Llm.Common.LlmClientOptions.EnableThinking.set -> void
+Agency.Llm.Common.LlmClientOptions.ThinkingBudgetTokens.get -> int?
+Agency.Llm.Common.LlmClientOptions.ThinkingBudgetTokens.set -> void
+Agency.Llm.Common.Model.ContextLength.get -> int?
+Agency.Llm.Common.Model.ContextLength.init -> void
+Agency.Llm.Common.Model.IsLoaded.get -> bool?
+Agency.Llm.Common.Model.IsLoaded.init -> void
+Agency.Llm.Common.Model.Kind.get -> Agency.Llm.Common.ModelKind?
+Agency.Llm.Common.Model.Kind.init -> void
+Agency.Llm.Common.ModelKind
+Agency.Llm.Common.ModelKind.Chat = 1 -> Agency.Llm.Common.ModelKind
+Agency.Llm.Common.ModelKind.Embedding = 2 -> Agency.Llm.Common.ModelKind
+Agency.Llm.Common.ModelKind.Unknown = 0 -> Agency.Llm.Common.ModelKind
+Agency.Llm.Common.ModelKind.Vision = 3 -> Agency.Llm.Common.ModelKind

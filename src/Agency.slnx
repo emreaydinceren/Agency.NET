@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/Acp/">
+    <Project Path="Acp\Agency.Acp.Test\Agency.Acp.Test.csproj" />
+    <Project Path="Acp\Agency.Acp\Agency.Acp.csproj" />
+  </Folder>
   <Folder Name="/Harness/">
     <Project Path="Harness\Agency.Harness.Console.Test\Agency.Harness.Console.Test.csproj" />
     <Project Path="Harness\Agency.Harness.Console\Agency.Harness.Console.csproj" />

@@ -105,8 +105,9 @@ public sealed class AgentLoopTests
     // ── Single-turn happy path ─────────────────────────────────────────────────
 
     /// <summary>
-    /// A single text-only turn produces the exact event sequence: session started, assistant
-    /// turn, iteration completed, agent result.
+    /// A single text-only turn produces the exact event sequence: session started, one streamed
+    /// text delta (the fake response decomposes to a single delta), assistant turn, iteration
+    /// completed, agent result.
     /// </summary>
     [Fact]
     public async Task RunAsync_SingleTurn_EmitsCorrectEventSequence()
@@ -120,9 +121,10 @@ public sealed class AgentLoopTests
         // Act
         var events = await RunToCompletion(agent, MakeContext("What is the capital of France?"), ct: TestContext.Current.CancellationToken);
 
-        // Assert: SessionStarted → AssistantTurn → IterationCompleted → AgentResult
+        // Assert: SessionStarted → AssistantTextDelta → AssistantTurn → IterationCompleted → AgentResult
         Assert.Collection(events,
             e => Assert.IsType<SessionStartedEvent>(e),
+            e => Assert.IsType<AssistantTextDeltaEvent>(e),
             e => Assert.IsType<AssistantTurnEvent>(e),
             e => Assert.IsType<IterationCompletedEvent>(e),
             e => Assert.IsType<AgentResultEvent>(e));
@@ -583,11 +585,12 @@ public sealed class AgentLoopTests
 
     /// <summary>
     /// When the LLM response finishes with <c>FinishReason.Length</c>, the loop reports
-    /// <see cref="AgentResultStatus.Error"/> with a final text that mentions the truncation and
-    /// the input token count that triggered it.
+    /// <see cref="AgentResultStatus.Truncated"/> — not <see cref="AgentResultStatus.Error"/>,
+    /// since the transcript is intact and the condition is recoverable — with a final text that
+    /// mentions the truncation and the input token count that triggered it.
     /// </summary>
     [Fact]
-    public async Task RunAsync_WhenResponseTruncated_EmitsErrorResult()
+    public async Task RunAsync_WhenResponseTruncated_EmitsTruncatedResult()
     {
         var llm = new FakeChatClient();
         llm.EnqueueResponse(new ChatResponse([new ChatMessage(ChatRole.Assistant, "...cut")])
@@ -600,7 +603,7 @@ public sealed class AgentLoopTests
         var events = await RunToCompletion(agent, MakeContext(), ct: TestContext.Current.CancellationToken);
 
         var result = Assert.IsType<AgentResultEvent>(events[^1]);
-        Assert.Equal(AgentResultStatus.Error, result.Status);
+        Assert.Equal(AgentResultStatus.Truncated, result.Status);
         Assert.NotNull(result.FinalText);
         Assert.Contains("truncated", result.FinalText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("3,350", result.FinalText);  // input token count surfaced in message

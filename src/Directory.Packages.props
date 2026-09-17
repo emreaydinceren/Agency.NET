@@ -12,6 +12,8 @@
   <ItemGroup>
     <PackageVersion Include="Anthropic" Version="12.31.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="dotacp.client" Version="2026.7.19" />
+    <PackageVersion Include="dotacp.protocol" Version="2026.7.19" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.9" />
@@ -30,7 +32,16 @@
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Core" Version="1.77.0" />
     <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />
+    <!-- Test-only: hosts the in-process bearer-authenticated MCP tool server for
+         Agency.Acp.Test's end-to-end functional test. Pinned to the same version as the
+         already-referenced ModelContextProtocol/ModelContextProtocol.Core packages. -->
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.0" />
+    <!-- Transitively pinned to patch several CVEs (NU1902/NU1903) in MessagePack 2.2.85, pulled in
+         by ModelContextProtocol.AspNetCore. 3.1.8 has no relevant API changes for this test-only use. -->
+    <PackageVersion Include="MessagePack" Version="3.1.8" />
     <PackageVersion Include="Moq" Version="4.20.72" />
+    <!-- Pinned to the exact version dotacp.protocol 2026.7.19 depends on for net10.0. -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="OpenAI" Version="2.11.0" />
     <PackageVersion Include="pgvector" Version="0.3.2" />

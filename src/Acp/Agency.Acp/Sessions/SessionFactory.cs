@@ -17,11 +17,10 @@ namespace Agency.Acp.Sessions;
 /// </summary>
 /// <remarks>
 /// Two steps are deliberately fail-soft rather than fail-hard, per spec §8.1: an unreachable
-/// model catalogue degrades to an empty list (step 2), and a requested model absent from the
-/// catalogue degrades to <see cref="AgentOptions.DefaultModel"/> (step 4) — never a JSON-RPC
-/// error. An unreachable MCP server is likewise recorded in <see cref="McpClientPool.FailedServers"/>
-/// rather than thrown (step 7), because <see cref="McpClientPool.CreateAsync"/> already fails soft
-/// per server.
+/// model catalogue degrades to an empty list (step 2), and a missing/unparseable identity degrades
+/// to the runtime's default identity line (step 1a) — never a JSON-RPC error. An unreachable MCP
+/// server is likewise recorded in <see cref="McpClientPool.FailedServers"/> rather than thrown
+/// (step 7), because <see cref="McpClientPool.CreateAsync"/> already fails soft per server.
 /// </remarks>
 internal sealed class SessionFactory
 {
@@ -53,16 +52,16 @@ internal sealed class SessionFactory
     /// with the <see cref="NewSessionResponse"/> to send back to the client.
     /// </summary>
     /// <param name="request">The deserialized <c>session/new</c> request.</param>
-    /// <param name="requestedModelId">
-    /// An optional client-requested model id. Not part of the wire DTO (<c>dotacp.protocol</c>'s
-    /// <see cref="NewSessionRequest"/> carries no model field); the caller is responsible for
-    /// extracting it from wherever the client places it (e.g. <see cref="NewSessionRequest.Meta"/>).
-    /// <see langword="null"/> when the client expressed no preference.
+    /// <param name="identityPrompt">
+    /// The Persona identity parsed from <c>_meta.systemPrompt</c> (spec §6.1, §8.1 step 1a), or
+    /// <see langword="null"/> to keep the runtime's default identity line. Not part of the wire DTO
+    /// (<c>dotacp.protocol</c>'s <see cref="NewSessionRequest"/> carries no identity field); the
+    /// caller is responsible for extracting it from wherever the client places it.
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     public async Task<(SessionState State, NewSessionResponse Response)> CreateAsync(
         NewSessionRequest request,
-        string? requestedModelId,
+        string? identityPrompt,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -87,18 +86,14 @@ internal sealed class SessionFactory
         // never be treated as false (spec P3), so it cannot be excluded on this basis.
         List<Model> chatCatalogue = catalogue.Where(m => m.Kind != ModelKind.Embedding).ToList();
 
-        // Step 4 — select model: requested model wins only if it is actually in the (filtered)
-        // catalogue; otherwise fall back to AgentOptions.DefaultModel. An unknown model id is never
-        // an error (the G6 contract).
-        Model? requestedModel = requestedModelId is { Length: > 0 }
-            ? chatCatalogue.FirstOrDefault(m => string.Equals(m.Id, requestedModelId, StringComparison.Ordinal))
-            : null;
-
-        string selectedModelId = requestedModel?.Id ?? this._processOptions.DefaultModel
+        // Step 4 — select model: session/new always starts on AgentOptions.DefaultModel. A client
+        // may switch models afterwards via session/set_config_option (the sole model-selection
+        // path — spec §6.2); session/new itself no longer accepts a requested model id.
+        string selectedModelId = this._processOptions.DefaultModel
             ?? throw new AcpJsonRpcException(ErrorCode.InternalError, "Agent:DefaultModel is not configured.");
 
-        Model? selectedCatalogueEntry = requestedModel
-            ?? chatCatalogue.FirstOrDefault(m => string.Equals(m.Id, selectedModelId, StringComparison.Ordinal));
+        Model? selectedCatalogueEntry =
+            chatCatalogue.FirstOrDefault(m => string.Equals(m.Id, selectedModelId, StringComparison.Ordinal));
 
         // Step 5 — per-session AgentOptions: only ContextWindowSize varies (spec §6.3); everything
         // else (including process-wide identity/hooks) is shared per the documented v1 constraint.
@@ -136,7 +131,7 @@ internal sealed class SessionFactory
             // and it is seeded from mcpPool.Tools alone — no built-in tool (read_file, write_file,
             // execute_powershell, subagent_tool) and no "skill" tool is ever added here.
             var toolContext = new ToolContext { Registry = new ToolRegistry(mcpPool.Tools) };
-            var chatSession = new ChatSession(agent, sessionOptions, toolContext: toolContext);
+            var chatSession = new ChatSession(agent, sessionOptions, toolContext, null, null, null, null, identityPrompt);
 
             // Step 8 — register and respond.
             string sessionId = Guid.NewGuid().ToString("n");
@@ -150,6 +145,7 @@ internal sealed class SessionFactory
                 Catalogue = chatCatalogue,
                 ModelId = selectedModelId,
                 Cwd = request.Cwd,
+                IdentityPrompt = identityPrompt,
             };
 
             NewSessionResponse response = new()

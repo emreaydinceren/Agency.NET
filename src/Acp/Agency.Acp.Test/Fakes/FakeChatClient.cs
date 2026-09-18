@@ -18,6 +18,9 @@ internal sealed class FakeChatClient : IChatClient
     /// <summary>Gets the messages received on each call, in order — used to prove session isolation.</summary>
     public List<IReadOnlyList<ChatMessage>> ReceivedMessages { get; } = [];
 
+    /// <summary>Gets the submitted system prompt (<see cref="ChatOptions.Instructions"/>) received on each call, in order.</summary>
+    public List<string> ReceivedSystemPrompts { get; } = [];
+
     /// <summary>Enqueues a response returned on the next call.</summary>
     public void EnqueueResponse(ChatResponse response) => this._responses.Enqueue(response);
 
@@ -32,6 +35,11 @@ internal sealed class FakeChatClient : IChatClient
     {
         this.CallCount++;
         this.ReceivedMessages.Add(messages.ToList());
+        if (options?.Instructions is not null)
+        {
+            this.ReceivedSystemPrompts.Add(options.Instructions);
+        }
+
         return Task.FromResult(this.Dequeue());
     }
 
@@ -43,6 +51,11 @@ internal sealed class FakeChatClient : IChatClient
     {
         this.CallCount++;
         this.ReceivedMessages.Add(messages.ToList());
+        if (options?.Instructions is not null)
+        {
+            this.ReceivedSystemPrompts.Add(options.Instructions);
+        }
+
         ChatResponse response = this.Dequeue();
         foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
         {

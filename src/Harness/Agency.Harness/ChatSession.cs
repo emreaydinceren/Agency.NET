@@ -24,6 +24,7 @@ public sealed class ChatSession : IAsyncDisposable
     private readonly SkillContext? _skills;
     private readonly SessionContext? _session;
     private readonly string? _instructionsBlock;
+    private readonly string? _identityPrompt;
     private Context? _ctx;
     private KnowledgeContext? _pendingKnowledge;
     private bool _pendingMemoryEnabled = true;
@@ -42,7 +43,36 @@ public sealed class ChatSession : IAsyncDisposable
     /// <param name="skills">Optional skill catalog context; defaults to <see cref="SkillContext.Empty"/>.</param>
     /// <param name="session">Optional pre-seeded session context forwarded to the context on first send.</param>
     /// <param name="instructionsBlock">Optional resolved instruction files to inject as a separate message before the prompt.</param>
+    // RS0027 asks that the overload carrying optional parameters be the widest one. The
+    // PersonaIdentity spec (§14.2) requires the opposite here: this signature is kept
+    // byte-identical so PublicAPI.Unshipped.txt records no *REMOVED* entry — which would be
+    // binary-breaking for the published AgencyDotNet.Harness package — and the wider,
+    // identity-aware overload is added alongside it instead.
+#pragma warning disable RS0027
     public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext = null, UserSpecificContext? user = null, SkillContext? skills = null, SessionContext? session = null, string? instructionsBlock = null)
+        : this(agent, options, toolContext, user, skills, session, instructionsBlock, identityPrompt: null)
+    {
+    }
+#pragma warning restore RS0027
+
+    /// <summary>
+    /// Initialises a new session bound to the supplied <paramref name="agent"/>, with a
+    /// Persona identity to replace the opening line of the system prompt.
+    /// </summary>
+    /// <param name="agent">The agent that will process each turn.</param>
+    /// <param name="options">Agent options forwarded to <see cref="Agent.ChatAsync"/> on every turn.</param>
+    /// <param name="toolContext">
+    /// Tool registry made available to the agent, or <see langword="null"/> for <see cref="ToolContext.Empty"/>.
+    /// </param>
+    /// <param name="user">Caller identity propagated into the context on first send, or <see langword="null"/> for none.</param>
+    /// <param name="skills">Skill catalog context, or <see langword="null"/> for <see cref="SkillContext.Empty"/>.</param>
+    /// <param name="session">Pre-seeded session context forwarded to the context on first send, or <see langword="null"/> for none.</param>
+    /// <param name="instructionsBlock">Resolved instruction files to inject as a separate message before the prompt, or <see langword="null"/> for none.</param>
+    /// <param name="identityPrompt">
+    /// The Persona-supplied identity that replaces the opening line of the system prompt
+    /// (spec §6.9 D-3), or <see langword="null"/> to keep the runtime's default identity line.
+    /// </param>
+    public ChatSession(Agent agent, AgentOptions options, ToolContext? toolContext, UserSpecificContext? user, SkillContext? skills, SessionContext? session, string? instructionsBlock, string? identityPrompt)
     {
         this._agent = agent ?? throw new ArgumentNullException(nameof(agent));
         this._options = options ?? throw new ArgumentNullException(nameof(options));
@@ -51,6 +81,7 @@ public sealed class ChatSession : IAsyncDisposable
         this._skills = skills;
         this._session = session;
         this._instructionsBlock = instructionsBlock;
+        this._identityPrompt = identityPrompt;
     }
 
     /// <summary>Gets the model identifier of the agent driving this session.</summary>
@@ -98,7 +129,8 @@ public sealed class ChatSession : IAsyncDisposable
             timeProvider: this._agent.TimeProvider,
             skills: this._skills,
             session: this._session,
-            instructionsBlock: this._instructionsBlock);
+            instructionsBlock: this._instructionsBlock,
+            identityPrompt: this._identityPrompt);
 
         // Pre-seed instructions message in preview, same as Agent.RunAsync() would do on first turn
         if (!string.IsNullOrEmpty(this._instructionsBlock))
@@ -187,7 +219,8 @@ public sealed class ChatSession : IAsyncDisposable
             timeProvider: this._agent.TimeProvider,
             skills: this._skills,
             session: this._session,
-            instructionsBlock: this._instructionsBlock);
+            instructionsBlock: this._instructionsBlock,
+            identityPrompt: this._identityPrompt);
 
         this._ctx.MemoryEnabled = this._pendingMemoryEnabled;
 

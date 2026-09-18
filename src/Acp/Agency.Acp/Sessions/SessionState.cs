@@ -55,6 +55,18 @@ internal sealed class SessionState : IAsyncDisposable
     /// <summary>Gets or sets the model id selected via <c>session/new</c> or <c>session/set_config_option</c>.</summary>
     public string? ModelId { get; set; }
 
+    /// <summary>
+    /// Gets the Persona identity parsed from <c>_meta.systemPrompt</c> at <c>session/new</c> (spec
+    /// §7.2), or <see langword="null"/> when the runtime's default identity line applies. Recorded
+    /// here — beyond having already been passed into <see cref="ChatSession"/> — for two reasons:
+    /// diagnostics ("which identity is this session running?" is otherwise unanswerable), and
+    /// rebuild survival ("session/set_config_option" rebuilds the client and <see cref="Agent"/> and
+    /// calls <see cref="Harness.ChatSession.SetAgent"/>, which preserves the existing
+    /// <see cref="Agency.Harness.Contexts.Context"/> — and therefore the identity — for free;
+    /// holding it here too makes that invariant inspectable).
+    /// </summary>
+    public string? IdentityPrompt { get; init; }
+
     /// <summary>Gets or sets the effort id selected via <c>session/set_config_option</c>.</summary>
     public string? EffortId { get; set; }
 

@@ -10,10 +10,12 @@ using Agency.Llm.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using Serilog.Extensions.Logging;
 
 namespace Agency.Acp;
 
@@ -132,7 +134,8 @@ internal static class Program
         }
 
         var sessionFactory = new SessionFactory(scopeFactory, processOptions, FetchCatalogueAsync);
-        MethodDispatcher.Configure(new SessionRegistry(), sessionFactory);
+        ILogger<MethodDispatcher> logger = services.GetRequiredService<ILoggerFactory>().CreateLogger<MethodDispatcher>();
+        MethodDispatcher.Configure(new SessionRegistry(), sessionFactory, logger);
     }
 
     /// <summary>
@@ -153,7 +156,12 @@ internal static class Program
     /// </summary>
     internal static async Task<int> RunAsync(Stream input, Stream output, CancellationToken cancellationToken)
     {
-        await using var transport = new StdioTransport(input, output);
+        // Bridge the process-wide Serilog sink (configured by ConfigureLogging, file-only — never
+        // Console.Out) into the transport so its last-resort fault handler is actually observable.
+        // Without this the transport holds a NullLogger and a swallowed fault stays invisible,
+        // which is the condition PersonaIdentity spec §5.2/§10 exists to remove.
+        using var transportLoggerFactory = new SerilogLoggerFactory(Log.Logger);
+        await using var transport = new StdioTransport(input, output, transportLoggerFactory.CreateLogger<StdioTransport>());
 
         // The same transport carries both directions: incoming client requests/notifications, and
         // responses to this proxy's own outgoing session/request_permission calls (spec §6.4). The

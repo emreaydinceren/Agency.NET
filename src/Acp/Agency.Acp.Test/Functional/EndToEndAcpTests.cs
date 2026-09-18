@@ -267,6 +267,103 @@ public sealed class EndToEndAcpTests(EndToEndAcpTests.AcpEndToEndFixture fixture
         Assert.Equal(StopReason.EndTurn, followUpResponse.StopReason);
     }
 
+    /// <summary>
+    /// Task 26 (spec §15 T-17, §13, Appendix B): drives two independent sessions on the shared
+    /// process, each carrying a distinctive nonce token in <c>_meta.systemPrompt</c> with a strong,
+    /// unambiguous instruction to emit it, then asserts:
+    /// <para>
+    /// (a) the reply from each session contains ITS OWN nonce — proving the identity reached the
+    /// model, not merely the adapter. Identity *delivery* to the prompt boundary is already proven,
+    /// deterministically, by <c>ChatSessionIdentityTests.SendAsync_TwoIterationTurn_IdentityPresentOnBothIterations</c>;
+    /// this assertion is the model-dependent one (spec §12 E-14: no reliable signal exists for
+    /// instruction-following on a very small model) and was run repeatedly during development to
+    /// gauge stability before being fixed here — see the task report.
+    /// </para>
+    /// <para>
+    /// (b) spec O-3: neither session's reply contains the OTHER session's nonce — no identity bleed
+    /// between two sessions on one process. This assertion does not depend on model
+    /// instruction-following: even a model that ignores its own identity entirely would still need
+    /// to spontaneously emit the other session's nonce for this to fail, which the nonces are chosen
+    /// to make implausible.
+    /// </para>
+    /// <para>
+    /// (c) no <c>tool_call</c> observed on either session names a built-in filesystem/shell tool or
+    /// the <c>skill</c> meta-tool (the v1 safety guarantee, spec §6.5) — structural, not
+    /// model-dependent: neither session advertises any MCP server, so the registry can only ever
+    /// contain the harness's own built-ins, none of which this assertion permits to surface.
+    /// </para>
+    /// <para>
+    /// Nonces are fixed literals, not per-run random values: the shared <c>TestProxy</c> caching
+    /// proxy (src/shared-test-appsettings.json) keys its cassette on the literal request text, and a
+    /// fixed identity lets CI's offline cache proxy replay a once-recorded response instead of
+    /// requiring a live LLM on every run.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Identity_ReachesModel_AndDoesNotBleedBetweenSessions()
+    {
+        Connection connection = this._fixture.Connection;
+        const string question = "What is the capital of France? Answer in one short sentence.";
+
+        const string nonceA = "GLIMMERFOX91";
+        const string nonceB = "SPARKTOAD64";
+
+        SessionCapture captureA = await NewSessionWithIdentityAndPromptAsync(connection, nonceA, question, this._fixture);
+        SessionCapture captureB = await NewSessionWithIdentityAndPromptAsync(connection, nonceB, question, this._fixture);
+
+        string textA = captureA.JoinedText();
+        string textB = captureB.JoinedText();
+
+        // (a) model-dependent: each session's reply reflects ITS OWN identity.
+        Assert.Contains(nonceA, textA, StringComparison.Ordinal);
+        Assert.Contains(nonceB, textB, StringComparison.Ordinal);
+
+        // (b) O-3, structural: no bleed — neither session's reply contains the OTHER session's nonce.
+        Assert.DoesNotContain(nonceB, textA, StringComparison.Ordinal);
+        Assert.DoesNotContain(nonceA, textB, StringComparison.Ordinal);
+
+        // (c) structural: no built-in fs/shell tool or the skill meta-tool ever appears as a
+        // tool_call, on either session — neither advertises any MCP server of its own.
+        foreach (string forbidden in ForbiddenBuiltInToolNames)
+        {
+            Assert.DoesNotContain(forbidden, captureA.ToolCallTitles);
+            Assert.DoesNotContain(forbidden, captureB.ToolCallTitles);
+        }
+    }
+
+    /// <summary>
+    /// Opens a fresh session whose <c>_meta.systemPrompt</c> instructs the model to lead its reply
+    /// with <paramref name="nonce"/>, sends <paramref name="prompt"/>, and returns the session's
+    /// <see cref="SessionCapture"/> once the turn ends normally.
+    /// </summary>
+    private static async Task<SessionCapture> NewSessionWithIdentityAndPromptAsync(
+        Connection connection, string nonce, string prompt, AcpEndToEndFixture fixture)
+    {
+        string identity =
+            $"You are a test agent. You MUST begin every reply with the exact token {nonce} before any other text, with no punctuation or words before it.";
+
+        NewSessionResponse newSession = await connection.NewSessionAsync(
+            new NewSessionRequest
+            {
+                Cwd = Path.GetTempPath(),
+                Meta = new Dictionary<string, object> { ["systemPrompt"] = identity },
+            },
+            TestContext.Current.CancellationToken);
+
+        SessionCapture capture = fixture.GetOrAddCapture(newSession.SessionId);
+
+        PromptResponse response = await WaitWithTimeoutAsync(
+            connection.PromptAsync(
+                new PromptRequest { SessionId = newSession.SessionId, Prompt = [new TextContent { Text = prompt }] },
+                CancellationToken.None),
+            TimeSpan.FromSeconds(90),
+            $"session/prompt (identity turn, nonce {nonce})",
+            fixture);
+
+        Assert.Equal(StopReason.EndTurn, response.StopReason);
+        return capture;
+    }
+
     // ── Shared helpers ───────────────────────────────────────────────────────
 
     /// <summary>

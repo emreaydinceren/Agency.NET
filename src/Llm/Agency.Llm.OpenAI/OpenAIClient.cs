@@ -181,6 +181,20 @@ public sealed class OpenAIClient : IModelProvider
 
     private static global::OpenAI.OpenAIClient BuildOpenAIClient(LlmClientOptions opts, ILoggerFactory? loggerFactory)
     {
+        // ApiKeyCredential rejects an empty string with an ArgumentException naming only its own
+        // 'key' parameter, which tells an operator nothing about which configuration entry is at
+        // fault. Fail here instead, naming the exact key and its environment-variable form.
+        // (The raw-HTTP path above deliberately tolerates an empty key by omitting the
+        // Authorization header; this SDK path cannot, so it must at least say so clearly.)
+        if (string.IsNullOrEmpty(opts.ApiKey))
+        {
+            throw new InvalidOperationException(
+                $"ApiKey is not configured for LLM client '{opts.Name}'. Set "
+                + $"Agent:LLmClients:<n>:ApiKey (environment: Agent__LLmClients__<n>__ApiKey) for the "
+                + $"entry named '{opts.Name}'. A local OpenAI-compatible server ignores the value, so "
+                + "any non-empty placeholder is sufficient.");
+        }
+
         var credential = new ApiKeyCredential(opts.ApiKey);
         var clientOptions = new global::OpenAI.OpenAIClientOptions();
 

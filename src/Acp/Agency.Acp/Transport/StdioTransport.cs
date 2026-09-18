@@ -1,5 +1,7 @@
 using System.Text;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Agency.Acp.Transport;
 
@@ -12,18 +14,26 @@ namespace Agency.Acp.Transport;
 /// <see cref="Channel{T}"/> drained by a single writer task, so lines emitted concurrently never
 /// interleave.
 /// </summary>
-internal sealed class StdioTransport : IAsyncDisposable
+internal sealed partial class StdioTransport : IAsyncDisposable
 {
     private readonly StreamReader _reader;
     private readonly StreamWriter _writer;
     private readonly Channel<string> _writeChannel;
     private readonly Task _writerTask;
+    private readonly ILogger _logger;
 
     /// <summary>
     /// Creates a transport bound to the given input and output streams. The transport does not
     /// take ownership of disposing <paramref name="input"/> or <paramref name="output"/>.
     /// </summary>
-    public StdioTransport(Stream input, Stream output)
+    /// <param name="input">The stream to read newline-delimited frames from.</param>
+    /// <param name="output">The stream to write newline-delimited frames to.</param>
+    /// <param name="logger">
+    /// Optional logger for the reader loop's last-resort fault handling (see
+    /// <see cref="InvokeHandlerAsync"/>). Defaults to <see cref="NullLogger"/> so existing call
+    /// sites that never pass one still compile unchanged.
+    /// </param>
+    public StdioTransport(Stream input, Stream output, ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
@@ -32,6 +42,7 @@ internal sealed class StdioTransport : IAsyncDisposable
         _writer = new StreamWriter(output, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)) { AutoFlush = false, NewLine = "\n" };
         _writeChannel = Channel.CreateUnbounded<string>();
         _writerTask = RunWriterLoopAsync();
+        _logger = logger ?? NullLogger.Instance;
     }
 
     /// <summary>
@@ -74,18 +85,26 @@ internal sealed class StdioTransport : IAsyncDisposable
         }
     }
 
-    private static async Task InvokeHandlerAsync(Func<string, CancellationToken, Task> onLine, string line, CancellationToken cancellationToken)
+    private async Task InvokeHandlerAsync(Func<string, CancellationToken, Task> onLine, string line, CancellationToken cancellationToken)
     {
         try
         {
             await onLine(line, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // A handler fault must not take down the reader loop or the process; the handler is
-            // responsible for translating its own failures into JSON-RPC error responses.
+            // Last resort only: MethodDispatcher.DispatchAsync (spec §14.3, P6) already maps every
+            // handler fault to a JSON-RPC error response, so onLine above should never throw. If it
+            // does anyway, the fault is in the dispatcher itself, not in a method handler — this
+            // catch exists solely so that fault cannot take down the reader loop or the process; it
+            // is not a place any handler is expected to route errors through.
+            LogHandlerFaultAtLastResort(_logger, ex);
         }
     }
+
+    /// <summary>Logs a fault caught by <see cref="InvokeHandlerAsync"/>'s last-resort catch — see its remarks for what that means.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled exception in the stdio reader loop's last-resort handler.")]
+    private static partial void LogHandlerFaultAtLastResort(ILogger logger, Exception ex);
 
     private async Task RunWriterLoopAsync()
     {

@@ -6,6 +6,8 @@ using Agency.Harness;
 using Agency.Llm.Common;
 using dotacp.protocol;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -16,11 +18,12 @@ namespace Agency.Acp.Dispatch;
 /// supports in v1, and maps everything else — unknown methods, unparseable requests, malformed
 /// params — to the matching JSON-RPC error per the ACP/JSON-RPC error code table.
 /// </summary>
-internal sealed class MethodDispatcher
+internal sealed partial class MethodDispatcher
 {
     private static SessionRegistry _sessions = new();
     private static SessionFactory? _sessionFactory;
     private static TurnDriver? _turnDriver;
+    private static ILogger _logger = NullLogger.Instance;
 
     private static readonly Dictionary<string, Func<JObject?, CancellationToken, Task<object?>>> Handlers =
         new(StringComparer.Ordinal)
@@ -47,10 +50,21 @@ internal sealed class MethodDispatcher
     /// tests that never exercise <c>session/new</c> do not need to call this — the default empty
     /// registry is enough for <see cref="Sessions"/> to be well-defined either way.
     /// </summary>
-    internal static void Configure(SessionRegistry sessions, SessionFactory sessionFactory)
+    /// <param name="sessions">The process-wide session registry.</param>
+    /// <param name="sessionFactory">Builds new sessions for <c>session/new</c>.</param>
+    /// <param name="logger">
+    /// Optional logger for dispatcher-level diagnostics (identity parse outcomes, and — in a later
+    /// task — dispatch faults). Defaults to <see cref="NullLogger"/> so existing test call sites that
+    /// never pass one still compile unchanged.
+    /// </param>
+    internal static void Configure(SessionRegistry sessions, SessionFactory sessionFactory, ILogger? logger = null)
     {
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
+        if (logger is not null)
+        {
+            _logger = logger;
+        }
     }
 
     /// <summary>
@@ -112,6 +126,15 @@ internal sealed class MethodDispatcher
         {
             return hasId ? BuildError(idToken, ErrorCode.InvalidParams, $"Invalid params for '{method}': {ex.Message}") : null;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            LogDispatchFault(_logger, ex, method);
+            return hasId ? BuildError(idToken, ErrorCode.InternalError, $"Internal error handling '{method}': {ex.GetType().Name}: {ex.Message}") : null;
+        }
     }
 
     private static Task<object?> HandleInitializeAsync(JObject? @params, CancellationToken cancellationToken)
@@ -144,8 +167,12 @@ internal sealed class MethodDispatcher
     /// <summary>
     /// Implements <c>session/new</c> (spec §8.1) via <see cref="SessionFactory"/>, then registers
     /// the resulting <see cref="SessionState"/> so <c>session/close</c>/<c>session/delete</c> can
-    /// find it. The wire DTO (<see cref="NewSessionRequest"/>) carries no model field, so a
-    /// client-requested model — spec §8.1 step 4 — is read from <c>_meta.model</c> when present.
+    /// find it. The wire DTO (<see cref="NewSessionRequest"/>) carries no identity field, so the
+    /// Persona identity — spec §8.1 step 1a — is read from <c>_meta.systemPrompt</c> when present
+    /// via <see cref="IdentityPromptParser"/>, tolerating both the <c>{"append": …}</c> object shape
+    /// and a bare string (spec §6.1, §14.1). A missing or unparseable identity never fails session
+    /// creation (spec §12 E-1) — <see langword="null"/> simply means "use the runtime's default
+    /// identity line".
     /// </summary>
     private static async Task<object?> HandleSessionNewAsync(JObject? @params, CancellationToken cancellationToken)
     {
@@ -155,10 +182,12 @@ internal sealed class MethodDispatcher
         }
 
         NewSessionRequest request = @params?.ToObject<NewSessionRequest>() ?? new NewSessionRequest();
-        string? requestedModelId = @params?["_meta"]?["model"]?.Value<string>();
+        string? identityPrompt = IdentityPromptParser.Parse(@params?["_meta"]?["systemPrompt"]);
+
+        LogIdentityParsed(_logger, identityPrompt is null ? "ignored/absent" : "recognised", identityPrompt?.Length ?? 0);
 
         (SessionState state, NewSessionResponse response) =
-            await _sessionFactory.CreateAsync(request, requestedModelId, cancellationToken).ConfigureAwait(false);
+            await _sessionFactory.CreateAsync(request, identityPrompt, cancellationToken).ConfigureAwait(false);
         _sessions.Add(state);
 
         return response;
@@ -284,6 +313,25 @@ internal sealed class MethodDispatcher
     private static string GetAgentVersion() =>
         Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? "0.0.0";
+
+    /// <summary>
+    /// Logs the outcome of parsing <c>_meta.systemPrompt</c> at <c>session/new</c> (spec §6.1): this
+    /// is the observability the original defect lacked — a silently-dropped identity is now visible
+    /// in one log line instead of nowhere.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "session/new identity parse: {Outcome}, length {Length}.")]
+    private static partial void LogIdentityParsed(ILogger logger, string outcome, int length);
+
+    /// <summary>
+    /// Logs a handler fault that fell through to the terminal <c>catch (Exception)</c> arm of
+    /// <see cref="DispatchAsync"/> (spec §14.3) — the observability a fault like this previously
+    /// had none of: before this contract existed, it escaped the dispatcher entirely and was
+    /// silently swallowed by <c>StdioTransport.InvokeHandlerAsync</c>'s bare catch. The full
+    /// exception (including its stack trace) is logged here; only the type name and message reach
+    /// the wire (see <see cref="BuildError"/> call site), never the trace.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled exception dispatching '{Method}'.")]
+    private static partial void LogDispatchFault(ILogger logger, Exception ex, string method);
 
     private static string BuildResult(JToken? id, object? result)
     {

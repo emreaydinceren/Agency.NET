@@ -225,7 +225,7 @@ public sealed class V1GuaranteeTests
             _ => Task.FromResult<IReadOnlyList<Model>>([]));
 
         (SessionState state, _) = await factory.CreateAsync(
-            new NewSessionRequest { Cwd = "/a" }, requestedModelId: null, ct);
+            new NewSessionRequest { Cwd = "/a" }, identityPrompt: null, ct);
 
         return (state, capturedClient);
     }

@@ -24,4 +24,13 @@
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Pack="false": the file must reach the BUILD OUTPUT (that is what makes a vanilla
+         agency-acp startable — PersonaIdentity spec §6.5, O-5), but it must not reach the
+         NUPKG. Without this, NuGet emits content/ and contentFiles/ entries and copies this
+         placeholder config into the build output of any downstream PackageReference
+         consumer, colliding with their own appsettings.json. -->
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" Pack="false" />
+  </ItemGroup>
+
 </Project>

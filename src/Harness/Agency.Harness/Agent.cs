@@ -158,6 +158,12 @@ public sealed partial class Agent
     /// <param name="skills">Optional skill context; defaults to <see cref="SkillContext.Empty"/>.</param>
     /// <param name="session">Optional pre-seeded session context; defaults to <see cref="SessionContext.Empty"/>.</param>
     /// <param name="instructionsBlock">Optional resolved instruction files to inject as a separate message before the prompt.</param>
+    // RS0027 asks that the overload carrying optional parameters be the widest one. The
+    // PersonaIdentity spec (§14.2) requires the opposite here: this signature is kept
+    // byte-identical so PublicAPI.Unshipped.txt records no *REMOVED* entry — which would be
+    // binary-breaking for the published AgencyDotNet.Harness package — and the wider,
+    // identity-aware overload is added alongside it instead.
+#pragma warning disable RS0027
     public static Context CreateContext(
         string initialPrompt,
         ToolContext? tools = null,
@@ -167,9 +173,39 @@ public sealed partial class Agent
         SkillContext? skills = null,
         SessionContext? session = null,
         string? instructionsBlock = null) =>
+        CreateContext(initialPrompt, tools, environment, user, timeProvider, skills, session, instructionsBlock, identityPrompt: null);
+#pragma warning restore RS0027
+
+    /// <summary>
+    /// Creates a new <see cref="Context"/> for a multi-turn conversation session,
+    /// pre-populated with temporal context, the initial user prompt, and a Persona identity.
+    /// </summary>
+    /// <param name="initialPrompt">The first user message that seeds the conversation.</param>
+    /// <param name="tools">Tool context; pass <see langword="null"/> for <see cref="ToolContext.Empty"/>.</param>
+    /// <param name="environment">Environmental context; pass <see langword="null"/> for <see cref="EnvironmentalContext.Empty"/>.</param>
+    /// <param name="user">Caller identity; pass <see langword="null"/> for <see cref="UserSpecificContext.Empty"/>.</param>
+    /// <param name="timeProvider">Clock for temporal grounding; pass <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
+    /// <param name="skills">Skill context; pass <see langword="null"/> for <see cref="SkillContext.Empty"/>.</param>
+    /// <param name="session">Pre-seeded session context; pass <see langword="null"/> for <see cref="SessionContext.Empty"/>.</param>
+    /// <param name="instructionsBlock">Resolved instruction files to inject as a separate message before the prompt, or <see langword="null"/> for none.</param>
+    /// <param name="identityPrompt">
+    /// The Persona-supplied identity that replaces the opening line of the system prompt
+    /// (spec §6.9 D-3), or <see langword="null"/> to keep the runtime's default identity line.
+    /// </param>
+    /// <returns>The newly created <see cref="Context"/>.</returns>
+    public static Context CreateContext(
+        string initialPrompt,
+        ToolContext? tools,
+        EnvironmentalContext? environment,
+        UserSpecificContext? user,
+        TimeProvider? timeProvider,
+        SkillContext? skills,
+        SessionContext? session,
+        string? instructionsBlock,
+        string? identityPrompt) =>
         new()
         {
-            Query = new QueryContext { Prompt = initialPrompt, InstructionsBlock = instructionsBlock },
+            Query = new QueryContext { Prompt = initialPrompt, InstructionsBlock = instructionsBlock, IdentityPrompt = identityPrompt },
             Temporal = new TemporalContext { CurrentDateUtc = (timeProvider ?? TimeProvider.System).GetUtcNow() },
             Tools = tools ?? ToolContext.Empty,
             Environment = environment ?? EnvironmentalContext.Empty,

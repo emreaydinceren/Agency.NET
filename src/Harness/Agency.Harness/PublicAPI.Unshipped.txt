@@ -17,6 +17,7 @@ Agency.Harness.AssistantThoughtDeltaEvent.Equals(Agency.Harness.AssistantThought
 Agency.Harness.AssistantThoughtDeltaEvent.Text.get -> string!
 Agency.Harness.AssistantThoughtDeltaEvent.Text.init -> void
 Agency.Harness.ChatSession.ChatSession(Agency.Harness.Agent! agent, Agency.Harness.AgentOptions! options, Agency.Harness.Contexts.ToolContext? toolContext = null, Agency.Harness.Contexts.UserSpecificContext? user = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null, string? instructionsBlock = null) -> void
+Agency.Harness.ChatSession.ChatSession(Agency.Harness.Agent! agent, Agency.Harness.AgentOptions! options, Agency.Harness.Contexts.ToolContext? toolContext, Agency.Harness.Contexts.UserSpecificContext? user, Agency.Harness.Contexts.SkillContext? skills, Agency.Harness.Contexts.SessionContext? session, string? instructionsBlock, string? identityPrompt) -> void
 Agency.Harness.ChatSession.MemoryEnabled.get -> bool
 Agency.Harness.ChatSession.SetMemoryEnabled(bool enabled) -> void
 Agency.Harness.Contexts.Context.MemoryEnabled.get -> bool
@@ -101,6 +102,7 @@ override sealed Agency.Harness.AssistantTextDeltaEvent.Equals(Agency.Harness.Age
 override sealed Agency.Harness.AssistantThoughtDeltaEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
 override sealed Agency.Harness.ToolStartedEvent.Equals(Agency.Harness.AgentEvent? other) -> bool
 static Agency.Harness.Agent.CreateContext(string! initialPrompt, Agency.Harness.Contexts.ToolContext? tools = null, Agency.Harness.Contexts.EnvironmentalContext? environment = null, Agency.Harness.Contexts.UserSpecificContext? user = null, System.TimeProvider? timeProvider = null, Agency.Harness.Contexts.SkillContext? skills = null, Agency.Harness.Contexts.SessionContext? session = null, string? instructionsBlock = null) -> Agency.Harness.Contexts.Context!
+static Agency.Harness.Agent.CreateContext(string! initialPrompt, Agency.Harness.Contexts.ToolContext? tools, Agency.Harness.Contexts.EnvironmentalContext? environment, Agency.Harness.Contexts.UserSpecificContext? user, System.TimeProvider? timeProvider, Agency.Harness.Contexts.SkillContext? skills, Agency.Harness.Contexts.SessionContext? session, string? instructionsBlock, string? identityPrompt) -> Agency.Harness.Contexts.Context!
 static Agency.Harness.AssistantTextDeltaEvent.operator !=(Agency.Harness.AssistantTextDeltaEvent? left, Agency.Harness.AssistantTextDeltaEvent? right) -> bool
 static Agency.Harness.AssistantTextDeltaEvent.operator ==(Agency.Harness.AssistantTextDeltaEvent? left, Agency.Harness.AssistantTextDeltaEvent? right) -> bool
 static Agency.Harness.AssistantThoughtDeltaEvent.operator !=(Agency.Harness.AssistantThoughtDeltaEvent? left, Agency.Harness.AssistantThoughtDeltaEvent? right) -> bool

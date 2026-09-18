@@ -33,21 +33,6 @@ public sealed class SessionCreationTests
         return new SessionFactory(provider.GetRequiredService<IServiceScopeFactory>(), processOptions, catalogueFetcher);
     }
 
-    /// <summary>(a) A requested model absent from the catalogue starts the session on <see cref="AgentOptions.DefaultModel"/> — never an error.</summary>
-    [Fact]
-    public async Task CreateAsync_RequestedModelNotInCatalogue_FallsBackToDefaultModelAndSucceeds()
-    {
-        var processOptions = new AgentOptions { DefaultModel = "the-default", DefaultClientName = "c" };
-        IReadOnlyList<Model> catalogue = [new Model("the-default", "Default")];
-        SessionFactory factory = BuildFactory(processOptions, _ => Task.FromResult(catalogue));
-
-        (SessionState state, NewSessionResponse response) = await factory.CreateAsync(
-            new NewSessionRequest { Cwd = "/a" }, requestedModelId: "does-not-exist", TestContext.Current.CancellationToken);
-
-        Assert.Equal("the-default", state.ModelId);
-        Assert.Equal(state.SessionId, (string)response.SessionId);
-    }
-
     /// <summary>(b) An unreachable MCP server yields a session with fewer tools, recorded in <c>FailedServers</c>, never thrown.</summary>
     [Fact]
     public async Task CreateAsync_UnreachableMcpServer_SucceedsWithFailureRecorded()

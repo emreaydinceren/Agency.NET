@@ -20,6 +20,42 @@ The design spec is [`docs/specs/Agency.Acp-Specifications.md`](../specs/Agency.A
 - An LLM endpoint configured under `Agent:LLmClients`, with `Agent:DefaultClientName` and `Agent:DefaultModel` resolving to one of them. The contract is **OpenAI-style or Claude-style HTTP** — no vendor-specific endpoint is on the required path.
 - Nothing else. There is **no database, no files, no serialization**: all state is process memory and dies with the process. That is a deliberate consequence of `supportsLoadSession: false`.
 
+### Configuration
+
+`agency-acp` ships an `appsettings.json` alongside the executable, so the process starts without
+any environment configuration. The shipped defaults are deliberately minimal:
+
+| Key | Default | Note |
+|---|---|---|
+| `Agent:DefaultClientName` | `local` | matches the single client below |
+| `Agent:DefaultModel` | `REPLACE_ME_WITH_YOUR_MODEL_ID` | **placeholder — override for real use** |
+| `Agent:LLmClients[0]` | `local`, `OpenAI`, `http://localhost:1234/v1` | the generic local-server default; no vendor endpoint is on the required path |
+| `Skills:DisableShellExecution` | `true` | mirrors a hardcoded lock — see below |
+
+**Environment variables override the file.** Configuration sources are layered, lowest precedence
+first:
+
+```text
+shared-appsettings.json  →  appsettings.json  →  appsettings.{Environment}.json
+                         →  environment variables  →  command line
+                         →  hardcoded in-memory lock   (highest)
+```
+
+So `Agent__DefaultModel=qwen/qwen3.6-35b-a3b` wins over the shipped placeholder, as does
+`Agent__DefaultClientName`, `Agent__LLmClients__0__BaseUrl`, and so on — double underscore separates
+configuration sections. A host that already supplies these (as an embedding client typically does)
+is unaffected by the shipped file.
+
+**`Skills:DisableShellExecution` cannot be relaxed by configuration.** It appears in the file for
+documentation only. `Program.BuildHost` adds it again as a final in-memory source, which outranks
+both the file and the environment — setting it `false` in `appsettings.json` or via
+`Skills__DisableShellExecution=false` has no effect. Shipping a configuration file must not create
+a route to unlocking a v1 safety guarantee.
+
+**The file is not in the NuGet package.** `appsettings.json` is copied to the build output but
+packed with `Pack="false"`, so `AgencyDotNet.Acp` contains only `lib/`. A downstream
+`PackageReference` therefore never has a placeholder config copied into its own build output.
+
 ## API Surface
 
 This is an executable (`<OutputType>Exe</OutputType>`). Every type is `internal`, exposed to the test project via `[assembly: InternalsVisibleTo("Agency.Acp.Test")]`. There is no public API intended for consumption by other libraries — the *protocol* is the surface.
@@ -72,7 +108,7 @@ All writes funnel through one `Channel<string>` drained by a single writer task,
 
 > **The spec's `models[]` / `effortLevels[]` / `AgentModelOption` vocabulary does not exist in the package.** `NewSessionResponse` is `{ Meta, ConfigOptions, Modes, SessionId }`. Both the model catalogue and the effort ladder are expressed as `SessionConfigOption` → `SessionConfigSelect` → `SessionConfigSelectOption { Name, Value, Description }`, where `Value` is the model id and `Description` carries residency.
 
-Model metadata is **enrichment, never a requirement**. [Agency.Llm.Common](Agency.Llm.Common.md)'s `Model` carries optional `Kind`, `ContextLength` and `IsLoaded`; providers fill what their server answers and leave the rest `null`. **`null` means *unknown*, never *false*** — a model with unknown residency renders as a plain row, not as "not loaded".
+Model metadata is **enrichment, never a requirement**. [Agency.Llm.Common](Agency.Llm.Common.md)'s `Model` carries optional `Kind`, `ContextLength` and `IsLoaded`; providers fill what their server answers and leave the rest `null`. **`null` means *unknown*, never *false*** — a model with unknown residency renders as a plain row, not as "not loaded". `Description` has exactly three states: `"loaded now"` when `IsLoaded == true`, `"not loaded"` when the provider **explicitly** reported `false`, and absent when it is `null`. The adapter never *infers* non-residency; it does relay it when a server states it.
 
 Effort is **per-client, not per-request**: each session builds its client with `opts with { … }`, and a mid-session change rebuilds client and agent and calls `ChatSession.SetAgent`, preserving history. OpenAI-style surfaces use `enable_thinking`; Claude-style use `thinking.budget_tokens`. Where neither applies the ladder is **empty** — an empty ladder beats a decorative one.
 
@@ -82,16 +118,72 @@ Effort is **per-client, not per-request**: each session builds its client with `
 
 ```text
 1. validate mcpServers[] shapes                     → -32602 on malformed
+1a. parse _meta.systemPrompt → identityPrompt       → null on absent/unknown shape (never an error)
 2. resolve catalogue      (one GET; failure → [])
 3. filter Kind == embedding where known
-4. select model: requested ∈ catalogue ? requested : AgentOptions.DefaultModel
+4. select model: AgentOptions.DefaultModel
 5. AgentOptions' = clone with ContextWindowSize = selected.ContextLength
-6. build client (effort folded in) → Agent → ChatSession
+6. build client (effort folded in) → Agent → ChatSession(identityPrompt)
 7. McpClientPool.CreateAsync(mcpServers)            → per-server failures recorded, not thrown
 8. register; return sessionId + ConfigOptions
 ```
 
-**Step 4:** an unknown model id is *never* an error — a stale stored choice must not block a session. **Step 7 is fail-soft:** an unreachable MCP server yields a session with fewer tools, not a failed session.
+**Step 1a is fail-soft:** a missing, empty or unrecognised `_meta.systemPrompt` yields `null` — the default identity line — and never fails session creation. See [Identity](#identity). **Step 4:** `session/new` always starts on `Agent:DefaultModel`; a client switches models afterwards via `session/set_config_option`, and an unknown model id is *never* an error — a stale stored choice must not block a session. **Step 7 is fail-soft:** an unreachable MCP server yields a session with fewer tools, not a failed session.
+
+### Identity
+
+A Persona supplies **who it is**; the harness supplies **how it works**. `session/new` carries the
+Persona's identity in `_meta.systemPrompt`, and it replaces exactly one thing: the opening identity
+line of the system prompt.
+
+```jsonc
+// session/new params
+{
+  "cwd": "/work",
+  "mcpServers": [ /* ... */ ],
+  "_meta": { "systemPrompt": { "append": "You are Ana, who routes requests to specialists." } }
+}
+```
+
+**Populating `_meta` from a client.** `dotacp.protocol`'s `NewSessionRequest` has **no typed
+identity field**. Clients set `NewSessionRequest.Meta` — a `Dictionary<string, object>` tagged
+`[JsonProperty("_meta")]` — while `MethodDispatcher` reads the raw token at
+`@params?["_meta"]?["systemPrompt"]`. The two ends are joined only by the wire property name, with
+**no compile-time link**, so a typo on either side fails silently rather than failing to build.
+`EndToEndAcpTests` demonstrates the client side.
+
+**Two accepted shapes, one meaning.** `{"append": "..."}` and a bare string `"..."` are treated
+identically. A bare string is not a second mode — it is shorthand for the first.
+
+**Append semantics, and why a replace is refused.** "Append" means *replace the identity line, keep
+everything else*. The ReAct reasoning instruction, the skills catalogue and the temporal/environment
+grounding are harness invariants and survive every identity. There is deliberately no replace mode:
+`QueryContext.IdentityPrompt` structurally cannot express one — `SystemPromptBuilder` substitutes a
+single line and assembles the rest unconditionally — and a true replace would strip the scaffolding
+the agent loop depends on, making a Persona look broken rather than misconfigured.
+
+**Present on every iteration.** The system prompt is a pure function of the `Context`, rebuilt on
+each loop iteration, so identity is re-emitted every time rather than injected once. A long identity
+is therefore a real per-iteration token cost — a 2 KB Persona prompt across 20 iterations is roughly
+10k tokens of repeated input.
+
+**Per-session, not per-turn.** Identity is fixed for the life of the session. `_meta` on
+`session/prompt` is not read: `Context.Query` is `init`-only, so a mid-session identity change would
+mean rebuilding the `Context` and losing history. Changing a Persona's identity means a new session.
+
+**Fail-soft, always.** Absent, empty, whitespace-only, or an unrecognised shape (`{}`, an array, a
+number, `{"append": 42}`) all yield "no identity" — the runtime's default line — and the session is
+created normally. An unrecognised shape is tolerated rather than rejected so a forward-compatible
+client cannot break against an older adapter; the parse outcome and identity length are logged at
+`Debug` so a silently-dropped identity is still visible.
+
+**Survives a model change.** `session/set_config_option` rebuilds the client and `Agent` and calls
+`ChatSession.SetAgent`, which preserves the existing `Context` — so the identity survives a model
+swap for free.
+
+**No bleed between sessions.** Identity is written once at session creation and read once per
+iteration, with no mutation path. Two sessions hold two `Context` instances, each with its own
+immutable `QueryContext`, so two Personas in one process cannot see each other's identity.
 
 ### Disposal is driven by three triggers, not one
 

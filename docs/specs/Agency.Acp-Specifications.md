@@ -446,8 +446,20 @@ answers:
 | `IsLoaded` | `bool?` | `null` | ✅ |
 
 **Mapping to ACP.** `Model` → `AgentModelOption(Id, Name, Description)`, where `Description`
-carries residency as a **point-in-time statement** ("loaded now"), and is `null` when unknown.
-Null renders as a plain row and never as a claim (P3).
+carries residency as a **point-in-time statement**, mapped from `Model.IsLoaded` in exactly
+three states:
+
+| `IsLoaded` | `Description` | Meaning |
+|---|---|---|
+| `true` | `"loaded now"` | the provider reported it resident |
+| `false` | `"not loaded"` | the provider **explicitly** reported it not resident |
+| `null` | `null` (absent) | unknown — no claim is made in either direction |
+
+**P3 governs the third row only.** Unknown is never rendered as `"not loaded"`; it renders as a
+plain row and never as a claim. `"not loaded"` *is* emitted when a richer server actually says
+so, because suppressing a fact the provider stated would be as wrong as inventing one it did
+not. Any statement that the adapter "never claims a model isn't resident" is too strong — it
+never *infers* that, which is a different thing.
 
 **Filtering.** Where `Kind` is known, embedding models are excluded. Where it is `null` they cannot
 be excluded, so a non-chat selection must fail as a clear JSON-RPC error (P6) — `G6`'s
@@ -503,7 +515,7 @@ workaround (P1).
 |---|---|---|
 | D-1 | `McpServerConfig.Headers` → `AdditionalHeaders` | **landed**, untested |
 | D-2 | Log first-attempt status on MCP `AutoDetect` fallback | `DelegatingHandler` on the `HttpClientTransport(options, httpClient, …)` overload |
-| D-3 | `QueryContext.IdentityPrompt` | re-land; one line in `SystemPromptBuilder` |
+| D-3 | `QueryContext.IdentityPrompt` | **landed**; one line in `SystemPromptBuilder`. **Consumer:** the ACP adapter supplies it from `session/new`'s `_meta.systemPrompt` — see §8.1 step 1a |
 | D-4 | Repair-on-cancel | `finally` that closes an orphaned `tool_use` |
 | D-5 | Dedicated timeout CTS | separate timeout from user cancel |
 | D-6 | Truncation split from `Error` | `FinishReason == Length` → its own status |
@@ -514,6 +526,12 @@ workaround (P1).
 `ChatResponse` the loop already consumes, so the tool loop, usage extraction, `FinishReason` check
 and stop conditions are untouched. The usage risk is retired — the OpenAI SDK sets
 `stream_options: {"include_usage": true}` automatically, verified on the wire.
+
+**Why D-3 names its consumer.** D-3 shipped as a harness feature with no named consumer, while
+§8.1 specified `session/new` without naming the producer of `IdentityPrompt`. The hop between them
+belonged to neither task and was therefore written nowhere — so a `session/new` carrying a 2 KB
+Persona prompt succeeded, silently, exactly as one carrying nothing did. A delta with no named
+consumer and a step with no named producer are the same bug written twice; both ends are now named.
 
 **Why D-4 matters more than its size.** Cancelling between the assistant message being appended and
 the tool results being appended leaves a `tool_use` with no matching `tool_result`. Nothing repairs
@@ -599,17 +617,32 @@ null-tolerant by construction.
 
 ```text
 1. validate mcpServers[] shapes                     → -32602 on malformed
+1a. parse _meta.systemPrompt → identityPrompt       → null on absent/unknown shape (never an error)
 2. resolve catalogue      (one GET; failure → [])
 3. filter Kind == embedding where known
-4. select model: requested ∈ catalogue ? requested : AgentOptions.DefaultModel
+4. select model: AgentOptions.DefaultModel
 5. AgentOptions' = clone with ContextWindowSize = selected.ContextLength
-6. build client (effort folded in) → Agent → ChatSession
+6. build client (effort folded in) → Agent → ChatSession(identityPrompt)
 7. McpClientPool.CreateAsync(mcpServers)            → per-server failures recorded, not thrown
 8. register; return sessionId, models[], effortLevels[]
 ```
 
-**Step 4 is the G6 contract**: an unknown model id is never an error. **Step 7 is fail-soft**: an
-unreachable MCP server yields a session with fewer tools, not a failed session.
+**Step 1a produces the Persona identity.** `_meta.systemPrompt` is parsed with *append* semantics
+— it replaces the opening identity line of the system prompt and nothing else — into
+`QueryContext.IdentityPrompt` (§6.9, D-3), which `SystemPromptBuilder` re-emits on **every**
+iteration. Both the `{"append": "…"}` object form and a bare string are accepted; a missing, empty
+or unrecognised value yields `null`, meaning *use the runtime's default identity line*, and **never**
+fails session creation. See
+[`Agency.Acp.PersonaIdentity-Specifications.md`](Agency.Acp.PersonaIdentity-Specifications.md) §6.1.
+
+**Step 4 no longer accepts a client-requested model.** `session/new` always starts on
+`AgentOptions.DefaultModel`; `session/set_config_option` is the **sole** model-selection path, and
+`NewSessionRequest` carries no model field. The **G6 contract** — an unknown model id is never an
+error — now holds structurally rather than by fallback: no code path validates a model id against
+the catalogue at all.
+
+**Step 7 is fail-soft**: an unreachable MCP server yields a session with fewer tools, not a failed
+session.
 
 ### 8.2 Turn execution
 
@@ -648,6 +681,16 @@ unreachable MCP server yields a session with fewer tools, not a failed session.
 | Catalogue unreachable | empty `models[]`; session still starts |
 | Model cannot chat | JSON-RPC error on first turn. The message **must name the model and the likely cause** — e.g. `model 'x' returned no chat completion; it may be an embedding model` — because with `Kind` null this is the only signal, it arrives after the user has asked the Persona to speak, and their next action is to pick a different model |
 | Harness exception | JSON-RPC error carrying the message |
+| **Any other handler exception** | **`-32603`, message names the method and exception type** — e.g. `Internal error handling 'session/prompt': InvalidOperationException: No LLM client named 'foo'`. The stack trace is logged, never put on the wire |
+| **Handler fault during shutdown cancellation** | **no response** — rethrown, so a clean exit does not emit a spurious error per in-flight handler |
+| **Faulting notification** (no `id`) | **no response** — JSON-RPC forbids one — but the fault **is** logged |
+
+**P6 now holds on every path, not most.** Until the PersonaIdentity work, `DispatchAsync` mapped
+only `AcpJsonRpcException` and `JsonException`; anything else escaped, was swallowed by
+`StdioTransport`'s bare `catch`, and the client received no reply, no error and no crash —
+indistinguishable from a slow model, and closable by no timeout on either side. The last three
+rows above are what closed that. See
+[`Agency.Acp.PersonaIdentity-Specifications.md`](Agency.Acp.PersonaIdentity-Specifications.md) §6.3.
 
 ---
 

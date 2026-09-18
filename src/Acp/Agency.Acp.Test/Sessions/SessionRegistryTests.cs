@@ -119,28 +119,68 @@ public sealed class SessionRegistryTests
     }
 
     /// <summary>
-    /// (c) Each session's <see cref="AgentOptions"/> is a distinct clone, so a different
-    /// catalogue-reported context length per model never bleeds between sessions.
+    /// (c-i) Each session's <see cref="AgentOptions"/> is a distinct clone, so two sessions built
+    /// from the same factory never share one instance — a different catalogue-reported context
+    /// length per model must never bleed between sessions.
     /// </summary>
+    /// <remarks>
+    /// Replaces the former <c>CreateAsync_CalledTwice_ProducesDistinctAgentOptionsWithOwnContextWindow</c>,
+    /// which drove two different <see cref="AgentOptions.ContextWindowSize"/> values by passing
+    /// <c>"small"</c>/<c>"big"</c> as a client-requested model — a path <c>session/new</c> no longer
+    /// has (spec §6.2, §14.5 G-2: <c>_meta.model</c> is deleted, not deprecated). Split into this
+    /// isolation test and <see cref="CreateAsync_DifferentDefaultModel_SelectsContextWindowFromCatalogue"/>
+    /// so neither property the original test proved is lost.
+    /// </remarks>
     [Fact]
-    public async Task CreateAsync_CalledTwice_ProducesDistinctAgentOptionsWithOwnContextWindow()
+    public async Task CreateAsync_CalledTwice_ProducesDistinctAgentOptionsInstances()
     {
         var processOptions = new AgentOptions { DefaultModel = "small", DefaultClientName = "c", ContextWindowSize = 1 };
-        IReadOnlyList<Model> catalogue =
-        [
-            new Model("small", "Small") { ContextLength = 1_000 },
-            new Model("big", "Big") { ContextLength = 100_000 },
-        ];
+        IReadOnlyList<Model> catalogue = [new Model("small", "Small") { ContextLength = 1_000 }];
 
         SessionFactory factory = BuildFactory(
             processOptions,
             (_, model) => NewAgentWithFakeClient(model ?? "small"),
             _ => Task.FromResult(catalogue));
 
-        (SessionState stateSmall, _) = await factory.CreateAsync(new NewSessionRequest { Cwd = "/a" }, "small", TestContext.Current.CancellationToken);
-        (SessionState stateBig, _) = await factory.CreateAsync(new NewSessionRequest { Cwd = "/b" }, "big", TestContext.Current.CancellationToken);
+        (SessionState stateA, _) = await factory.CreateAsync(new NewSessionRequest { Cwd = "/a" }, null, TestContext.Current.CancellationToken);
+        (SessionState stateB, _) = await factory.CreateAsync(new NewSessionRequest { Cwd = "/b" }, null, TestContext.Current.CancellationToken);
 
-        Assert.NotSame(stateSmall.Options, stateBig.Options);
+        Assert.NotSame(stateA.Options, stateB.Options);
+        Assert.Equal(1_000, stateA.Options.ContextWindowSize);
+        Assert.Equal(1_000, stateB.Options.ContextWindowSize);
+    }
+
+    /// <summary>
+    /// (c-ii) The per-session <see cref="AgentOptions.ContextWindowSize"/> tracks whichever model
+    /// <see cref="AgentOptions.DefaultModel"/> names, sourced from that model's catalogue entry.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="CreateAsync_CalledTwice_ProducesDistinctAgentOptionsInstances"/> for why this
+    /// is split out: the former single test varied the context window via a client-requested model
+    /// at <c>session/new</c>, which no longer exists. Here two factories, each with its own
+    /// <see cref="AgentOptions.DefaultModel"/> over the same catalogue, stand in for that variation.
+    /// </remarks>
+    [Fact]
+    public async Task CreateAsync_DifferentDefaultModel_SelectsContextWindowFromCatalogue()
+    {
+        IReadOnlyList<Model> catalogue =
+        [
+            new Model("small", "Small") { ContextLength = 1_000 },
+            new Model("big", "Big") { ContextLength = 100_000 },
+        ];
+
+        SessionFactory smallFactory = BuildFactory(
+            new AgentOptions { DefaultModel = "small", DefaultClientName = "c", ContextWindowSize = 1 },
+            (_, model) => NewAgentWithFakeClient(model ?? "small"),
+            _ => Task.FromResult(catalogue));
+        SessionFactory bigFactory = BuildFactory(
+            new AgentOptions { DefaultModel = "big", DefaultClientName = "c", ContextWindowSize = 1 },
+            (_, model) => NewAgentWithFakeClient(model ?? "big"),
+            _ => Task.FromResult(catalogue));
+
+        (SessionState stateSmall, _) = await smallFactory.CreateAsync(new NewSessionRequest { Cwd = "/a" }, null, TestContext.Current.CancellationToken);
+        (SessionState stateBig, _) = await bigFactory.CreateAsync(new NewSessionRequest { Cwd = "/b" }, null, TestContext.Current.CancellationToken);
+
         Assert.Equal(1_000, stateSmall.Options.ContextWindowSize);
         Assert.Equal(100_000, stateBig.Options.ContextWindowSize);
     }

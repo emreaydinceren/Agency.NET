@@ -15,6 +15,7 @@ namespace Agency.VectorStore.Sql.Postgres.Test;
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
+[Collection(SchemaCollection)]
 public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVStoreFunctionalTests.VectorStoreFixture>
 {
     private readonly VectorStoreFixture _fixture;
@@ -976,6 +977,13 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
     }
 
     // ── Fixture ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The xUnit collection shared by every test class using <see cref="VectorStoreFixture"/>. Each class gets
+    /// its own fixture instance; running them in one collection serializes their schema initialization, because
+    /// concurrent <c>CREATE TABLE IF NOT EXISTS</c> on a fresh database fails with a duplicate-key error.
+    /// </summary>
+    public const string SchemaCollection = "Postgres vector store schema";
 
     /// <summary>
     /// Shared vector store fixture for PostgreSQL integration tests.

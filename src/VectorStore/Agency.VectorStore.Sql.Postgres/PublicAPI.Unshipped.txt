@@ -1,3 +1,4 @@
 #nullable enable
 Agency.VectorStore.Sql.Postgres.PostgresKVStore.CreateProjectAsync(string! userId, string! projectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
 Agency.VectorStore.Sql.Postgres.PostgresKVStore.DeleteProjectAsync(string! userId, string! projectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.VectorStore.Sql.Postgres.PostgresKVStore.ReplaceDocumentAsync<TValue>(string! userId, string? sessionId, string! sourceFile, System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.DocumentChunk<TValue>!>! chunks, string? projectId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!

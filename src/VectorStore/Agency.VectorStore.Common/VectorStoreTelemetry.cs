@@ -190,4 +190,16 @@ public sealed partial class VectorStoreTelemetry : IDisposable
     /// <summary>Logs that a vector store delete failed.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "Error deleting vector store entry after {ElapsedMs}ms for user {UserId} session {SessionId} key {Key}")]
     internal static partial void LogErrorDeleting(ILogger logger, Exception ex, double elapsedMs, string userId, string? sessionId, string key);
+
+    /// <summary>Logs that a document replace is starting.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Replacing document {SourceFile} for user {UserId} session {SessionId} with {ChunkCount} chunk(s)")]
+    internal static partial void LogReplacingDocument(ILogger logger, string userId, string? sessionId, string sourceFile, int chunkCount);
+
+    /// <summary>Logs that a document replace completed.</summary>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Document replace completed in {ElapsedMs}ms for {SourceFile}. Stale entries deleted: {DeletedCount}")]
+    internal static partial void LogDocumentReplaced(ILogger logger, double elapsedMs, string sourceFile, int deletedCount);
+
+    /// <summary>Logs that a document replace failed.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "Error replacing document {SourceFile} after {ElapsedMs}ms")]
+    internal static partial void LogErrorReplacingDocument(ILogger logger, Exception ex, double elapsedMs, string sourceFile);
 }

@@ -1,0 +1,80 @@
+---
+name: agency-index
+description: Semantic search over a folder of documentation (Markdown, text, reStructuredText, AsciiDoc, HTML) through the agency-index CLI. Indexes incrementally — only files whose size or modification time changed are re-embedded — and returns the most relevant passages as JSON.
+when_to_use: When you need to find information by meaning in a repository's documentation, notes, ADRs or other prose files — especially when grep would need exact wording you don't know, or the folder is too large to read. Index the folder first (cheap to repeat; unchanged files are skipped), then search.
+---
+
+# agency-index — semantic index for documentation
+
+`agency-index` keeps a named **index** of a directory's text documents and answers semantic queries
+against it. Every command prints a single JSON object on stdout; check the exit code before parsing.
+
+## Workflow
+
+1. **Index (or refresh) the folder.** Safe and cheap to run before every search session — only added,
+   changed or deleted files are processed.
+
+   ```bash
+   agency-index index --index <name> --root <dir>
+   ```
+
+   - `<name>`: letters, digits, `.`, `_`, `-` (case-insensitive). One index = one root directory.
+   - After the first run `--root` may be omitted: `agency-index index --index <name>`.
+   - Default file types: `.md .markdown .mdx .txt .rst .adoc .html .htm` plus `README`, `CHANGELOG`,
+     `CONTRIBUTING`. Override with `--ext .md,.html` and/or `--names README,NOTES`. The selection is
+     remembered; files that stop matching are removed from the index.
+   - Skipped automatically: `.git`, `node_modules`, `bin`, `obj`, `dist`, and files over 1 MB
+     (`--max-file-kb` to change).
+   - HTML is reduced to its readable text before indexing.
+
+2. **Search.**
+
+   ```bash
+   agency-index search --index <name> --query "how are releases published?" --top 5
+   ```
+
+   Each hit has `path`, `chunk`, `score` (cosine similarity, 0–1, higher is better) and `text`.
+   Read the file at `path` when you need more context than the chunk.
+
+3. **Inspect / clean up** (no embedding endpoint needed):
+
+   ```bash
+   agency-index indexes                  # every index and its root
+   agency-index list --index <name>      # indexed files with size, mtime, chunk count
+   agency-index drop --index <name>      # delete the index
+   ```
+
+## Exit codes
+
+| Code | Meaning | What to do |
+|------|---------|------------|
+| 0 | Success | Parse stdout. |
+| 1 | Failure. For `index`, `failed` lists files that could not be indexed; everything else was applied. | Report the `message` / `failed` entries. Failed files are retried on the next run. |
+| 2 | Usage or configuration error (unknown index, missing option, root mismatch, no embedding endpoint, model changed). | Fix the arguments as the `message` says. Do not retry unchanged. |
+| 3 | Another process is indexing this index right now. | Searching is still safe. To index anyway, re-run with `--wait` to block until the other writer finishes. |
+
+## Concurrency
+
+Only one process writes an index at a time; others get exit code 3 (or wait with `--wait`).
+Searches never block and may run while an index is being refreshed.
+
+## Configuration
+
+Settings come from command-line options, then `AGENCY_INDEX_*` environment variables, then
+`~/.agency/indexer.json`:
+
+```json
+{
+  "Provider": "sqlite",
+  "Database": "/home/me/.agency/index.db",
+  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-nomic-embed-text-v1.5", "ApiKey": "unused", "Dimensions": 768 }
+}
+```
+
+- `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (`Database` is
+  then a connection string; requires the pgvector extension).
+- Any OpenAI-compatible embeddings endpoint works (OpenAI, LM Studio, Ollama's `/v1`, ...).
+- Environment variable form: `AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`,
+  `AGENCY_INDEX_Embedding__BaseUrl`, `AGENCY_INDEX_Embedding__ModelId`, ...
+- An index is tied to the embedding model it was built with; switching models requires
+  `drop` and a fresh `index`.

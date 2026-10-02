@@ -226,6 +226,34 @@ jobs:
             echo "== $id $version =="
 
             listing=$(unzip -l "$pkg")
+
+            # .NET tool packages (e.g. AgencyDotNet.Indexer) ship under tools/ instead of lib/ and are
+            # installed rather than referenced: check the shared entries, then install the tool from the
+            # feed and run its help command.
+            if echo "$nuspec" | grep -q '<packageType name="DotnetTool"'; then
+              for required in "tools/net10.0/any/DotnetToolSettings.xml" "README.md" "LICENSE" "NOTICE" "Agency_128.png"; do
+                if ! echo "$listing" | grep -qF "$required"; then
+                  echo "::error::$pkg missing required entry: $required"
+                  fail=1
+                fi
+              done
+              if echo "$listing" | grep -qi '\.pdb$'; then
+                echo "::error::$pkg contains a stray .pdb (symbols must ship in the .snupkg only)"
+                fail=1
+              fi
+              command=$(unzip -p "$pkg" 'tools/net10.0/any/DotnetToolSettings.xml' | grep -oP 'Command Name="\K[^"]+')
+              work=$(mktemp -d)
+              if ! dotnet tool install "$id" --version "$version" --tool-path "$work" --configfile NuGet.Config; then
+                echo "::error::$id $version failed to install from the Gitea feed"
+                fail=1
+              elif ! "$work/$command" help > /dev/null; then
+                echo "::error::$id $version installed but '$command help' failed"
+                fail=1
+              fi
+              rm -rf "$work"
+              continue
+            fi
+
             # RT56: PackageId (AgencyDotNet.*) and AssemblyName (Agency.*) diverge on purpose —
             # derive the actual lib dll name from the package contents instead of assuming it
             # matches $id.

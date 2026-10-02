@@ -29,6 +29,14 @@ public interface IVectorStore
         Query query,
         CancellationToken cancellationToken = default);
 
+    Task<int> ReplaceDocumentAsync<TValue>(
+        string userId,
+        string? sessionId,
+        string sourceFile,
+        IReadOnlyList<DocumentChunk<TValue>> chunks,
+        string? projectId = null,
+        CancellationToken cancellationToken = default);
+
     Task<bool> DeleteAsync(
         string userId,
         string? sessionId,
@@ -60,6 +68,7 @@ public interface IVectorStore
 
 - `UpsertAsync` inserts or replaces a keyed entry; a `null` `sessionId` is stored as `"*"` (user-global scope), and a `null` `projectId` is stored as `"*"` (global project scope).
 - `SearchAsync` returns ranked results for a `Query`, ordered by ascending vector distance.
+- `ReplaceDocumentAsync` replaces every entry of one document — the entries whose `source_file` metadata equals `sourceFile` in the given scope — with `chunks`. All chunk embeddings are generated in one batch, the chunks are upserted (each stamped with `source_file`), then the document's entries whose keys are not among `chunks` are deleted; returns how many were deleted. Readers never see the document missing; a failure part-way leaves old and new entries mixed until the next replace of that document. An empty `chunks` list deletes the document. Used by [Agency.Indexer](Agency.Indexer.md) to re-index a changed file without leaving stale tail chunks.
 - `DeleteAsync` returns `true` when an entry was removed, `false` if none existed; `projectId` narrows the delete to a specific project scope.
 - `CreateProjectAsync` declares a project for the user so it is listed and loadable before any document is ingested into it; idempotent — returns `true` if a new project was declared, `false` if a project with that id was already known (declared or derived from existing entries).
 - `DeleteProjectAsync` deletes every entry tagged with the given `projectId` for the user, then removes the project declaration; idempotent — deleting an unknown project removes nothing and returns `0`. Returns the number of stored entries (chunks) removed.
@@ -84,6 +93,15 @@ public record class Query(
 ```
 
 `SessionId = null` means search across all sessions for the user. `Key` and `Value` are optional exact-match filters layered on top of ANN search. `Limit` defaults to 10; pass `null` to remove the cap. `ProjectIds` optionally restricts the search to one or more project scopes; `null` leaves the search unscoped by project.
+
+#### DocumentChunk\<TValue\>
+
+```csharp
+// File: src/VectorStore/Agency.VectorStore.Common/DocumentChunk.cs
+public sealed record DocumentChunk<TValue>(string Key, TValue Value, IDictionary<string, object>? Metadata = null);
+```
+
+One chunk passed to `ReplaceDocumentAsync`. `Value` is serialized and embedded exactly as `UpsertAsync` does; the store adds the document's `source_file` entry to `Metadata`.
 
 #### DocumentInfo
 

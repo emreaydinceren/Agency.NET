@@ -6,3 +6,20 @@ static Agency.VectorStore.Common.ProjectName.TryNormalize(string? raw, out strin
 static Agency.VectorStore.Common.ProjectName.EnsureValid(string? raw) -> string!
 Agency.VectorStore.Common.IVectorStore.CreateProjectAsync(string! userId, string! projectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
 Agency.VectorStore.Common.IVectorStore.DeleteProjectAsync(string! userId, string! projectId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.VectorStore.Common.DocumentChunk<TValue>
+Agency.VectorStore.Common.DocumentChunk<TValue>.DocumentChunk(string! Key, TValue Value, System.Collections.Generic.IDictionary<string!, object!>? Metadata = null) -> void
+Agency.VectorStore.Common.DocumentChunk<TValue>.Key.get -> string!
+Agency.VectorStore.Common.DocumentChunk<TValue>.Key.init -> void
+Agency.VectorStore.Common.DocumentChunk<TValue>.Value.get -> TValue
+Agency.VectorStore.Common.DocumentChunk<TValue>.Value.init -> void
+Agency.VectorStore.Common.DocumentChunk<TValue>.Metadata.get -> System.Collections.Generic.IDictionary<string!, object!>?
+Agency.VectorStore.Common.DocumentChunk<TValue>.Metadata.init -> void
+Agency.VectorStore.Common.IVectorStore.ReplaceDocumentAsync<TValue>(string! userId, string? sessionId, string! sourceFile, System.Collections.Generic.IReadOnlyList<Agency.VectorStore.Common.DocumentChunk<TValue>!>! chunks, string? projectId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Agency.VectorStore.Common.DocumentChunk<TValue>.<Clone>$() -> Agency.VectorStore.Common.DocumentChunk<TValue>!
+Agency.VectorStore.Common.DocumentChunk<TValue>.Deconstruct(out string! Key, out TValue Value, out System.Collections.Generic.IDictionary<string!, object!>? Metadata) -> void
+Agency.VectorStore.Common.DocumentChunk<TValue>.Equals(Agency.VectorStore.Common.DocumentChunk<TValue>? other) -> bool
+override Agency.VectorStore.Common.DocumentChunk<TValue>.Equals(object? obj) -> bool
+override Agency.VectorStore.Common.DocumentChunk<TValue>.GetHashCode() -> int
+override Agency.VectorStore.Common.DocumentChunk<TValue>.ToString() -> string!
+static Agency.VectorStore.Common.DocumentChunk<TValue>.operator !=(Agency.VectorStore.Common.DocumentChunk<TValue>? left, Agency.VectorStore.Common.DocumentChunk<TValue>? right) -> bool
+static Agency.VectorStore.Common.DocumentChunk<TValue>.operator ==(Agency.VectorStore.Common.DocumentChunk<TValue>? left, Agency.VectorStore.Common.DocumentChunk<TValue>? right) -> bool

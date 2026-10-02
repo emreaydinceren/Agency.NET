@@ -1023,6 +1023,17 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
                     }
                     return Task.FromResult((ReadOnlyMemory<float>)embeddings.AsMemory());
                 });
+            mockGenerator
+                .Setup(g => g.GenerateEmbeddingsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+                .Returns<IEnumerable<string>, CancellationToken>(async (inputs, ct) =>
+                {
+                    var vectors = new List<ReadOnlyMemory<float>>();
+                    foreach (string input in inputs)
+                    {
+                        vectors.Add(await mockGenerator.Object.GenerateEmbeddingAsync(input, ct));
+                    }
+                    return vectors;
+                });
 
             this._embeddingGenerator = mockGenerator.Object;
         }

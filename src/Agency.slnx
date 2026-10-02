@@ -11,6 +11,10 @@
     <Project Path="Embeddings\Agency.Embeddings.OpenAI.Test\Agency.Embeddings.OpenAI.Test.csproj" />
     <Project Path="Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
   </Folder>
+  <Folder Name="/Indexer/">
+    <Project Path="Indexer\Agency.Indexer.Test\Agency.Indexer.Test.csproj" />
+    <Project Path="Indexer\Agency.Indexer\Agency.Indexer.csproj" />
+  </Folder>
   <Folder Name="/Ingestion/">
     <Project Path="Ingestion\Agency.Ingestion.FileSystem\Agency.Ingestion.FileSystem.csproj" />
     <Project Path="Ingestion\Agency.Ingestion.SemanticKernel\Agency.Ingestion.SemanticKernel.csproj" />

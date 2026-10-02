@@ -21,7 +21,9 @@
 
   <!-- Symbol and source embedding for NuGet packages -->
   <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
-    <IncludeSymbols>true</IncludeSymbols>
+    <!-- .NET tool packages (PackAsTool) opt out in their own project file: their symbols package would be
+         built from publish output, which deliberately carries no .pdb files. -->
+    <IncludeSymbols Condition="'$(PackAsTool)' != 'true'">true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedAllSources>true</EmbedAllSources>
     <PackageReadmeFile>README.md</PackageReadmeFile>

@@ -77,6 +77,11 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 | [Agency.Ingestion](Projects/Agency.Ingestion.md) | Core ingestion pipeline into a vector store. |
 | [Agency.Ingestion.FileSystem](Projects/Agency.Ingestion.FileSystem.md) · [Agency.Ingestion.SemanticKernel](Projects/Agency.Ingestion.SemanticKernel.md) | Source adapters (filesystem; Semantic Kernel chunking). |
 
+### Tools
+| Project | Role |
+|---|---|
+| [Agency.Indexer](Projects/Agency.Indexer.md) | `agency-index` — a .NET global tool plus agent skill (`SKILL.md`) for incremental semantic indexing of a documentation folder into SQLite or Postgres; single writer per index, JSON output. |
+
 ### LLM
 | Project | Role |
 |---|---|

@@ -6,6 +6,7 @@ namespace Agency.VectorStore.Sql.Postgres.Test;
 /// Tests for <see cref="PostgresKVStore.ReplaceDocumentAsync{TValue}"/> against an PostgreSQL database.
 /// </summary>
 [Trait("Category", "Functional")]
+[Collection(PostgresKVStoreFunctionalTests.SchemaCollection)]
 public sealed class PostgresReplaceDocumentTests : IClassFixture<PostgresKVStoreFunctionalTests.VectorStoreFixture>
 {
     private const string UserId = "replace-user";

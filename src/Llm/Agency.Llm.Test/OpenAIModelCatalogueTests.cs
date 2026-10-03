@@ -140,7 +140,16 @@ public sealed class OpenAIModelCatalogueTests
                     return;
                 }
 
-                await handleRequest(ctx).ConfigureAwait(false);
+                try
+                {
+                    await handleRequest(ctx).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is ObjectDisposedException or HttpListenerException)
+                {
+                    // The client may drop the connection, or the test may stop the listener, while a response is
+                    // still being written. That is normal teardown here: the assertions run on the client's result.
+                    return;
+                }
             }
         }, ct);
 

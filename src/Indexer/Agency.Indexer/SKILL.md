@@ -1,21 +1,32 @@
 ---
 name: agency-index
-description: Semantic search over a folder of documentation (Markdown, text, reStructuredText, AsciiDoc, HTML) through the agency-index CLI. Indexes incrementally — only files whose size or modification time changed are re-embedded — and returns the most relevant passages as JSON.
-when_to_use: To find information by meaning in a large set of documentation, notes or ADRs when you don't know the exact wording. Not for code, exact identifiers or error strings (use grep), and not for small folders or ones with an index page (read it).
+description: Find where something is explained in a folder of documentation (Markdown, text, reStructuredText, AsciiDoc, HTML) by meaning rather than exact words, using the agency-index CLI. Use for "where is X documented?", "which ADR covers Y?", "how does the project handle Z?", "what do our docs say about W?" when the docs tree is large (more than ~30 files) and you don't know the wording. Not for code, identifiers, error strings or file names (use grep).
 ---
 
 # agency-index — semantic index for documentation
 
 `agency-index` keeps a named **index** of a directory's text documents and answers semantic queries
-against it. Every command prints a single JSON object on stdout; check the exit code before parsing.
+against it. Every command prints a single JSON object on stdout, including failures
+(`{"status":"error","message":"..."}`); use the exit code to decide what to do with it.
+
+## Prerequisites — check before relying on it
+
+Run `agency-index indexes`. If the command is not found, or it exits 2 with "no embedding endpoint",
+the tool is not set up (see [Configuration](#configuration)): don't try to fix it mid-task, use grep.
+The first `index` of a large folder can take minutes (about 3 minutes for 55 files on a local model);
+refreshes after that take seconds.
 
 ## When to use it — and when not
 
-- **Use it** for questions about meaning in prose ("how is X decided?", "why did we choose Y?") when you
-  don't know the exact wording, or there are too many documents to skim.
-- **Don't** use it for exact identifiers, error strings or file names: grep is cheaper and exact.
-- **Don't** use it for code: only documentation is indexed.
-- **Skip it** if the folder is small or has an index page (e.g. `docs/Home.md`); read that instead.
+| Question | Use | Why |
+|----------|-----|-----|
+| "How is X decided?", "why did we choose Y?", "where do the docs explain Z?" and you don't know the wording | `agency-index search` | One call returns the few relevant passages; grep for a vague word like "release" returns hundreds of lines and several file reads. |
+| Exact identifier, error string, config key or file name | grep | Cheaper and exact. |
+| Anything about code | grep / read | Only documentation is indexed. |
+| You know which file or folder it is in | read it / grep there | No index needed. |
+
+If the docs have an index page (e.g. `docs/Home.md`), read it first; if it doesn't answer the question
+in one hop, search. Roughly 30+ documents is where search starts paying for itself.
 
 ## Workflow
 
@@ -35,13 +46,27 @@ against it. Every command prints a single JSON object on stdout; check the exit 
      (`--max-file-kb` to change).
    - HTML is reduced to its readable text before indexing.
 
+   Output (`path`s are absolute; `failed` is empty on a clean run):
+
+   ```json
+   {"status":"ok","index":"billing-api","root":"/work/billing-api/docs","added":["..."],"changed":[],"removed":[],"unchanged":54,"skipped_too_large":[],"failed":[],"chunks_written":3,"duration_ms":2835}
+   ```
+
 2. **Search.**
 
    ```bash
    agency-index search --index <name> --query "how are releases published?" --top 5
    ```
 
-   Each hit has `path`, `chunk`, `score` (cosine similarity, 0–1, higher is better) and `text`.
+   `--top` defaults to 5. Output:
+
+   ```json
+   {"status":"ok","index":"billing-api","hits":[{"path":"/work/billing-api/docs/releases.md","chunk":2,"score":0.7657,"text":"..."}]}
+   ```
+
+   Each hit has an absolute `path`, the `chunk` number within that file, a `score` (cosine similarity,
+   higher is better) and the passage `text`. With a typical local embedding model, real answers score
+   about 0.55–0.8 and unrelated queries about 0.4; treat top scores below ~0.45 as "not in the docs".
 
    - Phrase the query as a natural-language question, not keywords.
    - Answer from the returned `text` when it is enough; open the file at `path` only if you need more.
@@ -76,8 +101,8 @@ choose another name; do not retry the same one.
 | Code | Meaning | What to do |
 |------|---------|------------|
 | 0 | Success | Parse stdout. |
-| 1 | Failure. For `index`, `failed` lists files that could not be indexed; everything else was applied. | Report the `message` / `failed` entries. Failed files are retried on the next run. |
-| 2 | Usage or configuration error (unknown index, missing option, root mismatch, no embedding endpoint, model changed). | Fix the arguments as the `message` says. Do not retry unchanged. |
+| 1 | Failure. For `index`, `failed` lists files that could not be indexed; everything else was applied. | Read `message` / `failed` from the JSON and report them. Failed files are retried on the next run. |
+| 2 | Usage or configuration error (unknown index, missing option, root mismatch, no embedding endpoint, model changed). | Fix the arguments as the `message` says. Do not retry unchanged. If it is "no embedding endpoint", fall back to grep. |
 | 3 | Another process is indexing this index right now. | Searching is still safe. To index anyway, re-run with `--wait` to block until the other writer finishes. |
 
 ## Concurrency
@@ -100,6 +125,8 @@ Settings come from command-line options, then `AGENCY_INDEX_*` environment varia
 
 - `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (`Database` is
   then a connection string; requires the pgvector extension).
+- There is no default embedding endpoint: until one is configured, `index` and `search` exit 2.
+  Paths above use POSIX style; on Windows use e.g. `C:\Users\me\.agency\index.db`.
 - Any OpenAI-compatible embeddings endpoint works (OpenAI, LM Studio, Ollama's `/v1`, ...).
 - Environment variable form: `AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`,
   `AGENCY_INDEX_Embedding__BaseUrl`, `AGENCY_INDEX_Embedding__ModelId`, ...

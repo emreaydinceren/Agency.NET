@@ -55,6 +55,10 @@ internal static class Program
     /// <summary>Entry point.</summary>
     public static async Task<int> Main(string[] args)
     {
+        // Indexed documents contain non-ASCII text (arrows, dashes). With stdout redirected, Windows would encode it in the
+        // OEM code page and emit a substitute control character (0x1A), making the JSON invalid for the calling agent.
+        Console.OutputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
         {

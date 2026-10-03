@@ -69,6 +69,9 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$SYNC_MAILMAP" > mailmap.txt
+          # Commits cherry-picked from Claude-authored PRs keep their original author; map it to the
+          # owner's public noreply identity so it never reaches the mirror (the verify step allows only that one).
+          printf '%s\n' 'Emre Aydinceren <13038027+emreaydinceren@users.noreply.github.com> <noreply@anthropic.com>' >> mailmap.txt
           printf '%s\n' "$SYNC_REPLACEMENTS" > replacements.txt
 
       - name: ✂️ Rewrite history (path strip + text redaction + mailmap)

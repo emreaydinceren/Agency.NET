@@ -45,6 +45,33 @@ public interface IVectorStore
     Task<IReadOnlyList<SearchHit<TValue>>> SearchAsync<TValue>(Query query, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Replaces every entry of one document — the entries whose <c>source_file</c> metadata equals
+    /// <paramref name="sourceFile"/> within the given scope — with <paramref name="chunks"/>.
+    /// </summary>
+    /// <remarks>
+    /// All chunk embeddings are generated in a single batch before anything is written. The chunks are then
+    /// upserted (each one stamped with <c>source_file</c>), and finally entries of the document whose keys are
+    /// not among <paramref name="chunks"/> are deleted. Readers therefore never see the document missing; a
+    /// failure part-way leaves a mix of old and new entries that the next replace of the same document repairs.
+    /// Passing an empty <paramref name="chunks"/> list deletes the document.
+    /// </remarks>
+    /// <typeparam name="TValue">The type of the chunk values.</typeparam>
+    /// <param name="userId">The user the document belongs to. Cannot be null.</param>
+    /// <param name="sessionId">The session the document belongs to, or <see langword="null"/> for user-global entries (stored as <c>"*"</c>).</param>
+    /// <param name="sourceFile">The document identity, matched against the <c>source_file</c> metadata entry. Cannot be null.</param>
+    /// <param name="chunks">The complete new set of chunks for the document. Keys must be unique.</param>
+    /// <param name="projectId">The project scope for the document, or <see langword="null"/> for the global project (stored as <c>"*"</c>).</param>
+    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
+    /// <returns>The number of previously stored entries of the document that were deleted because their keys were not in <paramref name="chunks"/>.</returns>
+    Task<int> ReplaceDocumentAsync<TValue>(
+        string userId,
+        string? sessionId,
+        string sourceFile,
+        IReadOnlyList<DocumentChunk<TValue>> chunks,
+        string? projectId = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes the entry with the given key asynchronously.
     /// </summary>
     /// <param name="userId">The user this entry belongs to. Cannot be null.</param>

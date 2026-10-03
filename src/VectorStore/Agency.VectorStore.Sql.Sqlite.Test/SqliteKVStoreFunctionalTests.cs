@@ -1163,20 +1163,28 @@ public sealed class SqliteKVStoreFunctionalTests : IClassFixture<SqliteKVStoreFu
             var mockGenerator = new Mock<IEmbeddingGenerator>();
             mockGenerator
                 .Setup(g => g.GenerateEmbeddingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns<string, CancellationToken>((input, _) =>
-                {
-                    int hash = input.GetHashCode();
-                    var rng = new Random(hash);
-                    float[] embedding = new float[1536];
-                    for (int i = 0; i < embedding.Length; i++)
-                    {
-                        embedding[i] = (float)rng.NextDouble();
-                    }
-                    return Task.FromResult((ReadOnlyMemory<float>)embedding.AsMemory());
-                });
+                .Returns<string, CancellationToken>((input, _) => Task.FromResult(FakeEmbedding(input)));
+            mockGenerator
+                .Setup(g => g.GenerateEmbeddingsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+                .Returns<IEnumerable<string>, CancellationToken>((inputs, _) =>
+                    Task.FromResult<IReadOnlyList<ReadOnlyMemory<float>>>(inputs.Select(FakeEmbedding).ToList()));
 
             var logger = new Mock<ILogger<SqliteKVStore>>();
             this.KVStore = new SqliteKVStore(mockGenerator.Object, this.Runner, logger.Object);
+        }
+
+        /// <summary>
+        /// Returns a deterministic pseudo-random 1536-dimension embedding seeded from <paramref name="input"/>.
+        /// </summary>
+        private static ReadOnlyMemory<float> FakeEmbedding(string input)
+        {
+            var rng = new Random(input.GetHashCode());
+            float[] embedding = new float[1536];
+            for (int i = 0; i < embedding.Length; i++)
+            {
+                embedding[i] = (float)rng.NextDouble();
+            }
+            return embedding;
         }
 
         /// <summary>

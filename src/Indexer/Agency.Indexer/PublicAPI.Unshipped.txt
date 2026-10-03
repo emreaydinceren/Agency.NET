@@ -1,0 +1,5 @@
+#nullable enable
+Agency.Indexer.UsageException
+Agency.Indexer.UsageException.UsageException() -> void
+Agency.Indexer.UsageException.UsageException(string! message) -> void
+Agency.Indexer.UsageException.UsageException(string! message, System.Exception! innerException) -> void

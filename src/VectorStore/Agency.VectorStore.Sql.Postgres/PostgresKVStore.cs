@@ -30,6 +30,15 @@ public sealed class PostgresKVStore : IVectorStore
     /// </summary>
     public const string MeterName = "Agency.VectorStore.Sql.Postgres";
 
+    // Use EXCLUDED to update existing records on compound key conflict
+    private const string UpsertSql = @"
+                INSERT INTO semantic_kv_store (user_id, session_id, project_id, key, value, embedding, metadata)
+                VALUES (@uid, @sid, @pid, @k, @v, @e::vector, @m)
+                ON CONFLICT (user_id, session_id, project_id, key) DO UPDATE
+                SET value     = EXCLUDED.value,
+                    embedding = EXCLUDED.embedding,
+                    metadata  = EXCLUDED.metadata;";
+
     private static readonly VectorStoreTelemetry _telemetry = new(ActivitySourceName, MeterName);
 
     private readonly ILogger<PostgresKVStore> _logger;
@@ -253,17 +262,8 @@ public sealed class PostgresKVStore : IVectorStore
                 var vectorArray = await this._embeddingGenerator.GenerateEmbeddingAsync(contentToEmbed, cancellationToken);
                 string vectorLiteral = $"[{string.Join(',', vectorArray.ToArray().Select(v => v.ToString(CultureInfo.InvariantCulture)))}]";
 
-                // Use EXCLUDED to update existing records on compound key conflict
-                const string query = @"
-                INSERT INTO semantic_kv_store (user_id, session_id, project_id, key, value, embedding, metadata)
-                VALUES (@uid, @sid, @pid, @k, @v, @e::vector, @m)
-                ON CONFLICT (user_id, session_id, project_id, key) DO UPDATE
-                SET value     = EXCLUDED.value,
-                    embedding = EXCLUDED.embedding,
-                    metadata  = EXCLUDED.metadata;";
-
                 return await this._postgreSqlRunner.ExecuteAsync(
-                    query,
+                    UpsertSql,
                     new Dictionary<string, object?>
                     {
                         ["uid"] = userId,
@@ -278,6 +278,92 @@ public sealed class PostgresKVStore : IVectorStore
             },
             onSuccess: (_, elapsedMs) => VectorStoreTelemetry.LogUpserted(this._logger, elapsedMs, userId, sessionId ?? "global", key),
             onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorUpserting(this._logger, ex, elapsedMs, userId, sessionId ?? "global", key));
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> ReplaceDocumentAsync<TValue>(
+        string userId,
+        string? sessionId,
+        string sourceFile,
+        IReadOnlyList<DocumentChunk<TValue>> chunks,
+        string? projectId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(userId);
+        ArgumentNullException.ThrowIfNull(sourceFile);
+        ArgumentNullException.ThrowIfNull(chunks);
+        string[] keys = chunks.Select(c => c.Key).ToArray();
+        if (keys.Distinct(StringComparer.Ordinal).Count() != keys.Length)
+        {
+            throw new ArgumentException("Chunk keys must be unique.", nameof(chunks));
+        }
+
+        using var activity = _telemetry.StartActivity("vectorstore.replace_document");
+        activity?.SetTag("vectorstore.operation", "replace_document");
+        activity?.SetTag("vectorstore.user_id", userId);
+        activity?.SetTag("vectorstore.session_id", sessionId ?? "global");
+        activity?.SetTag("vectorstore.source_file", sourceFile);
+        activity?.SetTag("vectorstore.chunk_count", chunks.Count);
+        VectorStoreTelemetry.LogReplacingDocument(this._logger, userId, sessionId, sourceFile, chunks.Count);
+
+        return await _telemetry.ExecuteAsync(
+            "replace_document",
+            activity,
+            async () =>
+            {
+                string sid = VectorStoreTelemetry.ResolveSessionId(sessionId);
+                string pid = VectorStoreTelemetry.ResolveProjectId(projectId);
+                string[] values = chunks.Select(c => JsonSerializer.Serialize(c.Value)).ToArray();
+                IReadOnlyList<ReadOnlyMemory<float>> vectors = values.Length > 0
+                    ? await this._embeddingGenerator.GenerateEmbeddingsAsync(values, cancellationToken)
+                    : [];
+
+                for (int i = 0; i < chunks.Count; i++)
+                {
+                    var metadata = new Dictionary<string, object>(chunks[i].Metadata ?? new Dictionary<string, object>(), StringComparer.Ordinal)
+                    {
+                        ["source_file"] = sourceFile,
+                    };
+
+                    await this._postgreSqlRunner.ExecuteAsync(
+                        UpsertSql,
+                        new Dictionary<string, object?>
+                        {
+                            ["uid"] = userId,
+                            ["sid"] = sid,
+                            ["pid"] = pid,
+                            ["k"] = keys[i],
+                            ["v"] = new NpgsqlParameter("v", NpgsqlDbType.Jsonb) { Value = values[i] },
+                            ["e"] = $"[{string.Join(',', vectors[i].ToArray().Select(v => v.ToString(CultureInfo.InvariantCulture)))}]",
+                            ["m"] = new NpgsqlParameter("m", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(metadata) }
+                        },
+                        cancellationToken);
+                }
+
+                // S3265: see SearchAsync — NpgsqlDbType.Array | Text declares a text[] parameter.
+#pragma warning disable S3265
+                int deleted = await this._postgreSqlRunner.ExecuteAsync(
+                    @"
+                    DELETE FROM semantic_kv_store
+                    WHERE user_id = @uid AND session_id = @sid AND project_id = @pid
+                      AND metadata->>'source_file' = @src
+                      AND key <> ALL(@keys);",
+                    new Dictionary<string, object?>
+                    {
+                        ["uid"] = userId,
+                        ["sid"] = sid,
+                        ["pid"] = pid,
+                        ["src"] = sourceFile,
+                        ["keys"] = new NpgsqlParameter("keys", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = keys }
+                    },
+                    cancellationToken);
+#pragma warning restore S3265
+
+                activity?.SetTag("vectorstore.deleted_count", deleted);
+                return deleted;
+            },
+            onSuccess: (deleted, elapsedMs) => VectorStoreTelemetry.LogDocumentReplaced(this._logger, elapsedMs, sourceFile, deleted),
+            onError: (ex, elapsedMs) => VectorStoreTelemetry.LogErrorReplacingDocument(this._logger, ex, elapsedMs, sourceFile));
     }
 
     /// <inheritdoc/>

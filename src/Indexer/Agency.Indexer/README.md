@@ -1,0 +1,35 @@
+# Agency.Indexer (`agency-index`)
+
+A .NET global tool that gives agents incremental semantic search over a folder of documentation.
+It indexes text files (Markdown, plain text, reStructuredText, AsciiDoc, HTML) into SQLite or
+PostgreSQL/pgvector through `IVectorStore`, re-embedding only files whose size or modification time
+changed, and answers queries with JSON.
+
+## Install
+
+```bash
+dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
+```
+
+`install-skill` writes the bundled `SKILL.md` to `~/.claude/skills/agency-index/` (Claude Code) and
+`~/Agents/skills/agency-index/` (Agency harness); pass `--dir <skills-root>` to choose another location.
+
+## Use
+
+```bash
+agency-index index  --index docs --root ./docs
+agency-index search --index docs --query "how are releases published?"
+```
+
+See `SKILL.md` for the full command reference, exit codes and configuration.
+
+## How it works
+
+- **Delta:** the manifest (an `IKVStore`) records each file's size, last-write time and chunk count.
+  A run re-chunks and re-embeds only files that were added or whose size or last-write time changed,
+  and removes files that disappeared. Contents of unchanged files are never read.
+- **Replace:** each changed file is written with `IVectorStore.ReplaceDocumentAsync` — all chunks
+  embedded in one batch, upserted, then the file's stale chunks deleted.
+- **Single writer:** SQLite uses an exclusively opened `<db>.<index>.lock` file; PostgreSQL uses a
+  session advisory lock. Both are released automatically if the process dies. SQLite runs in WAL
+  mode so searches never block on a running index.

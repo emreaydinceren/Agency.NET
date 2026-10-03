@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>agency-index</ToolCommandName>
+    <!-- A tool package ships its publish output; keep symbols in the .snupkg only (as for every other
+         package) and leave out the referenced projects' XML docs, which a CLI never reads. -->
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <!-- A tool's .snupkg is built from the same publish output, which now has no .pdb files (NU5017). -->
+    <IncludeSymbols>false</IncludeSymbols>
+    <Description>Command-line semantic indexer for agents: incrementally indexes a folder of text documents into SQLite or PostgreSQL/pgvector and answers semantic queries as JSON. Ships an agent skill (SKILL.md) installed with `agency-index install-skill`.</Description>
+    <PackageTags>agency.net;ai;agent;skill;rag;semantic-search;vector-store;cli;dotnet-tool</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Embeddings\Agency.Embeddings.OpenAI\Agency.Embeddings.OpenAI.csproj" />
+    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion\Agency.Ingestion.csproj" />
+    <ProjectReference Include="..\..\Ingestion\Agency.Ingestion.SemanticKernel\Agency.Ingestion.SemanticKernel.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Postgres\Agency.KeyValueStore.Sql.Postgres.csproj" />
+    <ProjectReference Include="..\..\KeyValueStore\Agency.KeyValueStore.Sql.Sqlite\Agency.KeyValueStore.Sql.Sqlite.csproj" />
+    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Postgres\Agency.VectorStore.Sql.Postgres.csproj" />
+    <ProjectReference Include="..\..\VectorStore\Agency.VectorStore.Sql.Sqlite\Agency.VectorStore.Sql.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="SKILL.md" LogicalName="SKILL.md" />
+    <InternalsVisibleTo Include="Agency.Indexer.Test" />
+  </ItemGroup>
+
+</Project>

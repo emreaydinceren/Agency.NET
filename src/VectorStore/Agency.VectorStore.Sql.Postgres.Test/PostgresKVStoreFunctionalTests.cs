@@ -15,6 +15,7 @@ namespace Agency.VectorStore.Sql.Postgres.Test;
 /// Skip with: dotnet test --filter "Category!=Functional"
 /// </summary>
 [Trait("Category", "Functional")]
+[Collection(SchemaCollection)]
 public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVStoreFunctionalTests.VectorStoreFixture>
 {
     private readonly VectorStoreFixture _fixture;
@@ -978,6 +979,13 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
     // ── Fixture ─────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// The xUnit collection shared by every test class using <see cref="VectorStoreFixture"/>. Each class gets
+    /// its own fixture instance; running them in one collection serializes their schema initialization, because
+    /// concurrent <c>CREATE TABLE IF NOT EXISTS</c> on a fresh database fails with a duplicate-key error.
+    /// </summary>
+    public const string SchemaCollection = "Postgres vector store schema";
+
+    /// <summary>
     /// Shared vector store fixture for PostgreSQL integration tests.
     /// Sets up a mock embedding generator for deterministic testing.
     /// </summary>
@@ -1022,6 +1030,17 @@ public sealed class PostgresKVStoreFunctionalTests : IClassFixture<PostgresKVSto
                         embeddings[i] = (float)random.NextDouble();
                     }
                     return Task.FromResult((ReadOnlyMemory<float>)embeddings.AsMemory());
+                });
+            mockGenerator
+                .Setup(g => g.GenerateEmbeddingsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+                .Returns<IEnumerable<string>, CancellationToken>(async (inputs, ct) =>
+                {
+                    var vectors = new List<ReadOnlyMemory<float>>();
+                    foreach (string input in inputs)
+                    {
+                        vectors.Add(await mockGenerator.Object.GenerateEmbeddingAsync(input, ct));
+                    }
+                    return vectors;
                 });
 
             this._embeddingGenerator = mockGenerator.Object;

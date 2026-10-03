@@ -10,6 +10,7 @@
     <GlobalPackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713" />
   </ItemGroup>
   <ItemGroup>
+    <PackageVersion Include="AngleSharp" Version="1.8.3" />
     <PackageVersion Include="Anthropic" Version="12.31.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="dotacp.client" Version="2026.7.19" />

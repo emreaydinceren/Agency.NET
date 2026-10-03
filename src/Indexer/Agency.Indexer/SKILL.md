@@ -1,13 +1,21 @@
 ---
 name: agency-index
 description: Semantic search over a folder of documentation (Markdown, text, reStructuredText, AsciiDoc, HTML) through the agency-index CLI. Indexes incrementally — only files whose size or modification time changed are re-embedded — and returns the most relevant passages as JSON.
-when_to_use: When you need to find information by meaning in a repository's documentation, notes, ADRs or other prose files — especially when grep would need exact wording you don't know, or the folder is too large to read. Index the folder first (cheap to repeat; unchanged files are skipped), then search.
+when_to_use: To find information by meaning in a large set of documentation, notes or ADRs when you don't know the exact wording. Not for code, exact identifiers or error strings (use grep), and not for small folders or ones with an index page (read it).
 ---
 
 # agency-index — semantic index for documentation
 
 `agency-index` keeps a named **index** of a directory's text documents and answers semantic queries
 against it. Every command prints a single JSON object on stdout; check the exit code before parsing.
+
+## When to use it — and when not
+
+- **Use it** for questions about meaning in prose ("how is X decided?", "why did we choose Y?") when you
+  don't know the exact wording, or there are too many documents to skim.
+- **Don't** use it for exact identifiers, error strings or file names: grep is cheaper and exact.
+- **Don't** use it for code: only documentation is indexed.
+- **Skip it** if the folder is small or has an index page (e.g. `docs/Home.md`); read that instead.
 
 ## Workflow
 
@@ -34,7 +42,10 @@ against it. Every command prints a single JSON object on stdout; check the exit 
    ```
 
    Each hit has `path`, `chunk`, `score` (cosine similarity, 0–1, higher is better) and `text`.
-   Read the file at `path` when you need more context than the chunk.
+
+   - Phrase the query as a natural-language question, not keywords.
+   - Answer from the returned `text` when it is enough; open the file at `path` only if you need more.
+   - If the hits don't answer the question, rephrase once, then fall back to grep. Don't keep re-querying.
 
 3. **Inspect / clean up** (no embedding endpoint needed):
 

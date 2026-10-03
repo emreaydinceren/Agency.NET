@@ -46,7 +46,6 @@ internal static class Program
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        WriteIndented = true,
 
         // Output goes to a terminal or an agent, never into HTML, so keep quotes and angle brackets readable.
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,

@@ -44,6 +44,22 @@ against it. Every command prints a single JSON object on stdout; check the exit 
    agency-index drop --index <name>      # delete the index
    ```
 
+## Naming and partitioning (several repos on one machine)
+
+All repos share one database, so an index name is global to the machine, and `search` only ever looks
+inside the single index you name — it never crosses indexes. Keep repos apart like this:
+
+1. **One index per repo, named after the repo folder** (lower-case): `/work/billing-api` → `billing-api`.
+2. **Before creating an index, run `agency-index indexes`.** Each entry shows its `root`.
+   - An index whose `root` is the current repo already exists → use that name; don't create another.
+   - Your intended name exists with a *different* `root` → another repo owns it. Pick a different name
+     (for example `<org>-<repo>`). Never `drop` or re-point an index you did not create for this repo.
+3. **Always pass `--index <this repo's name>` when searching.** To search several repos, run `search`
+   once per index and combine the results yourself.
+
+If `index` fails with exit code 2 saying the index is bound to another root, the name is taken —
+choose another name; do not retry the same one.
+
 ## Exit codes
 
 | Code | Meaning | What to do |

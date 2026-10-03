@@ -69,9 +69,13 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$SYNC_MAILMAP" > mailmap.txt
-          # Commits cherry-picked from Claude-authored PRs keep their original author; map it to the
-          # owner's public noreply identity so it never reaches the mirror (the verify step allows only that one).
-          printf '%s\n' 'Emre Aydinceren <13038027+emreaydinceren@users.noreply.github.com> <noreply@anthropic.com>' >> mailmap.txt
+          # Commits cherry-picked from Claude-authored PRs keep their original author identity. Map every
+          # email used by an author named Claude to the owner's public noreply identity (the only one the
+          # verify step allows). Scoped by author name so any other unexpected identity still fails closed.
+          git -C scrub-clone log --all --format='%an|%ae' | awk -F'|' '$1=="Claude"{print $2}' | sort -u |
+            while IFS= read -r email; do
+              printf 'Emre Aydinceren <13038027+emreaydinceren@users.noreply.github.com> <%s>\n' "$email" >> mailmap.txt
+            done
           printf '%s\n' "$SYNC_REPLACEMENTS" > replacements.txt
 
       - name: ✂️ Rewrite history (path strip + text redaction + mailmap)

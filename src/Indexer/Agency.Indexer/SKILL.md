@@ -217,4 +217,7 @@ slightly above the top score. It is a user-level setting: a repo's `.agency-inde
 - Environment variable form: `AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`,
   `AGENCY_INDEX_Embedding__BaseUrl`, `AGENCY_INDEX_Embedding__ModelId`, ...
 - An index is tied to the embedding model it was built with; switching models requires
-  `drop` and a fresh `index`.
+  `drop` and a fresh `index`, and the tool refuses to refresh or search an index with another model.
+  `agency-index setup` warns about every existing index a model change would orphan (`warnings`, or
+  `status: index_model_mismatch` for the index it is about to build) and never drops anything itself.
+  Change settings with `setup`, which merges into `indexer.json`; do not overwrite the file by hand.

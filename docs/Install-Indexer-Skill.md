@@ -1,26 +1,84 @@
 # Install the documentation search skill (`agency-index`)
 
-`agency-index` gives a coding agent semantic search over a folder of documentation. It needs a .NET SDK
-and an OpenAI-compatible embeddings endpoint (LM Studio, Ollama, OpenAI, ...). Installing takes a few
-minutes; the first index of a large docs tree takes longer (see [First index](#first-index)).
+Following this page installs `agency-index`, which gives a coding agent semantic search over a folder of
+documentation, and ends with a working skill and a passing smoke-test search. It needs a .NET SDK and an
+OpenAI-compatible embeddings endpoint (LM Studio, Ollama, OpenAI, ...). Installing takes a few minutes; the
+first index of a large docs tree takes longer (see [First index](#first-index)).
 
-## Ask your agent to do it
+To have an agent do it, tell it: `Install the Agency indexer skill from docs/Install-Indexer-Skill.md`.
+To remove it again, see [Where things live](#where-things-live) and [Remove it](#remove-it).
 
-Paste this into any coding agent:
+## If you are an agent reading this
 
-> Install the Agency.Indexer skill by following `docs/Install-Indexer-Skill.md`. Before changing anything,
-> run `agency-index doctor` (if the tool is missing, offer the global install and wait for my yes).
-> Then ask me, one question at a time with the default stated: skill scope, embeddings provider and
-> model, and which folder to index. Run `agency-index setup` without `--yes` and show me what it
-> would write; apply it with `--yes` only after I agree. Finish with the smoke-test search it runs
-> and tell me the result. Do not install anything globally, write outside the chosen scope, or start
-> a long index without telling me the `agency-index index --dry-run` estimate first.
+You were handed this page, so the job is to **install the skill**. Do the steps below. Do not summarise the
+page and do not ask the user what they want done with it. (If the request says remove or uninstall, go to
+[Remove it](#remove-it); if it says upgrade or refresh, go to [Upgrading](#upgrading).)
 
-Actions that need explicit approval: the global tool install, writing `~/.agency/indexer.json`, writing
-to `~/.claude/skills`, and a first index estimated to take over a minute.
+Use what the request already says and ask only for what is missing, **one question at a time, as numbered
+options with the default marked**. Read-only discovery (`agency-index doctor`, `agency-index indexes`) needs no
+question.
 
-To remove everything again, see [Where things live](#where-things-live) and [Remove it](#remove-it),
-which has its own agent prompt.
+### Questions to ask (skip any the request already answers)
+
+1. **How to set it up.** When nothing is stated, this is your first message, word for word:
+
+   > How do you want to set it up?
+   > 1. For this repo (the skill and the index settings live in this repo)
+   > 2. Globally (the skill is available in all your repos)
+
+   1 means `--scope repo`: the skill goes in `<repo>/.claude/skills` and the repo gets a `.agency-index.json`.
+   2 means `--scope user`: the skill goes in `~/.claude/skills` and `~/Agents/skills`, with no repo file. Either
+   way the tool is one global .NET tool and the embeddings settings are user-level.
+2. **Where the embeddings come from:** 1. LM Studio (local), 2. Ollama (local), 3. OpenAI, 4. OpenRouter,
+   5. another OpenAI-compatible URL. These map to `--endpoint lmstudio|ollama|openai|openrouter` or
+   `--embedding-url <url>`.
+3. **Which model.** If the request names one, use it. Otherwise run the `setup` preview without
+   `--embedding-model`: it picks the only embedding model the server lists, and when there are several it fails
+   with the list, which you show the user to choose from. Never guess a model.
+4. **How to authenticate.** A local server needs no key: say so and move on. OpenAI and OpenRouter need a key in
+   the environment variable named in [API key](#api-key-openai-openrouter) (`OPENAI_API_KEY`,
+   `OPENROUTER_API_KEY`): tell the user which to set, check with `agency-index doctor` (its `api_key` check never
+   shows the value), and **never ask for the key, print it, or put it in a command line or file**.
+5. **What to index now.** Scope 1: the default is `docs/` if it exists. Scope 2: ask whether to index this
+   repo's docs now or skip.
+
+### What to do
+
+1. Run `agency-index doctor`. If the command is missing, install the tool
+   (`dotnet tool install -g AgencyDotNet.Indexer --prerelease`, see [PATH](#1-install-the-tool)); asking the
+   user to set it up counts as approval for that install.
+2. Run `agency-index indexes` to see what already exists.
+3. Ask the questions above. Then **preview** the setup, which writes nothing:
+
+   ```bash
+   agency-index setup --scope repo --endpoint lmstudio --embedding-model <id> --index <name> --root <dir> --no-index
+   ```
+
+   (Scope 2: `--scope user` and no `--index`/`--root`.) Show the user the `config_before` / `config_after` it
+   reports, read `status` and `warnings`, and handle them:
+   - `name_taken`: the index name belongs to another repo's folder. Ask for another name.
+   - `index_model_mismatch`, or `warnings` listing indexes: those indexes were built with a different embedding
+     model and cannot be refreshed or searched with the new one. Name them and ask: **keep the old model**
+     (pass `--embedding-model <old>`) or **drop and rebuild** them (`agency-index drop --index <name>`).
+     Never drop without a yes.
+4. Apply: run the same command with `--yes`. It installs the skill, **merges** the settings into
+   `~/.agency/indexer.json` and, for scope 1, writes the repo's `.agency-index.json`. Never write or overwrite
+   `indexer.json` by hand; the manual steps further down only show what `setup` writes.
+5. If the user wants an index: run `agency-index index --index <name> --root <dir> --dry-run` (scope 1:
+   `agency-index index --dry-run`) and tell the user the file count and time estimate. Ask before a run that
+   will take more than a minute, then run the real `index`; its progress goes to stderr.
+6. Smoke test: run `agency-index search --query "<a question these docs answer>"` (add `--index <name>` for
+   scope 2) and report the top hit's file and score. If the result is empty or poor, say so plainly.
+7. Run `agency-index doctor` again; every check should be `ok`. Report anything that is not.
+8. Tell the user how to remove it again ([Remove it](#remove-it)).
+
+### Approvals and limits
+
+- A request that asks you to set it up (for example "set it up globally with model X") approves the global tool
+  install, the `setup` apply and the skill install in the scope chosen.
+- Ask first, every time, before: dropping or rebuilding an existing index, any overwrite that is not a merge,
+  an index run estimated over a minute, writing outside the chosen scope, and `--scope all` anything.
+- Do not claim it works until the smoke-test search has run. If you could not run a step, say which.
 
 ## Quick path
 
@@ -36,7 +94,8 @@ and exits 0 either way; branch on `status` and each check's `fix`. `setup` insta
 scope: this repo), picks the embedding model (the configured one if the server lists it, else the only
 model with "embed" in its id; otherwise it asks you to pass `--embedding-model`), measures the model's
 dimensions from the endpoint, merges `~/.agency/indexer.json` without touching other keys, and, when
-`--index` or `--root` is given, runs the first index and one smoke-test search (`--query` to change it).
+`--index` or `--root` is given, runs the first index and one smoke-test search (`--query` to change it;
+`--no-index` writes the config and repo file but skips indexing, so you can `--dry-run` first).
 With `--scope repo` and an index it also writes the repo's `.agency-index.json` (see
 [Per-repo config](#per-repo-config)). It stops with exit 2 and `status: name_taken` if the index name belongs to
 another root. Options:
@@ -53,7 +112,10 @@ environment first. The manual steps below show what it does.
 | Storage | SQLite / PostgreSQL + pgvector | SQLite |
 | What to index first | a folder, or skip | `docs/` if it exists |
 
-## Steps
+## Manual steps
+
+The agent steps above use `setup`, which does all of this and merges instead of overwriting. These are the same
+steps by hand.
 
 ### 1. Install the tool
 
@@ -87,9 +149,10 @@ chooses any other location. The output lists each file and whether it replaced a
 
 ### 3. Point it at an embeddings endpoint
 
-There is no default endpoint: `index` and `search` exit 2 until one is configured. Create
-`~/.agency/indexer.json` (on Windows `C:\Users\<you>\.agency\indexer.json`; Git Bash still resolves
-`~/.agency`):
+There is no default endpoint: `index` and `search` exit 2 until one is configured. `setup` writes this for
+you. By hand, **merge** these keys into `~/.agency/indexer.json` (on Windows
+`C:\Users\<you>\.agency\indexer.json`; Git Bash still resolves `~/.agency`) and never replace a file that
+already exists: other keys, and the model your existing indexes were built with, depend on it:
 
 ```json
 {
@@ -253,6 +316,9 @@ install.
 
 The default SQLite database is **one file for every index on the machine**, for every repo, which is why
 index names are global. Move it with the `Database` key in `indexer.json`, `AGENCY_INDEX_Database` or `--db`.
+
+To run against a different profile folder (a sandbox, CI, a test), set `AGENCY_INDEX_HOME`: the `.agency` folder
+and the user-scope skill folders are then taken from it instead of your real profile.
 
 You do not have to remember these: `agency-index doctor` prints the config path, the database path and
 every skill copy it finds (marking stale ones), and `agency-index indexes` lists each index with the root

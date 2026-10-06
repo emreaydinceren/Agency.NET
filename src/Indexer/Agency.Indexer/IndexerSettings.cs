@@ -82,7 +82,17 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
     public IndexDefaults Defaults { get; init; } = IndexDefaults.None;
 
     /// <summary>The default per-user directory holding <c>indexer.json</c> and the default SQLite database.</summary>
-    public static string DefaultHome => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agency");
+    public static string DefaultHome => Path.Combine(UserProfile, ".agency");
+
+    /// <summary>
+    /// The user profile folder that holds <c>.agency</c> and the user-scope skill folders: <c>AGENCY_INDEX_HOME</c> when set
+    /// (to run against a sandbox, in CI or in tests, since .NET ignores a <c>USERPROFILE</c> override on Windows), else the
+    /// real profile.
+    /// </summary>
+    public static string UserProfile =>
+        Environment.GetEnvironmentVariable("AGENCY_INDEX_HOME") is { Length: > 0 } overridden
+            ? overridden
+            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>Resolves the settings for <paramref name="args"/>.</summary>
     /// <param name="args">The parsed command line.</param>

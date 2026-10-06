@@ -118,6 +118,22 @@ choose another name; do not retry the same one.
 Only one process writes an index at a time; others get exit code 3 (or wait with `--wait`).
 Searches never block and may run while an index is being refreshed.
 
+## Removing it (when the user asks)
+
+1. Run `agency-index doctor` and `agency-index indexes`. They show the config path, the database path
+   (default `~/.agency/index.db`, one file holding every repo's indexes), every skill copy and each
+   index with its `root`. Show the user what you found and which indexes belong to this repo.
+2. Ask which they want: **this repo only** (`agency-index drop --index <this repo's name>`, then
+   `agency-index uninstall-skill --scope repo`) or **everything** (also drop the other indexes they
+   approve, `uninstall-skill --scope user` and any `--dir` used, delete `~/.agency/index.db*` and
+   `~/.agency/indexer.json`, and last `dotnet tool uninstall -g AgencyDotNet.Indexer`).
+3. Never drop another repo's index, delete the database or config, or uninstall the tool without the
+   user's explicit yes. On PostgreSQL `drop` leaves the tables; do not drop them unless asked.
+4. Finish by listing what is left. Tell the user to remove the API key variable
+   (`OPENAI_API_KEY` / `OPENROUTER_API_KEY` / `AGENCY_INDEX_Embedding__ApiKey`) themselves.
+
+The full steps are in `docs/Install-Indexer-Skill.md` ("Remove it") in the Agency repository.
+
 ## Configuration
 
 Settings come from command-line options, then `AGENCY_INDEX_*` environment variables, then

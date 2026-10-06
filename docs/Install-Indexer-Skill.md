@@ -19,6 +19,9 @@ Paste this into any coding agent:
 Actions that need explicit approval: the global tool install, writing `~/.agency/indexer.json`, writing
 to `~/.claude/skills`, and a first index estimated to take over a minute.
 
+To remove everything again, see [Where things live](#where-things-live) and [Remove it](#remove-it),
+which has its own agent prompt.
+
 ## Quick path
 
 ```bash
@@ -184,13 +187,87 @@ install.
   stdout stays one JSON object at the end. Run it in the background or with a generous timeout.
 - Later runs only process added, changed or deleted files and take seconds.
 
-## Uninstall
+## Where things live
+
+| What | Default location |
+| --- | --- |
+| The tool | `~/.dotnet/tools/agency-index` (Windows: `%USERPROFILE%\.dotnet\tools\agency-index.exe`); `dotnet tool list -g` shows it |
+| The skill, this repo | `<repo>/.claude/skills/agency-index/SKILL.md` |
+| The skill, all repos | `~/.claude/skills/agency-index/SKILL.md` and `~/Agents/skills/agency-index/SKILL.md` (or the `--dir` you installed with) |
+| Config | `~/.agency/indexer.json` (Windows: `C:\Users\<you>\.agency\indexer.json`) |
+| Database, SQLite (default) | `~/.agency/index.db`, plus `index.db-wal` and `index.db-shm` while it is open and `index.db.<index>.lock` while an index run holds the writer lock, all in the same folder |
+| Database, PostgreSQL | The database named by your connection string, in the tables `semantic_kv_store`, `semantic_kv_projects` and `kv_store` (and the `vector` extension) |
+| The API key | Not stored by the tool. It lives in your environment or secret manager (see [API key](#api-key-openai-openrouter)) |
+
+The default SQLite database is **one file for every index on the machine**, for every repo, which is why
+index names are global. Move it with the `Database` key in `indexer.json`, `AGENCY_INDEX_Database` or `--db`.
+
+You do not have to remember these: `agency-index doctor` prints the config path, the database path and
+every skill copy it finds (marking stale ones), and `agency-index indexes` lists each index with the root
+it belongs to.
+
+## Remove it
+
+### Ask your agent to remove it
+
+Paste this into any coding agent:
+
+> Remove the Agency.Indexer by following the "Remove it" section of `docs/Install-Indexer-Skill.md`.
+> First run `agency-index doctor` and `agency-index indexes`, and show me every skill copy, the config
+> file, the database and each index you found, saying which belong to this repo and which belong to other
+> repos. Ask me whether to remove only this repo's index and skill, or everything. Delete nothing until I
+> agree, remove only what I approved, uninstall the tool last, and finish by telling me what is left,
+> including the API key environment variable, which I will remove myself.
+
+Actions that need explicit approval: dropping an index that does not belong to this repo, deleting the
+database file or `indexer.json` (they serve every repo on the machine), deleting a skill copy outside
+this repo, and the global tool uninstall.
+
+### This repo only
+
+Leaves the tool, the config and other repos' indexes alone.
 
 ```bash
-agency-index drop --index <repo-name>
-agency-index uninstall-skill --scope repo      # or --scope user, or --dir <skills-root>
-dotnet tool uninstall -g AgencyDotNet.Indexer
+agency-index drop --index <repo-name>          # deletes its chunks, manifest and configuration
+agency-index uninstall-skill --scope repo      # or --dir <skills-root> if you installed with one
 ```
+
+### Everything
+
+Run in this order; the tool goes last because it deletes the `agency-index` command.
+
+1. Drop every index you are removing. `agency-index indexes` lists them; run
+   `agency-index drop --index <name>` for each. Skip this step if you delete the SQLite file in step 3.
+2. Remove the skill from every scope you installed it in:
+
+   ```bash
+   agency-index uninstall-skill --scope repo
+   agency-index uninstall-skill --scope user
+   agency-index uninstall-skill --dir <skills-root>      # only if you used --dir
+   ```
+
+   Each call lists the files it deleted and removes the `agency-index` folder if that leaves it empty.
+3. Remove the data.
+   - **SQLite:** delete `~/.agency/index.db` together with `index.db-wal`, `index.db-shm` and any
+     `index.db.*.lock` beside it, once no `agency-index index` run is in progress.
+   - **PostgreSQL:** `drop` deletes the rows, but the tables and the `vector` extension stay, and other
+     Agency applications can use those same tables. Drop the tables only if the database is dedicated to
+     the indexer.
+4. Delete `~/.agency/indexer.json`, and the `~/.agency` folder if it is then empty.
+5. Uninstall the tool:
+
+   ```bash
+   dotnet tool uninstall -g AgencyDotNet.Indexer
+   ```
+
+6. Remove the API key: delete the `OPENAI_API_KEY` / `OPENROUTER_API_KEY` /
+   `AGENCY_INDEX_Embedding__ApiKey` entry from your profile or secret manager, and revoke the key at the
+   provider if nothing else uses it. A tool cannot remove it for you.
+
+Check it worked: `agency-index` is "not found", `dotnet tool list -g` no longer lists
+`AgencyDotNet.Indexer`, and the skill, config and database paths from the table above are gone.
+
+## Upgrading
 
 After upgrading the tool, `doctor` flags a skill that no longer matches the bundled one; re-run
 `setup --yes` (or `install-skill` with the same scope) to refresh it.

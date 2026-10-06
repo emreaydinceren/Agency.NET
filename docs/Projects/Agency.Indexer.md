@@ -48,7 +48,10 @@ database and key settings are ignored there, because the file arrives with the r
 line beats `AGENCY_INDEX_*` variables, which beat the repo file, which beats the user file. Configuration
 (highest precedence first): command-line options, `AGENCY_INDEX_*` environment variables
 (`AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`, `AGENCY_INDEX_Embedding__BaseUrl`, ...), then
-`~/.agency/indexer.json`. The default provider is SQLite at `~/.agency/index.db`.
+`~/.agency/indexer.json`. The default provider is SQLite at `~/.agency/index.db`. For PostgreSQL (`Provider: postgres`, pgvector required) the
+connection string contains the password, so it is read from `AGENCY_INDEX_Database` and `setup` never writes it
+to `indexer.json`; `doctor` flags one left there. See
+[Install-Indexer-Skill](../Install-Indexer-Skill.md#postgresql-optional).
 
 ## How It Works
 

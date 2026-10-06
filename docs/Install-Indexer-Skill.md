@@ -8,6 +8,9 @@ first index of a large docs tree takes longer (see [First index](#first-index)).
 To have an agent do it, tell it: `Install the Agency indexer skill from docs/Install-Indexer-Skill.md`.
 To remove it again, see [Where things live](#where-things-live) and [Remove it](#remove-it).
 
+Curious how it works under the hood: how files are selected, chunked and embedded, the commands, and how the
+single writer lock works? See [Agency.Indexer](Projects/Agency.Indexer.md).
+
 ## If you are an agent reading this
 
 You were handed this page, so the job is to **install the skill**. Do the steps below. Do not summarise the
@@ -39,7 +42,11 @@ question.
    the environment variable named in [API key](#api-key-openai-openrouter) (`OPENAI_API_KEY`,
    `OPENROUTER_API_KEY`): tell the user which to set, check with `agency-index doctor` (its `api_key` check never
    shows the value), and **never ask for the key, print it, or put it in a command line or file**.
-5. **What to index now.** Scope 1: the default is `docs/` if it exists. Scope 2: ask whether to index this
+5. **Storage: do not ask.** Use SQLite unless the request mentions PostgreSQL or a database server. For PostgreSQL,
+   pass `--provider postgres` to `setup`, tell the user to set the `AGENCY_INDEX_Database` environment variable
+   (see [PostgreSQL](#postgresql-optional)), and **never ask for, print or store the connection string**: it contains
+   the password.
+6. **What to index now.** Scope 1: the default is `docs/` if it exists. Scope 2: ask whether to index this
    repo's docs now or skip.
 
 ### What to do
@@ -109,7 +116,7 @@ environment first. The manual steps below show what it does.
 | --- | --- | --- |
 | Skill scope | this repo (`<repo>/.claude/skills`) / all my repos (`~/.claude/skills`) | this repo |
 | Embeddings | LM Studio / Ollama / OpenAI / other OpenAI-compatible | LM Studio |
-| Storage | SQLite / PostgreSQL + pgvector | SQLite |
+| Storage | SQLite / PostgreSQL + pgvector (see [PostgreSQL](#postgresql-optional)) | SQLite |
 | What to index first | a folder, or skip | `docs/` if it exists |
 
 ## Manual steps
@@ -232,7 +239,48 @@ Rules that keep it secret:
 - A key left in `indexer.json` is flagged by `doctor` as `api_key_storage`; delete it from the file and
   treat it as exposed if the file was ever shared or committed.
 
-For PostgreSQL, add `"Provider": "postgres"` and `"Database": "<connection string>"` (pgvector required).
+### PostgreSQL (optional)
+
+SQLite is the default and needs nothing. Use PostgreSQL with pgvector when several machines or people should
+share one index database, or you already run one. The connection string contains the **password, so it is a
+secret like the API key: it goes in the `AGENCY_INDEX_Database` environment variable and never in
+`indexer.json`, a repo file or a command line you keep.**
+
+1. **A server with pgvector.** If you have none, this runs one locally (the image already includes the extension):
+
+   ```bash
+   docker run -d --name agency-pg -e POSTGRES_USER=agency -e POSTGRES_PASSWORD=<choose a password> \
+     -e POSTGRES_DB=agency -p 5432:5432 pgvector/pgvector:pg18-trixie
+   ```
+
+2. **Choose PostgreSQL** (this part is not secret, so `indexer.json` keeps it):
+
+   ```json
+   { "Provider": "postgres" }
+   ```
+
+   or run `agency-index setup --provider postgres ...`, which saves exactly that and tells you the connection
+   string was not saved. Without a connection string, every command stops with a clear error instead of
+   quietly using SQLite.
+3. **Set the connection string in the environment**, the same ways as the [API key](#managing-the-key):
+
+   ```text
+   AGENCY_INDEX_Database=Host=localhost;Port=5432;Database=agency;Username=agency;Password=<password>
+   ```
+
+4. **Check it:** `agency-index doctor` shows `database` as "PostgreSQL connection opened", and flags
+   `database_credentials` if a password was left in `indexer.json` (delete it from the file and treat the
+   password as exposed if the file was ever shared).
+
+Good to know:
+
+- **First run:** the tool runs `CREATE EXTENSION IF NOT EXISTS vector` and creates `semantic_kv_store`,
+  `semantic_kv_projects` and `kv_store` in the database. The user needs permission to create tables, and to create
+  the extension unless an administrator has already run `CREATE EXTENSION vector;` there once.
+- **Embedding size is fixed per database:** the vector column takes its width from `Dimensions` when the tables
+  are first created. To switch to a model with a different size, use a new database (or drop those tables).
+- **Shared tables:** other Agency applications can use the same database and tables, which is why
+  [Remove it](#remove-it) deletes the rows but leaves the tables.
 
 ### 4. Index and verify
 

@@ -123,7 +123,7 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
         string database = config["Database"]
             ?? (provider == StorageProvider.Sqlite
                 ? Path.Combine(home, "index.db")
-                : throw new UsageException("Postgres needs a connection string: --db, AGENCY_INDEX_Database, or \"Database\" in indexer.json."));
+                : throw new UsageException("Postgres needs a connection string: set the AGENCY_INDEX_Database environment variable (it contains the password, so keep it out of files), or pass --db."));
 
         // Indexing is unattended and a local model can time out under load, so transient failures wait before retrying.
         var embedding = new EmbeddingOptions { RetryDelayMs = DefaultRetryDelayMs };

@@ -201,8 +201,12 @@ the index.
 default because scores depend on the model; to calibrate, search an index for something unrelated and set it
 slightly above the top score. It is a user-level setting: a repo's `.agency-index.json` cannot set it.
 
-- `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (`Database` is
-  then a connection string; requires the pgvector extension).
+- `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (requires a server with the
+  pgvector extension). For PostgreSQL the connection string contains the password, so it is a secret like the API
+  key: set it in the `AGENCY_INDEX_Database` environment variable, never in `indexer.json` (`doctor` flags it as
+  `database_credentials`) and never print it. `setup --provider postgres` saves only `"Provider": "postgres"`.
+  Without a connection string every command fails with a clear error instead of using SQLite. The vector column
+  width is fixed when the tables are first created, so a model with a different size needs a new database.
 - There is no default embedding endpoint: until one is configured, `index` and `search` exit 2.
   `agency-index setup --endpoint lmstudio` (add `--yes` to apply) picks the model and measures
   `Dimensions` for you.

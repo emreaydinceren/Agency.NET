@@ -12,6 +12,9 @@ internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator
     /// <summary>The embedding width.</summary>
     public const int Dimensions = 64;
 
+    /// <summary>When set, a batch containing an input with this text fails like an embedding server error would.</summary>
+    public string? FailWhenInputContains { get; set; }
+
     /// <summary>Every input passed to <see cref="GenerateEmbeddingsAsync"/>, in call order.</summary>
     public List<string> EmbeddedInputs { get; } = [];
 
@@ -23,6 +26,11 @@ internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator
     public Task<IReadOnlyList<ReadOnlyMemory<float>>> GenerateEmbeddingsAsync(IEnumerable<string> inputs, CancellationToken cancellationToken = default)
     {
         List<string> list = inputs.ToList();
+        if (this.FailWhenInputContains is { } marker && list.Any(i => i.Contains(marker, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("embedding server refused the request: model is overloaded", new TimeoutException("the operation timed out"));
+        }
+
         this.EmbeddedInputs.AddRange(list);
         return Task.FromResult<IReadOnlyList<ReadOnlyMemory<float>>>(list.Select(Embed).ToList());
     }

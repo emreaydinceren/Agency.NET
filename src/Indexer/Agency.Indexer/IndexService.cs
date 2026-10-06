@@ -29,8 +29,8 @@ internal enum IndexStatus
 
 /// <summary>A file that could not be indexed.</summary>
 /// <param name="Path">The full path of the file.</param>
-/// <param name="Error">Why it failed.</param>
-internal sealed record FailedFile(string Path, string Error);
+/// <param name="Reason">Why it failed: the exception chain, and for an HTTP failure the status and the start of the response body.</param>
+internal sealed record FailedFile(string Path, string Reason);
 
 /// <summary>Result of an <c>index</c> run.</summary>
 internal sealed record IndexResult(
@@ -139,7 +139,9 @@ internal sealed class IndexService(
             {
                 // One unreadable file or failed embedding call must not abort the rest of the run; the file
                 // keeps its old manifest entry (or none), so the next run retries it.
-                failed.Add(new FailedFile(file.Path, ex.Message));
+                string reason = FailureReason.Of(ex);
+                failed.Add(new FailedFile(file.Path, reason));
+                progress?.Invoke($"FAILED {file.Path}: {reason}");
             }
 
             progress?.Invoke(ProgressLine(i + 1, toIndex.Count, chunksWritten, failed.Count, stopwatch.Elapsed));

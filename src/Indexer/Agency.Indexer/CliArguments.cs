@@ -6,7 +6,7 @@ namespace Agency.Indexer;
 /// <param name="Flags">Boolean flags that were present.</param>
 internal sealed record CliArguments(string Command, IReadOnlyDictionary<string, string> Options, IReadOnlySet<string> Flags)
 {
-    private static readonly HashSet<string> KnownFlags = new(StringComparer.Ordinal) { "wait", "help", "yes", "dry-run" };
+    private static readonly HashSet<string> KnownFlags = new(StringComparer.Ordinal) { "wait", "help", "yes", "dry-run", "no-text" };
 
     /// <summary>Parses <paramref name="args"/>; throws <see cref="UsageException"/> on malformed input.</summary>
     public static CliArguments Parse(IReadOnlyList<string> args)
@@ -52,6 +52,20 @@ internal sealed record CliArguments(string Command, IReadOnlyDictionary<string, 
 
     /// <summary>Returns the value of option <paramref name="name"/>; throws <see cref="UsageException"/> when absent.</summary>
     public string Require(string name) => this.Get(name) ?? throw new UsageException($"Missing required option --{name}.");
+
+    /// <summary>Returns option <paramref name="name"/> parsed as a number from 0 to 1, or <see langword="null"/> when absent.</summary>
+    public double? GetFraction(string name)
+    {
+        string? raw = this.Get(name);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        return double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value) && value is >= 0 and <= 1
+            ? value
+            : throw new UsageException($"Option --{name} must be a number between 0 and 1.");
+    }
 
     /// <summary>Returns option <paramref name="name"/> parsed as a positive integer, or <paramref name="fallback"/> when absent.</summary>
     public int GetPositiveInt(string name, int fallback)

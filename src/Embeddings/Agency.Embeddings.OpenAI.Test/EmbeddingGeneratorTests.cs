@@ -221,6 +221,60 @@ public sealed class EmbeddingGeneratorTests
     }
 
     /// <summary>
+    /// Verifies a transient failure is retried after an exponentially growing wait, then succeeds, and a permanent
+    /// error is not retried at all.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEmbeddingsAsync_TransientFailure_RetriesWithBackoff_PermanentIsNot()
+    {
+        var transient = new FlakyHandler(failures: 2, System.Net.HttpStatusCode.ServiceUnavailable);
+        var options = new EmbeddingOptions { BaseUrl = DefaultOptions.BaseUrl, ModelId = DefaultOptions.ModelId, ApiKey = DefaultOptions.ApiKey, RetryDelayMs = 100 };
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        var results = await new EmbeddingGenerator(options, transient).GenerateEmbeddingsAsync(["x"], TestContext.Current.CancellationToken);
+
+        Assert.Single(results);
+        Assert.Equal(3, transient.Calls);
+        Assert.InRange(started.ElapsedMilliseconds, 270, 550); // waits of 100ms then 200ms (timer granularity can shave a little); the wrong exponent would wait 200ms then 400ms
+
+        var permanent = new FlakyHandler(failures: 99, System.Net.HttpStatusCode.BadRequest);
+        await Assert.ThrowsAnyAsync<Exception>(() => new EmbeddingGenerator(options, permanent).GenerateEmbeddingsAsync(["x"], TestContext.Current.CancellationToken));
+        Assert.Equal(1, permanent.Calls);
+    }
+
+    /// <summary>Verifies <see cref="EmbeddingOptions.MaxRetries"/> bounds the attempts and a negative delay is rejected.</summary>
+    [Fact]
+    public async Task GenerateEmbeddingsAsync_MaxRetries_BoundsAttempts()
+    {
+        var handler = new FlakyHandler(failures: 99, System.Net.HttpStatusCode.ServiceUnavailable);
+        var options = new EmbeddingOptions { BaseUrl = DefaultOptions.BaseUrl, ModelId = DefaultOptions.ModelId, ApiKey = DefaultOptions.ApiKey, MaxRetries = 1, RetryDelayMs = 1 };
+
+        await Assert.ThrowsAnyAsync<Exception>(() => new EmbeddingGenerator(options, handler).GenerateEmbeddingsAsync(["x"], TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, handler.Calls);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EmbeddingGenerator(new EmbeddingOptions { BaseUrl = "http://x/v1", ModelId = "m", ApiKey = "k", RetryDelayMs = -1 }, handler));
+    }
+
+    /// <summary>Fails the first <c>failures</c> requests with a status code, then answers with one vector.</summary>
+    private sealed class FlakyHandler(int failures, System.Net.HttpStatusCode status) : HttpMessageHandler
+    {
+        private int _calls;
+
+        public int Calls => this._calls;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            int call = Interlocked.Increment(ref this._calls);
+            return Task.FromResult(call <= failures
+                ? new HttpResponseMessage(status) { Content = new StringContent("busy") }
+                : new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(StubHttpMessageHandler.BuildEmbeddingsJson([0.1f]), System.Text.Encoding.UTF8, "application/json"),
+                });
+        }
+    }
+
+    /// <summary>
     /// Answers each embeddings request with one vector per input, recording the batch sizes and the
     /// highest number of requests in flight at once.
     /// </summary>
@@ -272,4 +326,4 @@ public sealed class EmbeddingGeneratorTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             generator.GenerateEmbeddingsAsync(["hello"], cts.Token));
     }
-}
+}

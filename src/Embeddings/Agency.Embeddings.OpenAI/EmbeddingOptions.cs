@@ -40,4 +40,16 @@ public sealed class EmbeddingOptions
     /// into sequential requests so a single big document cannot flood the server. Defaults to 32.
     /// </summary>
     public int MaxBatchSize { get; set; } = 32;
-}
+
+    /// <summary>
+    /// Gets or sets how many times a failed request is retried when the failure is transient (429, 5xx, a timeout or a
+    /// connection error); <see langword="null"/> keeps the SDK default of 3. Permanent errors such as 400 are never retried.
+    /// </summary>
+    public int? MaxRetries { get; set; }
+
+    /// <summary>
+    /// Gets or sets the wait before the first retry in milliseconds; each further retry waits twice as long, up to 30 seconds.
+    /// The default 0 keeps the SDK's near-immediate retries, which suit an interactive caller that should fail fast.
+    /// </summary>
+    public int RetryDelayMs { get; set; }
+}

@@ -29,9 +29,11 @@ internal static class Program
         agency-index — incremental semantic index over a folder of text documents.
 
         Commands:
-          index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--max-file-kb 1024] [--wait] [--dry-run]
-                  (progress goes to stderr; --dry-run reports the delta, chunk count and a time estimate without writing)
-          search  --index <name> --query <text> [--top 5]
+          index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--max-file-kb 1024] [--wait] [--dry-run] [--log <file>]
+                  (progress and each failed file with its reason go to stderr, and to --log <file> with timestamps; --dry-run reports the delta, chunk count and a time estimate without writing)
+          search  --index <name> --query <text> [--top 5] [--min-score 0..1] [--within 0..1] [--no-text] [--snippet-chars N]
+                  --min-score (or Search:MinScore in indexer.json) drops weaker hits; --within keeps hits within that distance of the best;
+                  filtered hits are counted in "filtered" with the pre-filter "best_score". --no-text / --snippet-chars shrink the output.
           list    --index <name>
           indexes
           drop    --index <name> [--wait]
@@ -186,13 +188,22 @@ internal static class Program
                     return Write(ExitOk, new { status = "dry_run", plan = await service.DryRunAsync(request, embeddings, ct) });
                 }
 
-                // Progress goes to stderr so stdout stays the single JSON object the calling agent parses.
-                IndexResult indexed = await service.IndexAsync(request, ct, Console.Error.WriteLine);
-                return Write(ExitCodeFor(indexed.Status), indexed);
+                // Progress and failures go to stderr (and --log) so stdout stays the single JSON object the calling agent parses.
+                using (var log = new RunLog(args.Get("log")))
+                {
+                    IndexResult indexed = await service.IndexAsync(request, ct, log.Write);
+                    log.Write($"finished: {indexed.Status}, {indexed.Added.Count} added, {indexed.Changed.Count} changed, {indexed.Failed.Count} failed, {indexed.DurationMs} ms");
+                    return Write(ExitCodeFor(indexed.Status), indexed);
+                }
 
             case "search":
                 IReadOnlyList<SearchResultHit> hits = await service.SearchAsync(IndexName(settings), args.Require("query"), args.GetPositiveInt("top", 5), ct);
-                return Write(ExitOk, new { status = "ok", index = IndexName(settings), hits });
+                var searchOptions = new SearchOptions(
+                    settings.SearchMinScore,
+                    args.GetFraction("within"),
+                    args.Flags.Contains("no-text"),
+                    args.Get("snippet-chars") is null ? null : args.GetPositiveInt("snippet-chars", 1));
+                return Write(ExitOk, SearchResponse.From(IndexName(settings), hits, searchOptions));
 
             case "list":
                 var (config, files) = await service.ListAsync(IndexName(settings), ct);

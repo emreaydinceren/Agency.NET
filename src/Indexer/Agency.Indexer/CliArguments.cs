@@ -6,7 +6,7 @@ namespace Agency.Indexer;
 /// <param name="Flags">Boolean flags that were present.</param>
 internal sealed record CliArguments(string Command, IReadOnlyDictionary<string, string> Options, IReadOnlySet<string> Flags)
 {
-    private static readonly HashSet<string> KnownFlags = new(StringComparer.Ordinal) { "wait", "help" };
+    private static readonly HashSet<string> KnownFlags = new(StringComparer.Ordinal) { "wait", "help", "yes", "dry-run" };
 
     /// <summary>Parses <paramref name="args"/>; throws <see cref="UsageException"/> on malformed input.</summary>
     public static CliArguments Parse(IReadOnlyList<string> args)

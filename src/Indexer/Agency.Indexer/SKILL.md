@@ -11,10 +11,18 @@ against it. Every command prints a single JSON object on stdout, including failu
 
 ## Prerequisites — check before relying on it
 
-Run `agency-index indexes`. If the command is not found, or it exits 2 with "no embedding endpoint",
-the tool is not set up (see [Configuration](#configuration)): don't try to fix it mid-task, use grep.
-The first `index` of a large folder can take minutes (about 3 minutes for 55 files on a local model);
-refreshes after that take seconds.
+Run `agency-index doctor`: one JSON object whose `status` is `ok` or `problems`, with a `fix` for each
+failing check. (It exits 0 either way; `agency-index indexes` is the lighter check.) If the command is
+not found, or `doctor` reports `embedding_config`/`endpoint` problems, the tool is not set up (see
+[Configuration](#configuration), or `agency-index setup` which does it for you after the user agrees):
+don't try to fix it mid-task, use grep.
+
+The first `index` of a large folder can take minutes (about 3 minutes for 55 files on a local model,
+over 10 for a few hundred files). Run `agency-index index --index <name> --root <dir> --dry-run` first: it
+writes nothing and reports the chunk count and an estimated time. A real run prints progress to
+stderr (`indexing 12/340 files, 410 chunks, ~6 min left`) and the JSON result to stdout at the end;
+tell the user the estimate first, and run it in the background or with a long timeout. Refreshes after
+that take seconds.
 
 ## When to use it — and when not
 
@@ -39,6 +47,8 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
 
    - `<name>`: letters, digits, `.`, `_`, `-` (case-insensitive). One index = one root directory.
    - After the first run `--root` may be omitted: `agency-index index --index <name>`.
+   - If the repo has a `.agency-index.json` (`agency-index doctor` shows `repo_config` and `defaults`), omit
+     `--index` and `--root` entirely: they are read from it, from any folder of the repo.
    - Default file types: `.md .markdown .mdx .txt .rst .adoc .html .htm` plus `README`, `CHANGELOG`,
      `CONTRIBUTING`. Override with `--ext .md,.html` and/or `--names README,NOTES`. The selection is
      remembered; files that stop matching are removed from the index.
@@ -86,6 +96,7 @@ All repos share one database, so an index name is global to the machine, and `se
 inside the single index you name — it never crosses indexes. Keep repos apart like this:
 
 1. **One index per repo, named after the repo folder** (lower-case): `/work/billing-api` → `billing-api`.
+   If the repo has a `.agency-index.json`, its `Index` is the name: use it.
 2. **Before creating an index, run `agency-index indexes`.** Each entry shows its `root`.
    - An index whose `root` is the current repo already exists → use that name; don't create another.
    - Your intended name exists with a *different* `root` → another repo owns it. Pick a different name
@@ -110,6 +121,33 @@ choose another name; do not retry the same one.
 Only one process writes an index at a time; others get exit code 3 (or wait with `--wait`).
 Searches never block and may run while an index is being refreshed.
 
+## Removing it (when the user asks)
+
+Use `agency-index uninstall`; it previews by default and changes nothing without `--yes`.
+
+1. Run `agency-index uninstall` and show the user the JSON: the skill files, each index with
+   `this_repo` (does its `root` lie inside this repo?), the database files, the config file and
+   `remaining`. The default scope `repo` only touches this repo's indexes and skill; `--scope all` also
+   covers every other repo's indexes, every skill copy, the SQLite database files (one file holding all
+   repos' indexes, default `~/.agency/index.db`) and `~/.agency/indexer.json`.
+2. Ask which scope they want, and get an explicit yes before `agency-index uninstall --yes`
+   (`--scope all --yes` for everything). `all` drops other repos' indexes: say so.
+3. Exit 1 with `locked` means another run is writing an index; nothing shared was deleted. Retry later.
+4. It never removes the tool. Report `remaining` and run `dotnet tool uninstall -g AgencyDotNet.Indexer`
+   only if the user says so. The API key variable (`OPENAI_API_KEY` / `OPENROUTER_API_KEY` /
+   `AGENCY_INDEX_Embedding__ApiKey`) is theirs to remove. On PostgreSQL the tables stay; leave them.
+
+`uninstall` also deletes the repo's own `.agency-index.json`. The full description is in
+`docs/Install-Indexer-Skill.md` ("Remove it") in the Agency repository.
+
+## Repo config
+
+A repo may have `.agency-index.json` (found by walking up from the current folder; the nearest wins) with
+`Index`, `Root` (relative to the file), `Extensions`, `Names` and `MaxFileKb`. Precedence per key: command line,
+`AGENCY_INDEX_*` environment, repo file, `~/.agency/indexer.json`, default. **Only those keys are read from the
+repo file**: never put an endpoint, database or key in it; they are ignored, and `doctor` reports them.
+`agency-index setup --index <name> --root <dir> --yes` writes it.
+
 ## Configuration
 
 Settings come from command-line options, then `AGENCY_INDEX_*` environment variables, then
@@ -119,15 +157,32 @@ Settings come from command-line options, then `AGENCY_INDEX_*` environment varia
 {
   "Provider": "sqlite",
   "Database": "/home/me/.agency/index.db",
-  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-nomic-embed-text-v1.5", "ApiKey": "unused", "Dimensions": 768 }
+  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-qwen3-embedding-0.6b", "Dimensions": 1024 }
 }
 ```
+
+`Dimensions` must equal the model's vector length (default 1024 when omitted); a wrong value breaks
+the index.
+
+| Model | Dimensions |
+|-------|------------|
+| `text-embedding-nomic-embed-text-v1.5` | 768 |
+| `text-embedding-qwen3-embedding-0.6b` | 1024 |
+| `text-embedding-3-small` (OpenAI) | 1536 |
 
 - `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (`Database` is
   then a connection string; requires the pgvector extension).
 - There is no default embedding endpoint: until one is configured, `index` and `search` exit 2.
-  Paths above use POSIX style; on Windows use e.g. `C:\Users\me\.agency\index.db`.
-- Any OpenAI-compatible embeddings endpoint works (OpenAI, LM Studio, Ollama's `/v1`, ...).
+  `agency-index setup --endpoint lmstudio` (add `--yes` to apply) picks the model and measures
+  `Dimensions` for you.
+  Paths above use POSIX style; on Windows use e.g. `C:\Users\me\.agency\index.db` (Git Bash still
+  resolves `~/.agency`). If `agency-index` is "not found" right after installing, add
+  `~/.dotnet/tools` (Windows: `%USERPROFILE%\.dotnet\tools`) to `PATH`.
+- Any OpenAI-compatible embeddings endpoint works (OpenAI, OpenRouter, LM Studio, Ollama's `/v1`, ...).
+- **The API key is a secret: keep it in the environment, never in `indexer.json` or on a command line.**
+  Local servers need none. Hosted ones read `OPENAI_API_KEY` (api.openai.com) or `OPENROUTER_API_KEY`
+  (openrouter.ai); any other endpoint reads `AGENCY_INDEX_Embedding__ApiKey`. `doctor` tells you when a
+  hosted endpoint has no key or a key sits in the config file. Never print or log the key.
 - Environment variable form: `AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`,
   `AGENCY_INDEX_Embedding__BaseUrl`, `AGENCY_INDEX_Embedding__ModelId`, ...
 - An index is tied to the embedding model it was built with; switching models requires

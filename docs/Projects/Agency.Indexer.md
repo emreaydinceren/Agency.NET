@@ -16,7 +16,8 @@ object to stdout.
 dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 ```
 
-`install-skill` writes `SKILL.md` to `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`
+For the full walk-through (scope, embeddings endpoint, `PATH`, first index, agent runbook) see
+[Install the documentation search skill](../Install-Indexer-Skill.md). `install-skill` writes `SKILL.md` to `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`
 (or `--dir <skills-root>`). Until a clean (non-`-g<sha>`) version is published to nuget.org, add
 `--prerelease` to the install.
 
@@ -24,17 +25,28 @@ dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 
 | Command | Purpose |
 |---|---|
-| `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--max-file-kb N] [--wait]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. |
+| `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--max-file-kb N] [--wait] [--dry-run]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. Progress lines go to stderr; `--dry-run` reports the delta, chunk count and a time estimate without writing. |
 | `search --index <name> --query <text> [--top N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity) and `text`. |
 | `list --index <name>` | The index configuration and every indexed file with size, last-write time and chunk count. |
 | `indexes` | Every index and its root. |
 | `drop --index <name> [--wait]` | Delete the index's chunks, manifest and configuration. |
-| `install-skill [--dir <skills-root>]` | Write the bundled `SKILL.md`. |
+| `install-skill [--dir <skills-root> \| --scope repo\|user]` | Write the bundled `SKILL.md` (default scope `user`); the output says which files replaced an existing one. |
+| `uninstall [--scope repo\|all] [--dir <skills-root>] [--yes]` | Remove the skill and the data. `repo` (default) drops this repo's indexes and its skill; `all` also drops every index, removes every skill copy, the SQLite database files and `indexer.json`. Previews unless `--yes`; never removes the tool itself (the last step is returned under `remaining`). |
+| `uninstall-skill [--dir <skills-root> \| --scope repo\|user]` | Remove the skill file written by `install-skill`. |
+| `doctor` | Read-only JSON report of every prerequisite (tool, skill, config, endpoint, model, dimensions, database, indexes), each with a `fix`. Exits 0; branch on `status`. |
+| `setup [--scope] [--endpoint lmstudio\|ollama\|openai\|openrouter \| --embedding-url <url>] [--embedding-model <id>] [--index <name>] [--root <dir>] [--yes]` | Install the skill, pick the embedding model, measure its dimensions, merge `indexer.json`, optionally run the first index and a smoke search. Without `--yes` it only previews. |
 
 Exit codes: `0` ok, `1` failure (for `index`: some files failed; the rest was applied), `2` usage or
 configuration error, `3` another process holds the index's writer lock.
 
-Configuration (highest precedence first): command-line options, `AGENCY_INDEX_*` environment variables
+The embeddings API key is a secret and is read from the environment (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or
+`AGENCY_INDEX_Embedding__ApiKey`); `setup` never writes it to a file and `doctor` flags one stored in
+`indexer.json`. A repo can carry its own defaults in `.agency-index.json` at its root (found by walking up from the current
+folder, nearest wins): `Index`, `Root` (relative to the file), `Extensions`, `Names` and `MaxFileKb`, so commands
+work from any folder of the repo without `--index`/`--root`. Only those keys are read from it; endpoint, model,
+database and key settings are ignored there, because the file arrives with the repository. Per key, the command
+line beats `AGENCY_INDEX_*` variables, which beat the repo file, which beats the user file. Configuration
+(highest precedence first): command-line options, `AGENCY_INDEX_*` environment variables
 (`AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`, `AGENCY_INDEX_Embedding__BaseUrl`, ...), then
 `~/.agency/indexer.json`. The default provider is SQLite at `~/.agency/index.db`.
 
@@ -48,8 +60,8 @@ Configuration (highest precedence first): command-line options, `AGENCY_INDEX_*`
    content hashing) and classifies each file as added, changed, removed or unchanged.
 3. **Write** — each added or changed file is read (HTML is reduced to text by `HtmlTextExtractor`),
    chunked with [Agency.Ingestion.SemanticKernel](Agency.Ingestion.SemanticKernel.md), and written with
-   `IVectorStore.ReplaceDocumentAsync` ([Agency.VectorStore.Common](Agency.VectorStore.Common.md)) — one
-   embedding batch per file, stale chunks removed. Its manifest entry is saved afterwards, so a crash
+   `IVectorStore.ReplaceDocumentAsync` ([Agency.VectorStore.Common](Agency.VectorStore.Common.md)) — sequential
+   embedding requests of at most `Embedding:MaxBatchSize` (default 32) chunks per file, stale chunks removed. Its manifest entry is saved afterwards, so a crash
    between the two just re-indexes that file next run. Removed files are replaced with no chunks.
 4. **Storage** — every index is a vector-store project owned by the user `agency-index`. The manifest and
    index configuration live in an [`IKVStore`](Agency.KeyValueStore.Common.md): file entries under the

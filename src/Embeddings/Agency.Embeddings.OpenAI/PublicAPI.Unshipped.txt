@@ -1,1 +1,3 @@
 #nullable enable
+Agency.Embeddings.OpenAI.EmbeddingOptions.MaxBatchSize.get -> int
+Agency.Embeddings.OpenAI.EmbeddingOptions.MaxBatchSize.set -> void

@@ -202,6 +202,62 @@ public sealed class EmbeddingGeneratorTests
     }
 
     /// <summary>
+    /// Verifies that an oversized batch is split into several requests of at most
+    /// <see cref="EmbeddingOptions.MaxBatchSize"/> inputs, so one large document cannot flood the server.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEmbeddingsAsync_MoreInputsThanMaxBatchSize_SplitsIntoSequentialRequests()
+    {
+        var handler = new InputCountingHandler();
+        var options = new EmbeddingOptions { BaseUrl = DefaultOptions.BaseUrl, ModelId = DefaultOptions.ModelId, ApiKey = DefaultOptions.ApiKey, MaxBatchSize = 4 };
+        var generator = new EmbeddingGenerator(options, handler);
+        string[] inputs = Enumerable.Range(0, 10).Select(i => $"chunk {i}").ToArray();
+
+        var results = await generator.GenerateEmbeddingsAsync(inputs, TestContext.Current.CancellationToken);
+
+        Assert.Equal(10, results.Count);
+        Assert.Equal([4, 4, 2], handler.BatchSizes);
+        Assert.Equal(1, handler.MaxConcurrent);
+    }
+
+    /// <summary>
+    /// Answers each embeddings request with one vector per input, recording the batch sizes and the
+    /// highest number of requests in flight at once.
+    /// </summary>
+    private sealed class InputCountingHandler : HttpMessageHandler
+    {
+        private static readonly float[] Vector = [0.1f, 0.2f];
+
+        private int _inFlight;
+
+        public List<int> BatchSizes { get; } = [];
+
+        public int MaxConcurrent { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            this.MaxConcurrent = Math.Max(this.MaxConcurrent, Interlocked.Increment(ref this._inFlight));
+            try
+            {
+                string body = await request.Content!.ReadAsStringAsync(cancellationToken);
+                int count = System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("input").GetArrayLength();
+                this.BatchSizes.Add(count);
+                await Task.Yield();
+
+                string json = StubHttpMessageHandler.BuildEmbeddingsJson(Enumerable.Range(0, count).Select(_ => Vector).ToArray());
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+                };
+            }
+            finally
+            {
+                Interlocked.Decrement(ref this._inFlight);
+            }
+        }
+    }
+
+    /// <summary>
     /// Verifies that cancellation is honored for batch embedding generation.
     /// </summary>
     [Fact]

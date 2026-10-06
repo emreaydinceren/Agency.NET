@@ -59,6 +59,7 @@ public sealed partial class EmbeddingGenerator : IEmbeddingGenerator
         ArgumentException.ThrowIfNullOrEmpty(options.BaseUrl);
         ArgumentException.ThrowIfNullOrEmpty(options.ApiKey);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxBatchSize, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.RetryDelayMs);
 
         this._modelId = options.ModelId;
         this._maxBatchSize = options.MaxBatchSize;
@@ -68,6 +69,11 @@ public sealed partial class EmbeddingGenerator : IEmbeddingGenerator
         {
             Endpoint = new Uri(options.BaseUrl),
         };
+
+        if (options.MaxRetries is not null || options.RetryDelayMs > 0)
+        {
+            clientOptions.RetryPolicy = new BackoffRetryPolicy(options.MaxRetries ?? 3, TimeSpan.FromMilliseconds(options.RetryDelayMs));
+        }
 
         if (httpMessageHandler is not null)
         {

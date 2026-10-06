@@ -62,6 +62,7 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
         ["embedding-model"] = "Embedding:ModelId",
         ["embedding-key"] = "Embedding:ApiKey",
         ["dimensions"] = "Embedding:Dimensions",
+        ["min-score"] = "Search:MinScore",
     };
 
     /// <summary>The index defaults: configuration key, and the command-line option that sets it.</summary>
@@ -69,6 +70,13 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
     [
         ("Index", "index"), ("Root", "root"), ("Extensions", "ext"), ("Names", "names"), ("MaxFileKb", "max-file-kb"),
     ];
+
+    /// <summary>
+    /// The lowest score a search hit may have (<c>Search:MinScore</c>, <c>AGENCY_INDEX_Search__MinScore</c> or <c>--min-score</c>),
+    /// or <see langword="null"/> for none. Scores depend on the embedding model, so this is a user-level setting with no default
+    /// and a repo file cannot set it.
+    /// </summary>
+    public double? SearchMinScore { get; init; }
 
     /// <summary>The repo-level defaults and where they came from; <see cref="IndexDefaults.None"/> unless set by <see cref="Resolve"/>.</summary>
     public IndexDefaults Defaults { get; init; } = IndexDefaults.None;
@@ -107,7 +115,8 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
                 ? Path.Combine(home, "index.db")
                 : throw new UsageException("Postgres needs a connection string: --db, AGENCY_INDEX_Database, or \"Database\" in indexer.json."));
 
-        var embedding = new EmbeddingOptions();
+        // Indexing is unattended and a local model can time out under load, so transient failures wait before retrying.
+        var embedding = new EmbeddingOptions { RetryDelayMs = DefaultRetryDelayMs };
         config.GetSection(EmbeddingOptions.SectionName).Bind(embedding);
         embedding.ApiKey = ResolveApiKey(embedding.BaseUrl, embedding.ApiKey);
         embedding.Dimensions ??= 1024;
@@ -120,8 +129,16 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
             config.GetValue("ChunkOverlap", 64))
         {
             Defaults = ResolveDefaults(args, userFile, repo),
+            SearchMinScore = ParseMinScore(config["Search:MinScore"]),
         };
     }
+
+    private static double? ParseMinScore(string? raw) =>
+        string.IsNullOrWhiteSpace(raw)
+            ? null
+            : double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double score) && score is >= 0 and <= 1
+                ? score
+                : throw new UsageException("Search:MinScore (--min-score) must be a number between 0 and 1.");
 
     /// <summary>
     /// Resolves each index default from the first layer that sets it: command line, environment, repo file, user file.
@@ -172,6 +189,9 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
         List<string?> items = section.GetChildren().Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).ToList();
         return items.Count > 0 ? string.Join(',', items) : (string.IsNullOrWhiteSpace(section.Value) ? null : section.Value);
     }
+
+    /// <summary>The first retry wait for a transient embedding failure; each further retry doubles it.</summary>
+    public const int DefaultRetryDelayMs = 1000;
 
     /// <summary>The key sent to endpoints that do not check it (LM Studio, Ollama); the OpenAI SDK needs a non-empty value.</summary>
     public const string NoKey = "unused";

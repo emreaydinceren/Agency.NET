@@ -1,3 +1,7 @@
 #nullable enable
 Agency.Embeddings.OpenAI.EmbeddingOptions.MaxBatchSize.get -> int
 Agency.Embeddings.OpenAI.EmbeddingOptions.MaxBatchSize.set -> void
+Agency.Embeddings.OpenAI.EmbeddingOptions.MaxRetries.get -> int?
+Agency.Embeddings.OpenAI.EmbeddingOptions.MaxRetries.set -> void
+Agency.Embeddings.OpenAI.EmbeddingOptions.RetryDelayMs.get -> int
+Agency.Embeddings.OpenAI.EmbeddingOptions.RetryDelayMs.set -> void

@@ -145,7 +145,7 @@ internal static class Setup
             throw new UsageException($"{new Uri(baseUrl).Host} needs an API key: set the {variable} environment variable. It is a secret and is never written to a file.");
         }
 
-        var embedding = new EmbeddingOptions { BaseUrl = baseUrl, ModelId = configured.ModelId, ApiKey = key, Dimensions = configured.Dimensions };
+        var embedding = new EmbeddingOptions { BaseUrl = baseUrl, ModelId = configured.ModelId, ApiKey = key, Dimensions = configured.Dimensions, MaxRetries = configured.MaxRetries, RetryDelayMs = configured.RetryDelayMs };
         try
         {
             embedding.ModelId = args.Get("embedding-model") ?? await ChooseModelAsync(http, embedding, ct);

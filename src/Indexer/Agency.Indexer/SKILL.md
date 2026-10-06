@@ -56,7 +56,12 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
      (`--max-file-kb` to change).
    - HTML is reduced to its readable text before indexing.
 
-   Output (`path`s are absolute; `failed` is empty on a clean run):
+   Output (`path`s are absolute; `failed` is empty on a clean run, otherwise `{path, reason}` entries with the
+   error text, e.g. the HTTP status and response body of a refused embedding). Each failure is also printed to
+   stderr as `FAILED <path>: <reason>` the moment it happens, and `--log <file>` appends the progress and
+   failure lines to a file with timestamps. Transient embedding errors (timeouts, 429, 5xx, connection errors)
+   are retried 3 times with a 1, 2, 4 second wait before the file is marked failed; failed files are retried
+   by the next run:
 
    ```json
    {"status":"ok","index":"billing-api","root":"/work/billing-api/docs","added":["..."],"changed":[],"removed":[],"unchanged":54,"skipped_too_large":[],"failed":[],"chunks_written":3,"duration_ms":2835}
@@ -75,8 +80,29 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
    ```
 
    Each hit has an absolute `path`, the `chunk` number within that file, a `score` (cosine similarity,
-   higher is better) and the passage `text`. With a typical local embedding model, real answers score
-   about 0.55–0.8 and unrelated queries about 0.4; treat top scores below ~0.45 as "not in the docs".
+   higher is better) and the passage `text`.
+
+   **Scores depend on the embedding model, so there is no built-in cutoff.** With
+   `text-embedding-qwen3-embedding-0.6b`, real answers score about 0.55–0.75 but an unrelated query still
+   tops out near 0.5. If `Search.MinScore` is configured (or you pass `--min-score`), weaker hits are
+   already removed. When that leaves nothing, the result is not an error:
+
+   ```json
+   {"status":"ok","index":"billing-api","hits":[],"filtered":5,"best_score":0.5138}
+   ```
+
+   Nothing relevant is in the docs: fall back to grep. `filtered` (how many hits were dropped) and
+   `best_score` (the top score before filtering) appear whenever hits were dropped. With no threshold
+   configured, treat a top score near the model's noise floor (see the table under
+   [Configuration](#configuration)) as "not in the docs".
+
+   Keep the output small with these options (flags, not config):
+
+   - `--min-score <0..1>`: drop hits below this score; overrides `Search.MinScore`.
+   - `--within <0..1>`: keep only hits within this distance of the best score (for example `--within 0.05`);
+     needs no per-model calibration.
+   - `--no-text`: path, chunk and score only, no passage text; open the file for what you need.
+   - `--snippet-chars <N>`: cut each hit's text to at most N characters.
 
    - Phrase the query as a natural-language question, not keywords.
    - Answer from the returned `text` when it is enough; open the file at `path` only if you need more.
@@ -157,18 +183,23 @@ Settings come from command-line options, then `AGENCY_INDEX_*` environment varia
 {
   "Provider": "sqlite",
   "Database": "/home/me/.agency/index.db",
-  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-qwen3-embedding-0.6b", "Dimensions": 1024 }
+  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-qwen3-embedding-0.6b", "Dimensions": 1024 },
+  "Search": { "MinScore": 0.55 }
 }
 ```
 
 `Dimensions` must equal the model's vector length (default 1024 when omitted); a wrong value breaks
 the index.
 
-| Model | Dimensions |
-|-------|------------|
-| `text-embedding-nomic-embed-text-v1.5` | 768 |
-| `text-embedding-qwen3-embedding-0.6b` | 1024 |
-| `text-embedding-3-small` (OpenAI) | 1536 |
+| Model | Dimensions | Noise floor (top score of an unrelated query) |
+|-------|------------|-----------------------------------------------|
+| `text-embedding-nomic-embed-text-v1.5` | 768 | not measured |
+| `text-embedding-qwen3-embedding-0.6b` | 1024 | about 0.5 (0.51 on a 102-file docs tree) |
+| `text-embedding-3-small` (OpenAI) | 1536 | not measured |
+
+`Search.MinScore` (`AGENCY_INDEX_Search__MinScore`, or `--min-score`) drops hits below a score. It has no
+default because scores depend on the model; to calibrate, search an index for something unrelated and set it
+slightly above the top score. It is a user-level setting: a repo's `.agency-index.json` cannot set it.
 
 - `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (`Database` is
   then a connection string; requires the pgvector extension).

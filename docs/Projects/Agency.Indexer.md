@@ -25,8 +25,8 @@ For the full walk-through (scope, embeddings endpoint, `PATH`, first index, agen
 
 | Command | Purpose |
 |---|---|
-| `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--max-file-kb N] [--wait] [--dry-run]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. Progress lines go to stderr; `--dry-run` reports the delta, chunk count and a time estimate without writing. |
-| `search --index <name> --query <text> [--top N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity) and `text`. |
+| `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--max-file-kb N] [--wait] [--dry-run] [--log <file>]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. Progress lines and each failed file with its reason go to stderr (and `--log`); `failed` in the result is `{path, reason}` entries; `--dry-run` reports the delta, chunk count and a time estimate without writing. |
+| `search --index <name> --query <text> [--top N] [--min-score X] [--within D] [--no-text] [--snippet-chars N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity) and `text`. `--min-score` (or `Search:MinScore`) and `--within` drop weak hits, reported as `filtered` with the pre-filter `best_score`; `--no-text` and `--snippet-chars` shrink the output. |
 | `list --index <name>` | The index configuration and every indexed file with size, last-write time and chunk count. |
 | `indexes` | Every index and its root. |
 | `drop --index <name> [--wait]` | Delete the index's chunks, manifest and configuration. |

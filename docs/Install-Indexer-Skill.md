@@ -110,6 +110,14 @@ column width, so a wrong value fails or corrupts the index.
 | `text-embedding-qwen3-embedding-0.6b` | 1024 |
 | `text-embedding-3-small` (OpenAI) | 1536 |
 
+**Optional: a search threshold.** Scores depend on the model; with qwen3-embedding-0.6b an unrelated query
+still tops out near 0.5, so a fixed "below 0.45 means not found" rule lets irrelevant text through. Set
+`"Search": { "MinScore": 0.55 }` in `indexer.json` (or `AGENCY_INDEX_Search__MinScore`, or `--min-score`
+per search) to drop weaker hits before they reach the agent's context. To pick the number, search for
+something unrelated and set it slightly above the top score. It stays a user-level setting: a repo's
+`.agency-index.json` cannot set it. When a threshold removes every hit, `search` still succeeds with
+`"hits":[]` plus `filtered` and `best_score`, which tells the agent to fall back to grep.
+
 For another model, ask the endpoint: the length of one returned vector is the value.
 
 ```bash
@@ -222,6 +230,12 @@ install.
   the user the estimate.
 - A real run prints progress lines to stderr (`indexing 12/340 files, 410 chunks, ~6 min left`) while
   stdout stays one JSON object at the end. Run it in the background or with a generous timeout.
+- A file that cannot be embedded is reported the moment it fails, on stderr as `FAILED <path>: <reason>` and in
+  the final JSON as `failed: [{path, reason}]` (the reason includes the HTTP status and the start of the
+  server's response body). `--log <file>` also appends the progress and failure lines, timestamped, to a file.
+  The rest of the run continues and the failed file is retried next time. Transient errors (timeout, 429, 5xx,
+  connection refused) are retried first, 3 times with a 1, 2, 4 second wait; set `Embedding:MaxRetries` and
+  `Embedding:RetryDelayMs` in `indexer.json` to change that (`RetryDelayMs: 0` retries immediately).
 - Later runs only process added, changed or deleted files and take seconds.
 
 ## Where things live

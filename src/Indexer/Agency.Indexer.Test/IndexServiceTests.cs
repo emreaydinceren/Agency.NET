@@ -234,6 +234,82 @@ public sealed class IndexServiceTests : IDisposable
         Assert.Equal(real.ChunksWritten, plan.EstimatedChunks);
     }
 
+    /// <summary>
+    /// Verifies a failing embedding is reported per file as it happens and in the result with the reason, while the
+    /// other files are still indexed and the failed one is retried by the next run.
+    /// </summary>
+    [Fact]
+    public async Task IndexAsync_EmbeddingFails_ReportsFileAndReasonInProgressAndResult()
+    {
+        this.WriteDoc("good.md", "alpha document");
+        string bad = this.WriteDoc("bad.md", "POISON document");
+        this._embeddings.FailWhenInputContains = "POISON";
+        IndexService service = await Services.SqliteAsync(this._database, this._embeddings);
+        var lines = new List<string>();
+
+        IndexResult result = await service.IndexAsync(Request(root: this._docs), Ct, lines.Add);
+
+        Assert.Equal(IndexStatus.PartialFailure, result.Status);
+        FailedFile failure = Assert.Single(result.Failed);
+        Assert.Equal(bad, failure.Path);
+        Assert.Contains("model is overloaded", failure.Reason, StringComparison.Ordinal);
+        Assert.Contains("the operation timed out", failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(lines, l => l.StartsWith("FAILED ", StringComparison.Ordinal) && l.Contains(bad, StringComparison.Ordinal) && l.Contains("model is overloaded", StringComparison.Ordinal));
+        Assert.Single(result.Added);
+
+        this._embeddings.FailWhenInputContains = null;
+        IndexResult retry = await service.IndexAsync(Request(), Ct);
+        Assert.Equal(IndexStatus.Ok, retry.Status);
+        Assert.Equal([bad], retry.Added);
+    }
+
+    /// <summary>Verifies the repeated messages of an aggregate (the SDK's "Retry failed after N tries") appear once.</summary>
+    [Fact]
+    public void FailureReason_AggregateOfIdenticalErrors_ListsEachMessageOnce()
+    {
+        var inner = new HttpRequestException("connection refused (127.0.0.1:9)");
+        var aggregate = new AggregateException("Retry failed after 4 tries. (connection refused (127.0.0.1:9)) (connection refused (127.0.0.1:9))", new Exception[] { inner, new HttpRequestException("connection refused (127.0.0.1:9)") });
+
+        Assert.Equal("Retry failed after 4 tries. -> connection refused (127.0.0.1:9)", FailureReason.Of(aggregate));
+    }
+
+    /// <summary>Verifies the run log echoes every line and appends timestamped lines to the file across runs.</summary>
+    [Fact]
+    public void RunLog_WithFile_EchoesAndAppendsTimestampedLines()
+    {
+        string path = Path.Combine(this._dir.Path, "logs", "run.log");
+        var echoed = new List<string>();
+
+        using (var first = new RunLog(path, echoed.Add))
+        {
+            first.Write("indexing 1/2 files");
+        }
+
+        using (var second = new RunLog(path, echoed.Add))
+        {
+            second.Write("FAILED a.md: boom");
+        }
+
+        string[] lines = File.ReadAllLines(path);
+        Assert.Equal(["indexing 1/2 files", "FAILED a.md: boom"], echoed);
+        Assert.Equal(2, lines.Length);
+        Assert.EndsWith(" indexing 1/2 files", lines[0], StringComparison.Ordinal);
+        Assert.True(DateTimeOffset.TryParse(lines[1][..lines[1].IndexOf(' ')], out _));
+        Assert.EndsWith(" FAILED a.md: boom", lines[1], StringComparison.Ordinal);
+    }
+
+    /// <summary>Verifies the run log without a file only echoes.</summary>
+    [Fact]
+    public void RunLog_WithoutFile_OnlyEchoes()
+    {
+        var echoed = new List<string>();
+
+        using var log = new RunLog(null, echoed.Add);
+        log.Write("x");
+
+        Assert.Equal(["x"], echoed);
+    }
+
     private static IndexRequest Request(string? root = null) =>
         new("docs", root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false);
 

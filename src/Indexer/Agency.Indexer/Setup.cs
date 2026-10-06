@@ -264,6 +264,11 @@ internal static class Setup
         string relative = Path.GetRelativePath(Path.GetDirectoryName(path)!, request.Root!);
         root["Index"] = request.Index;
         root["Root"] = relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? request.Root : relative.Replace('\\', '/');
+        if (request.Exclude is { Count: > 0 } exclude)
+        {
+            root["Exclude"] = new JsonArray(exclude.Select(e => (JsonNode?)JsonValue.Create(e)).ToArray());
+        }
+
         return root.ToJsonString(ConfigJson);
     }
 
@@ -283,7 +288,7 @@ internal static class Setup
 
         string docs = Path.Combine(workingDirectory, "docs");
         string root = Path.GetFullPath(args.Get("root") ?? (Directory.Exists(docs) ? docs : workingDirectory));
-        return new IndexRequest(canonical, root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false);
+        return new IndexRequest(canonical, root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false, args.Get("exclude") is { } exclude ? FileScanner.SplitList(exclude) : null);
     }
 
     /// <summary>The indexes already in the database; none when a SQLite database does not exist yet (probing must not create it).</summary>

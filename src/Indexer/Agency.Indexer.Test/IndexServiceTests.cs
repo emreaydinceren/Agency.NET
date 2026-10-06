@@ -212,7 +212,7 @@ public sealed class IndexServiceTests : IDisposable
         Assert.Contains("done in", lines[2], StringComparison.Ordinal);
     }
 
-    /// <summary>Verifies a dry run reports the delta and the real chunk count, writes nothing, and times a sample.</summary>
+    /// <summary>Verifies a dry run reports the delta and the real chunk count, writes nothing, and times a sample spread across the set.</summary>
     [Fact]
     public async Task DryRunAsync_ReportsPlanAndWritesNothing()
     {
@@ -228,7 +228,7 @@ public sealed class IndexServiceTests : IDisposable
         Assert.Equal(5, plan.Added.Count);
         Assert.Empty(await service.ListIndexesAsync(Ct));
         Assert.True(plan.EstimatedSeconds >= 0);
-        Assert.Equal(3, this._embeddings.EmbeddedInputs.Count);
+        Assert.Equal(5, this._embeddings.EmbeddedInputs.Count);
 
         IndexResult real = await service.IndexAsync(Request(root: this._docs), Ct);
         Assert.Equal(real.ChunksWritten, plan.EstimatedChunks);

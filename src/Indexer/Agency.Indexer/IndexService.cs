@@ -12,7 +12,17 @@ namespace Agency.Indexer;
 /// <param name="Names">The extensionless file names to select, or <see langword="null"/> to reuse the stored (or default) selection.</param>
 /// <param name="MaxFileBytes">The per-file size cap.</param>
 /// <param name="Wait">Whether to wait for another writer to finish instead of returning <see cref="IndexStatus.Locked"/>.</param>
-internal sealed record IndexRequest(string Index, string? Root, IReadOnlyList<string>? Extensions, IReadOnlyList<string>? Names, long MaxFileBytes, bool Wait);
+/// <param name="Exclude">Globs (relative to the root) of files and folders to leave out, or <see langword="null"/> to reuse the stored selection.</param>
+/// <param name="Rebuild">Whether to re-embed every file, even unchanged ones, and so allow the embedding model to change.</param>
+internal sealed record IndexRequest(
+    string Index,
+    string? Root,
+    IReadOnlyList<string>? Extensions,
+    IReadOnlyList<string>? Names,
+    long MaxFileBytes,
+    bool Wait,
+    IReadOnlyList<string>? Exclude = null,
+    bool Rebuild = false);
 
 /// <summary>Outcome of a write command.</summary>
 internal enum IndexStatus
@@ -72,7 +82,30 @@ internal sealed record DryRunResult(
 /// <param name="Chunk">The chunk index within the file.</param>
 /// <param name="Score">Cosine similarity in [0, 1]; higher is closer.</param>
 /// <param name="Text">The chunk text.</param>
-internal sealed record SearchResultHit(string Path, long? Chunk, double Score, string Text);
+/// <param name="Heading">The Markdown heading path above the chunk, when the index recorded one.</param>
+/// <param name="StartLine">The 1-based first line of the chunk in the file, when the index recorded one.</param>
+/// <param name="EndLine">The 1-based last line of the chunk in the file, when the index recorded one.</param>
+/// <param name="Index">The index the hit came from.</param>
+/// <param name="ExactMatch">Whether the chunk contains an identifier-like token of the query (set by hybrid ranking only).</param>
+internal sealed record SearchResultHit(
+    string Path,
+    long? Chunk,
+    double Score,
+    string Text,
+    string? Heading = null,
+    long? StartLine = null,
+    long? EndLine = null,
+    string? Index = null,
+    bool ExactMatch = false);
+
+/// <summary>The score distribution of unrelated queries against an index.</summary>
+/// <param name="Index">The calibrated index.</param>
+/// <param name="Probes">How many unrelated queries were run.</param>
+/// <param name="NoiseCeiling">The best score any unrelated query reached: anything at or below it is noise.</param>
+/// <param name="NoiseMean">The mean best score of the unrelated queries.</param>
+/// <param name="SuggestedMinScore">A threshold just above the noise ceiling.</param>
+/// <param name="Saved">Whether the suggestion was stored in the index's configuration.</param>
+internal sealed record CalibrationResult(string Index, int Probes, double NoiseCeiling, double NoiseMean, double SuggestedMinScore, bool Saved);
 
 /// <summary>Result of a <c>drop</c> run.</summary>
 internal sealed record DropResult(IndexStatus Status, string Index, int ChunksDeleted);
@@ -100,8 +133,33 @@ internal sealed class IndexService(
 
     private static readonly TimeSpan LockPollInterval = TimeSpan.FromSeconds(1);
 
-    /// <summary>The number of files embedded to time a dry run; the estimate scales their rate to every chunk.</summary>
-    private const int DryRunSampleFiles = 3;
+    /// <summary>The number of chunks embedded to time a dry run; the estimate scales their rate to every character.</summary>
+    private const int DryRunSampleChunks = 48;
+
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>How many times <c>top</c> candidates a path-filtered search retrieves before filtering.</summary>
+    private const int PathFilterOverfetch = 10;
+
+    /// <summary>How far above the noise ceiling a suggested threshold sits.</summary>
+    private const double CalibrationMargin = 0.03;
+
+    /// <summary>Probe queries about nothing a documentation set would cover; the best score any of them reaches is the noise floor.</summary>
+    private static readonly string[] CalibrationProbes =
+    [
+        "chocolate cake recipe with butter and eggs",
+        "football match final score and league table",
+        "how to knit a wool scarf",
+        "weather forecast for tomorrow afternoon",
+        "symptoms of the common cold and flu",
+        "best beaches to visit in southern Italy",
+        "history of the Roman Empire and its emperors",
+        "how to train a puppy to sit",
+        "stock market prices and interest rates",
+        "planting tomatoes in a vegetable garden",
+        "guitar chords for a folk song",
+        "renewing a passport at the post office",
+    ];
 
     /// <summary>Brings <see cref="IndexRequest.Index"/> up to date with the files on disk.</summary>
     /// <param name="request">What to index.</param>
@@ -116,35 +174,83 @@ internal sealed class IndexService(
             return new IndexResult(IndexStatus.Locked, request.Index, request.Root, [], [], [], 0, [], [], 0, stopwatch.ElapsedMilliseconds);
         }
 
+        IndexConfig? previous = await manifest.GetConfigAsync(request.Index, ct);
         IndexConfig config = await this.ResolveConfigAsync(request, ct);
 
         // Saved before any file is processed so the index is searchable (partially) while its first build runs.
         await manifest.SaveConfigAsync(request.Index, config, ct);
-        ScanResult scan = FileScanner.Scan(new ScanOptions(config.Root, config.Extensions, config.Names, request.MaxFileBytes));
-        IndexPlan plan = DeltaPlanner.Plan(scan.Files, await manifest.GetEntriesAsync(request.Index, ct));
+        ScanResult scan = FileScanner.Scan(new ScanOptions(config.Root, config.Extensions, config.Names, request.MaxFileBytes, config.Excludes));
+        IReadOnlyList<ManifestEntry> entries = await manifest.GetEntriesAsync(request.Index, ct);
+        IndexPlan plan = DeltaPlanner.Plan(scan.Files, entries);
+        if (request.Rebuild && previous is not null)
+        {
+            // Forget what was indexed, so an interrupted rebuild is finished by a plain run instead of leaving old-model chunks
+            // that look current. Chunks of files that no longer exist are removed below as usual.
+            foreach (ManifestEntry entry in entries.Where(e => !plan.Removed.Contains(e.Path, StringComparer.Ordinal)))
+            {
+                await manifest.DeleteEntryAsync(request.Index, entry.Path, ct);
+            }
+
+            plan = new IndexPlan(scan.Files.ToList(), [], plan.Removed, 0);
+        }
 
         var failed = new List<FailedFile>();
         int chunksWritten = 0;
 
+        // Chunking is local and quick, so it happens up front: the progress lines can then say "N of M chunks".
         List<ScannedFile> toIndex = plan.Added.Concat(plan.Changed).ToList();
-        progress?.Invoke($"indexing {toIndex.Count} files ({plan.Added.Count} added, {plan.Changed.Count} changed), removing {plan.Removed.Count}");
-        for (int i = 0; i < toIndex.Count; i++)
+        var chunked = new List<(ScannedFile File, List<DocumentChunk<string>>? Chunks)>(toIndex.Count);
+        foreach (ScannedFile file in toIndex)
         {
-            ScannedFile file = toIndex[i];
             try
             {
-                chunksWritten += await this.IndexFileAsync(request.Index, file, ct);
+                chunked.Add((file, await this.ChunkFileAsync(file, ct)));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // One unreadable file or failed embedding call must not abort the rest of the run; the file
-                // keeps its old manifest entry (or none), so the next run retries it.
                 string reason = FailureReason.Of(ex);
                 failed.Add(new FailedFile(file.Path, reason));
                 progress?.Invoke($"FAILED {file.Path}: {reason}");
+                chunked.Add((file, null));
+            }
+        }
+
+        int totalChunks = chunked.Sum(c => c.Chunks?.Count ?? 0);
+        progress?.Invoke($"indexing {toIndex.Count} files ({plan.Added.Count} added, {plan.Changed.Count} changed), {totalChunks} chunks, removing {plan.Removed.Count}");
+
+        int chunksDone = 0;
+        string currentPath = "";
+
+        // A file with many chunks can take minutes; say so periodically so a log tail does not look hung.
+        using var heartbeat = new Timer(
+            _ => progress?.Invoke($"still working on {Path.GetFileName(Volatile.Read(ref currentPath))}: {Volatile.Read(ref chunksDone)}/{totalChunks} chunks, {FormatDuration(stopwatch.Elapsed)} elapsed"),
+            null,
+            HeartbeatInterval,
+            HeartbeatInterval);
+        for (int i = 0; i < chunked.Count; i++)
+        {
+            (ScannedFile file, List<DocumentChunk<string>>? chunks) = chunked[i];
+            Volatile.Write(ref currentPath, file.Path);
+            if (chunks is not null)
+            {
+                try
+                {
+                    await vectorStore.ReplaceDocumentAsync(UserId, null, file.Path, chunks, request.Index, ct);
+                    await manifest.SaveEntryAsync(request.Index, new ManifestEntry(file.Path, file.Size, file.LastWriteTicks, chunks.Count), ct);
+                    chunksWritten += chunks.Count;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // One unreadable file or failed embedding call must not abort the rest of the run; the file
+                    // keeps its old manifest entry (or none), so the next run retries it.
+                    string reason = FailureReason.Of(ex);
+                    failed.Add(new FailedFile(file.Path, reason));
+                    progress?.Invoke($"FAILED {file.Path}: {reason}");
+                }
             }
 
-            progress?.Invoke(ProgressLine(i + 1, toIndex.Count, chunksWritten, failed.Count, stopwatch.Elapsed));
+            Volatile.Write(ref chunksDone, chunksDone + (chunks?.Count ?? 0));
+            progress?.Invoke(ProgressLine(i + 1, toIndex.Count, chunksWritten, chunksDone, totalChunks, failed.Count, stopwatch.Elapsed));
         }
 
         foreach (string path in plan.Removed)
@@ -175,28 +281,32 @@ internal sealed class IndexService(
     public async Task<DryRunResult> DryRunAsync(IndexRequest request, IEmbeddingGenerator embeddings, CancellationToken ct)
     {
         IndexConfig config = await this.ResolveConfigAsync(request, ct);
-        ScanResult scan = FileScanner.Scan(new ScanOptions(config.Root, config.Extensions, config.Names, request.MaxFileBytes));
+        ScanResult scan = FileScanner.Scan(new ScanOptions(config.Root, config.Extensions, config.Names, request.MaxFileBytes, config.Excludes));
         IndexPlan plan = DeltaPlanner.Plan(scan.Files, await manifest.GetEntriesAsync(request.Index, ct));
-
-        int estimatedChunks = 0;
-        var sample = new List<string>();
-        int sampledFiles = 0;
-        foreach (ScannedFile file in plan.Added.Concat(plan.Changed))
+        if (request.Rebuild)
         {
-            List<DocumentChunk<string>> chunks = await this.ChunkFileAsync(file, ct);
-            estimatedChunks += chunks.Count;
-            if (sampledFiles++ < DryRunSampleFiles)
-            {
-                sample.AddRange(chunks.Select(c => c.Value));
-            }
+            plan = new IndexPlan(scan.Files.ToList(), [], plan.Removed, 0);
         }
 
-        double? seconds = null;
-        if (sample.Count > 0)
+        var allChunks = new List<string>();
+        foreach (ScannedFile file in plan.Added.Concat(plan.Changed))
         {
+            allChunks.AddRange((await this.ChunkFileAsync(file, ct)).Select(c => c.Value));
+        }
+
+        int estimatedChunks = allChunks.Count;
+
+        // Time a sample spread across the whole set (the first files are often small stubs) and scale by text length, because
+        // embedding time follows tokens rather than chunk count.
+        double? seconds = null;
+        if (allChunks.Count > 0)
+        {
+            int sampleSize = Math.Min(DryRunSampleChunks, allChunks.Count);
+            List<string> sample = Enumerable.Range(0, sampleSize).Select(i => allChunks[(int)((long)i * allChunks.Count / sampleSize)]).ToList();
             var timer = Stopwatch.StartNew();
             await embeddings.GenerateEmbeddingsAsync(sample, ct);
-            seconds = Math.Round(timer.Elapsed.TotalSeconds * estimatedChunks / sample.Count, 1);
+            double sampleChars = Math.Max(1, sample.Sum(c => (double)c.Length));
+            seconds = Math.Round(timer.Elapsed.TotalSeconds * allChunks.Sum(c => (double)c.Length) / sampleChars, 1);
         }
 
         return new DryRunResult(
@@ -211,20 +321,92 @@ internal sealed class IndexService(
             seconds);
     }
 
-    /// <summary>Returns the <paramref name="top"/> chunks of <paramref name="index"/> closest to <paramref name="text"/>.</summary>
-    public async Task<IReadOnlyList<SearchResultHit>> SearchAsync(string index, string text, int top, CancellationToken ct)
+    /// <summary>
+    /// Returns the chunks of <paramref name="index"/> closest to <paramref name="text"/>, best first: the nearest
+    /// <paramref name="top"/>, or the nearest <paramref name="pool"/> when that is larger (so the caller can filter, group and
+    /// cut them afterwards). <paramref name="pathGlob"/> keeps only files whose path under the index root matches it.
+    /// </summary>
+    public async Task<IReadOnlyList<SearchResultHit>> SearchAsync(
+        string index,
+        string text,
+        int top,
+        CancellationToken ct,
+        string? pathGlob = null,
+        int pool = 0)
     {
-        _ = await manifest.GetConfigAsync(index, ct) ?? throw new UsageException($"Index '{index}' does not exist. Run 'agency-index index --index {index} --root <dir>' first.");
+        IndexConfig config = await manifest.GetConfigAsync(index, ct) ?? throw new UsageException($"Index '{index}' does not exist. Run 'agency-index index --index {index} --root <dir>' first.");
+        if (!string.Equals(config.EmbeddingModel, embeddingModel, StringComparison.Ordinal))
+        {
+            throw new UsageException($"Index '{index}' was built with embedding model '{config.EmbeddingModel}' but '{embeddingModel}' is configured, so its scores are meaningless. Run 'agency-index index --index {index} --rebuild' to re-embed it, or configure the original model.");
+        }
+
+        // A path filter removes hits after the search, so ask for more than will be kept.
+        int candidates = Math.Max(top, pool);
+        if (pathGlob is not null)
+        {
+            candidates = Math.Max(candidates, top * PathFilterOverfetch);
+        }
 
         IReadOnlyList<SearchHit<string>> hits = await vectorStore.SearchAsync<string>(
-            new Query(UserId, SearchSession, null, text, null, top, true, [index]), ct);
+            new Query(UserId, SearchSession, null, text, null, candidates, true, [index]), ct);
 
-        return hits.Select(h => new SearchResultHit(
+        IReadOnlyList<SearchResultHit> results = hits.Select(h => new SearchResultHit(
             h.Metadata?.GetValueOrDefault("source_file") as string ?? h.Key,
             h.Metadata?.GetValueOrDefault("chunk_index") as long?,
             Math.Round(Math.Max(0, 1.0 - h.Distance), 4),
-            h.Value)).ToList();
+            h.Value,
+            h.Metadata?.GetValueOrDefault("heading") as string,
+            h.Metadata?.GetValueOrDefault("start_line") as long?,
+            h.Metadata?.GetValueOrDefault("end_line") as long?,
+            index)).ToList();
+
+        if (pathGlob is not null)
+        {
+            var filter = new GlobFilter([pathGlob]);
+            results = results.Where(r => filter.Matches(Path.GetRelativePath(config.Root, r.Path))).ToList();
+        }
+
+        return pool > 0 ? results : results.Take(top).ToList();
     }
+
+    /// <summary>
+    /// Runs unrelated queries against <paramref name="index"/> and reports the best score any of them reached: the noise ceiling
+    /// for this model and corpus. A threshold just above it keeps on-topic hits and drops noise.
+    /// </summary>
+    /// <param name="index">The index to probe.</param>
+    /// <param name="save">Whether to store the suggested threshold so <c>search</c> uses it when none is configured.</param>
+    /// <param name="ct">Cancellation.</param>
+    public async Task<CalibrationResult> CalibrateAsync(string index, bool save, CancellationToken ct)
+    {
+        var bestScores = new List<double>();
+        foreach (string probe in CalibrationProbes)
+        {
+            IReadOnlyList<SearchResultHit> hits = await this.SearchAsync(index, probe, 1, ct);
+            if (hits.Count > 0)
+            {
+                bestScores.Add(hits[0].Score);
+            }
+        }
+
+        if (bestScores.Count == 0)
+        {
+            throw new UsageException($"Index '{index}' has no chunks to calibrate against.");
+        }
+
+        double ceiling = bestScores.Max();
+        double suggested = Math.Min(0.99, Math.Round(ceiling + CalibrationMargin, 2));
+        if (save)
+        {
+            IndexConfig config = (await manifest.GetConfigAsync(index, ct))!;
+            await manifest.SaveConfigAsync(index, config with { Calibration = new Calibration(ceiling, suggested) }, ct);
+        }
+
+        return new CalibrationResult(index, bestScores.Count, ceiling, Math.Round(bestScores.Average(), 4), suggested, save);
+    }
+
+    /// <summary>Returns the threshold stored by <see cref="CalibrateAsync"/> for <paramref name="index"/>, or <see langword="null"/>.</summary>
+    public async Task<double?> GetSuggestedMinScoreAsync(string index, CancellationToken ct) =>
+        (await manifest.GetConfigAsync(index, ct))?.Calibration?.SuggestedMinScore;
 
     /// <summary>Returns the configuration and manifest of <paramref name="index"/>.</summary>
     public async Task<(IndexConfig Config, IReadOnlyList<ManifestEntry> Files)> ListAsync(string index, CancellationToken ct)
@@ -285,9 +467,14 @@ internal sealed class IndexService(
             throw new UsageException($"Index '{request.Index}' is bound to root '{stored.Root}'. Use another index name, or drop this one first.");
         }
 
-        if (stored is not null && !string.Equals(stored.EmbeddingModel, embeddingModel, StringComparison.Ordinal))
+        if (stored is not null && !request.Rebuild && !string.Equals(stored.EmbeddingModel, embeddingModel, StringComparison.Ordinal))
         {
-            throw new UsageException($"Index '{request.Index}' was built with embedding model '{stored.EmbeddingModel}' but '{embeddingModel}' is configured. Drop and rebuild the index to switch models.");
+            throw new UsageException($"Index '{request.Index}' was built with embedding model '{stored.EmbeddingModel}' but '{embeddingModel}' is configured. Run 'agency-index index --index {request.Index} --rebuild' to re-embed it with the configured model.");
+        }
+
+        if (request.Rebuild && stored is null)
+        {
+            throw new UsageException($"Index '{request.Index}' does not exist, so there is nothing to rebuild; run it without --rebuild.");
         }
 
         root ??= stored!.Root;
@@ -300,17 +487,9 @@ internal sealed class IndexService(
             root,
             request.Extensions ?? stored?.Extensions ?? FileScanner.DefaultExtensions,
             request.Names ?? stored?.Names ?? FileScanner.DefaultNames,
-            embeddingModel);
-    }
-
-    /// <summary>Re-chunks and re-embeds one whole file, then records it in the manifest.</summary>
-    /// <returns>The number of chunks written.</returns>
-    private async Task<int> IndexFileAsync(string index, ScannedFile file, CancellationToken ct)
-    {
-        List<DocumentChunk<string>> chunks = await this.ChunkFileAsync(file, ct);
-        await vectorStore.ReplaceDocumentAsync(UserId, null, file.Path, chunks, index, ct);
-        await manifest.SaveEntryAsync(index, new ManifestEntry(file.Path, file.Size, file.LastWriteTicks, chunks.Count), ct);
-        return chunks.Count;
+            embeddingModel,
+            request.Exclude ?? stored?.Excludes,
+            stored is not null && string.Equals(stored.EmbeddingModel, embeddingModel, StringComparison.Ordinal) ? stored.Calibration : null);
     }
 
     /// <summary>Reads <paramref name="file"/> and splits it into the chunks that would be embedded.</summary>
@@ -330,24 +509,48 @@ internal sealed class IndexService(
             ["file_extension"] = extension,
         });
 
-        return splitter.Split(document)
-            .Select((chunk, i) => new DocumentChunk<string>(
-                $"{file.Path}:chunk:{i}",
-                chunk.Content,
-                new Dictionary<string, object>(chunk.Metadata ?? [], StringComparer.Ordinal) { ["chunk_index"] = i }))
+        List<Document> pieces = splitter.Split(document).ToList();
+
+        // Line numbers refer to the text as stored, which for HTML is the extracted text rather than the source markup.
+        IReadOnlyList<ChunkLocation> locations = extension is ".html" or ".htm"
+            ? []
+            : ChunkLocator.Locate(content, pieces.Select(p => p.Content).ToList(), extension is ".md" or ".markdown" or ".mdx");
+
+        return pieces
+            .Select((chunk, i) =>
+            {
+                var metadata = new Dictionary<string, object>(chunk.Metadata ?? [], StringComparer.Ordinal) { ["chunk_index"] = i };
+                if (i < locations.Count)
+                {
+                    ChunkLocation where = locations[i];
+                    if (where.Heading is not null)
+                    {
+                        metadata["heading"] = where.Heading;
+                    }
+
+                    if (where.StartLine is { } start && where.EndLine is { } end)
+                    {
+                        metadata["start_line"] = (long)start;
+                        metadata["end_line"] = (long)end;
+                    }
+                }
+
+                return new DocumentChunk<string>($"{file.Path}:chunk:{i}", chunk.Content, metadata);
+            })
             .ToList();
     }
 
-    /// <summary>E.g. <c>indexing 12/340 files, 410 chunks, 1 failed, ~6 min left</c>.</summary>
-    private static string ProgressLine(int done, int total, int chunks, int failedFiles, TimeSpan elapsed)
+    /// <summary>E.g. <c>indexing 12/340 files, 410/1980 chunks, 1 failed, ~6 min left</c>; the estimate follows the chunks still to do.</summary>
+    private static string ProgressLine(int done, int total, int chunksWritten, int chunksDone, int totalChunks, int failedFiles, TimeSpan elapsed)
     {
         string failures = failedFiles > 0 ? $", {failedFiles} failed" : "";
         if (done == total)
         {
-            return $"indexing {done}/{total} files, {chunks} chunks{failures}, done in {FormatDuration(elapsed)}";
+            return $"indexing {done}/{total} files, {chunksWritten} chunks{failures}, done in {FormatDuration(elapsed)}";
         }
 
-        return $"indexing {done}/{total} files, {chunks} chunks{failures}, ~{FormatDuration(elapsed * (total - done) / done)} left";
+        double remaining = chunksDone > 0 ? (double)(totalChunks - chunksDone) / chunksDone : (double)(total - done) / done;
+        return $"indexing {done}/{total} files, {chunksDone}/{totalChunks} chunks{failures}, ~{FormatDuration(elapsed * remaining)} left";
     }
 
     private static string FormatDuration(TimeSpan duration) =>

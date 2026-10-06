@@ -101,7 +101,7 @@ internal static class Doctor
         IndexDefaults d = settings.Defaults;
         var values = new (string Key, string? Value)[]
         {
-            ("Index", d.Index), ("Root", d.Root), ("Extensions", d.Extensions), ("Names", d.Names), ("MaxFileKb", d.MaxFileKb?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("Index", d.Index), ("Root", d.Root), ("Extensions", d.Extensions), ("Names", d.Names), ("MaxFileKb", d.MaxFileKb?.ToString(System.Globalization.CultureInfo.InvariantCulture)), ("Exclude", d.Exclude),
         };
         string detail = string.Join("; ", values.Where(v => v.Value is not null).Select(v => $"{v.Key}={v.Value} ({d.Sources.GetValueOrDefault(v.Key, "default")})"));
         return new DoctorCheck("defaults", true, detail.Length == 0 ? "No index defaults are set, so commands need --index (and --root on the first run)." : detail);

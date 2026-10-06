@@ -22,6 +22,7 @@ internal enum StorageProvider
 /// <param name="Extensions">The comma-separated extensions to select.</param>
 /// <param name="Names">The comma-separated extensionless file names to select.</param>
 /// <param name="MaxFileKb">The per-file size cap in KiB.</param>
+/// <param name="Exclude">The comma-separated globs of files and folders to leave out.</param>
 /// <param name="Sources">For each key that has a value, <c>command line</c>, <c>environment</c>, <c>repo file</c> or <c>user file</c>.</param>
 /// <param name="RepoConfigPath">The repo config file in effect, if any.</param>
 /// <param name="IgnoredRepoKeys">Keys in the repo file that are not allowed there and were ignored.</param>
@@ -31,12 +32,13 @@ internal sealed record IndexDefaults(
     string? Extensions,
     string? Names,
     int? MaxFileKb,
+    string? Exclude,
     IReadOnlyDictionary<string, string> Sources,
     string? RepoConfigPath,
     IReadOnlyList<string> IgnoredRepoKeys)
 {
     /// <summary>No defaults and no repo file.</summary>
-    public static IndexDefaults None { get; } = new(null, null, null, null, null, new Dictionary<string, string>(), null, []);
+    public static IndexDefaults None { get; } = new(null, null, null, null, null, null, new Dictionary<string, string>(), null, []);
 }
 
 /// <summary>
@@ -68,7 +70,7 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
     /// <summary>The index defaults: configuration key, and the command-line option that sets it.</summary>
     private static readonly (string Key, string Option)[] DefaultKeys =
     [
-        ("Index", "index"), ("Root", "root"), ("Extensions", "ext"), ("Names", "names"), ("MaxFileKb", "max-file-kb"),
+        ("Index", "index"), ("Root", "root"), ("Extensions", "ext"), ("Names", "names"), ("MaxFileKb", "max-file-kb"), ("Exclude", "exclude"),
     ];
 
     /// <summary>
@@ -187,6 +189,7 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
             values.GetValueOrDefault("Extensions"),
             values.GetValueOrDefault("Names"),
             maxFileKb,
+            values.GetValueOrDefault("Exclude"),
             sources,
             repo?.Path,
             repo?.Ignored ?? []);

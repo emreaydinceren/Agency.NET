@@ -20,7 +20,7 @@ don't try to fix it mid-task, use grep.
 The first `index` of a large folder can take minutes (about 3 minutes for 55 files on a local model,
 over 10 for a few hundred files). Run `agency-index index --index <name> --root <dir> --dry-run` first: it
 writes nothing and reports the chunk count and an estimated time. A real run prints progress to
-stderr (`indexing 12/340 files, 410 chunks, ~6 min left`) and the JSON result to stdout at the end;
+stderr (`indexing 12/340 files, 410/1980 chunks, ~6 min left`) and the JSON result to stdout at the end;
 tell the user the estimate first, and run it in the background or with a long timeout. Refreshes after
 that take seconds.
 
@@ -54,9 +54,12 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
      remembered; files that stop matching are removed from the index.
    - Skipped automatically: `.git`, `node_modules`, `bin`, `obj`, `dist`, and files over 1 MB
      (`--max-file-kb` to change).
+   - `--exclude "dir,**/*.draft.md"` (or `Exclude` in `.agency-index.json`) leaves out gitignore-style globs
+     relative to the root; use it for generated or log-like folders that crowd out real answers. It is
+     remembered, and `--dry-run` shows the effect first.
    - HTML is reduced to its readable text before indexing.
 
-   Output (`path`s are absolute; `failed` is empty on a clean run, otherwise `{path, reason}` entries with the
+   Output (file lists are relative to `root`, `--summary` prints counts instead; `failed` is empty on a clean run, otherwise `{path, reason}` entries with the
    error text, e.g. the HTTP status and response body of a refused embedding). Each failure is also printed to
    stderr as `FAILED <path>: <reason>` the moment it happens, and `--log <file>` appends the progress and
    failure lines to a file with timestamps. Transient embedding errors (timeouts, 429, 5xx, connection errors)
@@ -76,11 +79,12 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
    `--top` defaults to 5. Output:
 
    ```json
-   {"status":"ok","index":"billing-api","hits":[{"path":"/work/billing-api/docs/releases.md","chunk":2,"score":0.7657,"text":"..."}]}
+   {"status":"ok","index":"billing-api","hits":[{"path":"/work/billing-api/docs/releases.md","chunk":2,"score":0.7657,"text":"...","heading":"Releases > Publishing","start_line":41,"end_line":58}]}
    ```
 
    Each hit has an absolute `path`, the `chunk` number within that file, a `score` (cosine similarity,
-   higher is better) and the passage `text`.
+   higher is better), the passage `text` and, for indexes built by this version, the `heading` path and the
+   `start_line`/`end_line` of the section in the file (open those lines instead of the whole file).
 
    **Scores depend on the embedding model, so there is no built-in cutoff.** With
    `text-embedding-qwen3-embedding-0.6b`, real answers score about 0.55–0.75 but an unrelated query still
@@ -103,6 +107,13 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
      needs no per-model calibration.
    - `--no-text`: path, chunk and score only, no passage text; open the file for what you need.
    - `--snippet-chars <N>`: cut each hit's text to at most N characters.
+   - `--path <glob>`: only files whose path under the index root matches (`--path adr`).
+   - `--group-by-file` / `--per-file <N>`: at most 1 (or N) hits per file, so one file does not take the top places.
+   - `--hybrid`: also rank by keyword match; use it when the question names a config key, analyzer id or ADR
+     number. Chunks containing such an identifier from the query are exempt from `--min-score`.
+   - `--index a,b`: search several indexes at once and merge by score.
+   - `agency-index calibrate --index <name> --save` measures the noise ceiling of unrelated queries and stores a
+     suggested minimum score that `search` then uses when none is configured.
 
    - Phrase the query as a natural-language question, not keywords.
    - Answer from the returned `text` when it is enough; open the file at `path` only if you need more.
@@ -112,23 +123,25 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
 
    ```bash
    agency-index indexes                  # every index and its root
-   agency-index list --index <name>      # indexed files with size, mtime, chunk count
+   agency-index list --index <name>      # indexed files with size, mtime, chunk count (--summary: counts only)
    agency-index drop --index <name>      # delete the index
    ```
 
 ## Naming and partitioning (several repos on one machine)
 
 All repos share one database, so an index name is global to the machine, and `search` only ever looks
-inside the single index you name — it never crosses indexes. Keep repos apart like this:
+inside the indexes you name. Keep repos apart like this:
 
 1. **One index per repo, named after the repo folder** (lower-case): `/work/billing-api` → `billing-api`.
-   If the repo has a `.agency-index.json`, its `Index` is the name: use it.
+   If the repo has a `.agency-index.json`, its `Index` is the name: use it. Exclude noisy folders before
+   thinking of a second index; a second, narrower index (`billing-api-adr`) is justified only when you keep
+   asking about one body of documents and want it ranked on its own.
 2. **Before creating an index, run `agency-index indexes`.** Each entry shows its `root`.
    - An index whose `root` is the current repo already exists → use that name; don't create another.
    - Your intended name exists with a *different* `root` → another repo owns it. Pick a different name
      (for example `<org>-<repo>`). Never `drop` or re-point an index you did not create for this repo.
-3. **Always pass `--index <this repo's name>` when searching.** To search several repos, run `search`
-   once per index and combine the results yourself.
+3. **Always pass `--index <this repo's name>` when searching.** `--index a,b` searches several indexes
+   at once (they must use the same embedding model) and merges the hits; each hit names its `index`.
 
 If `index` fails with exit code 2 saying the index is bound to another root, the name is taken —
 choose another name; do not retry the same one.
@@ -169,7 +182,7 @@ Use `agency-index uninstall`; it previews by default and changes nothing without
 ## Repo config
 
 A repo may have `.agency-index.json` (found by walking up from the current folder; the nearest wins) with
-`Index`, `Root` (relative to the file), `Extensions`, `Names` and `MaxFileKb`. Precedence per key: command line,
+`Index`, `Root` (relative to the file), `Extensions`, `Names`, `MaxFileKb` and `Exclude`. Precedence per key: command line,
 `AGENCY_INDEX_*` environment, repo file, `~/.agency/indexer.json`, default. **Only those keys are read from the
 repo file**: never put an endpoint, database or key in it; they are ignored, and `doctor` reports them.
 `agency-index setup --index <name> --root <dir> --yes` writes it.
@@ -195,11 +208,12 @@ the index.
 |-------|------------|-----------------------------------------------|
 | `text-embedding-nomic-embed-text-v1.5` | 768 | not measured |
 | `text-embedding-qwen3-embedding-0.6b` | 1024 | about 0.5 (0.51 on a 102-file docs tree) |
+| `text-embedding-qwen3-embedding-4b` | 2560 | not measured; run `calibrate` |
 | `text-embedding-3-small` (OpenAI) | 1536 | not measured |
 
 `Search.MinScore` (`AGENCY_INDEX_Search__MinScore`, or `--min-score`) drops hits below a score. It has no
-default because scores depend on the model; to calibrate, search an index for something unrelated and set it
-slightly above the top score. It is a user-level setting: a repo's `.agency-index.json` cannot set it.
+default because scores depend on the model; run `agency-index calibrate --index <name>` (it searches twelve
+unrelated queries and suggests a value just above the best score; `--save` keeps it with the index). It is a user-level setting: a repo's `.agency-index.json` cannot set it.
 
 - `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (requires a server with the
   pgvector extension). For PostgreSQL the connection string contains the password, so it is a secret like the API
@@ -220,8 +234,9 @@ slightly above the top score. It is a user-level setting: a repo's `.agency-inde
   hosted endpoint has no key or a key sits in the config file. Never print or log the key.
 - Environment variable form: `AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`,
   `AGENCY_INDEX_Embedding__BaseUrl`, `AGENCY_INDEX_Embedding__ModelId`, ...
-- An index is tied to the embedding model it was built with; switching models requires
-  `drop` and a fresh `index`, and the tool refuses to refresh or search an index with another model.
+- An index is tied to the embedding model it was built with; switching models is
+  `agency-index index --index <name> --rebuild`, and the tool refuses to refresh or search an index with
+  another model until then.
   `agency-index setup` warns about every existing index a model change would orphan (`warnings`, or
   `status: index_model_mismatch` for the index it is about to build) and never drops anything itself.
   Change settings with `setup`, which merges into `indexer.json`; do not overwrite the file by hand.

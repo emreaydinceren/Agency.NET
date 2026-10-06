@@ -96,4 +96,25 @@ public sealed class IndexerSettingsTests : IDisposable
         this._setVariables.Add(name);
         Environment.SetEnvironmentVariable(name, value);
     }
+
+    /// <summary>Verifies <c>AGENCY_INDEX_HOME</c> relocates the user profile, and with it the home folder.</summary>
+    [Fact]
+    public void UserProfile_EnvironmentOverride_RelocatesHome()
+    {
+        string? saved = Environment.GetEnvironmentVariable("AGENCY_INDEX_HOME");
+        try
+        {
+            Environment.SetEnvironmentVariable("AGENCY_INDEX_HOME", "C:/sandbox/profile");
+
+            Assert.Equal("C:/sandbox/profile", IndexerSettings.UserProfile);
+            Assert.Equal(Path.Combine("C:/sandbox/profile", ".agency"), IndexerSettings.DefaultHome);
+
+            Environment.SetEnvironmentVariable("AGENCY_INDEX_HOME", null);
+            Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), IndexerSettings.UserProfile);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("AGENCY_INDEX_HOME", saved);
+        }
+    }
 }

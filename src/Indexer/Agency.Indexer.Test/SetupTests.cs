@@ -101,6 +101,81 @@ public sealed class SetupTests
         Assert.False(Directory.Exists(Path.Combine(dir.Path, "work", ".claude")));
     }
 
+    /// <summary>
+    /// Verifies a model change warns about every existing index built with another model (naming the way out), changes
+    /// nothing, and does not warn when the chosen model is the one the index was built with.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ModelDiffersFromExistingIndexes_WarnsAndWritesNothing()
+    {
+        using var dir = new TempDirectory();
+        await ArrangeIndexAsync(dir, "docs", Path.Combine(dir.Path, "other"));
+
+        SetupResult changed = await RunAsync(
+            dir, ["setup", "--embedding-url", Url], new StubEndpoint { Models = ["text-embedding-x"], VectorLength = FakeEmbeddingGenerator.Dimensions });
+        SetupResult same = await RunAsync(
+            dir, ["setup", "--embedding-url", Url, "--embedding-model", "fake-model"], new StubEndpoint { Models = ["fake-model"], VectorLength = FakeEmbeddingGenerator.Dimensions });
+
+        Assert.Equal("preview", changed.Status);
+        string warning = Assert.Single(changed.Warnings!);
+        Assert.Contains("'docs'", warning, StringComparison.Ordinal);
+        Assert.Contains("'fake-model'", warning, StringComparison.Ordinal);
+        Assert.Contains("'text-embedding-x'", warning, StringComparison.Ordinal);
+        Assert.Contains("agency-index drop --index docs", warning, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(dir.Path, "home", "indexer.json")));
+        Assert.Empty(same.Warnings!);
+    }
+
+    /// <summary>Verifies the index setup is about to build, if made with another model, stops setup before anything is written.</summary>
+    [Fact]
+    public async Task RunAsync_RequestedIndexBuiltWithAnotherModel_StopsBeforeWriting()
+    {
+        using var dir = new TempDirectory();
+        string root = Path.Combine(dir.Path, "work");
+        dir.Write("work/readme.md", "# Work");
+        await ArrangeIndexAsync(dir, "docs", root);
+
+        SetupResult result = await RunAsync(
+            dir,
+            ["setup", "--embedding-url", Url, "--index", "docs", "--root", root, "--yes"],
+            new StubEndpoint { Models = ["text-embedding-x"], VectorLength = FakeEmbeddingGenerator.Dimensions });
+
+        Assert.Equal("index_model_mismatch", result.Status);
+        Assert.Contains("agency-index drop --index docs", result.Message, StringComparison.Ordinal);
+        Assert.Contains("--embedding-model fake-model", result.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(dir.Path, "home", "indexer.json")));
+        Assert.False(Directory.Exists(Path.Combine(dir.Path, "work", ".claude")));
+    }
+
+    /// <summary>Verifies <c>--no-index --yes</c> writes the skill, config and repo file but builds no index and creates no database.</summary>
+    [Fact]
+    public async Task RunAsync_NoIndexWithYes_WritesConfigAndRepoFileButDoesNotIndex()
+    {
+        using var dir = new TempDirectory();
+        string root = Path.Combine(dir.Path, "work", "docs");
+        dir.Write("work/docs/a.md", "# A");
+
+        SetupResult result = await RunAsync(
+            dir,
+            ["setup", "--embedding-url", Url, "--index", "docs", "--root", root, "--no-index", "--yes"],
+            new StubEndpoint { Models = ["text-embedding-x"], VectorLength = 4 });
+
+        Assert.Equal("ok", result.Status);
+        Assert.Null(result.Index);
+        Assert.True(File.Exists(Path.Combine(dir.Path, "home", "indexer.json")));
+        Assert.True(File.Exists(Path.Combine(dir.Path, "work", ".agency-index.json")));
+        Assert.True(File.Exists(Path.Combine(dir.Path, "work", ".claude", "skills", "agency-index", "SKILL.md")));
+        Assert.False(File.Exists(Path.Combine(dir.Path, "home", "index.db")));
+    }
+
+    private static async Task ArrangeIndexAsync(TempDirectory dir, string name, string root)
+    {
+        dir.Write("other/b.md", "beta");
+        Directory.CreateDirectory(Path.Combine(dir.Path, "home"));
+        IndexService existing = await Services.SqliteAsync(Path.Combine(dir.Path, "home", "index.db"), new FakeEmbeddingGenerator());
+        await existing.IndexAsync(new IndexRequest(name, root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false), TestContext.Current.CancellationToken);
+    }
+
     private static Task<SetupResult> RunAsync(TempDirectory dir, string[] args, StubEndpoint endpoint)
     {
         string work = Path.Combine(dir.Path, "work");

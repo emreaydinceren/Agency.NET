@@ -43,9 +43,10 @@ internal static class Program
                   repo (default): drop this repo's indexes and remove its skill. all: every index, every skill copy, the SQLite
                   database files and indexer.json. Never removes the tool itself (see "remaining"). Without --yes it only previews.
           setup   [--scope repo|user] [--endpoint lmstudio|ollama|openai|openrouter | --embedding-url <url>] [--embedding-model <id>]
-                  [--index <name>] [--root <dir>] [--query <text>] [--yes]
+                  [--index <name>] [--root <dir>] [--no-index] [--query <text>] [--yes]
                   Installs the skill (default scope: repo), picks the embedding model and measures its dimensions, merges
-                  ~/.agency/indexer.json and, if --index/--root is given, runs a first index and a smoke search.
+                  ~/.agency/indexer.json and, if --index/--root is given, runs a first index and a smoke search
+                  (--no-index: write the config and repo file but do not index, so you can --dry-run first).
                   Without --yes it only reports what it would do.
           doctor        (read-only report of every prerequisite: {"status":"ok|problems","checks":[{name,ok,detail,fix}]}; exit 0)
 
@@ -122,7 +123,7 @@ internal static class Program
                 UninstallResult uninstall = await Uninstaller.RunAsync(
                     args,
                     IndexerSettings.DefaultHome,
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    IndexerSettings.UserProfile,
                     repoRoot,
                     ct);
                 return Write(uninstall.Status == "partial" ? ExitFailure : ExitOk, uninstall);
@@ -133,12 +134,12 @@ internal static class Program
                     SetupResult setup = await Setup.RunAsync(
                         args,
                         IndexerSettings.DefaultHome,
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        IndexerSettings.UserProfile,
                         repoRoot,
                         http,
                         ct);
                     return Write(
-                        setup.Status == "name_taken" ? ExitUsage : setup.Index is { Status: not IndexStatus.Ok } ? ExitFailure : ExitOk,
+                        setup.Status is "name_taken" or "index_model_mismatch" ? ExitUsage : setup.Index is { Status: not IndexStatus.Ok } ? ExitFailure : ExitOk,
                         setup);
                 }
 
@@ -148,7 +149,7 @@ internal static class Program
                     IReadOnlyList<DoctorCheck> checks = await Doctor.RunAsync(
                         args,
                         IndexerSettings.DefaultHome,
-                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        IndexerSettings.UserProfile,
                         repoRoot,
                         probe,
                         ct);
@@ -277,7 +278,7 @@ internal static class Program
         SkillInstaller.ResolveRoots(
             args.Get("dir"),
             args.Get("scope") ?? defaultScope,
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            IndexerSettings.UserProfile,
             RepoLocator.FindRoot(Directory.GetCurrentDirectory()));
 
     private static string IndexName(IndexerSettings settings) =>

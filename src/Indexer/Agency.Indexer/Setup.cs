@@ -15,7 +15,8 @@ namespace Agency.Indexer;
 internal sealed record SetupIndex(string Name, string Root, IndexStatus Status, int ChunksWritten, int FailedFiles, SearchResultHit? TopHit);
 
 /// <summary>What <c>setup</c> did, or with no <c>--yes</c> would do.</summary>
-/// <param name="Status"><c>preview</c> (nothing written), <c>ok</c>, or <c>name_taken</c> (the index name belongs to another root).</param>
+/// <param name="Status"><c>preview</c> (nothing written), <c>ok</c>, <c>name_taken</c> (the index name belongs to another root) or
+/// <c>index_model_mismatch</c> (the requested index was built with a different embedding model); the last two change nothing.</param>
 /// <param name="Message">A hint for the caller, if any.</param>
 /// <param name="SkillScope">The skill scope used.</param>
 /// <param name="Skill">The skill files written (or that would be written).</param>
@@ -29,6 +30,7 @@ internal sealed record SetupIndex(string Name, string Root, IndexStatus Status, 
 /// <param name="RepoConfigPath">The repo-level <c>.agency-index.json</c> written (or that would be), when <c>--scope repo</c> and an index were given.</param>
 /// <param name="RepoConfigBefore">The existing repo config's text, or <see langword="null"/> if there is none.</param>
 /// <param name="RepoConfigAfter">The repo config text written (or that would be).</param>
+/// <param name="Warnings">Existing indexes built with another model than the one chosen: they cannot be refreshed or searched until dropped and rebuilt (or the old model is kept). Setup never drops them.</param>
 internal sealed record SetupResult(
     string Status,
     string? Message,
@@ -43,7 +45,8 @@ internal sealed record SetupResult(
     SetupIndex? Index,
     string? RepoConfigPath = null,
     string? RepoConfigBefore = null,
-    string? RepoConfigAfter = null);
+    string? RepoConfigAfter = null,
+    IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// The <c>setup</c> command: installs the skill, probes the embeddings endpoint (picking the model and measuring
@@ -84,12 +87,30 @@ internal static class Setup
         string? repoPath = null;
         string? repoBefore = null;
         string? repoAfter = null;
+        IReadOnlyList<string> warnings = [];
         IndexRequest? request = IndexRequestFor(args, workingDirectory);
-        if (request is not null && await TakenByAnotherRootAsync(settings, request, ct) is { } owner)
+        IReadOnlyList<(string Index, IndexConfig Config)> existing = await ListExistingIndexesAsync(settings, ct);
+        if (request is not null && existing.FirstOrDefault(i => i.Index == request.Index).Config is { } named
+            && !string.Equals(named.Root, request.Root, StringComparison.Ordinal))
         {
             string suggestion = $"{Path.GetFileName(Path.GetDirectoryName(workingDirectory.TrimEnd('\\', '/')))}-{request.Index}".ToLowerInvariant();
-            return Result("name_taken", $"Index '{request.Index}' already belongs to {owner}. Nothing was changed; re-run with --index {suggestion} (or another name).");
+            return Result("name_taken", $"Index '{request.Index}' already belongs to {named.Root}. Nothing was changed; re-run with --index {suggestion} (or another name).");
         }
+
+        // An index is tied to the model it was built with. Changing the model orphans it, so say so before anything is written.
+        List<(string Index, IndexConfig Config)> orphaned = existing
+            .Where(i => !string.Equals(i.Config.EmbeddingModel, embedding.ModelId, StringComparison.Ordinal))
+            .ToList();
+        if (request is not null && orphaned.FirstOrDefault(i => i.Index == request.Index).Config is { } stale)
+        {
+            return Result(
+                "index_model_mismatch",
+                $"Index '{request.Index}' was built with '{stale.EmbeddingModel}' but '{embedding.ModelId}' was chosen. Nothing was changed. Either drop it first (agency-index drop --index {request.Index}) and re-run, or keep the model it was built with (--embedding-model {stale.EmbeddingModel}).");
+        }
+
+        warnings = orphaned
+            .Select(i => $"Index '{i.Index}' was built with '{i.Config.EmbeddingModel}'; with '{embedding.ModelId}' it cannot be refreshed or searched until you drop and rebuild it (agency-index drop --index {i.Index}). Keep '{i.Config.EmbeddingModel}' to keep using it. Setup does not drop anything.")
+            .ToList();
 
         // The repo file records which index and root belong to this repo, so later commands work from any folder of it.
         if (scope == "repo" && request is not null)
@@ -116,11 +137,11 @@ internal static class Setup
             await File.WriteAllTextAsync(repoPath, repoAfter!, ct);
         }
 
-        SetupIndex? index = request is null ? null : await IndexAndSearchAsync(settings, request, args.Get("query") ?? DefaultQuery, ct);
+        SetupIndex? index = request is null || args.Flags.Contains("no-index") ? null : await IndexAndSearchAsync(settings, request, args.Get("query") ?? DefaultQuery, ct);
         return Result("ok", keyWarning?.Trim(), installed.Select(i => i.Path).ToList(), index);
 
         SetupResult Result(string status, string? message, IReadOnlyList<string>? skill = null, SetupIndex? ran = null) =>
-            new(status, message, scope, skill ?? skillPaths, configPath, before, after, embedding.BaseUrl!, embedding.ModelId!, embedding.Dimensions!.Value, ran, repoPath, repoBefore, repoAfter);
+            new(status, message, scope, skill ?? skillPaths, configPath, before, after, embedding.BaseUrl!, embedding.ModelId!, embedding.Dimensions!.Value, ran, repoPath, repoBefore, repoAfter, warnings);
     }
 
     private static async Task<EmbeddingOptions> ProbeEmbeddingAsync(CliArguments args, EmbeddingOptions configured, HttpClient http, CancellationToken ct)
@@ -247,21 +268,16 @@ internal static class Setup
         return new IndexRequest(canonical, root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false);
     }
 
-    /// <summary>The root of an existing index of that name when it differs from the requested root; otherwise <see langword="null"/>.</summary>
-    private static async Task<string?> TakenByAnotherRootAsync(IndexerSettings settings, IndexRequest request, CancellationToken ct)
+    /// <summary>The indexes already in the database; none when a SQLite database does not exist yet (probing must not create it).</summary>
+    private static async Task<IReadOnlyList<(string Index, IndexConfig Config)>> ListExistingIndexesAsync(IndexerSettings settings, CancellationToken ct)
     {
-        // A SQLite database that does not exist yet cannot hold the name, and probing must not create it.
         if (settings.Provider == StorageProvider.Sqlite && !File.Exists(Path.GetFullPath(settings.Database)))
         {
-            return null;
+            return [];
         }
 
         IndexService service = await Program.CreateServiceAsync(settings, new Program.MissingEmbeddingGenerator(), ct);
-        IReadOnlyList<(string Index, IndexConfig Config)> indexes = await service.ListIndexesAsync(ct);
-        return indexes.FirstOrDefault(i => i.Index == request.Index).Config is { } config
-               && !string.Equals(config.Root, request.Root, StringComparison.Ordinal)
-            ? config.Root
-            : null;
+        return await service.ListIndexesAsync(ct);
     }
 
     private static async Task<SetupIndex> IndexAndSearchAsync(IndexerSettings settings, IndexRequest request, string query, CancellationToken ct)

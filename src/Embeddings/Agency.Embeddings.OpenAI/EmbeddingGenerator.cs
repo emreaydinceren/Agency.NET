@@ -41,6 +41,7 @@ public sealed partial class EmbeddingGenerator : IEmbeddingGenerator
 
     private readonly EmbeddingClient _client;
     private readonly string? _modelId;
+    private readonly int _maxBatchSize;
     private readonly ILogger<EmbeddingGenerator> _logger;
 
     /// <summary>Initialises the generator from application configuration via the DI options system.</summary>
@@ -57,8 +58,10 @@ public sealed partial class EmbeddingGenerator : IEmbeddingGenerator
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrEmpty(options.BaseUrl);
         ArgumentException.ThrowIfNullOrEmpty(options.ApiKey);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxBatchSize, 1);
 
         this._modelId = options.ModelId;
+        this._maxBatchSize = options.MaxBatchSize;
         this._logger = logger ?? NullLogger<EmbeddingGenerator>.Instance;
 
         var clientOptions = new OpenAIClientOptions
@@ -145,22 +148,30 @@ public sealed partial class EmbeddingGenerator : IEmbeddingGenerator
 
         try
         {
-            var result = await this._client.GenerateEmbeddingsAsync(inputList, cancellationToken: cancellationToken);
+            var vectors = new List<ReadOnlyMemory<float>>(inputList.Count);
+            int tokens = 0;
+
+            // Sequential slices: one oversized document must not arrive at the server as a single huge request.
+            foreach (string[] slice in inputList.Chunk(this._maxBatchSize))
+            {
+                var result = await this._client.GenerateEmbeddingsAsync(slice, cancellationToken: cancellationToken);
+                tokens += result.Value.Usage.InputTokenCount;
+                vectors.AddRange(result.Value.Select(static e => e.ToFloats()));
+            }
 
             stopwatch.Stop();
-            int tokens = result.Value.Usage.InputTokenCount;
 
             _requestCount.Add(1, new TagList { { "operation", "batch" }, { "status", "success" } });
             _requestDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new TagList { { "operation", "batch" } });
             _tokenCount.Add(tokens, new TagList { { "operation", "batch" } });
 
             activity?.SetTag("gen_ai.response.usage.input_tokens", tokens);
-            activity?.SetTag("gen_ai.response.embedding_count", result.Value.Count);
+            activity?.SetTag("gen_ai.response.embedding_count", vectors.Count);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            this.LogBatchEmbeddingsGenerated(stopwatch.Elapsed.TotalMilliseconds, result.Value.Count, tokens);
+            this.LogBatchEmbeddingsGenerated(stopwatch.Elapsed.TotalMilliseconds, vectors.Count, tokens);
 
-            return result.Value.Select(static e => e.ToFloats()).ToList();
+            return vectors;
         }
         catch (Exception ex)
         {

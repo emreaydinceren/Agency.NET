@@ -29,12 +29,20 @@ internal static class Program
         agency-index — incremental semantic index over a folder of text documents.
 
         Commands:
-          index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--max-file-kb 1024] [--wait]
+          index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--max-file-kb 1024] [--wait] [--dry-run]
+                  (progress goes to stderr; --dry-run reports the delta, chunk count and a time estimate without writing)
           search  --index <name> --query <text> [--top 5]
           list    --index <name>
           indexes
           drop    --index <name> [--wait]
-          install-skill [--dir <skills-root>]
+          install-skill [--dir <skills-root> | --scope repo|user]    (default scope: user)
+          uninstall-skill [--dir <skills-root> | --scope repo|user]
+          setup   [--scope repo|user] [--endpoint lmstudio|ollama|openai|openrouter | --embedding-url <url>] [--embedding-model <id>]
+                  [--index <name>] [--root <dir>] [--query <text>] [--yes]
+                  Installs the skill (default scope: repo), picks the embedding model and measures its dimensions, merges
+                  ~/.agency/indexer.json and, if --index/--root is given, runs a first index and a smoke search.
+                  Without --yes it only reports what it would do.
+          doctor        (read-only report of every prerequisite: {"status":"ok|problems","checks":[{name,ok,detail,fix}]}; exit 0)
 
         Connection options (or AGENCY_INDEX_* environment variables, or ~/.agency/indexer.json):
           --provider sqlite|postgres   --db <sqlite path | postgres connection string>
@@ -95,11 +103,38 @@ internal static class Program
                 return ExitOk;
 
             case "install-skill":
-                string? dir = args.Get("dir");
-                IReadOnlyList<string> roots = dir is not null
-                    ? [dir]
-                    : SkillInstaller.DefaultRoots(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-                return Write(ExitOk, new { status = "ok", installed = await SkillInstaller.InstallAsync(roots, ct) });
+                return Write(ExitOk, new { status = "ok", installed = await SkillInstaller.InstallAsync(SkillRootsFor(args, "user"), ct) });
+
+            case "uninstall-skill":
+                return Write(ExitOk, new { status = "ok", removed = SkillInstaller.Uninstall(SkillRootsFor(args, "user")) });
+
+            case "setup":
+                using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) })
+                {
+                    SetupResult setup = await Setup.RunAsync(
+                        args,
+                        IndexerSettings.DefaultHome,
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        Directory.GetCurrentDirectory(),
+                        http,
+                        ct);
+                    return Write(
+                        setup.Status == "name_taken" ? ExitUsage : setup.Index is { Status: not IndexStatus.Ok } ? ExitFailure : ExitOk,
+                        setup);
+                }
+
+            case "doctor":
+                using (var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(10) })
+                {
+                    IReadOnlyList<DoctorCheck> checks = await Doctor.RunAsync(
+                        args,
+                        IndexerSettings.DefaultHome,
+                        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                        Directory.GetCurrentDirectory(),
+                        probe,
+                        ct);
+                    return Write(ExitOk, new { status = checks.All(c => c.Ok) ? "ok" : "problems", checks });
+                }
 
             case "index" or "search" or "list" or "indexes" or "drop":
                 break;
@@ -122,15 +157,20 @@ internal static class Program
         switch (args.Command)
         {
             case "index":
-                IndexResult indexed = await service.IndexAsync(
-                    new IndexRequest(
-                        IndexName(args),
-                        args.Get("root"),
-                        args.Get("ext") is { } ext ? FileScanner.ParseExtensions(ext) : null,
-                        args.Get("names") is { } names ? FileScanner.SplitList(names) : null,
-                        args.GetPositiveInt("max-file-kb", (int)(FileScanner.DefaultMaxFileBytes / 1024)) * 1024L,
-                        args.Flags.Contains("wait")),
-                    ct);
+                var request = new IndexRequest(
+                    IndexName(args),
+                    args.Get("root"),
+                    args.Get("ext") is { } ext ? FileScanner.ParseExtensions(ext) : null,
+                    args.Get("names") is { } names ? FileScanner.SplitList(names) : null,
+                    args.GetPositiveInt("max-file-kb", (int)(FileScanner.DefaultMaxFileBytes / 1024)) * 1024L,
+                    args.Flags.Contains("wait"));
+                if (args.Flags.Contains("dry-run"))
+                {
+                    return Write(ExitOk, new { status = "dry_run", plan = await service.DryRunAsync(request, embeddings, ct) });
+                }
+
+                // Progress goes to stderr so stdout stays the single JSON object the calling agent parses.
+                IndexResult indexed = await service.IndexAsync(request, ct, Console.Error.WriteLine);
                 return Write(ExitCodeFor(indexed.Status), indexed);
 
             case "search":
@@ -205,6 +245,13 @@ internal static class Program
             settings.Embedding.ModelId ?? "");
     }
 
+    private static IReadOnlyList<string> SkillRootsFor(CliArguments args, string defaultScope) =>
+        SkillInstaller.ResolveRoots(
+            args.Get("dir"),
+            args.Get("scope") ?? defaultScope,
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Directory.GetCurrentDirectory());
+
     private static string IndexName(CliArguments args) =>
         ProjectName.TryNormalize(args.Require("index"), out string canonical, out string? error)
             ? canonical
@@ -233,7 +280,7 @@ internal static class Program
     /// Stands in for the embedding generator on commands that never embed (list, indexes, drop), so they work
     /// without an embedding endpoint configured.
     /// </summary>
-    private sealed class MissingEmbeddingGenerator : IEmbeddingGenerator
+    internal sealed class MissingEmbeddingGenerator : IEmbeddingGenerator
     {
         public Task<ReadOnlyMemory<float>> GenerateEmbeddingAsync(string input, CancellationToken cancellationToken = default) =>
             throw new UsageException("No embedding endpoint configured.");

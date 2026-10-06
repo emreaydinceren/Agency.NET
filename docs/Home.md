@@ -83,7 +83,7 @@ The solution (`src/Agency.slnx`) is grouped into subsystems. Each row links to t
 ### Tools
 | Project | Role |
 |---|---|
-| [Agency.Indexer](Projects/Agency.Indexer.md) | `agency-index` — a .NET global tool plus agent skill (`SKILL.md`) for incremental semantic indexing of a documentation folder into SQLite or Postgres; single writer per index, JSON output. |
+| [Agency.Indexer](Projects/Agency.Indexer.md) | `agency-index` — a .NET global tool plus agent skill (`SKILL.md`) for incremental semantic indexing of a documentation folder into SQLite or Postgres; single writer per index, JSON output. Install walk-through: [Install-Indexer-Skill](Install-Indexer-Skill.md). |
 
 ### LLM
 | Project | Role |

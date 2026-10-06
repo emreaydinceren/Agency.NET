@@ -11,10 +11,18 @@ against it. Every command prints a single JSON object on stdout, including failu
 
 ## Prerequisites — check before relying on it
 
-Run `agency-index indexes`. If the command is not found, or it exits 2 with "no embedding endpoint",
-the tool is not set up (see [Configuration](#configuration)): don't try to fix it mid-task, use grep.
-The first `index` of a large folder can take minutes (about 3 minutes for 55 files on a local model);
-refreshes after that take seconds.
+Run `agency-index doctor`: one JSON object whose `status` is `ok` or `problems`, with a `fix` for each
+failing check. (It exits 0 either way; `agency-index indexes` is the lighter check.) If the command is
+not found, or `doctor` reports `embedding_config`/`endpoint` problems, the tool is not set up (see
+[Configuration](#configuration), or `agency-index setup` which does it for you after the user agrees):
+don't try to fix it mid-task, use grep.
+
+The first `index` of a large folder can take minutes (about 3 minutes for 55 files on a local model,
+over 10 for a few hundred files). Run `agency-index index --index <name> --root <dir> --dry-run` first: it
+writes nothing and reports the chunk count and an estimated time. A real run prints progress to
+stderr (`indexing 12/340 files, 410 chunks, ~6 min left`) and the JSON result to stdout at the end;
+tell the user the estimate first, and run it in the background or with a long timeout. Refreshes after
+that take seconds.
 
 ## When to use it — and when not
 
@@ -119,15 +127,32 @@ Settings come from command-line options, then `AGENCY_INDEX_*` environment varia
 {
   "Provider": "sqlite",
   "Database": "/home/me/.agency/index.db",
-  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-nomic-embed-text-v1.5", "ApiKey": "unused", "Dimensions": 768 }
+  "Embedding": { "BaseUrl": "http://localhost:1234/v1", "ModelId": "text-embedding-qwen3-embedding-0.6b", "Dimensions": 1024 }
 }
 ```
+
+`Dimensions` must equal the model's vector length (default 1024 when omitted); a wrong value breaks
+the index.
+
+| Model | Dimensions |
+|-------|------------|
+| `text-embedding-nomic-embed-text-v1.5` | 768 |
+| `text-embedding-qwen3-embedding-0.6b` | 1024 |
+| `text-embedding-3-small` (OpenAI) | 1536 |
 
 - `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (`Database` is
   then a connection string; requires the pgvector extension).
 - There is no default embedding endpoint: until one is configured, `index` and `search` exit 2.
-  Paths above use POSIX style; on Windows use e.g. `C:\Users\me\.agency\index.db`.
-- Any OpenAI-compatible embeddings endpoint works (OpenAI, LM Studio, Ollama's `/v1`, ...).
+  `agency-index setup --endpoint lmstudio` (add `--yes` to apply) picks the model and measures
+  `Dimensions` for you.
+  Paths above use POSIX style; on Windows use e.g. `C:\Users\me\.agency\index.db` (Git Bash still
+  resolves `~/.agency`). If `agency-index` is "not found" right after installing, add
+  `~/.dotnet/tools` (Windows: `%USERPROFILE%\.dotnet\tools`) to `PATH`.
+- Any OpenAI-compatible embeddings endpoint works (OpenAI, OpenRouter, LM Studio, Ollama's `/v1`, ...).
+- **The API key is a secret: keep it in the environment, never in `indexer.json` or on a command line.**
+  Local servers need none. Hosted ones read `OPENAI_API_KEY` (api.openai.com) or `OPENROUTER_API_KEY`
+  (openrouter.ai); any other endpoint reads `AGENCY_INDEX_Embedding__ApiKey`. `doctor` tells you when a
+  hosted endpoint has no key or a key sits in the config file. Never print or log the key.
 - Environment variable form: `AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`,
   `AGENCY_INDEX_Embedding__BaseUrl`, `AGENCY_INDEX_Embedding__ModelId`, ...
 - An index is tied to the embedding model it was built with; switching models requires

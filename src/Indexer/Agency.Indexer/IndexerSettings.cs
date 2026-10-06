@@ -65,7 +65,7 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
 
         var embedding = new EmbeddingOptions();
         config.GetSection(EmbeddingOptions.SectionName).Bind(embedding);
-        embedding.ApiKey ??= "unused";
+        embedding.ApiKey = ResolveApiKey(embedding.BaseUrl, embedding.ApiKey);
         embedding.Dimensions ??= 1024;
 
         return new IndexerSettings(
@@ -74,6 +74,47 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
             embedding,
             config.GetValue("ChunkSize", 512),
             config.GetValue("ChunkOverlap", 64));
+    }
+
+    /// <summary>The key sent to endpoints that do not check it (LM Studio, Ollama); the OpenAI SDK needs a non-empty value.</summary>
+    public const string NoKey = "unused";
+
+    /// <summary>
+    /// The environment variable that conventionally holds the API key for a hosted provider, or <see langword="null"/>
+    /// for any other endpoint (a local server, which needs no key).
+    /// </summary>
+    public static string? KeyVariableFor(string? baseUrl)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri))
+        {
+            return null;
+        }
+
+        return uri.Host switch
+        {
+            string host when host.EndsWith("openrouter.ai", StringComparison.OrdinalIgnoreCase) => "OPENROUTER_API_KEY",
+            string host when host.EndsWith("openai.com", StringComparison.OrdinalIgnoreCase) => "OPENAI_API_KEY",
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The key to send: an explicitly configured one, else (for a hosted provider) the provider's conventional
+    /// environment variable, else <see cref="NoKey"/>. A key found in the environment is never written to configuration.
+    /// </summary>
+    /// <param name="baseUrl">The embeddings endpoint.</param>
+    /// <param name="configured">The key from options, environment or <c>indexer.json</c>, if any.</param>
+    /// <param name="getEnvironmentVariable">Environment lookup; defaults to the process environment.</param>
+    public static string ResolveApiKey(string? baseUrl, string? configured, Func<string, string?>? getEnvironmentVariable = null)
+    {
+        if (!string.IsNullOrEmpty(configured) && configured != NoKey)
+        {
+            return configured;
+        }
+
+        string? variable = KeyVariableFor(baseUrl);
+        string? fromEnvironment = variable is null ? null : (getEnvironmentVariable ?? Environment.GetEnvironmentVariable)(variable);
+        return string.IsNullOrEmpty(fromEnvironment) ? NoKey : fromEnvironment;
     }
 
     /// <summary>Throws <see cref="UsageException"/> unless an embedding endpoint and model are configured.</summary>

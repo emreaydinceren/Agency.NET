@@ -34,4 +34,10 @@ public sealed class EmbeddingOptions
     /// Required when using a SQLite vector store so the schema is created with the correct column width.
     /// </summary>
     public int? Dimensions { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of inputs sent in one embeddings request. Larger batches are split
+    /// into sequential requests so a single big document cannot flood the server. Defaults to 32.
+    /// </summary>
+    public int MaxBatchSize { get; set; } = 32;
 }

@@ -12,7 +12,7 @@
     <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
     <!-- A tool's .snupkg is built from the same publish output, which now has no .pdb files (NU5017). -->
     <IncludeSymbols>false</IncludeSymbols>
-    <Description>Command-line semantic indexer for agents: incrementally indexes a folder of text documents into SQLite or PostgreSQL/pgvector and answers semantic queries as JSON. Ships an agent skill (SKILL.md) installed with `agency-index install-skill`.</Description>
+    <Description>Command-line semantic indexer for agents: incrementally indexes a folder of text documents into SQLite or PostgreSQL/pgvector and answers semantic queries as JSON. Ships an agent skill (SKILL.md) installed with `agency-index install-skill`. Needs an OpenAI-compatible embeddings endpoint; see docs/Install-Indexer-Skill.md in the repository.</Description>
     <PackageTags>agency.net;ai;agent;skill;rag;semantic-search;vector-store;cli;dotnet-tool</PackageTags>
   </PropertyGroup>
 

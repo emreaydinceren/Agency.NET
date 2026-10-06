@@ -11,6 +11,9 @@ changed, and answers queries with JSON.
 dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 ```
 
+For the full walk-through (skill scope, embeddings endpoint, `PATH`, first index, an agent runbook) see
+`docs/Install-Indexer-Skill.md` in the repository.
+
 `install-skill` writes the bundled `SKILL.md` to `~/.claude/skills/agency-index/` (Claude Code) and
 `~/Agents/skills/agency-index/` (Agency harness); pass `--dir <skills-root>` to choose another location.
 
@@ -28,8 +31,8 @@ See `SKILL.md` for the full command reference, exit codes and configuration.
 - **Delta:** the manifest (an `IKVStore`) records each file's size, last-write time and chunk count.
   A run re-chunks and re-embeds only files that were added or whose size or last-write time changed,
   and removes files that disappeared. Contents of unchanged files are never read.
-- **Replace:** each changed file is written with `IVectorStore.ReplaceDocumentAsync` — all chunks
-  embedded in one batch, upserted, then the file's stale chunks deleted.
+- **Replace:** each changed file is written with `IVectorStore.ReplaceDocumentAsync` — chunks
+  embedded in sequential requests of at most 32, upserted, then the file's stale chunks deleted.
 - **Single writer:** SQLite uses an exclusively opened `<db>.<index>.lock` file; PostgreSQL uses a
   session advisory lock. Both are released automatically if the process dies. SQLite runs in WAL
   mode so searches never block on a running index.

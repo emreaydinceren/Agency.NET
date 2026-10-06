@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Agency.Embeddings.Common;
 using Agency.Ingestion;
 using Agency.VectorStore.Common;
 
@@ -45,6 +46,27 @@ internal sealed record IndexResult(
     int ChunksWritten,
     long DurationMs);
 
+/// <summary>What an <c>index --dry-run</c> would do. Nothing is written.</summary>
+/// <param name="Index">The canonical index name.</param>
+/// <param name="Root">The directory that would be indexed.</param>
+/// <param name="Added">Files that would be indexed for the first time.</param>
+/// <param name="Changed">Files that would be re-indexed.</param>
+/// <param name="Removed">Files that would be removed from the index.</param>
+/// <param name="Unchanged">The number of files that would be left alone.</param>
+/// <param name="SkippedTooLarge">Files over the size cap.</param>
+/// <param name="EstimatedChunks">The chunks the added and changed files split into.</param>
+/// <param name="EstimatedSeconds">A rough embedding time from a small timed sample, or <see langword="null"/> when there was nothing to embed.</param>
+internal sealed record DryRunResult(
+    string Index,
+    string Root,
+    IReadOnlyList<string> Added,
+    IReadOnlyList<string> Changed,
+    IReadOnlyList<string> Removed,
+    int Unchanged,
+    IReadOnlyList<string> SkippedTooLarge,
+    int EstimatedChunks,
+    double? EstimatedSeconds);
+
 /// <summary>One semantic search hit.</summary>
 /// <param name="Path">The full path of the source file.</param>
 /// <param name="Chunk">The chunk index within the file.</param>
@@ -78,8 +100,14 @@ internal sealed class IndexService(
 
     private static readonly TimeSpan LockPollInterval = TimeSpan.FromSeconds(1);
 
+    /// <summary>The number of files embedded to time a dry run; the estimate scales their rate to every chunk.</summary>
+    private const int DryRunSampleFiles = 3;
+
     /// <summary>Brings <see cref="IndexRequest.Index"/> up to date with the files on disk.</summary>
-    public async Task<IndexResult> IndexAsync(IndexRequest request, CancellationToken ct)
+    /// <param name="request">What to index.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <param name="progress">Receives a human-readable line at the start and after each file; the result is unaffected.</param>
+    public async Task<IndexResult> IndexAsync(IndexRequest request, CancellationToken ct, Action<string>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
         await using IAsyncDisposable? held = await this.AcquireAsync(request.Index, request.Wait, ct);
@@ -98,8 +126,11 @@ internal sealed class IndexService(
         var failed = new List<FailedFile>();
         int chunksWritten = 0;
 
-        foreach (ScannedFile file in plan.Added.Concat(plan.Changed))
+        List<ScannedFile> toIndex = plan.Added.Concat(plan.Changed).ToList();
+        progress?.Invoke($"indexing {toIndex.Count} files ({plan.Added.Count} added, {plan.Changed.Count} changed), removing {plan.Removed.Count}");
+        for (int i = 0; i < toIndex.Count; i++)
         {
+            ScannedFile file = toIndex[i];
             try
             {
                 chunksWritten += await this.IndexFileAsync(request.Index, file, ct);
@@ -110,6 +141,8 @@ internal sealed class IndexService(
                 // keeps its old manifest entry (or none), so the next run retries it.
                 failed.Add(new FailedFile(file.Path, ex.Message));
             }
+
+            progress?.Invoke(ProgressLine(i + 1, toIndex.Count, chunksWritten, failed.Count, stopwatch.Elapsed));
         }
 
         foreach (string path in plan.Removed)
@@ -131,6 +164,49 @@ internal sealed class IndexService(
             failed,
             chunksWritten,
             stopwatch.ElapsedMilliseconds);
+    }
+
+    /// <summary>
+    /// Reports what <see cref="IndexAsync"/> would do without writing anything: the delta, the chunk count, and a
+    /// time estimate from embedding the chunks of the first few files (the embeddings are discarded). Takes no writer lock.
+    /// </summary>
+    public async Task<DryRunResult> DryRunAsync(IndexRequest request, IEmbeddingGenerator embeddings, CancellationToken ct)
+    {
+        IndexConfig config = await this.ResolveConfigAsync(request, ct);
+        ScanResult scan = FileScanner.Scan(new ScanOptions(config.Root, config.Extensions, config.Names, request.MaxFileBytes));
+        IndexPlan plan = DeltaPlanner.Plan(scan.Files, await manifest.GetEntriesAsync(request.Index, ct));
+
+        int estimatedChunks = 0;
+        var sample = new List<string>();
+        int sampledFiles = 0;
+        foreach (ScannedFile file in plan.Added.Concat(plan.Changed))
+        {
+            List<DocumentChunk<string>> chunks = await this.ChunkFileAsync(file, ct);
+            estimatedChunks += chunks.Count;
+            if (sampledFiles++ < DryRunSampleFiles)
+            {
+                sample.AddRange(chunks.Select(c => c.Value));
+            }
+        }
+
+        double? seconds = null;
+        if (sample.Count > 0)
+        {
+            var timer = Stopwatch.StartNew();
+            await embeddings.GenerateEmbeddingsAsync(sample, ct);
+            seconds = Math.Round(timer.Elapsed.TotalSeconds * estimatedChunks / sample.Count, 1);
+        }
+
+        return new DryRunResult(
+            request.Index,
+            config.Root,
+            plan.Added.Select(f => f.Path).ToList(),
+            plan.Changed.Select(f => f.Path).ToList(),
+            plan.Removed,
+            plan.Unchanged,
+            scan.SkippedTooLarge,
+            estimatedChunks,
+            seconds);
     }
 
     /// <summary>Returns the <paramref name="top"/> chunks of <paramref name="index"/> closest to <paramref name="text"/>.</summary>
@@ -229,6 +305,15 @@ internal sealed class IndexService(
     /// <returns>The number of chunks written.</returns>
     private async Task<int> IndexFileAsync(string index, ScannedFile file, CancellationToken ct)
     {
+        List<DocumentChunk<string>> chunks = await this.ChunkFileAsync(file, ct);
+        await vectorStore.ReplaceDocumentAsync(UserId, null, file.Path, chunks, index, ct);
+        await manifest.SaveEntryAsync(index, new ManifestEntry(file.Path, file.Size, file.LastWriteTicks, chunks.Count), ct);
+        return chunks.Count;
+    }
+
+    /// <summary>Reads <paramref name="file"/> and splits it into the chunks that would be embedded.</summary>
+    private async Task<List<DocumentChunk<string>>> ChunkFileAsync(ScannedFile file, CancellationToken ct)
+    {
         string extension = Path.GetExtension(file.Path).ToLowerInvariant();
         string content = await File.ReadAllTextAsync(file.Path, ct);
         if (extension is ".html" or ".htm")
@@ -243,15 +328,26 @@ internal sealed class IndexService(
             ["file_extension"] = extension,
         });
 
-        List<DocumentChunk<string>> chunks = splitter.Split(document)
+        return splitter.Split(document)
             .Select((chunk, i) => new DocumentChunk<string>(
                 $"{file.Path}:chunk:{i}",
                 chunk.Content,
                 new Dictionary<string, object>(chunk.Metadata ?? [], StringComparer.Ordinal) { ["chunk_index"] = i }))
             .ToList();
-
-        await vectorStore.ReplaceDocumentAsync(UserId, null, file.Path, chunks, index, ct);
-        await manifest.SaveEntryAsync(index, new ManifestEntry(file.Path, file.Size, file.LastWriteTicks, chunks.Count), ct);
-        return chunks.Count;
     }
+
+    /// <summary>E.g. <c>indexing 12/340 files, 410 chunks, 1 failed, ~6 min left</c>.</summary>
+    private static string ProgressLine(int done, int total, int chunks, int failedFiles, TimeSpan elapsed)
+    {
+        string failures = failedFiles > 0 ? $", {failedFiles} failed" : "";
+        if (done == total)
+        {
+            return $"indexing {done}/{total} files, {chunks} chunks{failures}, done in {FormatDuration(elapsed)}";
+        }
+
+        return $"indexing {done}/{total} files, {chunks} chunks{failures}, ~{FormatDuration(elapsed * (total - done) / done)} left";
+    }
+
+    private static string FormatDuration(TimeSpan duration) =>
+        duration.TotalSeconds < 90 ? $"{Math.Max(1, (int)duration.TotalSeconds)}s" : $"{(int)Math.Round(duration.TotalMinutes)} min";
 }

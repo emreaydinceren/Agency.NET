@@ -193,6 +193,47 @@ public sealed class IndexServiceTests : IDisposable
         await Assert.ThrowsAsync<UsageException>(() => service.SearchAsync("docs", "alpha", 1, Ct));
     }
 
+    /// <summary>Verifies progress is reported up front and after every file, ending with a completion line.</summary>
+    [Fact]
+    public async Task IndexAsync_WithProgress_ReportsStartAndEachFile()
+    {
+        this.WriteDoc("a.md", "alpha");
+        this.WriteDoc("b.md", "beta");
+        IndexService service = await Services.SqliteAsync(this._database, this._embeddings);
+        var lines = new List<string>();
+
+        await service.IndexAsync(Request(root: this._docs), Ct, lines.Add);
+
+        Assert.Equal(3, lines.Count);
+        Assert.StartsWith("indexing 2 files", lines[0], StringComparison.Ordinal);
+        Assert.StartsWith("indexing 1/2 files", lines[1], StringComparison.Ordinal);
+        Assert.Contains("left", lines[1], StringComparison.Ordinal);
+        Assert.StartsWith("indexing 2/2 files", lines[2], StringComparison.Ordinal);
+        Assert.Contains("done in", lines[2], StringComparison.Ordinal);
+    }
+
+    /// <summary>Verifies a dry run reports the delta and the real chunk count, writes nothing, and times a sample.</summary>
+    [Fact]
+    public async Task DryRunAsync_ReportsPlanAndWritesNothing()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            this.WriteDoc($"doc{i}.md", $"Document number {i} talks about topic{i}.");
+        }
+
+        IndexService service = await Services.SqliteAsync(this._database, this._embeddings);
+
+        DryRunResult plan = await service.DryRunAsync(Request(root: this._docs), this._embeddings, Ct);
+
+        Assert.Equal(5, plan.Added.Count);
+        Assert.Empty(await service.ListIndexesAsync(Ct));
+        Assert.True(plan.EstimatedSeconds >= 0);
+        Assert.Equal(3, this._embeddings.EmbeddedInputs.Count);
+
+        IndexResult real = await service.IndexAsync(Request(root: this._docs), Ct);
+        Assert.Equal(real.ChunksWritten, plan.EstimatedChunks);
+    }
+
     private static IndexRequest Request(string? root = null) =>
         new("docs", root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false);
 

@@ -25,12 +25,13 @@ For the full walk-through (scope, embeddings endpoint, `PATH`, first index, agen
 
 | Command | Purpose |
 |---|---|
-| `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--max-file-kb N] [--wait] [--dry-run] [--log <file>]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. Progress lines and each failed file with its reason go to stderr (and `--log`); `failed` in the result is `{path, reason}` entries; `--dry-run` reports the delta, chunk count and a time estimate without writing. |
-| `search --index <name> --query <text> [--top N] [--min-score X] [--within D] [--no-text] [--snippet-chars N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity) and `text`. `--min-score` (or `Search:MinScore`) and `--within` drop weak hits, reported as `filtered` with the pre-filter `best_score`; `--no-text` and `--snippet-chars` shrink the output. |
-| `list --index <name>` | The index configuration and every indexed file with size, last-write time and chunk count. |
+| `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--exclude <glob>,...] [--max-file-kb N] [--wait] [--dry-run] [--rebuild] [--summary] [--log <file>]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. Progress lines (files, chunks, ETA, plus a 30 s heartbeat) and each failed file with its reason go to stderr (and `--log`); `failed` in the result is `{path, reason}` entries; the other file lists are relative to `root`, and `--summary` prints counts instead. `--exclude` takes gitignore-style globs relative to the root. `--rebuild` re-embeds every file, which is how the embedding model is switched. `--dry-run` reports the delta, chunk count and a time estimate (a sample spread over the whole set, scaled by text length) without writing. |
+| `search --index <name>[,<name>...] --query <text> [--top N] [--min-score X] [--within D] [--no-text] [--snippet-chars N] [--path <glob>] [--hybrid] [--group-by-file \| --per-file N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity), `text`, and `heading`, `start_line` and `end_line` when the index recorded them (`index` when several indexes were searched). `--path` filters by glob; `--hybrid` fuses the vector rank with a BM25 rank over the candidate pool and exempts identifier matches from the threshold; `--group-by-file` and `--per-file` cap hits per file; several indexes are merged by score. `--min-score` (or `Search:MinScore`) and `--within` drop weak hits, reported as `filtered` with the pre-filter `best_score`; `--no-text` and `--snippet-chars` shrink the output. |
+| `calibrate --index <name> [--save]` | Runs twelve unrelated queries and reports the noise ceiling and a suggested minimum score; `--save` stores it in the index configuration, and `search` uses it when no threshold is configured. |
+| `list --index <name> [--summary]` | The index configuration and every indexed file (relative to the root) with size, last-write time and chunk count; `--summary` gives counts. |
 | `indexes` | Every index and its root. |
 | `drop --index <name> [--wait]` | Delete the index's chunks, manifest and configuration. |
-| `install-skill [--dir <skills-root> \| --scope repo\|user]` | Write the bundled `SKILL.md` (default scope `user`); the output says which files replaced an existing one. |
+| `install-skill [--dir <skills-root> \| --scope repo\|user]` | Write the bundled `SKILL.md` (default scope `user`, two copies: `~/.claude/skills` and `~/Agents/skills`; `setup` defaults to `repo`); the output says which files replaced an existing one. |
 | `uninstall [--scope repo\|all] [--dir <skills-root>] [--yes]` | Remove the skill and the data. `repo` (default) drops this repo's indexes and its skill; `all` also drops every index, removes every skill copy, the SQLite database files and `indexer.json`. Previews unless `--yes`; never removes the tool itself (the last step is returned under `remaining`). |
 | `uninstall-skill [--dir <skills-root> \| --scope repo\|user]` | Remove the skill file written by `install-skill`. |
 | `doctor` | Read-only JSON report of every prerequisite (tool, skill, config, endpoint, model, dimensions, database, indexes), each with a `fix`. Exits 0; branch on `status`. |
@@ -42,13 +43,16 @@ configuration error, `3` another process holds the index's writer lock.
 The embeddings API key is a secret and is read from the environment (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or
 `AGENCY_INDEX_Embedding__ApiKey`); `setup` never writes it to a file and `doctor` flags one stored in
 `indexer.json`. A repo can carry its own defaults in `.agency-index.json` at its root (found by walking up from the current
-folder, nearest wins): `Index`, `Root` (relative to the file), `Extensions`, `Names` and `MaxFileKb`, so commands
+folder, nearest wins): `Index`, `Root` (relative to the file), `Extensions`, `Names`, `MaxFileKb` and `Exclude`, so commands
 work from any folder of the repo without `--index`/`--root`. Only those keys are read from it; endpoint, model,
 database and key settings are ignored there, because the file arrives with the repository. Per key, the command
 line beats `AGENCY_INDEX_*` variables, which beat the repo file, which beats the user file. Configuration
 (highest precedence first): command-line options, `AGENCY_INDEX_*` environment variables
 (`AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`, `AGENCY_INDEX_Embedding__BaseUrl`, ...), then
-`~/.agency/indexer.json`. The default provider is SQLite at `~/.agency/index.db`.
+`~/.agency/indexer.json`. The default provider is SQLite at `~/.agency/index.db`. For PostgreSQL (`Provider: postgres`, pgvector required) the
+connection string contains the password, so it is read from `AGENCY_INDEX_Database` and `setup` never writes it
+to `indexer.json`; `doctor` flags one left there. See
+[Install-Indexer-Skill](../Install-Indexer-Skill.md#postgresql-optional).
 
 ## How It Works
 
@@ -92,7 +96,8 @@ or blocks with `--wait`.
 
 - A skill plus a CLI instead of an MCP server: each command is a short-lived process with JSON on stdout,
   which avoids stdio-protocol logging pitfalls and tool-call timeouts on long index runs.
-- An index is tied to its root and embedding model; changing either is a usage error (drop and rebuild).
+- An index is tied to its root and embedding model; changing the root is a usage error (drop it), and changing the model needs `index --rebuild`. A rebuild forgets the manifest first, so an interrupted one is finished by a plain run. Searching with another model than the index's is refused, since its scores would be meaningless.
+- Chunk locations (`heading`, `start_line`, `end_line`) are found by locating each chunk's first and last line in the source text, because the splitter reports no offsets; a chunk whose whitespace the splitter rewrote has none rather than a wrong one. `HybridRanker` is reciprocal-rank fusion of the vector rank and a BM25 rank computed over the retrieved candidate pool, not a second index.
   Narrowing `--ext`/`--names` is allowed and removes files that no longer match.
 - Searches pass a non-null session id so both backends restrict results to the index's project (the
   Postgres store reads a null session as "every session and project of the user").

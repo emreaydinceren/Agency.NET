@@ -15,7 +15,7 @@ namespace Agency.Indexer;
 internal sealed record RepoConfig(string Path, IReadOnlyDictionary<string, string> Values, IReadOnlyList<string> Ignored)
 {
     /// <summary>The only keys a repo file may set.</summary>
-    public static readonly IReadOnlyList<string> AllowedKeys = ["Index", "Root", "Extensions", "Names", "MaxFileKb"];
+    public static readonly IReadOnlyList<string> AllowedKeys = ["Index", "Root", "Extensions", "Names", "MaxFileKb", "Exclude"];
 
     /// <summary>Reads <paramref name="path"/>; throws <see cref="UsageException"/> if it is not a JSON object.</summary>
     public static RepoConfig Load(string path)

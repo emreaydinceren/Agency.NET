@@ -29,21 +29,28 @@ internal static class Program
         agency-index — incremental semantic index over a folder of text documents.
 
         Commands:
-          index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--max-file-kb 1024] [--wait] [--dry-run] [--log <file>]
-                  (progress and each failed file with its reason go to stderr, and to --log <file> with timestamps; --dry-run reports the delta, chunk count and a time estimate without writing)
-          search  --index <name> --query <text> [--top 5] [--min-score 0..1] [--within 0..1] [--no-text] [--snippet-chars N]
-                  --min-score (or Search:MinScore in indexer.json) drops weaker hits; --within keeps hits within that distance of the best;
+          index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--exclude <glob>,...] [--max-file-kb 1024] [--wait] [--dry-run] [--rebuild] [--summary] [--log <file>]
+                  (progress and each failed file with its reason go to stderr, and to --log <file> with timestamps; --dry-run reports the delta, chunk count and a time estimate without writing;
+                  --exclude takes gitignore-style globs relative to the root, e.g. docs/manual-tests,**/*.draft.md; --rebuild re-embeds every file, which is how to switch embedding models;
+                  paths in the result are relative to "root"; --summary prints counts instead of file lists)
+          search  --index <name>[,<name>...] --query <text> [--top 5] [--min-score 0..1] [--within 0..1] [--no-text] [--snippet-chars N]
+                  [--path <glob>] [--hybrid] [--group-by-file | --per-file N]
+                  --min-score (or Search:MinScore in indexer.json, or the value stored by 'calibrate --save') drops weaker hits; --within keeps hits within that distance of the best;
                   filtered hits are counted in "filtered" with the pre-filter "best_score". --no-text / --snippet-chars shrink the output.
-          list    --index <name>
+                  --path keeps files whose path under the index root matches the glob; --hybrid also ranks by keyword match (a chunk containing an identifier from the query survives --min-score);
+                  --group-by-file keeps the best chunk of each file, --per-file N the best N. Hits carry heading, start_line and end_line when the index recorded them.
+          calibrate --index <name> [--save]
+                  Runs unrelated queries against the index and reports the noise ceiling and a suggested min score; --save stores it so search uses it when no min score is configured.
+          list    --index <name> [--summary]
           indexes
           drop    --index <name> [--wait]
-          install-skill [--dir <skills-root> | --scope repo|user]    (default scope: user)
+          install-skill [--dir <skills-root> | --scope repo|user]    (default scope: user; "setup" defaults to repo)
           uninstall-skill [--dir <skills-root> | --scope repo|user]
           uninstall [--scope repo|all] [--dir <skills-root>] [--yes]
                   repo (default): drop this repo's indexes and remove its skill. all: every index, every skill copy, the SQLite
                   database files and indexer.json. Never removes the tool itself (see "remaining"). Without --yes it only previews.
           setup   [--scope repo|user] [--endpoint lmstudio|ollama|openai|openrouter | --embedding-url <url>] [--embedding-model <id>]
-                  [--index <name>] [--root <dir>] [--no-index] [--query <text>] [--yes]
+                  [--index <name>] [--root <dir>] [--exclude <glob>,...] [--no-index] [--query <text>] [--yes]
                   Installs the skill (default scope: repo), picks the embedding model and measures its dimensions, merges
                   ~/.agency/indexer.json and, if --index/--root is given, runs a first index and a smoke search
                   (--no-index: write the config and repo file but do not index, so you can --dry-run first).
@@ -156,7 +163,7 @@ internal static class Program
                     return Write(ExitOk, new { status = checks.All(c => c.Ok) ? "ok" : "problems", checks });
                 }
 
-            case "index" or "search" or "list" or "indexes" or "drop":
+            case "index" or "search" or "calibrate" or "list" or "indexes" or "drop":
                 break;
 
             default:
@@ -164,7 +171,7 @@ internal static class Program
         }
 
         var settings = IndexerSettings.Resolve(args, IndexerSettings.DefaultHome, workingDirectory);
-        if (args.Command is "index" or "search")
+        if (args.Command is "index" or "search" or "calibrate")
         {
             settings.RequireEmbedding();
         }
@@ -183,10 +190,13 @@ internal static class Program
                     settings.Defaults.Extensions is { } ext ? FileScanner.ParseExtensions(ext) : null,
                     settings.Defaults.Names is { } names ? FileScanner.SplitList(names) : null,
                     (settings.Defaults.MaxFileKb ?? (int)(FileScanner.DefaultMaxFileBytes / 1024)) * 1024L,
-                    args.Flags.Contains("wait"));
+                    args.Flags.Contains("wait"),
+                    settings.Defaults.Exclude is { } exclude ? FileScanner.SplitList(exclude) : null,
+                    args.Flags.Contains("rebuild"));
+                bool summary = args.Flags.Contains("summary");
                 if (args.Flags.Contains("dry-run"))
                 {
-                    return Write(ExitOk, new { status = "dry_run", plan = await service.DryRunAsync(request, embeddings, ct) });
+                    return Write(ExitOk, new { status = "dry_run", plan = IndexOutput.Of(await service.DryRunAsync(request, embeddings, ct), summary) });
                 }
 
                 // Progress and failures go to stderr (and --log) so stdout stays the single JSON object the calling agent parses.
@@ -194,27 +204,18 @@ internal static class Program
                 {
                     IndexResult indexed = await service.IndexAsync(request, ct, log.Write);
                     log.Write($"finished: {indexed.Status}, {indexed.Added.Count} added, {indexed.Changed.Count} changed, {indexed.Failed.Count} failed, {indexed.DurationMs} ms");
-                    return Write(ExitCodeFor(indexed.Status), indexed);
+                    return Write(ExitCodeFor(indexed.Status), IndexOutput.Of(indexed, summary));
                 }
 
             case "search":
-                IReadOnlyList<SearchResultHit> hits = await service.SearchAsync(IndexName(settings), args.Require("query"), args.GetPositiveInt("top", 5), ct);
-                var searchOptions = new SearchOptions(
-                    settings.SearchMinScore,
-                    args.GetFraction("within"),
-                    args.Flags.Contains("no-text"),
-                    args.Get("snippet-chars") is null ? null : args.GetPositiveInt("snippet-chars", 1));
-                return Write(ExitOk, SearchResponse.From(IndexName(settings), hits, searchOptions));
+                return Write(ExitOk, await SearchAsync(service, settings, args, ct));
+
+            case "calibrate":
+                return Write(ExitOk, new { status = "ok", calibration = await service.CalibrateAsync(IndexName(settings), args.Flags.Contains("save"), ct) });
 
             case "list":
                 var (config, files) = await service.ListAsync(IndexName(settings), ct);
-                return Write(ExitOk, new
-                {
-                    status = "ok",
-                    index = IndexName(settings),
-                    config,
-                    files = files.Select(f => new { path = f.Path, size = f.Size, last_write_utc = new DateTime(f.LastWriteTicks, DateTimeKind.Utc), chunks = f.Chunks }),
-                });
+                return Write(ExitOk, IndexOutput.Of(IndexName(settings), config, files, args.Flags.Contains("summary")));
 
             case "indexes":
                 var all = await service.ListIndexesAsync(ct);
@@ -224,6 +225,49 @@ internal static class Program
                 DropResult dropped = await service.DropAsync(IndexName(settings), args.Flags.Contains("wait"), ct);
                 return Write(ExitCodeFor(dropped.Status), dropped);
         }
+    }
+
+    /// <summary>The candidates a grouped, merged or hybrid search retrieves, so there is something to regroup and rerank.</summary>
+    private const int CandidatePool = 50;
+
+    internal static async Task<SearchResponse> SearchAsync(IndexService service, IndexerSettings settings, CliArguments args, CancellationToken ct)
+    {
+        string[] indexes = IndexNames(settings);
+        string query = args.Require("query");
+        int top = args.GetPositiveInt("top", 5);
+        bool hybrid = args.Flags.Contains("hybrid");
+        int? perFile = args.Flags.Contains("group-by-file") ? 1 : args.Get("per-file") is null ? null : args.GetPositiveInt("per-file", 1);
+        bool multi = indexes.Length > 1;
+
+        // Regrouping, reranking and merging indexes all need more candidates than will be returned.
+        int pool = hybrid || perFile is not null || multi ? Math.Max(CandidatePool, top * 10) : 0;
+
+        var hits = new List<SearchResultHit>();
+        double? suggested = null;
+        foreach (string index in indexes)
+        {
+            hits.AddRange(await service.SearchAsync(index, query, top, ct, args.Get("path"), pool));
+            if (await service.GetSuggestedMinScoreAsync(index, ct) is { } stored)
+            {
+                suggested = Math.Max(suggested ?? 0, stored);
+            }
+        }
+
+        IReadOnlyList<SearchResultHit> ranked = hits.OrderByDescending(h => h.Score).ToList();
+        if (hybrid)
+        {
+            ranked = HybridRanker.Rank(query, ranked);
+        }
+
+        var options = new SearchOptions(
+            settings.SearchMinScore ?? suggested,
+            args.GetFraction("within"),
+            args.Flags.Contains("no-text"),
+            args.Get("snippet-chars") is null ? null : args.GetPositiveInt("snippet-chars", 1),
+            perFile,
+            pool > 0 ? top : null,
+            multi);
+        return SearchResponse.From(string.Join(',', indexes), ranked, options);
     }
 
     /// <summary>Builds the stores for the configured backend and initializes their schemas.</summary>
@@ -280,6 +324,17 @@ internal static class Program
             args.Get("scope") ?? defaultScope,
             IndexerSettings.UserProfile,
             RepoLocator.FindRoot(Directory.GetCurrentDirectory()));
+
+    /// <summary>The index names of a <c>search</c>: <c>--index a,b</c> searches both.</summary>
+    private static string[] IndexNames(IndexerSettings settings) =>
+        settings.Defaults.Index is not { } names
+            ? throw new UsageException("No index name: pass --index <name>, or set \"Index\" in .agency-index.json (see 'agency-index setup').")
+            : FileScanner.SplitList(names).Select(CanonicalName).Distinct(StringComparer.Ordinal).ToArray();
+
+    private static string CanonicalName(string name) =>
+        ProjectName.TryNormalize(name, out string canonical, out string? error)
+            ? canonical
+            : throw new UsageException($"Invalid index name: {error}");
 
     private static string IndexName(IndexerSettings settings) =>
         settings.Defaults.Index is not { } name

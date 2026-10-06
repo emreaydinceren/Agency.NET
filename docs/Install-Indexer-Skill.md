@@ -8,6 +8,9 @@ first index of a large docs tree takes longer (see [First index](#first-index)).
 To have an agent do it, tell it: `Install the Agency indexer skill from docs/Install-Indexer-Skill.md`.
 To remove it again, see [Where things live](#where-things-live) and [Remove it](#remove-it).
 
+Curious how it works under the hood: how files are selected, chunked and embedded, the commands, and how the
+single writer lock works? See [Agency.Indexer](Projects/Agency.Indexer.md).
+
 ## If you are an agent reading this
 
 You were handed this page, so the job is to **install the skill**. Do the steps below. Do not summarise the
@@ -39,7 +42,11 @@ question.
    the environment variable named in [API key](#api-key-openai-openrouter) (`OPENAI_API_KEY`,
    `OPENROUTER_API_KEY`): tell the user which to set, check with `agency-index doctor` (its `api_key` check never
    shows the value), and **never ask for the key, print it, or put it in a command line or file**.
-5. **What to index now.** Scope 1: the default is `docs/` if it exists. Scope 2: ask whether to index this
+5. **Storage: do not ask.** Use SQLite unless the request mentions PostgreSQL or a database server. For PostgreSQL,
+   pass `--provider postgres` to `setup`, tell the user to set the `AGENCY_INDEX_Database` environment variable
+   (see [PostgreSQL](#postgresql-optional)), and **never ask for, print or store the connection string**: it contains
+   the password.
+6. **What to index now.** Scope 1: the default is `docs/` if it exists. Scope 2: ask whether to index this
    repo's docs now or skip.
 
 ### What to do
@@ -59,8 +66,8 @@ question.
    - `name_taken`: the index name belongs to another repo's folder. Ask for another name.
    - `index_model_mismatch`, or `warnings` listing indexes: those indexes were built with a different embedding
      model and cannot be refreshed or searched with the new one. Name them and ask: **keep the old model**
-     (pass `--embedding-model <old>`) or **drop and rebuild** them (`agency-index drop --index <name>`).
-     Never drop without a yes.
+     (pass `--embedding-model <old>`) or **rebuild** them (`agency-index index --index <name> --rebuild`, which
+     re-embeds every file under the new model in one step). Never rebuild or drop without a yes.
 4. Apply: run the same command with `--yes`. It installs the skill, **merges** the settings into
    `~/.agency/indexer.json` and, for scope 1, writes the repo's `.agency-index.json`. Never write or overwrite
    `indexer.json` by hand; the manual steps further down only show what `setup` writes.
@@ -69,8 +76,10 @@ question.
    will take more than a minute, then run the real `index`; its progress goes to stderr.
 6. Smoke test: run `agency-index search --query "<a question these docs answer>"` (add `--index <name>` for
    scope 2) and report the top hit's file and score. If the result is empty or poor, say so plainly.
-7. Run `agency-index doctor` again; every check should be `ok`. Report anything that is not.
-8. Tell the user how to remove it again ([Remove it](#remove-it)).
+7. Offer to calibrate the search threshold ([step 5](#5-calibrate-the-search-threshold-recommended)); at least run
+   `agency-index calibrate --index <name>` and tell the user the `noise_ceiling`. Save a threshold only with their yes.
+8. Run `agency-index doctor` again; every check should be `ok`. Report anything that is not.
+9. Tell the user how to remove it again ([Remove it](#remove-it)).
 
 ### Approvals and limits
 
@@ -107,9 +116,9 @@ environment first. The manual steps below show what it does.
 
 | Choice | Options | Default |
 | --- | --- | --- |
-| Skill scope | this repo (`<repo>/.claude/skills`) / all my repos (`~/.claude/skills`) | this repo |
+| Skill scope | this repo (`<repo>/.claude/skills`) / all my repos (`~/.claude/skills`) | this repo for `setup`; the bare `install-skill` command defaults to all my repos |
 | Embeddings | LM Studio / Ollama / OpenAI / other OpenAI-compatible | LM Studio |
-| Storage | SQLite / PostgreSQL + pgvector | SQLite |
+| Storage | SQLite / PostgreSQL + pgvector (see [PostgreSQL](#postgresql-optional)) | SQLite |
 | What to index first | a folder, or skip | `docs/` if it exists |
 
 ## Manual steps
@@ -136,16 +145,19 @@ new on `PATH`. Open a new shell, or add it for the current one:
 ### 2. Install the skill
 
 ```bash
-# this repo only (default choice)
+# this repo only (what setup does unless you say otherwise)
 agency-index install-skill --scope repo
 
-# all my repos
+# all my repos (what install-skill alone does)
 agency-index install-skill --scope user
 ```
 
-`--scope repo` writes `./.claude/skills/agency-index/`; `--scope user` (the default for this command)
-writes `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`; `--dir <skills-root>`
-chooses any other location. The output lists each file and whether it replaced an existing one.
+The two commands have different defaults on purpose: `setup` is the guided path and picks this repo, so it
+changes the least; `install-skill` on its own installs for the user. Pass `--scope` to either to be explicit.
+`--scope repo` writes `./.claude/skills/agency-index/`; `--scope user` writes **two** copies,
+`~/.claude/skills/agency-index/` (Claude Code) and `~/Agents/skills/agency-index/` (other agent tools that read
+that folder); `--dir <skills-root>` chooses any other location. The output lists each file and whether it
+replaced an existing one; `uninstall` removes every copy.
 
 ### 3. Point it at an embeddings endpoint
 
@@ -171,13 +183,24 @@ column width, so a wrong value fails or corrupts the index.
 | --- | --- |
 | `text-embedding-nomic-embed-text-v1.5` | 768 |
 | `text-embedding-qwen3-embedding-0.6b` | 1024 |
+| `text-embedding-qwen3-embedding-4b` | 2560 |
+| `text-embedding-qwen3-embedding-8b` | 4096 |
+| `mxbai-embed-large` | 1024 |
 | `text-embedding-3-small` (OpenAI) | 1536 |
+| `text-embedding-3-large` (OpenAI) | 3072 |
 
-**Optional: a search threshold.** Scores depend on the model; with qwen3-embedding-0.6b an unrelated query
+`setup` does not read this table: it asks the endpoint for one vector and uses that length, so a model that is
+not listed here still works. The table is for writing `indexer.json` by hand.
+
+**Optional: a search threshold** (the full procedure is [step 5](#5-calibrate-the-search-threshold-recommended)). Scores depend on the model; with qwen3-embedding-0.6b an unrelated query
 still tops out near 0.5, so a fixed "below 0.45 means not found" rule lets irrelevant text through. Set
 `"Search": { "MinScore": 0.55 }` in `indexer.json` (or `AGENCY_INDEX_Search__MinScore`, or `--min-score`
 per search) to drop weaker hits before they reach the agent's context. To pick the number, search for
-something unrelated and set it slightly above the top score. It stays a user-level setting: a repo's
+something unrelated and set it slightly above the top score, or let `agency-index calibrate --index <name>`
+do that: it runs twelve unrelated queries, reports the `noise_ceiling` (the best score any of them reached) and a
+`suggested_min_score` just above it, and `--save` stores that value with the index so `search` uses it when no
+threshold is configured (a configured `Search:MinScore` or `--min-score` still wins). On-topic scores are not
+measured, so look at a few real queries before trusting the suggestion. It stays a user-level setting: a repo's
 `.agency-index.json` cannot set it. When a threshold removes every hit, `search` still succeeds with
 `"hits":[]` plus `filtered` and `best_score`, which tells the agent to fall back to grep.
 
@@ -232,7 +255,48 @@ Rules that keep it secret:
 - A key left in `indexer.json` is flagged by `doctor` as `api_key_storage`; delete it from the file and
   treat it as exposed if the file was ever shared or committed.
 
-For PostgreSQL, add `"Provider": "postgres"` and `"Database": "<connection string>"` (pgvector required).
+### PostgreSQL (optional)
+
+SQLite is the default and needs nothing. Use PostgreSQL with pgvector when several machines or people should
+share one index database, or you already run one. The connection string contains the **password, so it is a
+secret like the API key: it goes in the `AGENCY_INDEX_Database` environment variable and never in
+`indexer.json`, a repo file or a command line you keep.**
+
+1. **A server with pgvector.** If you have none, this runs one locally (the image already includes the extension):
+
+   ```bash
+   docker run -d --name agency-pg -e POSTGRES_USER=agency -e POSTGRES_PASSWORD=<choose a password> \
+     -e POSTGRES_DB=agency -p 5432:5432 pgvector/pgvector:pg18-trixie
+   ```
+
+2. **Choose PostgreSQL** (this part is not secret, so `indexer.json` keeps it):
+
+   ```json
+   { "Provider": "postgres" }
+   ```
+
+   or run `agency-index setup --provider postgres ...`, which saves exactly that and tells you the connection
+   string was not saved. Without a connection string, every command stops with a clear error instead of
+   quietly using SQLite.
+3. **Set the connection string in the environment**, the same ways as the [API key](#managing-the-key):
+
+   ```text
+   AGENCY_INDEX_Database=Host=localhost;Port=5432;Database=agency;Username=agency;Password=<password>
+   ```
+
+4. **Check it:** `agency-index doctor` shows `database` as "PostgreSQL connection opened", and flags
+   `database_credentials` if a password was left in `indexer.json` (delete it from the file and treat the
+   password as exposed if the file was ever shared).
+
+Good to know:
+
+- **First run:** the tool runs `CREATE EXTENSION IF NOT EXISTS vector` and creates `semantic_kv_store`,
+  `semantic_kv_projects` and `kv_store` in the database. The user needs permission to create tables, and to create
+  the extension unless an administrator has already run `CREATE EXTENSION vector;` there once.
+- **Embedding size is fixed per database:** the vector column takes its width from `Dimensions` when the tables
+  are first created. To switch to a model with a different size, use a new database (or drop those tables).
+- **Shared tables:** other Agency applications can use the same database and tables, which is why
+  [Remove it](#remove-it) deletes the rows but leaves the tables.
 
 ### 4. Index and verify
 
@@ -246,13 +310,72 @@ Name the index after the repo folder, lower-case. Index names are global to the 
 shows your name with a different `root`, another repo owns it, so pick another name (for example
 `<org>-<repo>`). A good result is `"status":"ok"` with hits whose `score` is above about 0.5.
 
+### 5. Calibrate the search threshold (recommended)
+
+`agency-index` applies no minimum score by default, because scores depend on the embedding model. Without a
+threshold, `search` always returns the top N hits, even for a question the docs never answer. Calibrate once per
+model and index; it takes a few minutes.
+
+**1. Measure the noise ceiling.** The quick way is `agency-index calibrate --index <repo-name>`: it runs twelve
+unrelated queries and reports `noise_ceiling`. For a sharper number, also search 10-20 things your docs do not
+cover, including a few plausible-sounding ones from your own stack, with the filter off:
+
+```bash
+agency-index search --index <repo-name> --query "chocolate cake recipe" --top 1 --min-score 0 --no-text
+```
+
+Record the highest `score` returned. It is the best score a hit can reach by chance.
+
+**2. Measure the real-answer floor.** Write 15-30 real questions in your own words; do not reuse the documents'
+title words. For each, note the document that should answer it. Run them with `--min-score 0 --top 5 --no-text`
+and record the best score and whether the expected document is in the top 5.
+
+**3. Pick a threshold in the gap.** Choose a value above the noise ceiling and below the real-answer floor, and
+check how many real questions it would drop and how much noise it would keep:
+
+| Threshold | Real questions kept | Noise let through |
+| --- | --- | --- |
+| 0.50 | all | some |
+| 0.55 | all | few or none |
+| 0.60 | some dropped | none |
+
+If the two ranges overlap, no threshold separates them cleanly. Pick the value that keeps every real question
+and rely on `best_score` to spot misses.
+
+**4. Save it.** Either set it in the user-level file (a repo's `.agency-index.json` cannot set it):
+
+```json
+{ "Search": { "MinScore": 0.55 } }
+```
+
+or store the `calibrate` suggestion with the index: `agency-index calibrate --index <repo-name> --save` (used
+only when no `Search:MinScore` or `--min-score` is set). The `calibrate` figure is only the noise side plus a
+margin, so prefer the value from step 3 when you have measured the real-answer floor.
+
+**5. Verify.** An unrelated query should now return no hits and say why:
+
+```text
+{"hits":[],"filtered":3,"best_score":0.4947,"min_score":0.55}
+```
+
+A real question that returns nothing shows its `best_score`. If it is just under the threshold, lower the
+setting or pass `--min-score 0` for that search.
+
+Notes:
+
+- Recalibrate after changing the embedding model; scores are not comparable across models.
+- Real answers cluster tightly. One measurement on this repo's docs with `text-embedding-qwen3-embedding-4b`:
+  real answers scored 0.57-0.72 and noise reached 0.50, so a narrow gap is normal. Your numbers will differ.
+- A threshold fixes weak hits, not ranking. If large, repetitive documents crowd out better ones, use
+  [`Exclude`, `--path` and `--group-by-file`](#choosing-what-to-index-and-how-to-search-it) rather than a higher threshold.
+
 ## Per-repo config
 
 A repo can carry its own defaults, so every command works from any folder inside it without `--index` and
 `--root`. Put `.agency-index.json` at the repo root, or let `setup --index <name> --root <dir> --yes` write it:
 
 ```json
-{ "Index": "myrepo", "Root": "docs", "Extensions": [".md"], "Names": ["README"], "MaxFileKb": 1024 }
+{ "Index": "myrepo", "Root": "docs", "Extensions": [".md"], "Names": ["README"], "MaxFileKb": 1024, "Exclude": ["docs/manual-tests", "**/*.draft.md"] }
 ```
 
 Then, from any folder of the repo:
@@ -267,10 +390,10 @@ agency-index search --query "how are releases published?"
 | Found like `.gitignore` | The nearest `.agency-index.json` walking up from the current folder wins outright. Files in between are not merged. |
 | Relative `Root` | Relative to the folder holding the file, never the current folder, so it means the same thing everywhere. |
 | Precedence, per key | Command line, then `AGENCY_INDEX_*` environment variables, then the repo file, then the user file (`~/.agency/indexer.json`), then the built-in default. A list such as `Extensions` is replaced, not merged. |
-| User file | May set the same five keys as machine-wide defaults (use an absolute `Root` there), and holds everything else: endpoint, model, dimensions, database. |
+| User file | May set the same six keys as machine-wide defaults (use an absolute `Root` there), and holds everything else: endpoint, model, dimensions, database. |
 | "This repo" | The nearest folder holding `.agency-index.json` or `.git`. It decides where `--scope repo` puts the skill and which indexes `uninstall` treats as this repo's, from any folder of it. |
 
-**Only five keys are read from the repo file:** `Index`, `Root`, `Extensions`, `Names` and `MaxFileKb`. Anything
+**Only six keys are read from the repo file:** `Index`, `Root`, `Extensions`, `Names`, `MaxFileKb` and `Exclude`. Anything
 else in it (`Embedding`, `Provider`, `Database`, `ApiKey`, ...) is ignored, and `doctor` reports it. The file
 arrives with the repository, and a setting that chose the embeddings endpoint would let a cloned repo send
 your document text, and the `OPENAI_API_KEY` Bearer token, to another server. Keep endpoint, model and
@@ -281,6 +404,56 @@ database, and index names are global to a machine: if the name is already owned 
 `setup` stops with `name_taken` and suggests another. `agency-index doctor` shows the file in use
 (`repo_config`) and each default with the layer it came from (`defaults`).
 
+## Choosing what to index and how to search it
+
+Which files go in matters more than any search option. Generated or log-like folders (manual test runs,
+changelogs, meeting notes) can be half the chunks of a docs tree and crowd out the document you want.
+
+**Leave files out.** `Exclude` takes gitignore-style globs relative to the index root, in `.agency-index.json`, in
+`indexer.json`, in `AGENCY_INDEX_Exclude`, or as `--exclude` on `index`:
+
+```bash
+agency-index index --exclude "engineering/manual-tests,**/*.draft.md"
+```
+
+| Glob | Matches |
+| --- | --- |
+| `manual-tests` | a file or folder of that name at any depth, and everything under a folder |
+| `engineering/manual-tests` | that folder under the root, and everything under it |
+| `**/*.draft.md` | any `.draft.md` file at any depth |
+| `*.md` inside a path (`docs/*.md`) | files directly in that folder; `*` never crosses a `/` |
+
+The setting is remembered with the index; adding an exclusion removes the files it covers on the next run, and
+removing one brings them back. `agency-index index --dry-run` shows the result before anything is written.
+
+**One index or two?** One index per repo is the rule, and an exclusion usually removes the need for a second.
+Build a second, narrower index (for example `myrepo-adr` over just the decision records) only when you keep
+asking questions about one body of documents and want its answers ranked on their own; search both at once with
+`--index myrepo,myrepo-adr`.
+
+**Search options** (all optional, all flags of `search`):
+
+| Option | Effect |
+| --- | --- |
+| `--path <glob>` | Only files whose path under the index root matches, for example `--path "adr"` or `--path "engineering/**"`. |
+| `--group-by-file` / `--per-file N` | At most the best 1 (or N) chunks of any one file, so one file cannot take the top three places. |
+| `--hybrid` | Also rank by keyword match, for questions that name a config key, analyzer id or ADR number. Chunks containing an identifier from the query are exempt from `--min-score`. It reorders the best 50 or so vector hits; it cannot find a chunk the vector search ranked far down. |
+| `--index a,b` | Search several indexes (built with the same model) and merge the hits by score; each hit names its `index`. |
+| `--min-score`, `--within`, `--no-text`, `--snippet-chars` | As in the [search threshold](#3-point-it-at-an-embeddings-endpoint) section and the skill. |
+
+Each hit of an index built by this version carries `heading` (the Markdown heading path above the chunk, for
+example `Guide > Install`) and `start_line` / `end_line`, so an agent can open the exact section. Hits from
+indexes built earlier simply lack them; `index --rebuild` adds them.
+
+**Switching the embedding model** is one command: `agency-index index --index <name> --rebuild`. It re-embeds every
+file with the configured model, keeps serving searches while it runs (a search during the rebuild mixes old and
+new vectors, so treat results as unreliable until it finishes) and, if it is interrupted, a plain `agency-index
+index` run finishes it. On PostgreSQL the vector column cannot change width, so a model with a different size
+needs a new database there.
+
+**Long output.** `list` and `index --dry-run` print file paths relative to the `root` in the result, and
+`--summary` prints counts instead of lists (`index`, `index --dry-run`, `list`).
+
 ## First index
 
 Each file's chunks are embedded in requests of at most 32 inputs, one request at a time, so a local
@@ -289,10 +462,12 @@ model is not flooded. Expect minutes, not seconds, for a docs tree of a few hund
 install.
 
 - `agency-index index --index <name> --root <dir> --dry-run` writes nothing and reports the files to
-  index, the chunk count and a time estimate from embedding a three-file sample. Run it first and tell
-  the user the estimate.
-- A real run prints progress lines to stderr (`indexing 12/340 files, 410 chunks, ~6 min left`) while
-  stdout stays one JSON object at the end. Run it in the background or with a generous timeout.
+  index, the chunk count and a time estimate. The estimate embeds about 48 chunks spread across the whole set and
+  scales their time by text length; it is still a guess, since a local model slows down under sustained load, so
+  say "about" and expect a run to take somewhat longer. Run it first and tell the user.
+- A real run prints progress lines to stderr (`indexing 12/340 files, 410/1980 chunks, ~6 min left`, with the
+  chunk total known up front) and a `still working on <file>` line every 30 seconds, while stdout stays one JSON
+  object at the end. Run it in the background with `--log <file>` and read the file to follow it.
 - A file that cannot be embedded is reported the moment it fails, on stderr as `FAILED <path>: <reason>` and in
   the final JSON as `failed: [{path, reason}]` (the reason includes the HTTP status and the start of the
   server's response body). `--log <file>` also appends the progress and failure lines, timestamped, to a file.

@@ -7,7 +7,20 @@ namespace Agency.Indexer;
 /// <param name="Extensions">The selected extensions.</param>
 /// <param name="Names">The selected extensionless file names.</param>
 /// <param name="EmbeddingModel">The embedding model the chunks were embedded with.</param>
-internal sealed record IndexConfig(string Root, IReadOnlyList<string> Extensions, IReadOnlyList<string> Names, string EmbeddingModel);
+/// <param name="Excludes">Globs of files and folders left out, or <see langword="null"/> for none (also what indexes created before this existed read as).</param>
+/// <param name="Calibration">The noise floor measured by <c>calibrate --save</c>, if any.</param>
+internal sealed record IndexConfig(
+    string Root,
+    IReadOnlyList<string> Extensions,
+    IReadOnlyList<string> Names,
+    string EmbeddingModel,
+    IReadOnlyList<string>? Excludes = null,
+    Calibration? Calibration = null);
+
+/// <summary>The score threshold measured for an index.</summary>
+/// <param name="NoiseCeiling">The best score unrelated queries reached.</param>
+/// <param name="SuggestedMinScore">A threshold just above <paramref name="NoiseCeiling"/>.</param>
+internal sealed record Calibration(double NoiseCeiling, double SuggestedMinScore);
 
 /// <summary>
 /// Persists index configurations and per-file manifests in an <see cref="IKVStore"/>. Each index's file

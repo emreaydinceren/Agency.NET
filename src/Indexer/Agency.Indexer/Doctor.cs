@@ -59,6 +59,16 @@ internal static class Doctor
                 "Move the key to the OPENAI_API_KEY / OPENROUTER_API_KEY environment variable (or AGENCY_INDEX_Embedding__ApiKey) and delete it from the file."));
         }
 
+        if (File.Exists(configPath) && StoresDatabasePassword(await File.ReadAllTextAsync(configPath, ct)))
+        {
+            // Only where it is stored is reported; the connection string itself is never printed.
+            checks.Add(new DoctorCheck(
+                "database_credentials",
+                false,
+                $"{configPath} holds a PostgreSQL connection string with a password in plain text.",
+                "Move it to the AGENCY_INDEX_Database environment variable and delete the Database key from the file (keep \"Provider\": \"postgres\"). Treat the password as exposed if the file was ever shared or committed."));
+        }
+
         await AddEmbeddingChecksAsync(checks, settings, http, ct);
         bool databaseOk = await AddDatabaseCheckAsync(checks, settings, ct);
         if (databaseOk)
@@ -91,11 +101,21 @@ internal static class Doctor
         IndexDefaults d = settings.Defaults;
         var values = new (string Key, string? Value)[]
         {
-            ("Index", d.Index), ("Root", d.Root), ("Extensions", d.Extensions), ("Names", d.Names), ("MaxFileKb", d.MaxFileKb?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("Index", d.Index), ("Root", d.Root), ("Extensions", d.Extensions), ("Names", d.Names), ("MaxFileKb", d.MaxFileKb?.ToString(System.Globalization.CultureInfo.InvariantCulture)), ("Exclude", d.Exclude),
         };
         string detail = string.Join("; ", values.Where(v => v.Value is not null).Select(v => $"{v.Key}={v.Value} ({d.Sources.GetValueOrDefault(v.Key, "default")})"));
         return new DoctorCheck("defaults", true, detail.Length == 0 ? "No index defaults are set, so commands need --index (and --root on the first run)." : detail);
     }
+
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>Whether the config text sets a <c>Database</c> that is a connection string carrying a password.</summary>
+    internal static bool StoresDatabasePassword(string json) =>
+        System.Text.Json.Nodes.JsonNode.Parse(json) is System.Text.Json.Nodes.JsonObject root
+        && root["Database"] is System.Text.Json.Nodes.JsonValue value
+        && value.TryGetValue(out string? database)
+        && (System.Text.RegularExpressions.Regex.IsMatch(database, "(^|[;\\s])(password|pwd)\\s*=\\s*[^;\\s]", System.Text.RegularExpressions.RegexOptions.IgnoreCase, RegexTimeout)
+            || System.Text.RegularExpressions.Regex.IsMatch(database, "^postgres(ql)?://[^/@:]+:[^@]+@", System.Text.RegularExpressions.RegexOptions.IgnoreCase, RegexTimeout));
 
     /// <summary>Whether the config text sets a real <c>Embedding:ApiKey</c> (the placeholder does not count).</summary>
     private static bool StoresApiKey(string json) =>

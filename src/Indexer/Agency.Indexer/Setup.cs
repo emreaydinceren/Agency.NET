@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Agency.Embeddings.OpenAI;
 using Agency.VectorStore.Common;
+using Npgsql;
 
 namespace Agency.Indexer;
 
@@ -81,7 +82,8 @@ internal static class Setup
 
         string configPath = Path.Combine(home, "indexer.json");
         string? before = File.Exists(configPath) ? await File.ReadAllTextAsync(configPath, ct) : null;
-        string after = MergeConfig(before, embedding);
+        bool storageChosen = args.Get("provider") is not null;
+        string after = MergeConfig(before, embedding, storageChosen ? settings.Provider : null, args.Get("db"));
         var skillPaths = skillRoots.Select(r => Path.Combine(Path.GetFullPath(r), SkillInstaller.SkillName, "SKILL.md")).ToList();
 
         string? repoPath = null;
@@ -111,6 +113,11 @@ internal static class Setup
         warnings = orphaned
             .Select(i => $"Index '{i.Index}' was built with '{i.Config.EmbeddingModel}'; with '{embedding.ModelId}' it cannot be refreshed or searched until you drop and rebuild it (agency-index drop --index {i.Index}). Keep '{i.Config.EmbeddingModel}' to keep using it. Setup does not drop anything.")
             .ToList();
+
+        if (storageChosen && settings.Provider == StorageProvider.Postgres)
+        {
+            warnings = [.. warnings, "PostgreSQL: 'Provider' was saved to indexer.json, but the connection string was not, because it contains the password. Set the AGENCY_INDEX_Database environment variable to it so index and search can connect; until then they fail with a clear error instead of silently using SQLite."];
+        }
 
         // The repo file records which index and root belong to this repo, so later commands work from any folder of it.
         if (scope == "repo" && request is not null)
@@ -205,7 +212,7 @@ internal static class Setup
     /// Sets the endpoint, model and dimensions in the existing config (or a new one), leaving every other key as it was.
     /// The API key is a secret and is never written.
     /// </summary>
-    private static string MergeConfig(string? existing, EmbeddingOptions embedding)
+    internal static string MergeConfig(string? existing, EmbeddingOptions embedding, StorageProvider? provider = null, string? sqlitePath = null)
     {
         JsonObject root;
         try
@@ -227,6 +234,17 @@ internal static class Setup
         section["ModelId"] = embedding.ModelId;
         section["Dimensions"] = embedding.Dimensions;
 
+        // The storage choice is saved so the next command uses it. A SQLite path is harmless to write; a PostgreSQL
+        // connection string holds the password, so it is never written (it belongs in AGENCY_INDEX_Database).
+        if (provider is { } storage)
+        {
+            root["Provider"] = storage == StorageProvider.Postgres ? "postgres" : "sqlite";
+            if (storage == StorageProvider.Sqlite && sqlitePath is not null)
+            {
+                root["Database"] = sqlitePath;
+            }
+        }
+
         return root.ToJsonString(ConfigJson);
     }
 
@@ -246,6 +264,11 @@ internal static class Setup
         string relative = Path.GetRelativePath(Path.GetDirectoryName(path)!, request.Root!);
         root["Index"] = request.Index;
         root["Root"] = relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? request.Root : relative.Replace('\\', '/');
+        if (request.Exclude is { Count: > 0 } exclude)
+        {
+            root["Exclude"] = new JsonArray(exclude.Select(e => (JsonNode?)JsonValue.Create(e)).ToArray());
+        }
+
         return root.ToJsonString(ConfigJson);
     }
 
@@ -265,7 +288,7 @@ internal static class Setup
 
         string docs = Path.Combine(workingDirectory, "docs");
         string root = Path.GetFullPath(args.Get("root") ?? (Directory.Exists(docs) ? docs : workingDirectory));
-        return new IndexRequest(canonical, root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false);
+        return new IndexRequest(canonical, root, null, null, FileScanner.DefaultMaxFileBytes, Wait: false, args.Get("exclude") is { } exclude ? FileScanner.SplitList(exclude) : null);
     }
 
     /// <summary>The indexes already in the database; none when a SQLite database does not exist yet (probing must not create it).</summary>
@@ -276,8 +299,15 @@ internal static class Setup
             return [];
         }
 
-        IndexService service = await Program.CreateServiceAsync(settings, new Program.MissingEmbeddingGenerator(), ct);
-        return await service.ListIndexesAsync(ct);
+        try
+        {
+            IndexService service = await Program.CreateServiceAsync(settings, new Program.MissingEmbeddingGenerator(), ct);
+            return await service.ListIndexesAsync(ct);
+        }
+        catch (Exception ex) when (settings.Provider == StorageProvider.Postgres && ex is NpgsqlException or TimeoutException or System.Net.Sockets.SocketException)
+        {
+            throw new UsageException($"Could not use PostgreSQL ({ex.Message}). Check the connection string (set it in AGENCY_INDEX_Database), that the server is running, and that the user may run CREATE EXTENSION vector.");
+        }
     }
 
     private static async Task<SetupIndex> IndexAndSearchAsync(IndexerSettings settings, IndexRequest request, string query, CancellationToken ct)

@@ -5,7 +5,8 @@ namespace Agency.Indexer;
 /// <param name="Extensions">File extensions to include, with a leading dot (matched case-insensitively).</param>
 /// <param name="Names">Exact file names to include regardless of extension, e.g. <c>README</c> (matched case-insensitively).</param>
 /// <param name="MaxFileBytes">Files larger than this are skipped.</param>
-internal sealed record ScanOptions(string Root, IReadOnlyCollection<string> Extensions, IReadOnlyCollection<string> Names, long MaxFileBytes);
+/// <param name="Exclude">Globs, relative to <paramref name="Root"/>, of files and folders to skip (see <see cref="GlobFilter"/>).</param>
+internal sealed record ScanOptions(string Root, IReadOnlyCollection<string> Extensions, IReadOnlyCollection<string> Names, long MaxFileBytes, IReadOnlyList<string>? Exclude = null);
 
 /// <summary>The outcome of a scan.</summary>
 /// <param name="Files">The selected files, ordered by path.</param>
@@ -41,6 +42,7 @@ internal static class FileScanner
     {
         var extensions = new HashSet<string>(options.Extensions, StringComparer.OrdinalIgnoreCase);
         var names = new HashSet<string>(options.Names, StringComparer.OrdinalIgnoreCase);
+        var excluded = new GlobFilter(options.Exclude);
         var files = new List<ScannedFile>();
         var tooLarge = new List<string>();
         var pending = new Stack<string>();
@@ -52,7 +54,7 @@ internal static class FileScanner
 
             foreach (string sub in Directory.EnumerateDirectories(directory, "*", TopLevelOnly))
             {
-                if (!SkippedDirectories.Contains(Path.GetFileName(sub)))
+                if (!SkippedDirectories.Contains(Path.GetFileName(sub)) && !excluded.Matches(Path.GetRelativePath(options.Root, sub)))
                 {
                     pending.Push(sub);
                 }
@@ -60,7 +62,8 @@ internal static class FileScanner
 
             foreach (string path in Directory.EnumerateFiles(directory, "*", TopLevelOnly))
             {
-                if (!extensions.Contains(Path.GetExtension(path)) && !names.Contains(Path.GetFileName(path)))
+                if ((!extensions.Contains(Path.GetExtension(path)) && !names.Contains(Path.GetFileName(path)))
+                    || excluded.Matches(Path.GetRelativePath(options.Root, path)))
                 {
                     continue;
                 }

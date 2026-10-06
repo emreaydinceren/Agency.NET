@@ -14,6 +14,7 @@ internal sealed record UninstallIndex(string Name, string Root, bool ThisRepo, s
 /// <param name="Indexes">The indexes in the database and what happens to each.</param>
 /// <param name="DataFiles">The database files found (preview) or deleted; only for <c>all</c> on SQLite.</param>
 /// <param name="ConfigFile">The <c>indexer.json</c> found (preview) or deleted; only for <c>all</c>.</param>
+/// <param name="RepoConfigFile">This repo's <c>.agency-index.json</c> found (preview) or deleted.</param>
 /// <param name="Remaining">Steps the tool cannot do itself.</param>
 /// <param name="Message">What to know about the outcome.</param>
 internal sealed record UninstallResult(
@@ -23,6 +24,7 @@ internal sealed record UninstallResult(
     IReadOnlyList<UninstallIndex> Indexes,
     IReadOnlyList<string> DataFiles,
     string? ConfigFile,
+    string? RepoConfigFile,
     IReadOnlyList<string> Remaining,
     string Message);
 
@@ -47,7 +49,7 @@ internal static class Uninstaller
 
         bool apply = args.Flags.Contains("yes");
         bool all = scope == "all";
-        IndexerSettings settings = IndexerSettings.Resolve(args, home);
+        IndexerSettings settings = IndexerSettings.Resolve(args, home, workingDirectory);
 
         var skillRoots = new List<string> { Path.Combine(workingDirectory, ".claude", "skills") };
         if (all)
@@ -77,6 +79,7 @@ internal static class Uninstaller
         List<string> dataFiles = all && settings.Provider == StorageProvider.Sqlite ? SqliteFiles(databasePath) : [];
         string configPath = Path.Combine(home, "indexer.json");
         string? configFile = all && File.Exists(configPath) ? configPath : null;
+        string? repoConfig = settings.Defaults.RepoConfigPath;
         var remaining = new List<string>();
         if (all)
         {
@@ -86,7 +89,7 @@ internal static class Uninstaller
 
         if (!apply)
         {
-            return new UninstallResult("preview", scope, skills, indexes, dataFiles, configFile, remaining, "Nothing was changed. Re-run with --yes to apply.");
+            return new UninstallResult("preview", scope, skills, indexes, dataFiles, configFile, repoConfig, remaining, "Nothing was changed. Re-run with --yes to apply.");
         }
 
         var problems = new List<string>();
@@ -108,6 +111,13 @@ internal static class Uninstaller
         }
 
         IReadOnlyList<string> removedSkills = SkillInstaller.Uninstall(skillRoots).ToList();
+        string? removedRepoConfig = null;
+        if (repoConfig is not null)
+        {
+            File.Delete(repoConfig);
+            removedRepoConfig = repoConfig;
+        }
+
         var removedData = new List<string>();
         string? removedConfig = null;
         if (all && problems.Count == 0)
@@ -150,6 +160,7 @@ internal static class Uninstaller
             applied,
             removedData,
             removedConfig,
+            removedRepoConfig,
             remaining,
             problems.Count == 0 ? "Done. Complete the remaining steps yourself." : string.Join(" ", problems));
     }

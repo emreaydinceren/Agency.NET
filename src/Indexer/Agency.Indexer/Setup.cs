@@ -26,6 +26,9 @@ internal sealed record SetupIndex(string Name, string Root, IndexStatus Status, 
 /// <param name="ModelId">The embedding model.</param>
 /// <param name="Dimensions">The vector length measured from the endpoint.</param>
 /// <param name="Index">The first index, when one was requested and applied.</param>
+/// <param name="RepoConfigPath">The repo-level <c>.agency-index.json</c> written (or that would be), when <c>--scope repo</c> and an index were given.</param>
+/// <param name="RepoConfigBefore">The existing repo config's text, or <see langword="null"/> if there is none.</param>
+/// <param name="RepoConfigAfter">The repo config text written (or that would be).</param>
 internal sealed record SetupResult(
     string Status,
     string? Message,
@@ -37,7 +40,10 @@ internal sealed record SetupResult(
     string BaseUrl,
     string ModelId,
     int Dimensions,
-    SetupIndex? Index);
+    SetupIndex? Index,
+    string? RepoConfigPath = null,
+    string? RepoConfigBefore = null,
+    string? RepoConfigAfter = null);
 
 /// <summary>
 /// The <c>setup</c> command: installs the skill, probes the embeddings endpoint (picking the model and measuring
@@ -66,7 +72,7 @@ internal static class Setup
         string scope = args.Get("scope") ?? "repo";
         IReadOnlyList<string> skillRoots = SkillInstaller.ResolveRoots(args.Get("dir"), scope, userProfile, workingDirectory);
 
-        IndexerSettings settings = IndexerSettings.Resolve(args, home);
+        IndexerSettings settings = IndexerSettings.Resolve(args, home, workingDirectory);
         EmbeddingOptions embedding = await ProbeEmbeddingAsync(args, settings.Embedding, http, ct);
         settings = settings with { Embedding = embedding };
 
@@ -75,11 +81,22 @@ internal static class Setup
         string after = MergeConfig(before, embedding);
         var skillPaths = skillRoots.Select(r => Path.Combine(Path.GetFullPath(r), SkillInstaller.SkillName, "SKILL.md")).ToList();
 
+        string? repoPath = null;
+        string? repoBefore = null;
+        string? repoAfter = null;
         IndexRequest? request = IndexRequestFor(args, workingDirectory);
         if (request is not null && await TakenByAnotherRootAsync(settings, request, ct) is { } owner)
         {
             string suggestion = $"{Path.GetFileName(Path.GetDirectoryName(workingDirectory.TrimEnd('\\', '/')))}-{request.Index}".ToLowerInvariant();
             return Result("name_taken", $"Index '{request.Index}' already belongs to {owner}. Nothing was changed; re-run with --index {suggestion} (or another name).");
+        }
+
+        // The repo file records which index and root belong to this repo, so later commands work from any folder of it.
+        if (scope == "repo" && request is not null)
+        {
+            repoPath = settings.Defaults.RepoConfigPath ?? Path.Combine(workingDirectory, RepoLocator.ConfigFileName);
+            repoBefore = File.Exists(repoPath) ? await File.ReadAllTextAsync(repoPath, ct) : null;
+            repoAfter = MergeRepoConfig(repoBefore, repoPath, request);
         }
 
         string? keyWarning = args.Get("embedding-key") is null
@@ -94,12 +111,16 @@ internal static class Setup
         IReadOnlyList<InstalledSkill> installed = await SkillInstaller.InstallAsync(skillRoots, ct);
         Directory.CreateDirectory(home);
         await File.WriteAllTextAsync(configPath, after, ct);
+        if (repoPath is not null)
+        {
+            await File.WriteAllTextAsync(repoPath, repoAfter!, ct);
+        }
 
         SetupIndex? index = request is null ? null : await IndexAndSearchAsync(settings, request, args.Get("query") ?? DefaultQuery, ct);
         return Result("ok", keyWarning?.Trim(), installed.Select(i => i.Path).ToList(), index);
 
         SetupResult Result(string status, string? message, IReadOnlyList<string>? skill = null, SetupIndex? ran = null) =>
-            new(status, message, scope, skill ?? skillPaths, configPath, before, after, embedding.BaseUrl!, embedding.ModelId!, embedding.Dimensions!.Value, ran);
+            new(status, message, scope, skill ?? skillPaths, configPath, before, after, embedding.BaseUrl!, embedding.ModelId!, embedding.Dimensions!.Value, ran, repoPath, repoBefore, repoAfter);
     }
 
     private static async Task<EmbeddingOptions> ProbeEmbeddingAsync(CliArguments args, EmbeddingOptions configured, HttpClient http, CancellationToken ct)
@@ -185,6 +206,25 @@ internal static class Setup
         section["ModelId"] = embedding.ModelId;
         section["Dimensions"] = embedding.Dimensions;
 
+        return root.ToJsonString(ConfigJson);
+    }
+
+    /// <summary>Sets <c>Index</c> and <c>Root</c> (relative to the file when inside its folder) in the repo config, keeping every other key.</summary>
+    private static string MergeRepoConfig(string? existing, string path, IndexRequest request)
+    {
+        JsonObject root;
+        try
+        {
+            root = existing is null ? [] : JsonNode.Parse(existing) as JsonObject ?? throw new UsageException($"{path} is not a JSON object.");
+        }
+        catch (JsonException ex)
+        {
+            throw new UsageException($"{path} is not valid JSON ({ex.Message}); fix or remove it first.");
+        }
+
+        string relative = Path.GetRelativePath(Path.GetDirectoryName(path)!, request.Root!);
+        root["Index"] = request.Index;
+        root["Root"] = relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? request.Root : relative.Replace('\\', '/');
         return root.ToJsonString(ConfigJson);
     }
 

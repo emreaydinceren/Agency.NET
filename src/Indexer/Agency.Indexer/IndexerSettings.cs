@@ -14,8 +14,35 @@ internal enum StorageProvider
 }
 
 /// <summary>
+/// The per-repo defaults for <c>index</c>/<c>search</c>/...: what to index and under which name. Resolved from the same
+/// layers as <see cref="IndexerSettings"/>; <paramref name="Sources"/> records which layer each value came from.
+/// </summary>
+/// <param name="Index">The index name.</param>
+/// <param name="Root">The directory to index.</param>
+/// <param name="Extensions">The comma-separated extensions to select.</param>
+/// <param name="Names">The comma-separated extensionless file names to select.</param>
+/// <param name="MaxFileKb">The per-file size cap in KiB.</param>
+/// <param name="Sources">For each key that has a value, <c>command line</c>, <c>environment</c>, <c>repo file</c> or <c>user file</c>.</param>
+/// <param name="RepoConfigPath">The repo config file in effect, if any.</param>
+/// <param name="IgnoredRepoKeys">Keys in the repo file that are not allowed there and were ignored.</param>
+internal sealed record IndexDefaults(
+    string? Index,
+    string? Root,
+    string? Extensions,
+    string? Names,
+    int? MaxFileKb,
+    IReadOnlyDictionary<string, string> Sources,
+    string? RepoConfigPath,
+    IReadOnlyList<string> IgnoredRepoKeys)
+{
+    /// <summary>No defaults and no repo file.</summary>
+    public static IndexDefaults None { get; } = new(null, null, null, null, null, new Dictionary<string, string>(), null, []);
+}
+
+/// <summary>
 /// Connection and model settings, resolved from (highest precedence first) command-line options,
-/// <c>AGENCY_INDEX_*</c> environment variables, and <c>~/.agency/indexer.json</c>.
+/// <c>AGENCY_INDEX_*</c> environment variables, the repo's <c>.agency-index.json</c> (index defaults only), and
+/// <c>~/.agency/indexer.json</c>.
 /// </summary>
 /// <param name="Provider">The storage backend.</param>
 /// <param name="Database">The SQLite file path, or the PostgreSQL connection string.</param>
@@ -37,14 +64,31 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
         ["dimensions"] = "Embedding:Dimensions",
     };
 
+    /// <summary>The index defaults: configuration key, and the command-line option that sets it.</summary>
+    private static readonly (string Key, string Option)[] DefaultKeys =
+    [
+        ("Index", "index"), ("Root", "root"), ("Extensions", "ext"), ("Names", "names"), ("MaxFileKb", "max-file-kb"),
+    ];
+
+    /// <summary>The repo-level defaults and where they came from; <see cref="IndexDefaults.None"/> unless set by <see cref="Resolve"/>.</summary>
+    public IndexDefaults Defaults { get; init; } = IndexDefaults.None;
+
     /// <summary>The default per-user directory holding <c>indexer.json</c> and the default SQLite database.</summary>
     public static string DefaultHome => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".agency");
 
     /// <summary>Resolves the settings for <paramref name="args"/>.</summary>
-    public static IndexerSettings Resolve(CliArguments args, string home)
+    /// <param name="args">The parsed command line.</param>
+    /// <param name="home">The folder holding the user-level <c>indexer.json</c> and the default database.</param>
+    /// <param name="workingDirectory">Where to start looking for a repo-level <c>.agency-index.json</c>, or <see langword="null"/> to use none.</param>
+    public static IndexerSettings Resolve(CliArguments args, string home, string? workingDirectory = null)
     {
+        string userFile = Path.Combine(home, "indexer.json");
+        string? repoPath = workingDirectory is null ? null : RepoLocator.FindConfig(workingDirectory);
+        RepoConfig? repo = repoPath is null ? null : RepoConfig.Load(repoPath);
+
+        // Connection settings: user file < environment < command line. The repo file never contributes here.
         IConfiguration config = new ConfigurationBuilder()
-            .AddJsonFile(Path.Combine(home, "indexer.json"), optional: true)
+            .AddJsonFile(userFile, optional: true)
             .AddEnvironmentVariables(EnvironmentPrefix)
             .AddInMemoryCollection(OptionToKey
                 .Where(map => args.Get(map.Key) is not null)
@@ -73,7 +117,60 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
             database,
             embedding,
             config.GetValue("ChunkSize", 512),
-            config.GetValue("ChunkOverlap", 64));
+            config.GetValue("ChunkOverlap", 64))
+        {
+            Defaults = ResolveDefaults(args, userFile, repo),
+        };
+    }
+
+    /// <summary>
+    /// Resolves each index default from the first layer that sets it: command line, environment, repo file, user file.
+    /// A layer's value replaces the lower layers' value whole (a list is not merged element by element).
+    /// </summary>
+    private static IndexDefaults ResolveDefaults(CliArguments args, string userFile, RepoConfig? repo)
+    {
+        IConfiguration user = new ConfigurationBuilder().AddJsonFile(userFile, optional: true).Build();
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var sources = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach ((string key, string option) in DefaultKeys)
+        {
+            (string? value, string? source) = args.Get(option) is { } fromCli ? (fromCli, "command line")
+                : Environment.GetEnvironmentVariable(EnvironmentPrefix + key) is { Length: > 0 } fromEnvironment ? (fromEnvironment, "environment")
+                : repo is not null && repo.Values.TryGetValue(key, out string? fromRepo) ? (fromRepo, "repo file")
+                : ListOrValue(user, key) is { } fromUser ? (fromUser, "user file")
+                : (null, null);
+            if (value is not null && source is not null)
+            {
+                values[key] = value;
+                sources[key] = source;
+            }
+        }
+
+        int? maxFileKb = null;
+        if (values.TryGetValue("MaxFileKb", out string? rawMax))
+        {
+            maxFileKb = int.TryParse(rawMax, out int kb) && kb > 0
+                ? kb
+                : throw new UsageException($"MaxFileKb must be a positive integer (from the {sources["MaxFileKb"]}).");
+        }
+
+        return new IndexDefaults(
+            values.GetValueOrDefault("Index"),
+            values.GetValueOrDefault("Root"),
+            values.GetValueOrDefault("Extensions"),
+            values.GetValueOrDefault("Names"),
+            maxFileKb,
+            sources,
+            repo?.Path,
+            repo?.Ignored ?? []);
+    }
+
+    /// <summary>A scalar value, or a JSON array joined with commas (extensions and names are lists); <see langword="null"/> if unset.</summary>
+    private static string? ListOrValue(IConfiguration config, string key)
+    {
+        IConfigurationSection section = config.GetSection(key);
+        List<string?> items = section.GetChildren().Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).ToList();
+        return items.Count > 0 ? string.Join(',', items) : (string.IsNullOrWhiteSpace(section.Value) ? null : section.Value);
     }
 
     /// <summary>The key sent to endpoints that do not check it (LM Studio, Ollama); the OpenAI SDK needs a non-empty value.</summary>

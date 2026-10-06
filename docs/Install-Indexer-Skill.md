@@ -37,7 +37,9 @@ scope: this repo), picks the embedding model (the configured one if the server l
 model with "embed" in its id; otherwise it asks you to pass `--embedding-model`), measures the model's
 dimensions from the endpoint, merges `~/.agency/indexer.json` without touching other keys, and, when
 `--index` or `--root` is given, runs the first index and one smoke-test search (`--query` to change it).
-It stops with exit 2 and `status: name_taken` if the index name belongs to another root. Options:
+With `--scope repo` and an index it also writes the repo's `.agency-index.json` (see
+[Per-repo config](#per-repo-config)). It stops with exit 2 and `status: name_taken` if the index name belongs to
+another root. Options:
 `--scope repo|user`, `--endpoint lmstudio|ollama|openai|openrouter` or `--embedding-url <url>`,
 `--embedding-model`. Hosted endpoints need their [API key](#api-key-openai-openrouter) in the
 environment first. The manual steps below show what it does.
@@ -173,6 +175,41 @@ Name the index after the repo folder, lower-case. Index names are global to the 
 shows your name with a different `root`, another repo owns it, so pick another name (for example
 `<org>-<repo>`). A good result is `"status":"ok"` with hits whose `score` is above about 0.5.
 
+## Per-repo config
+
+A repo can carry its own defaults, so every command works from any folder inside it without `--index` and
+`--root`. Put `.agency-index.json` at the repo root, or let `setup --index <name> --root <dir> --yes` write it:
+
+```json
+{ "Index": "myrepo", "Root": "docs", "Extensions": [".md"], "Names": ["README"], "MaxFileKb": 1024 }
+```
+
+Then, from any folder of the repo:
+
+```bash
+agency-index index                    # same as: --index myrepo --root <repo>/docs
+agency-index search --query "how are releases published?"
+```
+
+| Rule | Behavior |
+| --- | --- |
+| Found like `.gitignore` | The nearest `.agency-index.json` walking up from the current folder wins outright. Files in between are not merged. |
+| Relative `Root` | Relative to the folder holding the file, never the current folder, so it means the same thing everywhere. |
+| Precedence, per key | Command line, then `AGENCY_INDEX_*` environment variables, then the repo file, then the user file (`~/.agency/indexer.json`), then the built-in default. A list such as `Extensions` is replaced, not merged. |
+| User file | May set the same five keys as machine-wide defaults (use an absolute `Root` there), and holds everything else: endpoint, model, dimensions, database. |
+| "This repo" | The nearest folder holding `.agency-index.json` or `.git`. It decides where `--scope repo` puts the skill and which indexes `uninstall` treats as this repo's, from any folder of it. |
+
+**Only five keys are read from the repo file:** `Index`, `Root`, `Extensions`, `Names` and `MaxFileKb`. Anything
+else in it (`Embedding`, `Provider`, `Database`, `ApiKey`, ...) is ignored, and `doctor` reports it. The file
+arrives with the repository, and a setting that chose the embeddings endpoint would let a cloned repo send
+your document text, and the `OPENAI_API_KEY` Bearer token, to another server. Keep endpoint, model and
+database in your user file.
+
+Commit the file so teammates get the same index name and root. Each person's index still lives in their own
+database, and index names are global to a machine: if the name is already owned by another repo's root,
+`setup` stops with `name_taken` and suggests another. `agency-index doctor` shows the file in use
+(`repo_config`) and each default with the layer it came from (`defaults`).
+
 ## First index
 
 Each file's chunks are embedded in requests of at most 32 inputs, one request at a time, so a local
@@ -194,7 +231,8 @@ install.
 | The tool | `~/.dotnet/tools/agency-index` (Windows: `%USERPROFILE%\.dotnet\tools\agency-index.exe`); `dotnet tool list -g` shows it |
 | The skill, this repo | `<repo>/.claude/skills/agency-index/SKILL.md` |
 | The skill, all repos | `~/.claude/skills/agency-index/SKILL.md` and `~/Agents/skills/agency-index/SKILL.md` (or the `--dir` you installed with) |
-| Config | `~/.agency/indexer.json` (Windows: `C:\Users\<you>\.agency\indexer.json`) |
+| Config, user | `~/.agency/indexer.json` (Windows: `C:\Users\<you>\.agency\indexer.json`) |
+| Config, repo | `<repo>/.agency-index.json`, committable; index defaults only (see [Per-repo config](#per-repo-config)) |
 | Database, SQLite (default) | `~/.agency/index.db`, plus `index.db-wal` and `index.db-shm` while it is open and `index.db.<index>.lock` while an index run holds the writer lock, all in the same folder |
 | Database, PostgreSQL | The database named by your connection string, in the tables `semantic_kv_store`, `semantic_kv_projects` and `kv_store` (and the `vector` extension) |
 | The API key | Not stored by the tool. It lives in your environment or secret manager (see [API key](#api-key-openai-openrouter)) |
@@ -221,11 +259,11 @@ dotnet tool uninstall -g AgencyDotNet.Indexer   # the last step, listed under "r
 
 | Scope | Removes | Leaves |
 | --- | --- | --- |
-| `repo` (default) | The indexes whose root is inside the current folder, and `<repo>/.claude/skills/agency-index/` | Other repos' indexes, the user-scope skill, the database file, `indexer.json`, the tool |
+| `repo` (default) | The indexes whose root is inside this repo, `<repo>/.claude/skills/agency-index/` and the repo's `.agency-index.json` | Other repos' indexes, the user-scope skill, the database file, `indexer.json`, the tool |
 | `all` | Every index, every skill copy (this repo and both user folders), the SQLite database files (`index.db`, `-wal`, `-shm`, `.lock`) and `indexer.json` | The tool and your API key |
 
 The output is one JSON object: each skill file, each index with `this_repo` and what happened to it
-(`would_drop`, `dropped`, `locked`, `keep`), the data files, the config file, and `remaining`. Use `--dir
+(`would_drop`, `dropped`, `locked`, `keep`), the data files, the config file, the repo config file, and `remaining`. Use `--dir
 <skills-root>` to include a skill folder you installed with `--dir`. If an index is being written by
 another process the command reports it as `locked`, deletes none of the shared data, and exits 1; re-run
 when the other run finishes. On PostgreSQL it deletes the rows but not the tables or the `vector`

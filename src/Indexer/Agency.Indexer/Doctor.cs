@@ -34,7 +34,7 @@ internal static class Doctor
         string configPath = Path.Combine(home, "indexer.json");
         try
         {
-            settings = IndexerSettings.Resolve(args, home);
+            settings = IndexerSettings.Resolve(args, home, workingDirectory);
         }
         catch (Exception ex) when (ex is UsageException or InvalidDataException or FormatException)
         {
@@ -46,6 +46,9 @@ internal static class Doctor
             "config",
             true,
             File.Exists(configPath) ? $"{configPath} found." : $"{configPath} not found; using options, AGENCY_INDEX_* variables and defaults."));
+
+        checks.Add(RepoConfigCheck(settings, workingDirectory));
+        checks.Add(DefaultsCheck(settings));
 
         if (File.Exists(configPath) && StoresApiKey(await File.ReadAllTextAsync(configPath, ct)))
         {
@@ -64,6 +67,34 @@ internal static class Doctor
         }
 
         return checks;
+    }
+
+    private static DoctorCheck RepoConfigCheck(IndexerSettings settings, string workingDirectory)
+    {
+        IndexDefaults defaults = settings.Defaults;
+        if (defaults.RepoConfigPath is null)
+        {
+            return new DoctorCheck("repo_config", true, $"No {RepoLocator.ConfigFileName} found from {workingDirectory} upwards; using the user-level config and command-line options.");
+        }
+
+        return defaults.IgnoredRepoKeys.Count == 0
+            ? new DoctorCheck("repo_config", true, $"{defaults.RepoConfigPath} found.")
+            : new DoctorCheck(
+                "repo_config",
+                false,
+                $"{defaults.RepoConfigPath}: ignored {string.Join(", ", defaults.IgnoredRepoKeys)}. A repo file may only set {string.Join(", ", RepoConfig.AllowedKeys)}.",
+                $"Remove those keys. Endpoint, model, database and provider belong in {Path.Combine(IndexerSettings.DefaultHome, "indexer.json")}; a repo file must not choose where document text is sent.");
+    }
+
+    private static DoctorCheck DefaultsCheck(IndexerSettings settings)
+    {
+        IndexDefaults d = settings.Defaults;
+        var values = new (string Key, string? Value)[]
+        {
+            ("Index", d.Index), ("Root", d.Root), ("Extensions", d.Extensions), ("Names", d.Names), ("MaxFileKb", d.MaxFileKb?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        };
+        string detail = string.Join("; ", values.Where(v => v.Value is not null).Select(v => $"{v.Key}={v.Value} ({d.Sources.GetValueOrDefault(v.Key, "default")})"));
+        return new DoctorCheck("defaults", true, detail.Length == 0 ? "No index defaults are set, so commands need --index (and --root on the first run)." : detail);
     }
 
     /// <summary>Whether the config text sets a real <c>Embedding:ApiKey</c> (the placeholder does not count).</summary>

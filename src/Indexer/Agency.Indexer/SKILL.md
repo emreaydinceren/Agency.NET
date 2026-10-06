@@ -47,6 +47,8 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
 
    - `<name>`: letters, digits, `.`, `_`, `-` (case-insensitive). One index = one root directory.
    - After the first run `--root` may be omitted: `agency-index index --index <name>`.
+   - If the repo has a `.agency-index.json` (`agency-index doctor` shows `repo_config` and `defaults`), omit
+     `--index` and `--root` entirely: they are read from it, from any folder of the repo.
    - Default file types: `.md .markdown .mdx .txt .rst .adoc .html .htm` plus `README`, `CHANGELOG`,
      `CONTRIBUTING`. Override with `--ext .md,.html` and/or `--names README,NOTES`. The selection is
      remembered; files that stop matching are removed from the index.
@@ -94,6 +96,7 @@ All repos share one database, so an index name is global to the machine, and `se
 inside the single index you name — it never crosses indexes. Keep repos apart like this:
 
 1. **One index per repo, named after the repo folder** (lower-case): `/work/billing-api` → `billing-api`.
+   If the repo has a `.agency-index.json`, its `Index` is the name: use it.
 2. **Before creating an index, run `agency-index indexes`.** Each entry shows its `root`.
    - An index whose `root` is the current repo already exists → use that name; don't create another.
    - Your intended name exists with a *different* `root` → another repo owns it. Pick a different name
@@ -134,7 +137,16 @@ Use `agency-index uninstall`; it previews by default and changes nothing without
    only if the user says so. The API key variable (`OPENAI_API_KEY` / `OPENROUTER_API_KEY` /
    `AGENCY_INDEX_Embedding__ApiKey`) is theirs to remove. On PostgreSQL the tables stay; leave them.
 
-The full description is in `docs/Install-Indexer-Skill.md` ("Remove it") in the Agency repository.
+`uninstall` also deletes the repo's own `.agency-index.json`. The full description is in
+`docs/Install-Indexer-Skill.md` ("Remove it") in the Agency repository.
+
+## Repo config
+
+A repo may have `.agency-index.json` (found by walking up from the current folder; the nearest wins) with
+`Index`, `Root` (relative to the file), `Extensions`, `Names` and `MaxFileKb`. Precedence per key: command line,
+`AGENCY_INDEX_*` environment, repo file, `~/.agency/indexer.json`, default. **Only those keys are read from the
+repo file**: never put an endpoint, database or key in it; they are ignored, and `doctor` reports them.
+`agency-index setup --index <name> --root <dir> --yes` writes it.
 
 ## Configuration
 

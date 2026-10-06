@@ -24,6 +24,9 @@ agency-index index  --index docs --root ./docs
 agency-index search --index docs --query "how are releases published?"
 ```
 
+With a `.agency-index.json` at the repo root (`{ "Index": "docs", "Root": "docs" }`), `index` and `search`
+work from any folder of the repo without `--index`/`--root`; only those index settings are read from it.
+
 See `SKILL.md` for the full command reference, exit codes and configuration.
 
 ## How it works

@@ -41,7 +41,12 @@ configuration error, `3` another process holds the index's writer lock.
 
 The embeddings API key is a secret and is read from the environment (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or
 `AGENCY_INDEX_Embedding__ApiKey`); `setup` never writes it to a file and `doctor` flags one stored in
-`indexer.json`. Configuration (highest precedence first): command-line options, `AGENCY_INDEX_*` environment variables
+`indexer.json`. A repo can carry its own defaults in `.agency-index.json` at its root (found by walking up from the current
+folder, nearest wins): `Index`, `Root` (relative to the file), `Extensions`, `Names` and `MaxFileKb`, so commands
+work from any folder of the repo without `--index`/`--root`. Only those keys are read from it; endpoint, model,
+database and key settings are ignored there, because the file arrives with the repository. Per key, the command
+line beats `AGENCY_INDEX_*` variables, which beat the repo file, which beats the user file. Configuration
+(highest precedence first): command-line options, `AGENCY_INDEX_*` environment variables
 (`AGENCY_INDEX_Provider`, `AGENCY_INDEX_Database`, `AGENCY_INDEX_Embedding__BaseUrl`, ...), then
 `~/.agency/indexer.json`. The default provider is SQLite at `~/.agency/index.db`.
 

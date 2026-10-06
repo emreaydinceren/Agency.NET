@@ -99,6 +99,11 @@ internal static class Program
 
     private static async Task<int> RunAsync(CliArguments args, CancellationToken ct)
     {
+        string workingDirectory = Directory.GetCurrentDirectory();
+
+        // "This repo" is the nearest folder with a .agency-index.json or .git, so a leaf folder behaves like the root.
+        string repoRoot = RepoLocator.FindRoot(workingDirectory);
+
         switch (args.Command)
         {
             case "help":
@@ -116,7 +121,7 @@ internal static class Program
                     args,
                     IndexerSettings.DefaultHome,
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    Directory.GetCurrentDirectory(),
+                    repoRoot,
                     ct);
                 return Write(uninstall.Status == "partial" ? ExitFailure : ExitOk, uninstall);
 
@@ -127,7 +132,7 @@ internal static class Program
                         args,
                         IndexerSettings.DefaultHome,
                         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        Directory.GetCurrentDirectory(),
+                        repoRoot,
                         http,
                         ct);
                     return Write(
@@ -142,7 +147,7 @@ internal static class Program
                         args,
                         IndexerSettings.DefaultHome,
                         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                        Directory.GetCurrentDirectory(),
+                        repoRoot,
                         probe,
                         ct);
                     return Write(ExitOk, new { status = checks.All(c => c.Ok) ? "ok" : "problems", checks });
@@ -155,7 +160,7 @@ internal static class Program
                 throw new UsageException($"Unknown command '{args.Command}'. Run 'agency-index help'.");
         }
 
-        var settings = IndexerSettings.Resolve(args, IndexerSettings.DefaultHome);
+        var settings = IndexerSettings.Resolve(args, IndexerSettings.DefaultHome, workingDirectory);
         if (args.Command is "index" or "search")
         {
             settings.RequireEmbedding();
@@ -170,11 +175,11 @@ internal static class Program
         {
             case "index":
                 var request = new IndexRequest(
-                    IndexName(args),
-                    args.Get("root"),
-                    args.Get("ext") is { } ext ? FileScanner.ParseExtensions(ext) : null,
-                    args.Get("names") is { } names ? FileScanner.SplitList(names) : null,
-                    args.GetPositiveInt("max-file-kb", (int)(FileScanner.DefaultMaxFileBytes / 1024)) * 1024L,
+                    IndexName(settings),
+                    settings.Defaults.Root,
+                    settings.Defaults.Extensions is { } ext ? FileScanner.ParseExtensions(ext) : null,
+                    settings.Defaults.Names is { } names ? FileScanner.SplitList(names) : null,
+                    (settings.Defaults.MaxFileKb ?? (int)(FileScanner.DefaultMaxFileBytes / 1024)) * 1024L,
                     args.Flags.Contains("wait"));
                 if (args.Flags.Contains("dry-run"))
                 {
@@ -186,15 +191,15 @@ internal static class Program
                 return Write(ExitCodeFor(indexed.Status), indexed);
 
             case "search":
-                IReadOnlyList<SearchResultHit> hits = await service.SearchAsync(IndexName(args), args.Require("query"), args.GetPositiveInt("top", 5), ct);
-                return Write(ExitOk, new { status = "ok", index = IndexName(args), hits });
+                IReadOnlyList<SearchResultHit> hits = await service.SearchAsync(IndexName(settings), args.Require("query"), args.GetPositiveInt("top", 5), ct);
+                return Write(ExitOk, new { status = "ok", index = IndexName(settings), hits });
 
             case "list":
-                var (config, files) = await service.ListAsync(IndexName(args), ct);
+                var (config, files) = await service.ListAsync(IndexName(settings), ct);
                 return Write(ExitOk, new
                 {
                     status = "ok",
-                    index = IndexName(args),
+                    index = IndexName(settings),
                     config,
                     files = files.Select(f => new { path = f.Path, size = f.Size, last_write_utc = new DateTime(f.LastWriteTicks, DateTimeKind.Utc), chunks = f.Chunks }),
                 });
@@ -204,7 +209,7 @@ internal static class Program
                 return Write(ExitOk, new { status = "ok", indexes = all.Select(i => new { name = i.Index, root = i.Config.Root, embedding_model = i.Config.EmbeddingModel }) });
 
             default:
-                DropResult dropped = await service.DropAsync(IndexName(args), args.Flags.Contains("wait"), ct);
+                DropResult dropped = await service.DropAsync(IndexName(settings), args.Flags.Contains("wait"), ct);
                 return Write(ExitCodeFor(dropped.Status), dropped);
         }
     }
@@ -262,12 +267,14 @@ internal static class Program
             args.Get("dir"),
             args.Get("scope") ?? defaultScope,
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Directory.GetCurrentDirectory());
+            RepoLocator.FindRoot(Directory.GetCurrentDirectory()));
 
-    private static string IndexName(CliArguments args) =>
-        ProjectName.TryNormalize(args.Require("index"), out string canonical, out string? error)
-            ? canonical
-            : throw new UsageException($"Invalid index name: {error}");
+    private static string IndexName(IndexerSettings settings) =>
+        settings.Defaults.Index is not { } name
+            ? throw new UsageException("No index name: pass --index <name>, or set \"Index\" in .agency-index.json (see 'agency-index setup').")
+            : ProjectName.TryNormalize(name, out string canonical, out string? error)
+                ? canonical
+                : throw new UsageException($"Invalid index name: {error}");
 
     private static int ExitCodeFor(IndexStatus status) => status switch
     {

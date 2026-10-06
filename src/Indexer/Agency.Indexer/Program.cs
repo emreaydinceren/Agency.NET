@@ -37,6 +37,9 @@ internal static class Program
           drop    --index <name> [--wait]
           install-skill [--dir <skills-root> | --scope repo|user]    (default scope: user)
           uninstall-skill [--dir <skills-root> | --scope repo|user]
+          uninstall [--scope repo|all] [--dir <skills-root>] [--yes]
+                  repo (default): drop this repo's indexes and remove its skill. all: every index, every skill copy, the SQLite
+                  database files and indexer.json. Never removes the tool itself (see "remaining"). Without --yes it only previews.
           setup   [--scope repo|user] [--endpoint lmstudio|ollama|openai|openrouter | --embedding-url <url>] [--embedding-model <id>]
                   [--index <name>] [--root <dir>] [--query <text>] [--yes]
                   Installs the skill (default scope: repo), picks the embedding model and measures its dimensions, merges
@@ -107,6 +110,15 @@ internal static class Program
 
             case "uninstall-skill":
                 return Write(ExitOk, new { status = "ok", removed = SkillInstaller.Uninstall(SkillRootsFor(args, "user")) });
+
+            case "uninstall":
+                UninstallResult uninstall = await Uninstaller.RunAsync(
+                    args,
+                    IndexerSettings.DefaultHome,
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    Directory.GetCurrentDirectory(),
+                    ct);
+                return Write(uninstall.Status == "partial" ? ExitFailure : ExitOk, uninstall);
 
             case "setup":
                 using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) })

@@ -120,19 +120,21 @@ Searches never block and may run while an index is being refreshed.
 
 ## Removing it (when the user asks)
 
-1. Run `agency-index doctor` and `agency-index indexes`. They show the config path, the database path
-   (default `~/.agency/index.db`, one file holding every repo's indexes), every skill copy and each
-   index with its `root`. Show the user what you found and which indexes belong to this repo.
-2. Ask which they want: **this repo only** (`agency-index drop --index <this repo's name>`, then
-   `agency-index uninstall-skill --scope repo`) or **everything** (also drop the other indexes they
-   approve, `uninstall-skill --scope user` and any `--dir` used, delete `~/.agency/index.db*` and
-   `~/.agency/indexer.json`, and last `dotnet tool uninstall -g AgencyDotNet.Indexer`).
-3. Never drop another repo's index, delete the database or config, or uninstall the tool without the
-   user's explicit yes. On PostgreSQL `drop` leaves the tables; do not drop them unless asked.
-4. Finish by listing what is left. Tell the user to remove the API key variable
-   (`OPENAI_API_KEY` / `OPENROUTER_API_KEY` / `AGENCY_INDEX_Embedding__ApiKey`) themselves.
+Use `agency-index uninstall`; it previews by default and changes nothing without `--yes`.
 
-The full steps are in `docs/Install-Indexer-Skill.md` ("Remove it") in the Agency repository.
+1. Run `agency-index uninstall` and show the user the JSON: the skill files, each index with
+   `this_repo` (does its `root` lie inside this repo?), the database files, the config file and
+   `remaining`. The default scope `repo` only touches this repo's indexes and skill; `--scope all` also
+   covers every other repo's indexes, every skill copy, the SQLite database files (one file holding all
+   repos' indexes, default `~/.agency/index.db`) and `~/.agency/indexer.json`.
+2. Ask which scope they want, and get an explicit yes before `agency-index uninstall --yes`
+   (`--scope all --yes` for everything). `all` drops other repos' indexes: say so.
+3. Exit 1 with `locked` means another run is writing an index; nothing shared was deleted. Retry later.
+4. It never removes the tool. Report `remaining` and run `dotnet tool uninstall -g AgencyDotNet.Indexer`
+   only if the user says so. The API key variable (`OPENAI_API_KEY` / `OPENROUTER_API_KEY` /
+   `AGENCY_INDEX_Embedding__ApiKey`) is theirs to remove. On PostgreSQL the tables stay; leave them.
+
+The full description is in `docs/Install-Indexer-Skill.md` ("Remove it") in the Agency repository.
 
 ## Configuration
 

@@ -31,6 +31,7 @@ For the full walk-through (scope, embeddings endpoint, `PATH`, first index, agen
 | `indexes` | Every index and its root. |
 | `drop --index <name> [--wait]` | Delete the index's chunks, manifest and configuration. |
 | `install-skill [--dir <skills-root> \| --scope repo\|user]` | Write the bundled `SKILL.md` (default scope `user`); the output says which files replaced an existing one. |
+| `uninstall [--scope repo\|all] [--dir <skills-root>] [--yes]` | Remove the skill and the data. `repo` (default) drops this repo's indexes and its skill; `all` also drops every index, removes every skill copy, the SQLite database files and `indexer.json`. Previews unless `--yes`; never removes the tool itself (the last step is returned under `remaining`). |
 | `uninstall-skill [--dir <skills-root> \| --scope repo\|user]` | Remove the skill file written by `install-skill`. |
 | `doctor` | Read-only JSON report of every prerequisite (tool, skill, config, endpoint, model, dimensions, database, indexes), each with a `fix`. Exits 0; branch on `status`. |
 | `setup [--scope] [--endpoint lmstudio\|ollama\|openai\|openrouter \| --embedding-url <url>] [--embedding-model <id>] [--index <name>] [--root <dir>] [--yes]` | Install the skill, pick the embedding model, measure its dimensions, merge `indexer.json`, optionally run the first index and a smoke search. Without `--yes` it only previews. |

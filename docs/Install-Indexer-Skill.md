@@ -208,61 +208,52 @@ it belongs to.
 
 ## Remove it
 
+One command does it, in two steps: preview, then apply. It never removes the tool itself (a running
+program cannot delete its own executable), so the last step is printed for you to run.
+
+```bash
+agency-index uninstall                       # preview for this repo only; changes nothing
+agency-index uninstall --yes                 # apply: drop this repo's indexes, remove this repo's skill
+agency-index uninstall --scope all           # preview everything
+agency-index uninstall --scope all --yes     # apply everything
+dotnet tool uninstall -g AgencyDotNet.Indexer   # the last step, listed under "remaining"
+```
+
+| Scope | Removes | Leaves |
+| --- | --- | --- |
+| `repo` (default) | The indexes whose root is inside the current folder, and `<repo>/.claude/skills/agency-index/` | Other repos' indexes, the user-scope skill, the database file, `indexer.json`, the tool |
+| `all` | Every index, every skill copy (this repo and both user folders), the SQLite database files (`index.db`, `-wal`, `-shm`, `.lock`) and `indexer.json` | The tool and your API key |
+
+The output is one JSON object: each skill file, each index with `this_repo` and what happened to it
+(`would_drop`, `dropped`, `locked`, `keep`), the data files, the config file, and `remaining`. Use `--dir
+<skills-root>` to include a skill folder you installed with `--dir`. If an index is being written by
+another process the command reports it as `locked`, deletes none of the shared data, and exits 1; re-run
+when the other run finishes. On PostgreSQL it deletes the rows but not the tables or the `vector`
+extension, because other Agency applications can share them; drop those yourself only if the database is
+dedicated to the indexer. The API key lives in your environment or secret manager: remove the
+`OPENAI_API_KEY` / `OPENROUTER_API_KEY` / `AGENCY_INDEX_Embedding__ApiKey` entry yourself and revoke the
+key at the provider if nothing else uses it.
+
 ### Ask your agent to remove it
 
 Paste this into any coding agent:
 
 > Remove the Agency.Indexer by following the "Remove it" section of `docs/Install-Indexer-Skill.md`.
-> First run `agency-index doctor` and `agency-index indexes`, and show me every skill copy, the config
-> file, the database and each index you found, saying which belong to this repo and which belong to other
-> repos. Ask me whether to remove only this repo's index and skill, or everything. Delete nothing until I
-> agree, remove only what I approved, uninstall the tool last, and finish by telling me what is left,
-> including the API key environment variable, which I will remove myself.
+> Run `agency-index uninstall` (a preview) and show me what it found, saying which indexes belong to
+> this repo and which to other repos. Ask me whether to remove only this repo or everything. Apply it
+> with `--yes` (and `--scope all` if I chose everything) only after I agree, then tell me the
+> `remaining` steps and run the tool uninstall only if I say so.
 
-Actions that need explicit approval: dropping an index that does not belong to this repo, deleting the
-database file or `indexer.json` (they serve every repo on the machine), deleting a skill copy outside
-this repo, and the global tool uninstall.
+Actions that need explicit approval: any `--yes`, and especially `--scope all`, which drops other
+repos' indexes and deletes the database and config that serve every repo on the machine; and the global
+tool uninstall.
 
-### This repo only
+### By hand
 
-Leaves the tool, the config and other repos' indexes alone.
-
-```bash
-agency-index drop --index <repo-name>          # deletes its chunks, manifest and configuration
-agency-index uninstall-skill --scope repo      # or --dir <skills-root> if you installed with one
-```
-
-### Everything
-
-Run in this order; the tool goes last because it deletes the `agency-index` command.
-
-1. Drop every index you are removing. `agency-index indexes` lists them; run
-   `agency-index drop --index <name>` for each. Skip this step if you delete the SQLite file in step 3.
-2. Remove the skill from every scope you installed it in:
-
-   ```bash
-   agency-index uninstall-skill --scope repo
-   agency-index uninstall-skill --scope user
-   agency-index uninstall-skill --dir <skills-root>      # only if you used --dir
-   ```
-
-   Each call lists the files it deleted and removes the `agency-index` folder if that leaves it empty.
-3. Remove the data.
-   - **SQLite:** delete `~/.agency/index.db` together with `index.db-wal`, `index.db-shm` and any
-     `index.db.*.lock` beside it, once no `agency-index index` run is in progress.
-   - **PostgreSQL:** `drop` deletes the rows, but the tables and the `vector` extension stay, and other
-     Agency applications can use those same tables. Drop the tables only if the database is dedicated to
-     the indexer.
-4. Delete `~/.agency/indexer.json`, and the `~/.agency` folder if it is then empty.
-5. Uninstall the tool:
-
-   ```bash
-   dotnet tool uninstall -g AgencyDotNet.Indexer
-   ```
-
-6. Remove the API key: delete the `OPENAI_API_KEY` / `OPENROUTER_API_KEY` /
-   `AGENCY_INDEX_Embedding__ApiKey` entry from your profile or secret manager, and revoke the key at the
-   provider if nothing else uses it. A tool cannot remove it for you.
+If the tool is already gone or broken: delete the skill folders listed in [Where things
+live](#where-things-live), delete `~/.agency/index.db` with its `-wal`, `-shm` and `*.lock` files (once
+no index run is in progress) and `~/.agency/indexer.json`, then run `dotnet tool uninstall -g
+AgencyDotNet.Indexer`.
 
 Check it worked: `agency-index` is "not found", `dotnet tool list -g` no longer lists
 `AgencyDotNet.Indexer`, and the skill, config and database paths from the table above are gone.

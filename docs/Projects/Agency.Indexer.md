@@ -4,7 +4,7 @@
 
 `Agency.Indexer` is the `agency-index` command-line tool: incremental semantic indexing of a folder of
 documentation for agents. It ships as a .NET global tool (package `AgencyDotNet.Indexer`) with an embedded
-agent skill (`SKILL.md`). An agent indexes a directory under a name, re-runs the index whenever it likes
+agent skill (a short `SKILL.md` plus an on-demand `REFERENCE.md`). An agent indexes a directory under a name, re-runs the index whenever it likes
 (only added, changed or deleted files are processed), and searches it; every command prints one JSON
 object to stdout.
 
@@ -17,7 +17,7 @@ dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 ```
 
 For the full walk-through (scope, embeddings endpoint, `PATH`, first index, agent runbook) see
-[Install the documentation search skill](../Install-Indexer-Skill.md). `install-skill` writes `SKILL.md` to `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`
+[Install the documentation search skill](../Install-Indexer-Skill.md). `install-skill` writes `SKILL.md` and `REFERENCE.md` to `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`
 (or `--dir <skills-root>`). Until a clean (non-`-g<sha>`) version is published to nuget.org, add
 `--prerelease` to the install.
 
@@ -26,12 +26,13 @@ For the full walk-through (scope, embeddings endpoint, `PATH`, first index, agen
 | Command | Purpose |
 |---|---|
 | `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--exclude <glob>,...] [--max-file-kb N] [--wait] [--dry-run] [--rebuild] [--summary] [--log <file>]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. Progress lines (files, chunks, ETA, plus a 30 s heartbeat) and each failed file with its reason go to stderr (and `--log`); `failed` in the result is `{path, reason}` entries; the other file lists are relative to `root`, and `--summary` prints counts instead. `--exclude` takes gitignore-style globs relative to the root. `--rebuild` re-embeds every file, which is how the embedding model is switched. `--dry-run` reports the delta, chunk count and a time estimate (a sample spread over the whole set, scaled by text length) without writing. |
-| `search --index <name>[,<name>...] --query <text> [--top N] [--min-score X] [--within D] [--no-text] [--snippet-chars N] [--path <glob>] [--hybrid] [--group-by-file \| --per-file N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity), `text`, and `heading`, `start_line` and `end_line` when the index recorded them (`index` when several indexes were searched). `--path` filters by glob; `--hybrid` fuses the vector rank with a BM25 rank over the candidate pool and exempts identifier matches from the threshold; `--group-by-file` and `--per-file` cap hits per file; several indexes are merged by score. `--min-score` (or `Search:MinScore`) and `--within` drop weak hits, reported as `filtered` with the pre-filter `best_score`; `--no-text` and `--snippet-chars` shrink the output. |
+| `search --index <name>[,<name>...] --query <text> [--top N] [--min-score X] [--within D] [--no-text] [--snippet-chars N] [--path <glob>] [--hybrid] [--group-by-file \| --per-file N]` | Semantic search; compact by default, so hits carry `path`, `chunk`, `score` (cosine similarity) and `heading`, `start_line` and `end_line` when the index recorded them (`index` when several indexes were searched). `--path` filters by glob; `--hybrid` fuses the vector rank with a BM25 rank over the candidate pool and exempts identifier matches from the threshold; `--group-by-file` and `--per-file` cap hits per file; several indexes are merged by score. `--min-score` (or `Search:MinScore`) and `--within` drop weak hits, reported as `filtered` with the pre-filter `best_score`; Chunk `text` is left out unless `--full` (whole chunk) or `--snippet-chars` is given. The result adds `top_gap` and, when the top hit leads the next by 0.08 or more, a `hint` to read it and stop searching. |
+| `read --index <name> --path <file> [--start N] [--end N]` | Lines of an indexed file (at most 400; `path` absolute or relative to the root), with `stale` set when the file changed since indexing. Pairs with a hit's `start_line`/`end_line`. |
 | `calibrate --index <name> [--save]` | Runs twelve unrelated queries and reports the noise ceiling and a suggested minimum score; `--save` stores it in the index configuration, and `search` uses it when no threshold is configured. |
 | `list --index <name> [--summary]` | The index configuration and every indexed file (relative to the root) with size, last-write time and chunk count; `--summary` gives counts. |
 | `indexes` | Every index and its root. |
 | `drop --index <name> [--wait]` | Delete the index's chunks, manifest and configuration. |
-| `install-skill [--dir <skills-root> \| --scope repo\|user]` | Write the bundled `SKILL.md` (default scope `user`, two copies: `~/.claude/skills` and `~/Agents/skills`; `setup` defaults to `repo`); the output says which files replaced an existing one. |
+| `install-skill [--dir <skills-root> \| --scope repo\|user]` | Write the bundled `SKILL.md` and `REFERENCE.md` (default scope `user`, two copies: `~/.claude/skills` and `~/Agents/skills`; `setup` defaults to `repo`); the output says which files replaced an existing one. |
 | `uninstall [--scope repo\|all] [--dir <skills-root>] [--yes]` | Remove the skill and the data. `repo` (default) drops this repo's indexes and its skill; `all` also drops every index, removes every skill copy, the SQLite database files and `indexer.json`. Previews unless `--yes`; never removes the tool itself (the last step is returned under `remaining`). |
 | `uninstall-skill [--dir <skills-root> \| --scope repo\|user]` | Remove the skill file written by `install-skill`. |
 | `doctor` | Read-only JSON report of every prerequisite (tool, skill, config, endpoint, model, dimensions, database, indexes), each with a `fix`. Exits 0; branch on `status`. |

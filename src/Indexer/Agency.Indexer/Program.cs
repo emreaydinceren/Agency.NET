@@ -33,12 +33,14 @@ internal static class Program
                   (progress and each failed file with its reason go to stderr, and to --log <file> with timestamps; --dry-run reports the delta, chunk count and a time estimate without writing;
                   --exclude takes gitignore-style globs relative to the root, e.g. docs/manual-tests,**/*.draft.md; --rebuild re-embeds every file, which is how to switch embedding models;
                   paths in the result are relative to "root"; --summary prints counts instead of file lists)
-          search  --index <name>[,<name>...] --query <text> [--top 5] [--min-score 0..1] [--within 0..1] [--no-text] [--snippet-chars N]
+          search  --index <name>[,<name>...] --query <text> [--top 5] [--min-score 0..1] [--within 0..1] [--full] [--no-text] [--snippet-chars N]
                   [--path <glob>] [--hybrid] [--group-by-file | --per-file N]
                   --min-score (or Search:MinScore in indexer.json, or the value stored by 'calibrate --save') drops weaker hits; --within keeps hits within that distance of the best;
-                  filtered hits are counted in "filtered" with the pre-filter "best_score". --no-text / --snippet-chars shrink the output.
+                  filtered hits are counted in "filtered" with the pre-filter "best_score". Text is left out unless --full (whole chunk) or --snippet-chars N is given; "hint" appears when the top hit clearly leads.
                   --path keeps files whose path under the index root matches the glob; --hybrid also ranks by keyword match (a chunk containing an identifier from the query survives --min-score);
                   --group-by-file keeps the best chunk of each file, --per-file N the best N. Hits carry heading, start_line and end_line when the index recorded them.
+          read    --index <name> --path <file> [--start 1] [--end <line>]
+                  Lines of an indexed file (at most 400), with "stale" set when the file changed since indexing; pair it with a hit's start_line/end_line.
           calibrate --index <name> [--save]
                   Runs unrelated queries against the index and reports the noise ceiling and a suggested min score; --save stores it so search uses it when no min score is configured.
           list    --index <name> [--summary]
@@ -163,7 +165,7 @@ internal static class Program
                     return Write(ExitOk, new { status = checks.All(c => c.Ok) ? "ok" : "problems", checks });
                 }
 
-            case "index" or "search" or "calibrate" or "list" or "indexes" or "drop":
+            case "index" or "search" or "read" or "calibrate" or "list" or "indexes" or "drop":
                 break;
 
             default:
@@ -217,6 +219,14 @@ internal static class Program
                 var (config, files) = await service.ListAsync(IndexName(settings), ct);
                 return Write(ExitOk, IndexOutput.Of(IndexName(settings), config, files, args.Flags.Contains("summary")));
 
+            case "read":
+                return Write(ExitOk, await service.ReadAsync(
+                    IndexName(settings),
+                    args.Require("path"),
+                    args.GetPositiveInt("start", 1),
+                    args.Get("end") is null ? null : args.GetPositiveInt("end", 1),
+                    ct));
+
             case "indexes":
                 var all = await service.ListIndexesAsync(ct);
                 return Write(ExitOk, new { status = "ok", indexes = all.Select(i => new { name = i.Index, root = i.Config.Root, embedding_model = i.Config.EmbeddingModel }) });
@@ -262,7 +272,7 @@ internal static class Program
         var options = new SearchOptions(
             settings.SearchMinScore ?? suggested,
             args.GetFraction("within"),
-            args.Flags.Contains("no-text"),
+            args.Flags.Contains("no-text") || (!args.Flags.Contains("full") && args.Get("snippet-chars") is null),
             args.Get("snippet-chars") is null ? null : args.GetPositiveInt("snippet-chars", 1),
             perFile,
             pool > 0 ? top : null,

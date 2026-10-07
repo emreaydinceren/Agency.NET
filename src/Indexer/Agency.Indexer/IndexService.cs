@@ -107,6 +107,15 @@ internal sealed record SearchResultHit(
 /// <param name="Saved">Whether the suggestion was stored in the index's configuration.</param>
 internal sealed record CalibrationResult(string Index, int Probes, double NoiseCeiling, double NoiseMean, double SuggestedMinScore, bool Saved);
 
+/// <summary>A line range read from an indexed file.</summary>
+/// <param name="Path">The full path of the file.</param>
+/// <param name="StartLine">The 1-based first line returned.</param>
+/// <param name="EndLine">The 1-based last line returned.</param>
+/// <param name="TotalLines">The number of lines in the file.</param>
+/// <param name="Stale">Whether the file changed since it was indexed, so line numbers from search may have drifted.</param>
+/// <param name="Text">The requested lines.</param>
+internal sealed record ReadResult(string Path, int StartLine, int EndLine, int TotalLines, bool Stale, string Text);
+
 /// <summary>Result of a <c>drop</c> run.</summary>
 internal sealed record DropResult(IndexStatus Status, string Index, int ChunksDeleted);
 
@@ -124,6 +133,9 @@ internal sealed class IndexService(
 {
     /// <summary>The store user every index belongs to, keeping indexer data apart from other Agency users.</summary>
     public const string UserId = "agency-index";
+
+    /// <summary>The most lines one <see cref="ReadAsync"/> call returns.</summary>
+    public const int MaxReadLines = 400;
 
     /// <summary>
     /// The session passed when searching. It never holds data; a non-null session restricts results to the
@@ -407,6 +419,33 @@ internal sealed class IndexService(
     /// <summary>Returns the threshold stored by <see cref="CalibrateAsync"/> for <paramref name="index"/>, or <see langword="null"/>.</summary>
     public async Task<double?> GetSuggestedMinScoreAsync(string index, CancellationToken ct) =>
         (await manifest.GetConfigAsync(index, ct))?.Calibration?.SuggestedMinScore;
+
+    /// <summary>
+    /// Returns lines <paramref name="start"/> to <paramref name="end"/> (at most <see cref="MaxReadLines"/>) of
+    /// <paramref name="path"/>, which must be a file of <paramref name="index"/>, absolute or relative to its root.
+    /// </summary>
+    public async Task<ReadResult> ReadAsync(string index, string path, int start, int? end, CancellationToken ct)
+    {
+        IndexConfig config = await manifest.GetConfigAsync(index, ct) ?? throw new UsageException($"Index '{index}' does not exist.");
+        string full = Path.GetFullPath(path, config.Root);
+        ManifestEntry entry = (await manifest.GetEntriesAsync(index, ct)).FirstOrDefault(e => string.Equals(e.Path, full, StringComparison.Ordinal))
+            ?? throw new UsageException($"'{path}' is not a file of index '{index}'. Use a path from search or list.");
+
+        string[] lines = (await File.ReadAllTextAsync(full, ct)).ReplaceLineEndings("\n").Split('\n');
+        int last = Math.Min(Math.Min(end ?? int.MaxValue, start + MaxReadLines - 1), lines.Length);
+        if (start > lines.Length || last < start)
+        {
+            throw new UsageException($"Line range {start}-{end} is outside '{path}', which has {lines.Length} lines.");
+        }
+
+        return new ReadResult(
+            full,
+            start,
+            last,
+            lines.Length,
+            new FileInfo(full).LastWriteTimeUtc.Ticks != entry.LastWriteTicks,
+            string.Join('\n', lines[(start - 1)..last]));
+    }
 
     /// <summary>Returns the configuration and manifest of <paramref name="index"/>.</summary>
     public async Task<(IndexConfig Config, IReadOnlyList<ManifestEntry> Files)> ListAsync(string index, CancellationToken ct)

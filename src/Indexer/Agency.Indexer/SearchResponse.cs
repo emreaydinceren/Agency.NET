@@ -48,14 +48,24 @@ internal sealed record SearchHitView(
 /// <param name="Filtered">How many of the retrieved hits were dropped; absent when none were.</param>
 /// <param name="BestScore">The top score before filtering; present only together with <paramref name="Filtered"/>.</param>
 /// <param name="MinScore">The score threshold that was applied, when there was one.</param>
+/// <param name="TopGap">The top hit's lead over the second hit, when at least two hits are returned.</param>
+/// <param name="Hint">Advice for the agent, present only when the top hit clearly leads (<see cref="DecisiveGap"/>).</param>
 internal sealed record SearchResponse(
     string Status,
     string Index,
     IReadOnlyList<SearchHitView> Hits,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Filtered,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? BestScore,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? MinScore = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? MinScore = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? TopGap = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Hint = null)
 {
+    /// <summary>
+    /// How far the top score must lead the runner-up for <see cref="Hint"/> to tell the agent to stop searching.
+    /// A heuristic, not tuned per embedding model.
+    /// </summary>
+    public const double DecisiveGap = 0.08;
+
     /// <summary>Applies <paramref name="options"/> to <paramref name="hits"/> (best first, as the index returns them).</summary>
     public static SearchResponse From(string index, IReadOnlyList<SearchResultHit> hits, SearchOptions options)
     {
@@ -90,13 +100,18 @@ internal sealed record SearchResponse(
             shaped = shaped.Take(top);
         }
 
+        List<SearchResultHit> returned = shaped.ToList();
+        double? gap = returned.Count > 1 ? Math.Round(returned[0].Score - returned[1].Score, 4) : null;
+
         return new SearchResponse(
             "ok",
             index,
-            shaped.Select(h => new SearchHitView(h.Path, h.Chunk, h.Score, Shape(h.Text, options), h.Heading, h.StartLine, h.EndLine, options.ShowIndex ? h.Index : null)).ToList(),
+            returned.Select(h => new SearchHitView(h.Path, h.Chunk, h.Score, Shape(h.Text, options), h.Heading, h.StartLine, h.EndLine, options.ShowIndex ? h.Index : null)).ToList(),
             dropped > 0 ? dropped : null,
             dropped > 0 ? best : null,
-            options.MinScore);
+            options.MinScore,
+            gap,
+            gap is >= DecisiveGap ? $"Top hit leads the next by {gap:0.00}: read it and stop searching." : null);
     }
 
     private static string? Shape(string text, SearchOptions options)

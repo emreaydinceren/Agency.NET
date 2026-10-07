@@ -439,7 +439,7 @@ asking questions about one body of documents and want its answers ranked on thei
 | `--group-by-file` / `--per-file N` | At most the best 1 (or N) chunks of any one file, so one file cannot take the top three places. |
 | `--hybrid` | Also rank by keyword match, for questions that name a config key, analyzer id or ADR number. Chunks containing an identifier from the query are exempt from `--min-score`. It reorders the best 50 or so vector hits; it cannot find a chunk the vector search ranked far down. |
 | `--index a,b` | Search several indexes (built with the same model) and merge the hits by score; each hit names its `index`. |
-| `--min-score`, `--within`, `--no-text`, `--snippet-chars` | As in the [search threshold](#3-point-it-at-an-embeddings-endpoint) section and the skill. |
+| `--min-score`, `--within`, `--no-text`, `--snippet-chars`, `--full` | Chunk text is left out unless `--full` or `--snippet-chars` is given. As in the [search threshold](#3-point-it-at-an-embeddings-endpoint) section and the skill. |
 
 Each hit of an index built by this version carries `heading` (the Markdown heading path above the chunk, for
 example `Guide > Install`) and `start_line` / `end_line`, so an agent can open the exact section. Hits from
@@ -481,8 +481,8 @@ install.
 | What | Default location |
 | --- | --- |
 | The tool | `~/.dotnet/tools/agency-index` (Windows: `%USERPROFILE%\.dotnet\tools\agency-index.exe`); `dotnet tool list -g` shows it |
-| The skill, this repo | `<repo>/.claude/skills/agency-index/SKILL.md` |
-| The skill, all repos | `~/.claude/skills/agency-index/SKILL.md` and `~/Agents/skills/agency-index/SKILL.md` (or the `--dir` you installed with) |
+| The skill, this repo | `<repo>/.claude/skills/agency-index/SKILL.md` and `REFERENCE.md` |
+| The skill, all repos | `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`, each with `SKILL.md` and `REFERENCE.md` (or the `--dir` you installed with) |
 | Config, user | `~/.agency/indexer.json` (Windows: `C:\Users\<you>\.agency\indexer.json`) |
 | Config, repo | `<repo>/.agency-index.json`, committable; index defaults only (see [Per-repo config](#per-repo-config)) |
 | Database, SQLite (default) | `~/.agency/index.db`, plus `index.db-wal` and `index.db-shm` while it is open and `index.db.<index>.lock` while an index run holds the writer lock, all in the same folder |

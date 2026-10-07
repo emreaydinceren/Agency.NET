@@ -281,6 +281,29 @@ internal static class Doctor
                 }
             }
 
+            string[] stale = indexes.Where(i => i.Config.FormatVersion < IndexFormat.Current).Select(i => i.Index).ToArray();
+            if (stale.Length > 0)
+            {
+                checks.Add(new DoctorCheck(
+                    "index_format",
+                    false,
+                    $"{string.Join(", ", stale)} use the older chunk-level format: search still works but prints re-ranked chunk lines, not exact passages.",
+                    $"Run: agency-index index --index {stale[0]} --rebuild (re-embeds every file)."));
+            }
+
+            foreach ((string name, IndexConfig cfg) in indexes)
+            {
+                double? minScore = settings.SearchMinScore ?? cfg.Calibration?.SuggestedMinScore;
+                if (minScore is { } min && cfg.Calibration?.AnswerFloor is { } floor && min > floor)
+                {
+                    checks.Add(new DoctorCheck(
+                        "min_score",
+                        false,
+                        $"The minimum score {min:0.000} is above the answer floor {floor:0.000} measured for '{name}': real answers are being filtered out.",
+                        $"Lower Search:MinScore below {floor:0.000}, or remove it and rely on the no-match line; re-run: agency-index calibrate --index {name} --questions <file>."));
+                }
+            }
+
             string detail = string.Join("; ", indexes.Select(i => $"{i.Index} -> {i.Config.Root}"));
             checks.Add(problems.Count == 0
                 ? new DoctorCheck("indexes", true, detail)

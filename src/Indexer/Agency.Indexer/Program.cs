@@ -33,16 +33,23 @@ internal static class Program
                   (progress and each failed file with its reason go to stderr, and to --log <file> with timestamps; --dry-run reports the delta, chunk count and a time estimate without writing;
                   --exclude takes gitignore-style globs relative to the root, e.g. docs/manual-tests,**/*.draft.md; --rebuild re-embeds every file, which is how to switch embedding models;
                   paths in the result are relative to "root"; --summary prints counts instead of file lists)
-          search  --index <name>[,<name>...] --query <text> [--top 5] [--min-score 0..1] [--within 0..1] [--full] [--no-text] [--snippet-chars N]
-                  [--path <glob>] [--hybrid] [--group-by-file | --per-file N]
+          search  --index <name>[,<name>...] --query <text> [--top 4] [--per-file 2] [--lines 2] [--max-line-chars 200] [--highlight] [--vector-only] [--raw-query]
+                  [--path <glob>] [--min-score 0..1] [--within 0..1] [--log <file>]
+                  Default output (--format lines): per file, the best lines as relative/path.md:LINE: text, then "  [score 0.63, +3.1 sd] heading", and a
+                  "# top hit leads ..." / "# no clear winner ..." / "# no match above min score" line. Keyword matches of the files are fused with the vector ranking
+                  (--vector-only turns that off); words found in most files are left out of the embedded query (--raw-query keeps them).
+          search  ... --json   (or --format json) the JSON result: --top 5 --min-score --within --full --no-text --snippet-chars N --group-by-file | --per-file N --hybrid
                   --min-score (or Search:MinScore in indexer.json, or the value stored by 'calibrate --save') drops weaker hits; --within keeps hits within that distance of the best;
                   filtered hits are counted in "filtered" with the pre-filter "best_score". Text is left out unless --full (whole chunk) or --snippet-chars N is given; "hint" appears when the top hit clearly leads.
-                  --path keeps files whose path under the index root matches the glob; --hybrid also ranks by keyword match (a chunk containing an identifier from the query survives --min-score);
-                  --group-by-file keeps the best chunk of each file, --per-file N the best N. Hits carry heading, start_line and end_line when the index recorded them.
-          read    --index <name> --path <file> [--start 1] [--end <line>]
-                  Lines of an indexed file (at most 400), with "stale" set when the file changed since indexing; pair it with a hit's start_line/end_line.
-          calibrate --index <name> [--save]
+                  --hybrid also ranks by keyword match (a chunk containing an identifier from the query survives --min-score); --group-by-file keeps the best chunk of each file, --per-file N the best N.
+          read    --index <name> --path <file> [--start N] [--end N | --around LINE] [--window 40] [--all] [--json]
+          read    --hit N [...]   (the Nth file of the last search from this folder)
+                  Plain text: a "# path lines A-B of N" header (with the stale flag) then numbered lines. Without a range: the first 40 lines, or 40 around --around;
+                  --all returns the whole file; an explicit --start/--end returns at most 400 lines. --json gives the JSON form.
+          calibrate --index <name> [--questions <file>] [--save]
                   Runs unrelated queries against the index and reports the noise ceiling and a suggested min score; --save stores it so search uses it when no min score is configured.
+                  --questions takes a JSON array of {"question","expected_path"} rows and also reports the answer floor (10th percentile score of the expected files), how many
+                  answers score no better than noise, and a minimum score inside the gap, or a warning when the two overlap.
           list    --index <name> [--summary]
           indexes
           drop    --index <name> [--wait]
@@ -210,22 +217,17 @@ internal static class Program
                 }
 
             case "search":
-                return Write(ExitOk, await SearchAsync(service, settings, args, ct));
+                return await SearchCommandAsync(service, embeddings, settings, args, workingDirectory, ct);
 
             case "calibrate":
-                return Write(ExitOk, new { status = "ok", calibration = await service.CalibrateAsync(IndexName(settings), args.Flags.Contains("save"), ct) });
+                return Write(ExitOk, new { status = "ok", calibration = await service.CalibrateAsync(IndexName(settings), args.Flags.Contains("save"), ct, LoadQuestions(args.Get("questions"))) });
 
             case "list":
                 var (config, files) = await service.ListAsync(IndexName(settings), ct);
                 return Write(ExitOk, IndexOutput.Of(IndexName(settings), config, files, args.Flags.Contains("summary")));
 
             case "read":
-                return Write(ExitOk, await service.ReadAsync(
-                    IndexName(settings),
-                    args.Require("path"),
-                    args.GetPositiveInt("start", 1),
-                    args.Get("end") is null ? null : args.GetPositiveInt("end", 1),
-                    ct));
+                return await ReadCommandAsync(service, settings, args, workingDirectory, ct);
 
             case "indexes":
                 var all = await service.ListIndexesAsync(ct);
@@ -236,6 +238,157 @@ internal static class Program
                 return Write(ExitCodeFor(dropped.Status), dropped);
         }
     }
+
+    /// <summary>Runs <c>search</c>: the grep-style lines output by default, the JSON result with <c>--json</c> or <c>--format json</c>.</summary>
+    private static async Task<int> SearchCommandAsync(
+        IndexService service, IEmbeddingGenerator embeddings, IndexerSettings settings, CliArguments args, string workingDirectory, CancellationToken ct)
+    {
+        string format = args.Flags.Contains("json") ? "json" : args.Get("format") ?? "lines";
+        if (format is not ("lines" or "json"))
+        {
+            throw new UsageException($"Unknown --format '{format}'. Expected 'lines' or 'json'.");
+        }
+
+        string[] indexes = IndexNames(settings);
+        double? suggested = null;
+        foreach (string index in indexes)
+        {
+            IndexConfig config = await service.GetConfigAsync(index, ct);
+            if (config.FormatVersion < IndexFormat.Current)
+            {
+                Console.Error.WriteLine($"warning: index '{index}' uses the older chunk-level format; run 'agency-index index --index {index} --rebuild' for passage-level search.");
+            }
+
+            if (config.Calibration?.SuggestedMinScore is { } stored)
+            {
+                suggested = Math.Max(suggested ?? 0, stored);
+            }
+        }
+
+        string text;
+        double? topScore;
+        IReadOnlyList<PrintedHit> printed;
+        if (format == "json")
+        {
+            SearchResponse response = await SearchAsync(service, settings, args, ct);
+            text = Serialize(response);
+            topScore = response.Hits.Count > 0 ? response.Hits[0].Score : null;
+            printed = response.Hits.Select(h => new PrintedHit(h.Index ?? response.Index, h.Path, (int?)h.StartLine, (int?)h.EndLine)).ToList();
+        }
+        else
+        {
+            int perFile = args.Flags.Contains("group-by-file") ? 1 : args.GetPositiveInt("per-file", 2);
+            var options = new LineSearchOptions(
+                args.GetPositiveInt("top", 4),
+                perFile,
+                args.GetPositiveInt("lines", 2),
+                args.GetPositiveInt("max-line-chars", 200),
+                args.Flags.Contains("highlight"),
+                settings.SearchMinScore ?? suggested,
+                args.GetFraction("within"),
+                !args.Flags.Contains("vector-only"),
+                args.Flags.Contains("raw-query"),
+                args.Get("path"));
+            LineSearchResult result = await LineSearch.RunAsync(service, embeddings, indexes, args.Require("query"), options, ct);
+            text = result.Text;
+            topScore = result.TopScore;
+            printed = result.Hits;
+        }
+
+        Console.Out.WriteLine(text);
+        SearchSession.Save(IndexerSettings.DefaultHome, workingDirectory, printed);
+        if (args.Get("log") is { } logFile)
+        {
+            string flags = string.Join(' ', args.Options.Where(o => o.Key is not ("query" or "index" or "log")).Select(o => $"--{o.Key} {o.Value}").Concat(args.Flags.Select(f => $"--{f}")));
+            SearchSession.AppendLog(logFile, args.Require("query"), flags, text.Length, topScore);
+        }
+
+        return ExitOk;
+    }
+
+    /// <summary>Runs <c>read</c>: a plain-text window of an indexed file, or the JSON form with <c>--json</c>.</summary>
+    private static async Task<int> ReadCommandAsync(IndexService service, IndexerSettings settings, CliArguments args, string workingDirectory, CancellationToken ct)
+    {
+        string index;
+        string path;
+        int? around;
+        if (args.Get("hit") is not null)
+        {
+            int number = args.GetPositiveInt("hit", 1);
+            IReadOnlyList<PrintedHit> hits = SearchSession.Load(IndexerSettings.DefaultHome, workingDirectory)
+                ?? throw new UsageException("No previous search from this folder; run 'agency-index search' first, or pass --path.");
+            PrintedHit hit = number <= hits.Count ? hits[number - 1] : throw new UsageException($"The last search printed {hits.Count} hit(s); there is no hit {number}.");
+            (index, path, around) = (hit.Index, hit.Path, hit.StartLine);
+        }
+        else
+        {
+            (index, path) = (IndexName(settings), args.Require("path"));
+            around = args.Get("around") is null ? null : args.GetPositiveInt("around", 1);
+        }
+
+        int window = args.GetPositiveInt("window", 40);
+        bool all = args.Flags.Contains("all");
+        int start;
+        int? end;
+        if (args.Get("start") is not null || args.Get("end") is not null)
+        {
+            (start, end) = (args.GetPositiveInt("start", 1), args.Get("end") is null ? null : args.GetPositiveInt("end", 1));
+        }
+        else if (all)
+        {
+            (start, end) = (1, null);
+        }
+        else if (around is { } line)
+        {
+            start = Math.Max(1, line - (window / 2));
+            end = start + window - 1;
+        }
+        else
+        {
+            (start, end) = (1, window);
+        }
+
+        ReadResult result = await service.ReadAsync(index, path, start, end, ct, all);
+        if (args.Flags.Contains("json"))
+        {
+            return Write(ExitOk, result);
+        }
+
+        string root = (await service.GetConfigAsync(index, ct)).Root;
+        string rel = Path.GetRelativePath(root, result.Path).Replace(Path.DirectorySeparatorChar, '/');
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(System.Globalization.CultureInfo.InvariantCulture, $"# {rel} lines {result.StartLine}-{result.EndLine} of {result.TotalLines}{(result.Stale ? " [stale: the file changed since it was indexed; run 'agency-index index']" : "")}");
+        int number2 = result.StartLine;
+        foreach (string text in result.Text.Split('\n'))
+        {
+            sb.Append(number2++).Append(": ").AppendLine(text);
+        }
+
+        Console.Out.Write(sb.ToString());
+        return ExitOk;
+    }
+
+    private static List<CalibrationQuestion>? LoadQuestions(string? file)
+    {
+        if (file is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            List<QuestionRow>? rows = JsonSerializer.Deserialize<List<QuestionRow>>(File.ReadAllText(file), JsonOptions);
+            return rows is { Count: > 0 } && rows.All(r => !string.IsNullOrWhiteSpace(r.Question) && !string.IsNullOrWhiteSpace(r.ExpectedPath))
+                ? rows.Select(r => new CalibrationQuestion(r.Question!, r.ExpectedPath!)).ToList()
+                : throw new UsageException($"{file} must be a non-empty JSON array of {{\"question\", \"expected_path\"}} rows.");
+        }
+        catch (Exception ex) when (ex is IOException or JsonException)
+        {
+            throw new UsageException($"Cannot read questions from {file}: {ex.Message}");
+        }
+    }
+
+    private sealed record QuestionRow(string? Question, string? ExpectedPath);
 
     /// <summary>The candidates a grouped, merged or hybrid search retrieves, so there is something to regroup and rerank.</summary>
     private const int CandidatePool = 50;
@@ -325,7 +478,8 @@ internal static class Program
             manifest,
             new SemanticKernelTextSplitter(settings.ChunkSize, settings.ChunkOverlap),
             writerLock,
-            settings.Embedding.ModelId ?? "");
+            settings.Embedding.ModelId ?? "",
+            settings.Passage);
     }
 
     private static IReadOnlyList<string> SkillRootsFor(CliArguments args, string defaultScope) =>
@@ -360,9 +514,11 @@ internal static class Program
         _ => ExitFailure,
     };
 
+    private static string Serialize(object payload) => JsonSerializer.Serialize(payload, JsonOptions);
+
     private static int Write(int exitCode, object payload)
     {
-        Console.Out.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
+        Console.Out.WriteLine(Serialize(payload));
         return exitCode;
     }
 

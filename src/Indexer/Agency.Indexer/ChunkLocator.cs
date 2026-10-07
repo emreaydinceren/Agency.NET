@@ -50,6 +50,32 @@ internal static partial class ChunkLocator
         return result;
     }
 
+    /// <summary>The heading path in force at every line, and which lines are headings.</summary>
+    /// <param name="content">The text, with <c>\n</c> line endings.</param>
+    /// <param name="markdown">Whether to track Markdown headings.</param>
+    /// <returns>The heading path of line <c>n</c> at index <c>n - 1</c> (or <see langword="null"/>), and the 1-based heading lines.</returns>
+    internal static (string?[] PathByLine, HashSet<int> HeadingLines) Outline(string content, bool markdown)
+    {
+        List<int> lineStarts = LineStarts(content);
+        List<(int Line, int Level, string Text)> headings = markdown ? Headings(content, lineStarts) : [];
+        var paths = new string?[lineStarts.Count];
+        var stack = new List<(int Level, string Text)>();
+        int next = 0;
+        for (int line = 1; line <= lineStarts.Count; line++)
+        {
+            while (next < headings.Count && headings[next].Line <= line)
+            {
+                stack.RemoveAll(p => p.Level >= headings[next].Level);
+                stack.Add((headings[next].Level, headings[next].Text));
+                next++;
+            }
+
+            paths[line - 1] = stack.Count == 0 ? null : string.Join(" > ", stack.Select(p => p.Text));
+        }
+
+        return (paths, headings.Select(h => h.Line).ToHashSet());
+    }
+
     private static int IndexOfFrom(string content, string needle, int from)
     {
         int found = content.IndexOf(needle, from, StringComparison.Ordinal);

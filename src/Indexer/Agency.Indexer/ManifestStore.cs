@@ -9,18 +9,55 @@ namespace Agency.Indexer;
 /// <param name="EmbeddingModel">The embedding model the chunks were embedded with.</param>
 /// <param name="Excludes">Globs of files and folders left out, or <see langword="null"/> for none (also what indexes created before this existed read as).</param>
 /// <param name="Calibration">The noise floor measured by <c>calibrate --save</c>, if any.</param>
+/// <param name="FormatVersion">1 for chunk-level indexes (what indexes created before this existed read as), 2 for passage-level ones.</param>
+/// <param name="PassageLines">The most lines in a passage of a format 2 index, or 0.</param>
+/// <param name="PassageOverlap">The lines consecutive passages share in a format 2 index.</param>
+/// <param name="Noise">The score distribution of unrelated queries, measured after each index run, used to normalize scores.</param>
+/// <param name="CommonTerms">Words found in most files (a project name), left out of the embedded query.</param>
 internal sealed record IndexConfig(
     string Root,
     IReadOnlyList<string> Extensions,
     IReadOnlyList<string> Names,
     string EmbeddingModel,
     IReadOnlyList<string>? Excludes = null,
-    Calibration? Calibration = null);
+    Calibration? Calibration = null,
+    int FormatVersion = 1,
+    int PassageLines = 0,
+    int PassageOverlap = 0,
+    NoiseStats? Noise = null,
+    IReadOnlyList<string>? CommonTerms = null);
 
 /// <summary>The score threshold measured for an index.</summary>
 /// <param name="NoiseCeiling">The best score unrelated queries reached.</param>
 /// <param name="SuggestedMinScore">A threshold just above <paramref name="NoiseCeiling"/>.</param>
-internal sealed record Calibration(double NoiseCeiling, double SuggestedMinScore);
+/// <param name="AnswerFloor">The 10th percentile score of the expected pages of real questions, when <c>calibrate --questions</c> was used.</param>
+internal sealed record Calibration(double NoiseCeiling, double SuggestedMinScore, double? AnswerFloor = null);
+
+/// <summary>The best scores of unrelated queries: what "no match" looks like for this model and corpus.</summary>
+/// <param name="Mean">The mean best score.</param>
+/// <param name="StdDev">The standard deviation of the best scores.</param>
+/// <param name="Ceiling">The highest best score.</param>
+internal sealed record NoiseStats(double Mean, double StdDev, double Ceiling)
+{
+    /// <summary>The smallest deviation used, so a very tight distribution does not make every score look extreme.</summary>
+    public const double MinStdDev = 0.005;
+
+    /// <summary>How many standard deviations <paramref name="score"/> sits above the noise mean.</summary>
+    public double Normalize(double score) => (score - this.Mean) / Math.Max(this.StdDev, MinStdDev);
+}
+
+/// <summary>The index format versions.</summary>
+internal static class IndexFormat
+{
+    /// <summary>Chunk-level (the splitter's chunks).</summary>
+    public const int Chunks = 1;
+
+    /// <summary>Passage-level (a few whole lines each, embedded with their heading path).</summary>
+    public const int Passages = 2;
+
+    /// <summary>The format new and rebuilt indexes use.</summary>
+    public const int Current = Passages;
+}
 
 /// <summary>
 /// Persists index configurations and per-file manifests in an <see cref="IKVStore"/>. Each index's file

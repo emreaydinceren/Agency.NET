@@ -51,7 +51,8 @@ internal sealed record IndexDefaults(
 /// <param name="Embedding">The OpenAI-compatible embedding endpoint settings.</param>
 /// <param name="ChunkSize">Maximum tokens per chunk.</param>
 /// <param name="ChunkOverlap">Tokens shared between consecutive chunks.</param>
-internal sealed record IndexerSettings(StorageProvider Provider, string Database, EmbeddingOptions Embedding, int ChunkSize, int ChunkOverlap)
+/// <param name="Passage">How a passage-level index cuts files (<c>PassageLines</c>, <c>PassageOverlap</c>).</param>
+internal sealed record IndexerSettings(StorageProvider Provider, string Database, EmbeddingOptions Embedding, int ChunkSize, int ChunkOverlap, PassageOptions? Passage = null)
 {
     /// <summary>The prefix of the environment variables the settings are read from.</summary>
     public const string EnvironmentPrefix = "AGENCY_INDEX_";
@@ -138,12 +139,20 @@ internal sealed record IndexerSettings(StorageProvider Provider, string Database
             database,
             embedding,
             config.GetValue("ChunkSize", 512),
-            config.GetValue("ChunkOverlap", 64))
+            config.GetValue("ChunkOverlap", 64),
+            ParsePassage(config.GetValue("PassageLines", PassageOptions.Default.Lines), config.GetValue("PassageOverlap", PassageOptions.Default.Overlap)))
         {
             Defaults = ResolveDefaults(args, userFile, repo),
             SearchMinScore = ParseMinScore(config["Search:MinScore"]),
         };
     }
+
+    private static PassageOptions ParsePassage(int lines, int overlap) =>
+        lines is < 1 or > 40
+            ? throw new UsageException("PassageLines must be between 1 and 40.")
+            : overlap < 0 || overlap >= lines
+                ? throw new UsageException("PassageOverlap must be at least 0 and less than PassageLines.")
+                : new PassageOptions(lines, overlap);
 
     private static double? ParseMinScore(string? raw) =>
         string.IsNullOrWhiteSpace(raw)

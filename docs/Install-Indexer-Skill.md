@@ -308,7 +308,8 @@ agency-index search --index <repo-name> --query "how are releases published?"
 
 Name the index after the repo folder, lower-case. Index names are global to the machine: if `indexes`
 shows your name with a different `root`, another repo owns it, so pick another name (for example
-`<org>-<repo>`). A good result is `"status":"ok"` with hits whose `score` is above about 0.5.
+`<org>-<repo>`). A good result is a few `path:line: text` lines whose `[score ...]` is above about 0.5 (add `--json`
+for the JSON form).
 
 ### 5. Calibrate the search threshold (recommended)
 
@@ -321,13 +322,13 @@ unrelated queries and reports `noise_ceiling`. For a sharper number, also search
 cover, including a few plausible-sounding ones from your own stack, with the filter off:
 
 ```bash
-agency-index search --index <repo-name> --query "chocolate cake recipe" --top 1 --min-score 0 --no-text
+agency-index search --index <repo-name> --query "chocolate cake recipe" --top 1 --min-score 0 --json --no-text
 ```
 
 Record the highest `score` returned. It is the best score a hit can reach by chance.
 
-**2. Measure the real-answer floor.** Write 15-30 real questions in your own words; do not reuse the documents'
-title words. For each, note the document that should answer it. Run them with `--min-score 0 --top 5 --no-text`
+**2. Measure the real-answer floor.** (`agency-index calibrate --index <repo-name> --questions questions.json` does steps 1 and 2 and warns when they overlap; see `REFERENCE.md`. The manual procedure is below.) Write 15-30 real questions in your own words; do not reuse the documents'
+title words. For each, note the document that should answer it. Run them with `--min-score 0 --top 5 --json --no-text`
 and record the best score and whether the expected document is in the top 5.
 
 **3. Pick a threshold in the gap.** Choose a value above the noise ceiling and below the real-answer floor, and

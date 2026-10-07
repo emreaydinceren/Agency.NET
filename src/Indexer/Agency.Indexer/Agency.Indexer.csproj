@@ -37,6 +37,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="SKILL.md" LogicalName="SKILL.md" />
+    <EmbeddedResource Include="REFERENCE.md" LogicalName="REFERENCE.md" />
     <InternalsVisibleTo Include="Agency.Indexer.Test" />
   </ItemGroup>
 

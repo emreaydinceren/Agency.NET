@@ -11,7 +11,7 @@ changed, and answers queries with JSON.
 dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 ```
 
-`install-skill` writes the bundled `SKILL.md` to `~/.claude/skills/agency-index/` (Claude Code) and
+`install-skill` writes the bundled `SKILL.md` and `REFERENCE.md` to `~/.claude/skills/agency-index/` (Claude Code) and
 `~/Agents/skills/agency-index/` (Agency harness); pass `--dir <skills-root>` to choose another location.
 
 ## Use
@@ -21,7 +21,10 @@ agency-index index  --index docs --root ./docs
 agency-index search --index docs --query "how are releases published?"
 ```
 
-See `SKILL.md` for the full command reference, exit codes and configuration.
+Search is compact (paths, headings and line spans, no text); fetch a span with
+`agency-index read --index docs --path <file> --start <start_line> --end <end_line>`.
+See `REFERENCE.md` for the full command reference, exit codes and configuration, and `SKILL.md` for the
+short agent entry point.
 
 ## How it works
 

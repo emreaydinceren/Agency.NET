@@ -4,7 +4,7 @@
 
 `Agency.Indexer` is the `agency-index` command-line tool: incremental semantic indexing of a folder of
 documentation for agents. It ships as a .NET global tool (package `AgencyDotNet.Indexer`) with an embedded
-agent skill (`SKILL.md`). An agent indexes a directory under a name, re-runs the index whenever it likes
+agent skill (`SKILL.md` plus an on-demand `REFERENCE.md`). An agent indexes a directory under a name, re-runs the index whenever it likes
 (only added, changed or deleted files are processed), and searches it; every command prints one JSON
 object to stdout.
 
@@ -16,7 +16,7 @@ object to stdout.
 dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 ```
 
-`install-skill` writes `SKILL.md` to `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`
+`install-skill` writes `SKILL.md` and `REFERENCE.md` to `~/.claude/skills/agency-index/` and `~/Agents/skills/agency-index/`
 (or `--dir <skills-root>`). Until a clean (non-`-g<sha>`) version is published to nuget.org, add
 `--prerelease` to the install.
 
@@ -25,7 +25,8 @@ dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 | Command | Purpose |
 |---|---|
 | `index --index <name> [--root <dir>] [--ext ...] [--names ...] [--max-file-kb N] [--wait]` | Create or refresh an index. `--root` is required on the first run and fixed afterwards. |
-| `search --index <name> --query <text> [--top N]` | Semantic search; hits carry `path`, `chunk`, `score` (cosine similarity) and `text`. |
+| `search --index <name> --query <text> [--top N] [--full]` | Semantic search. Compact by default: `best_score`, `top_gap`, an optional `hint` when the top hit clearly leads, and hits with `path`, `chunk`, `score`, `heading`, `start_line`, `end_line` (no `text`; `--full` adds it). |
+| `read --index <name> --path <file> [--start N] [--end N]` | Lines of an indexed file (at most 400), with `stale` set when the file changed since indexing. Pairs with the line span of a search hit. |
 | `list --index <name>` | The index configuration and every indexed file with size, last-write time and chunk count. |
 | `indexes` | Every index and its root. |
 | `drop --index <name> [--wait]` | Delete the index's chunks, manifest and configuration. |
@@ -50,7 +51,11 @@ Configuration (highest precedence first): command-line options, `AGENCY_INDEX_*`
    chunked with [Agency.Ingestion.SemanticKernel](Agency.Ingestion.SemanticKernel.md), and written with
    `IVectorStore.ReplaceDocumentAsync` ([Agency.VectorStore.Common](Agency.VectorStore.Common.md)) — one
    embedding batch per file, stale chunks removed. Its manifest entry is saved afterwards, so a crash
-   between the two just re-indexes that file next run. Removed files are replaced with no chunks.
+   between the two just re-indexes that file next run. Removed files are replaced with no chunks. Each chunk
+   also stores its nearest Markdown heading and 1-based line span, recovered by `ChunkLocator` (the splitter
+   reports no offsets, so chunks are matched as whitespace-normalized substrings; an unmatched chunk and every
+   HTML chunk, whose text differs from the file, get no span). Files indexed before this was added keep their
+   old chunks until they change; drop and re-index to refresh them.
 4. **Storage** — every index is a vector-store project owned by the user `agency-index`. The manifest and
    index configuration live in an [`IKVStore`](Agency.KeyValueStore.Common.md): file entries under the
    session `files:<index>` keyed by full path, configurations under the session `indexes`.
@@ -80,6 +85,10 @@ or blocks with `--wait`.
 
 - A skill plus a CLI instead of an MCP server: each command is a short-lived process with JSON on stdout,
   which avoids stdio-protocol logging pitfalls and tool-call timeouts on long index runs.
+- Search is compact by default because chunk text dominated the token cost of a call; the agent reads only
+  the span it needs with `read`. The `hint` threshold (`SearchGuidance.DecisiveGap`, 0.08) is a heuristic
+  not tuned per embedding model. There is no chunk-by-id read: `IVectorStore` has no get-by-key, and the
+  line span addresses the same text.
 - An index is tied to its root and embedding model; changing either is a usage error (drop and rebuild).
   Narrowing `--ext`/`--names` is allowed and removes files that no longer match.
 - Searches pass a non-null session id so both backends restrict results to the index's project (the

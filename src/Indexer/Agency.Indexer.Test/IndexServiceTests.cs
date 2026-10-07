@@ -126,6 +126,59 @@ public sealed class IndexServiceTests : IDisposable
         Assert.Equal("Database backups run nightly.", htmlHits[0].Text);
     }
 
+    /// <summary>Verifies that markdown hits carry the heading and line span, and HTML hits carry neither.</summary>
+    [Fact]
+    public async Task SearchAsync_ReportsHeadingAndLineSpan_ForMarkdownOnly()
+    {
+        string body = string.Join("\n\n", Enumerable.Range(0, 20).Select(i => i == 19 ? "Tag the commit and push the tag to publish a release." : $"Filler paragraph {i} about unrelated gardening topics."));
+        this.WriteDoc("guide.md", $"# Guide\n\nintro\n\n## Releases\n\n{body}\n");
+        this.WriteDoc("page.html", "<html><body><p>Database backups run nightly.</p></body></html>");
+        IndexService service = await Services.SqliteAsync(this._database, this._embeddings);
+        await service.IndexAsync(Request(root: this._docs), Ct);
+
+        SearchResultHit md = (await service.SearchAsync("docs", "publish a release tag", 1, Ct))[0];
+        SearchResultHit html = (await service.SearchAsync("docs", "database backups nightly", 1, Ct))[0];
+
+        Assert.Equal("Releases", md.Heading);
+        Assert.Equal(45, md.EndLine);
+        Assert.InRange(md.StartLine!.Value, 7, 45);
+        Assert.Null(html.Heading);
+        Assert.Null(html.StartLine);
+    }
+
+    /// <summary>Verifies that read returns the requested lines, clamps the end, and flags a changed file as stale.</summary>
+    [Fact]
+    public async Task ReadAsync_ReturnsLineRange_AndFlagsStaleFiles()
+    {
+        string path = this.WriteDoc("notes.md", "one\ntwo\nthree\nfour");
+        IndexService service = await Services.SqliteAsync(this._database, this._embeddings);
+        await service.IndexAsync(Request(root: this._docs), Ct);
+
+        ReadResult middle = await service.ReadAsync("docs", path, 2, 3, Ct);
+        ReadResult clamped = await service.ReadAsync("docs", path, 3, 99, Ct);
+        this.WriteDoc("notes.md", "one\ntwo\nthree\nfour\nfive", touchSeconds: 9);
+        ReadResult stale = await service.ReadAsync("docs", path, 1, 1, Ct);
+
+        Assert.Equal("two\nthree", middle.Text);
+        Assert.False(middle.Stale);
+        Assert.Equal((3, 4, "three\nfour"), (clamped.StartLine, clamped.EndLine, clamped.Text));
+        Assert.True(stale.Stale);
+    }
+
+    /// <summary>Verifies that read refuses files outside the index and ranges outside the file.</summary>
+    [Fact]
+    public async Task ReadAsync_InvalidRequests_ThrowUsageException()
+    {
+        string path = this.WriteDoc("notes.md", "one\ntwo");
+        string outside = this._dir.Write("secret.txt", "nope");
+        IndexService service = await Services.SqliteAsync(this._database, this._embeddings);
+        await service.IndexAsync(Request(root: this._docs), Ct);
+
+        await Assert.ThrowsAsync<UsageException>(() => service.ReadAsync("docs", outside, 1, 1, Ct));
+        await Assert.ThrowsAsync<UsageException>(() => service.ReadAsync("docs", path, 5, 6, Ct));
+        await Assert.ThrowsAsync<UsageException>(() => service.ReadAsync("missing", path, 1, 1, Ct));
+    }
+
     /// <summary>Verifies that narrowing the extension selection removes files that no longer match.</summary>
     [Fact]
     public async Task IndexAsync_ExtensionSelectionNarrowed_RemovesUnselectedFiles()

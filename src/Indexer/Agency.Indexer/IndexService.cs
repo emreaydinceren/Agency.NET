@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Serialization;
 using Agency.Ingestion;
 using Agency.VectorStore.Common;
 
@@ -49,8 +50,27 @@ internal sealed record IndexResult(
 /// <param name="Path">The full path of the source file.</param>
 /// <param name="Chunk">The chunk index within the file.</param>
 /// <param name="Score">Cosine similarity in [0, 1]; higher is closer.</param>
-/// <param name="Text">The chunk text.</param>
-internal sealed record SearchResultHit(string Path, long? Chunk, double Score, string Text);
+/// <param name="Heading">The nearest Markdown heading above the chunk, when known.</param>
+/// <param name="StartLine">The 1-based first line of the chunk in the file, when known.</param>
+/// <param name="EndLine">The 1-based last line of the chunk in the file, when known.</param>
+/// <param name="Text">The chunk text; <see langword="null"/> in compact output.</param>
+internal sealed record SearchResultHit(
+    string Path,
+    long? Chunk,
+    double Score,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? StartLine,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? EndLine,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text);
+
+/// <summary>A line range read from an indexed file.</summary>
+/// <param name="Path">The full path of the file.</param>
+/// <param name="StartLine">The 1-based first line returned.</param>
+/// <param name="EndLine">The 1-based last line returned.</param>
+/// <param name="TotalLines">The number of lines in the file.</param>
+/// <param name="Stale">Whether the file changed since it was indexed, so line numbers from search may have drifted.</param>
+/// <param name="Text">The requested lines.</param>
+internal sealed record ReadResult(string Path, int StartLine, int EndLine, int TotalLines, bool Stale, string Text);
 
 /// <summary>Result of a <c>drop</c> run.</summary>
 internal sealed record DropResult(IndexStatus Status, string Index, int ChunksDeleted);
@@ -75,6 +95,9 @@ internal sealed class IndexService(
     /// requested projects on both backends (Postgres reads a null session as "every session and project").
     /// </summary>
     private const string SearchSession = "agency-index";
+
+    /// <summary>The most lines one <see cref="ReadAsync"/> call returns.</summary>
+    public const int MaxReadLines = 400;
 
     private static readonly TimeSpan LockPollInterval = TimeSpan.FromSeconds(1);
 
@@ -145,7 +168,37 @@ internal sealed class IndexService(
             h.Metadata?.GetValueOrDefault("source_file") as string ?? h.Key,
             h.Metadata?.GetValueOrDefault("chunk_index") as long?,
             Math.Round(Math.Max(0, 1.0 - h.Distance), 4),
+            h.Metadata?.GetValueOrDefault("heading") as string,
+            h.Metadata?.GetValueOrDefault("start_line") as long?,
+            h.Metadata?.GetValueOrDefault("end_line") as long?,
             h.Value)).ToList();
+    }
+
+    /// <summary>
+    /// Returns lines <paramref name="start"/> to <paramref name="end"/> (at most <see cref="MaxReadLines"/>) of
+    /// <paramref name="path"/>, which must be a file of <paramref name="index"/>.
+    /// </summary>
+    public async Task<ReadResult> ReadAsync(string index, string path, int start, int? end, CancellationToken ct)
+    {
+        IndexConfig config = await manifest.GetConfigAsync(index, ct) ?? throw new UsageException($"Index '{index}' does not exist.");
+        string full = Path.GetFullPath(path, config.Root);
+        ManifestEntry entry = (await manifest.GetEntriesAsync(index, ct)).FirstOrDefault(e => string.Equals(e.Path, full, StringComparison.Ordinal))
+            ?? throw new UsageException($"'{path}' is not a file of index '{index}'. Use a path from search or list.");
+
+        string[] lines = (await File.ReadAllTextAsync(full, ct)).ReplaceLineEndings("\n").Split('\n');
+        int last = Math.Min(Math.Min(end ?? int.MaxValue, start + MaxReadLines - 1), lines.Length);
+        if (start > lines.Length || last < start)
+        {
+            throw new UsageException($"Line range {start}-{end} is outside '{path}', which has {lines.Length} lines.");
+        }
+
+        return new ReadResult(
+            full,
+            start,
+            last,
+            lines.Length,
+            new FileInfo(full).LastWriteTimeUtc.Ticks != entry.LastWriteTicks,
+            string.Join('\n', lines[(start - 1)..last]));
     }
 
     /// <summary>Returns the configuration and manifest of <paramref name="index"/>.</summary>
@@ -243,11 +296,30 @@ internal sealed class IndexService(
             ["file_extension"] = extension,
         });
 
-        List<DocumentChunk<string>> chunks = splitter.Split(document)
-            .Select((chunk, i) => new DocumentChunk<string>(
-                $"{file.Path}:chunk:{i}",
-                chunk.Content,
-                new Dictionary<string, object>(chunk.Metadata ?? [], StringComparer.Ordinal) { ["chunk_index"] = i }))
+        List<Document> pieces = splitter.Split(document).ToList();
+
+        // HTML is searched as extracted text, so its line numbers would not match the file on disk.
+        IReadOnlyList<ChunkSpan> spans = extension is ".html" or ".htm"
+            ? pieces.Select(_ => new ChunkSpan(null, null, null)).ToList()
+            : ChunkLocator.Locate(content, pieces.Select(p => p.Content).ToList(), extension is ".md" or ".markdown" or ".mdx");
+
+        List<DocumentChunk<string>> chunks = pieces
+            .Select((chunk, i) =>
+            {
+                var metadata = new Dictionary<string, object>(chunk.Metadata ?? [], StringComparer.Ordinal) { ["chunk_index"] = i };
+                if (spans[i].Heading is { } heading)
+                {
+                    metadata["heading"] = heading;
+                }
+
+                if (spans[i].StartLine is { } startLine && spans[i].EndLine is { } endLine)
+                {
+                    metadata["start_line"] = startLine;
+                    metadata["end_line"] = endLine;
+                }
+
+                return new DocumentChunk<string>($"{file.Path}:chunk:{i}", chunk.Content, metadata);
+            })
             .ToList();
 
         await vectorStore.ReplaceDocumentAsync(UserId, null, file.Path, chunks, index, ct);

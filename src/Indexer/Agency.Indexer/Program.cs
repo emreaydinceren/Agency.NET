@@ -30,7 +30,8 @@ internal static class Program
 
         Commands:
           index   --index <name> [--root <dir>] [--ext .md,.txt,...] [--names README,...] [--max-file-kb 1024] [--wait]
-          search  --index <name> --query <text> [--top 5]
+          search  --index <name> --query <text> [--top 5] [--full]
+          read    --index <name> --path <file> [--start 1] [--end <line>]
           list    --index <name>
           indexes
           drop    --index <name> [--wait]
@@ -97,7 +98,7 @@ internal static class Program
                     : SkillInstaller.DefaultRoots(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
                 return Write(ExitOk, new { status = "ok", installed = await SkillInstaller.InstallAsync(roots, ct) });
 
-            case "index" or "search" or "list" or "indexes" or "drop":
+            case "index" or "search" or "read" or "list" or "indexes" or "drop":
                 break;
 
             default:
@@ -131,7 +132,23 @@ internal static class Program
 
             case "search":
                 IReadOnlyList<SearchResultHit> hits = await service.SearchAsync(IndexName(args), args.Require("query"), args.GetPositiveInt("top", 5), ct);
-                return Write(ExitOk, new { status = "ok", index = IndexName(args), hits });
+                var (best, gap) = SearchGuidance.Summarize(hits);
+                bool full = args.Flags.Contains("full");
+                return Write(ExitOk, new SearchResponse(
+                    "ok",
+                    IndexName(args),
+                    best,
+                    gap,
+                    SearchGuidance.Hint(gap),
+                    full ? hits : hits.Select(h => h with { Text = null }).ToList()));
+
+            case "read":
+                return Write(ExitOk, await service.ReadAsync(
+                    IndexName(args),
+                    args.Require("path"),
+                    args.GetPositiveInt("start", 1),
+                    args.Get("end") is null ? null : args.GetPositiveInt("end", 1),
+                    ct));
 
             case "list":
                 var (config, files) = await service.ListAsync(IndexName(args), ct);

@@ -3,7 +3,7 @@
 A .NET global tool that gives agents incremental semantic search over a folder of documentation.
 It indexes text files (Markdown, plain text, reStructuredText, AsciiDoc, HTML) into SQLite or
 PostgreSQL/pgvector through `IVectorStore`, re-embedding only files whose size or modification time
-changed, and answers queries with JSON.
+changed, and answers queries with grep-style `path:line: text` lines (or JSON with `--json`).
 
 ## Install
 

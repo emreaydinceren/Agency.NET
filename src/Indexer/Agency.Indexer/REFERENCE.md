@@ -4,7 +4,8 @@ The short entry point is `SKILL.md`; this is the full detail, loaded on demand.
 
 `agency-index` keeps a named **index** of a directory's text documents and answers semantic queries
 against it. Every command prints a single JSON object on stdout, including failures
-(`{"status":"error","message":"..."}`); use the exit code to decide what to do with it.
+(`{"status":"error","message":"..."}`), except `search` and `read`, which print plain text (add `--json` for
+JSON); use the exit code to decide what to do with it.
 
 ## Prerequisites — check before relying on it
 
@@ -70,66 +71,76 @@ in one hop, search. Roughly 30+ documents is where search starts paying for itse
 2. **Search.**
 
    ```bash
-   agency-index search --index <name> --query "how are releases published?" --top 5
+   agency-index search --index <name> --query "how are releases published?"
    ```
 
-   `--top` defaults to 5. Output:
+   Default output (`--format lines`) is grep-shaped: per file, the lines closest to the question as
+   `path:line: text` (paths relative to the index root, `/` separators, true line numbers), then one summary line, then
+   a verdict:
 
-   ```json
-   {"status":"ok","index":"billing-api","hits":[{"path":"/work/billing-api/docs/releases.md","chunk":2,"score":0.7657,"heading":"Releases > Publishing","start_line":41,"end_line":58},{"path":"/work/billing-api/docs/ci.md","chunk":0,"score":0.6012}],"top_gap":0.1645,"hint":"Top hit leads the next by 0.16: read it and stop searching."}
+   ```text
+   adr/0015-adapter-change.md:29: Changing the Adapter clears both Model and Effort, and says so inline.
+     [score 0.63, +3.1 sd] Adapters > Consequences
+   Huddle.UserGuide.md:352: messages already posted keep the old name, because the transcript records what
+     [score 0.60, +2.4 sd] Renaming a Teammate
+   # top hit leads by 0.03; read it and stop
    ```
 
-   Each hit has an absolute `path`, the `chunk` number within that file, a `score` (cosine similarity,
-   higher is better) and, for indexes built by this version, the `heading` path and the
-   `start_line`/`end_line` of the section in the file. **Passage text is left out by default** to keep the
-   call cheap: fetch the span with `read` (below), or add `--full` (whole chunk) or `--snippet-chars <N>`.
+   - `[score s, +z sd]`: `s` is the cosine similarity of the file's best passage; `z` is how many standard deviations
+     it sits above the best scores of unrelated queries against this index (measured after every `index` run, so
+     scores are comparable across queries and indexes). The heading path of the passage follows.
+   - Last line, one of: `# top hit leads by X; read it and stop` (the top file leads the next one by at least 1.5
+     noise standard deviations, or 0.03 when the index has no noise statistics: a heuristic, not tuned per model),
+     `# no clear winner; reword or open two`, or `# no match above min score (0.54)`. The last means nothing cleared
+     the minimum (`Search:MinScore`, `--min-score`, a calibrated value, or else the noise ceiling): the topic is not
+     in the docs. Exit code is 0 in all three cases.
+   - `# ignored words common to every page: huddle` means words found in at least 75% of the files were left out of the
+     embedded query, so a project name does not lift every score. `--raw-query` embeds the query as typed.
+   - Retrieval fuses the vector ranking with a keyword (BM25) ranking of the files, reciprocal-rank fusion, so an
+     exact term (`LibraryPathResolver`, `sprints.md`) is found even when the embedding drifted; a query word that looks
+     like an identifier counts as one more first-place vote. `--vector-only` turns the keyword side off.
+   - Which lines: the passages of the best files are cut into lines and the lines are embedded in one batch call
+     (plus one more call for keyword-only passages), so the printed lines are the semantically closest ones.
 
-   `top_gap` is the top hit's lead over the second; `hint` appears only when that lead is 0.08 or more (a
-   heuristic, not tuned per embedding model) and means the top hit is very likely the answer: read it and stop.
+   Options:
 
-   **Read just the span:**
+   - `--top <N>` files (default 4), `--per-file <N>` passages considered per file (default 2, `--group-by-file` is 1),
+     `--lines <N>` printed per file (default 2), `--max-line-chars <N>` (default 200), `--highlight` (marks query words
+     with `**`; off by default to save characters).
+   - `--path <glob>`: only files whose path under the index root matches (`--path adr`).
+   - `--min-score <0..1>` and `--within <0..1>` as before.
+   - `--index a,b`: search several indexes (same embedding model); paths are then prefixed `index:`.
+   - `--log <file>`: append one JSON line per search (`time`, `query`, `flags`, `chars`, `top_score`), so a benchmark can
+     count calls and payload.
+
+   **JSON output** (`--json` or `--format json`) is the schema of 0.1.221, unchanged: `hits` with `path`, `chunk`,
+   `score`, `heading`, `start_line`, `end_line` (`text` with `--full` or `--snippet-chars <N>`), `top_gap`, `hint`,
+   `filtered`/`best_score`. Its options: `--top` (default 5), `--min-score`, `--within`, `--full`, `--no-text`,
+   `--snippet-chars`, `--path`, `--group-by-file`/`--per-file`, `--hybrid` (rerank the vector candidates by keyword
+   match; identifiers are exempt from `--min-score`), `--index a,b`.
+
+   **Read:**
 
    ```bash
-   agency-index read --index <name> --path <path> --start <start_line> --end <end_line>
+   agency-index read --hit 1                          # the first file block of the last search in this folder
+   agency-index read --index <name> --path <path> --around <line>
+   agency-index read --index <name> --path <path> --start <line> --end <line>
    ```
 
-   Returns `path`, `start_line`, `end_line`, `total_lines`, `stale` and `text` (at most 400 lines per call).
-   `path` must be a file of the index, absolute or relative to its root. `stale: true` means the file changed
-   since it was indexed, so line numbers from search may have drifted: re-run `index`. A hit without
-   `start_line` comes from an older index or an HTML file: read the file instead.
+   Plain text: a header `# path lines 10-49 of 321` (plus `[stale: ...]` when the file changed since indexing, so line
+   numbers may have drifted: re-run `index`), then `N: text` lines. Without a range you get the first 40 lines; with
+   `--around LINE` (or `--hit`) 40 lines centred on it; `--window N` changes 40; `--all` returns the whole file;
+   `--start/--end` returns that range (at most 400 lines). `--json` gives `path`, `start_line`, `end_line`,
+   `total_lines`, `stale`, `text`. `path` must be a file of the index, absolute or relative to its root. The last
+   search is remembered per working folder in `~/.agency/last-search/`.
 
-   **Scores depend on the embedding model, so there is no built-in cutoff.** With
-   `text-embedding-qwen3-embedding-0.6b`, real answers score about 0.55–0.75 but an unrelated query still
-   tops out near 0.5. If `Search.MinScore` is configured (or you pass `--min-score`), weaker hits are
-   already removed. When that leaves nothing, the result is not an error:
-
-   ```json
-   {"status":"ok","index":"billing-api","hits":[],"filtered":5,"best_score":0.5138}
-   ```
-
-   Nothing relevant is in the docs: fall back to grep. `filtered` (how many hits were dropped) and
-   `best_score` (the top score before filtering) appear whenever hits were dropped. With no threshold
-   configured, treat a top score near the model's noise floor (see the table under
-   [Configuration](#configuration)) as "not in the docs".
-
-   Keep the output small with these options (flags, not config):
-
-   - `--min-score <0..1>`: drop hits below this score; overrides `Search.MinScore`.
-   - `--within <0..1>`: keep only hits within this distance of the best score (for example `--within 0.05`);
-     needs no per-model calibration.
-   - `--full`: include each hit's whole chunk text (the default leaves it out; `--no-text` is accepted and is the default).
-   - `--snippet-chars <N>`: include each hit's text, cut to at most N characters.
-   - `--path <glob>`: only files whose path under the index root matches (`--path adr`).
-   - `--group-by-file` / `--per-file <N>`: at most 1 (or N) hits per file, so one file does not take the top places.
-   - `--hybrid`: also rank by keyword match; use it when the question names a config key, analyzer id or ADR
-     number. Chunks containing such an identifier from the query are exempt from `--min-score`.
-   - `--index a,b`: search several indexes at once and merge by score.
-   - `agency-index calibrate --index <name> --save` measures the noise ceiling of unrelated queries and stores a
-     suggested minimum score that `search` then uses when none is configured.
+   **Scores depend on the embedding model**, so there is no built-in cutoff beyond the noise ceiling. With
+   `text-embedding-qwen3-embedding-0.6b`, real answers score about 0.55-0.75 but an unrelated query still tops out near
+   0.5. Real answers to everyday-word questions can sit only a little above that, so a hand-picked `Search:MinScore`
+   can hide a correct page: measure it with `calibrate --questions` (see [Configuration](#configuration)).
 
    - Phrase the query as a natural-language question, not keywords.
-   - Use `read` on the hit's `start_line`/`end_line` for the passage; open the whole file only if you need more.
-   - If the hits don't answer the question, rephrase once, then fall back to grep. Don't keep re-querying.
+   - If the lines don't answer the question, rephrase once, then fall back to grep. Don't keep re-querying.
 
 3. **Inspect / clean up** (no embedding endpoint needed):
 
@@ -224,8 +235,20 @@ the index.
 | `text-embedding-3-small` (OpenAI) | 1536 | not measured |
 
 `Search.MinScore` (`AGENCY_INDEX_Search__MinScore`, or `--min-score`) drops hits below a score. It has no
-default because scores depend on the model; run `agency-index calibrate --index <name>` (it searches twelve
-unrelated queries and suggests a value just above the best score; `--save` keeps it with the index). It is a user-level setting: a repo's `.agency-index.json` cannot set it.
+default because scores depend on the model. **Calibration:** `agency-index calibrate --index <name>` searches twelve
+unrelated queries and reports the noise ceiling and a suggestion just above it. That is a guess from unrelated
+queries only, and it can sit above the score of a correct page. Give it real questions instead:
+
+```bash
+agency-index calibrate --index <name> --questions questions.json [--save]
+# questions.json: [{"question": "After I relabel a coworker, where do its earlier exchanges end up?", "expected_path": "adr/0011-a-rename.md"}]
+```
+
+It reports `noise_ceiling`, `answer_floor` (10th percentile score of the expected files), `answers_at_or_below_ceiling`,
+`missed` (expected file not in the best 200 hits) and a `suggested_min_score` halfway through the gap, or a `warning`
+when the two overlap, in which case no threshold is suggested or saved: rely on the normalized score and the `# no match`
+line. `--save` stores the noise statistics and, when there is a gap, the threshold and answer floor; `doctor` warns when
+a configured minimum score is above the saved answer floor. It is a user-level setting: a repo's `.agency-index.json` cannot set it.
 
 - `Provider` is `sqlite` (default, database at `~/.agency/index.db`) or `postgres` (requires a server with the
   pgvector extension). For PostgreSQL the connection string contains the password, so it is a secret like the API
@@ -239,6 +262,14 @@ unrelated queries and suggests a value just above the best score; `--save` keeps
   Paths above use POSIX style; on Windows use e.g. `C:\Users\me\.agency\index.db` (Git Bash still
   resolves `~/.agency`). If `agency-index` is "not found" right after installing, add
   `~/.dotnet/tools` (Windows: `%USERPROFILE%\.dotnet\tools`) to `PATH`.
+- **Index format.** New and rebuilt indexes are *passage-level* (format 2): each file is cut into passages of at most
+  `PassageLines` (default 6) non-blank lines, `PassageOverlap` (default 1) lines shared with the next, never across a
+  Markdown heading, each embedded together with its heading path and stored with its exact line range. Set them in
+  `indexer.json` (`"PassageLines"`, `"PassageOverlap"`); changing them is refused until `index --rebuild`. An index
+  built before this (format 1, chunk-level) keeps working and is refreshed in its own format; `search` prints a
+  `warning:` on stderr and re-ranks the lines of the chunks at query time, and `doctor` reports `index_format`. Passages
+  multiply the chunk count by roughly four to six, so a first index and the database are that much bigger and slower;
+  refreshes only touch changed files. HTML files keep the splitter's chunks (no line numbers).
 - Any OpenAI-compatible embeddings endpoint works (OpenAI, OpenRouter, LM Studio, Ollama's `/v1`, ...).
 - **The API key is a secret: keep it in the environment, never in `indexer.json` or on a command line.**
   Local servers need none. Hosted ones read `OPENAI_API_KEY` (api.openai.com) or `OPENROUTER_API_KEY`

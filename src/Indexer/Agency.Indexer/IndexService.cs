@@ -105,7 +105,28 @@ internal sealed record SearchResultHit(
 /// <param name="NoiseMean">The mean best score of the unrelated queries.</param>
 /// <param name="SuggestedMinScore">A threshold just above the noise ceiling.</param>
 /// <param name="Saved">Whether the suggestion was stored in the index's configuration.</param>
-internal sealed record CalibrationResult(string Index, int Probes, double NoiseCeiling, double NoiseMean, double SuggestedMinScore, bool Saved);
+/// <param name="Questions">With <c>--questions</c>: how many real questions were run.</param>
+/// <param name="Missed">With <c>--questions</c>: questions whose expected file was not among the best 200 hits.</param>
+/// <param name="AnswerFloor">With <c>--questions</c>: the 10th percentile score of the expected files.</param>
+/// <param name="AnswersAtOrBelowCeiling">With <c>--questions</c>: expected files that scored no better than noise (found ones plus the missed).</param>
+/// <param name="Warning">With <c>--questions</c>: set when the answers and the noise overlap, so no threshold separates them.</param>
+internal sealed record CalibrationResult(
+    string Index,
+    int Probes,
+    double NoiseCeiling,
+    double NoiseMean,
+    double SuggestedMinScore,
+    bool Saved,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? Questions = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? Missed = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double? AnswerFloor = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? AnswersAtOrBelowCeiling = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Warning = null);
+
+/// <summary>A real question and the file that answers it, for <c>calibrate --questions</c>.</summary>
+/// <param name="Question">The question as a user would ask it.</param>
+/// <param name="ExpectedPath">The answering file, absolute or relative to the index root.</param>
+internal sealed record CalibrationQuestion(string Question, string ExpectedPath);
 
 /// <summary>A line range read from an indexed file.</summary>
 /// <param name="Path">The full path of the file.</param>
@@ -129,8 +150,11 @@ internal sealed class IndexService(
     ManifestStore manifest,
     ITextSplitter splitter,
     IWriterLock writerLock,
-    string embeddingModel)
+    string embeddingModel,
+    PassageOptions? passage = null)
 {
+    private readonly PassageOptions _passage = passage ?? PassageOptions.Default;
+
     /// <summary>The store user every index belongs to, keeping indexer data apart from other Agency users.</summary>
     public const string UserId = "agency-index";
 
@@ -155,6 +179,12 @@ internal sealed class IndexService(
 
     /// <summary>How far above the noise ceiling a suggested threshold sits.</summary>
     private const double CalibrationMargin = 0.03;
+
+    /// <summary>How many hits <c>calibrate --questions</c> looks through for each question's expected file.</summary>
+    private const int AnswerPool = 200;
+
+    /// <summary>The least distance between the answer floor and the noise ceiling for which a threshold is suggested.</summary>
+    private const double MinAnswerGap = 0.02;
 
     /// <summary>Probe queries about nothing a documentation set would cover; the best score any of them reaches is the noise floor.</summary>
     private static readonly string[] CalibrationProbes =
@@ -216,7 +246,7 @@ internal sealed class IndexService(
         {
             try
             {
-                chunked.Add((file, await this.ChunkFileAsync(file, ct)));
+                chunked.Add((file, await this.ChunkFileAsync(file, config, ct)));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -271,6 +301,11 @@ internal sealed class IndexService(
             await manifest.DeleteEntryAsync(request.Index, path, ct);
         }
 
+        if (failed.Count == 0 && (toIndex.Count > 0 || plan.Removed.Count > 0 || config.Noise is null))
+        {
+            await this.RefreshStatisticsAsync(request.Index, scan.Files, ct);
+        }
+
         var failedPaths = failed.Select(f => f.Path).ToHashSet(StringComparer.Ordinal);
         return new IndexResult(
             failed.Count == 0 ? IndexStatus.Ok : IndexStatus.PartialFailure,
@@ -303,7 +338,7 @@ internal sealed class IndexService(
         var allChunks = new List<string>();
         foreach (ScannedFile file in plan.Added.Concat(plan.Changed))
         {
-            allChunks.AddRange((await this.ChunkFileAsync(file, ct)).Select(c => c.Value));
+            allChunks.AddRange((await this.ChunkFileAsync(file, config, ct)).Select(c => c.Value));
         }
 
         int estimatedChunks = allChunks.Count;
@@ -388,7 +423,68 @@ internal sealed class IndexService(
     /// <param name="index">The index to probe.</param>
     /// <param name="save">Whether to store the suggested threshold so <c>search</c> uses it when none is configured.</param>
     /// <param name="ct">Cancellation.</param>
-    public async Task<CalibrationResult> CalibrateAsync(string index, bool save, CancellationToken ct)
+    /// <param name="questions">Real questions with their expected files, to measure the answer floor against the noise ceiling.</param>
+    public async Task<CalibrationResult> CalibrateAsync(string index, bool save, CancellationToken ct, IReadOnlyList<CalibrationQuestion>? questions = null)
+    {
+        NoiseStats noise = await this.MeasureNoiseAsync(index, ct) ?? throw new UsageException($"Index '{index}' has no chunks to calibrate against.");
+        double ceiling = noise.Ceiling;
+        double suggested = Math.Min(0.99, Math.Round(ceiling + CalibrationMargin, 2));
+        int? missed = null;
+        double? floor = null;
+        int? atOrBelow = null;
+        string? warning = null;
+        if (questions is { Count: > 0 })
+        {
+            IndexConfig current = (await manifest.GetConfigAsync(index, ct))!;
+            var found = new List<double>();
+            int misses = 0;
+            foreach (CalibrationQuestion question in questions)
+            {
+                string expected = Path.GetFullPath(question.ExpectedPath, current.Root);
+                IReadOnlyList<SearchResultHit> hits = await this.SearchAsync(index, question.Question, AnswerPool, ct);
+                SearchResultHit? hit = hits.FirstOrDefault(h => string.Equals(h.Path, expected, StringComparison.Ordinal));
+                if (hit is null)
+                {
+                    misses++;
+                }
+                else
+                {
+                    found.Add(hit.Score);
+                }
+            }
+
+            missed = misses;
+            if (found.Count > 0)
+            {
+                found.Sort();
+                floor = found[(int)Math.Floor(0.1 * (found.Count - 1))];
+            }
+
+            atOrBelow = found.Count(s => s <= ceiling) + misses;
+            if (floor is { } f && f - ceiling >= MinAnswerGap && misses == 0)
+            {
+                suggested = Math.Round(ceiling + ((f - ceiling) / 2), 3);
+            }
+            else
+            {
+                warning = floor is null
+                    ? "None of the expected files was among the best hits, so no threshold can be suggested."
+                    : $"The answer floor {floor:0.000} is within {MinAnswerGap:0.00} of the noise ceiling {ceiling:0.000}{(misses > 0 ? $" and {misses} expected file(s) were not retrieved" : "")}: any minimum score either keeps noise or hides real answers. Do not set Search:MinScore; use the normalized score and the no-match line instead.";
+            }
+        }
+
+        bool canSave = save && warning is null;
+        if (save)
+        {
+            IndexConfig config = (await manifest.GetConfigAsync(index, ct))!;
+            await manifest.SaveConfigAsync(index, config with { Noise = noise, Calibration = canSave ? new Calibration(ceiling, suggested, floor) : config.Calibration }, ct);
+        }
+
+        return new CalibrationResult(index, CalibrationProbes.Length, ceiling, Math.Round(noise.Mean, 4), suggested, canSave, questions is { Count: > 0 } ? questions.Count : null, missed, floor, atOrBelow, warning);
+    }
+
+    /// <summary>Runs the unrelated probe queries and returns the distribution of their best scores, or <see langword="null"/> for an empty index.</summary>
+    public async Task<NoiseStats?> MeasureNoiseAsync(string index, CancellationToken ct)
     {
         var bestScores = new List<double>();
         foreach (string probe in CalibrationProbes)
@@ -402,18 +498,48 @@ internal sealed class IndexService(
 
         if (bestScores.Count == 0)
         {
-            throw new UsageException($"Index '{index}' has no chunks to calibrate against.");
+            return null;
         }
 
-        double ceiling = bestScores.Max();
-        double suggested = Math.Min(0.99, Math.Round(ceiling + CalibrationMargin, 2));
-        if (save)
+        double mean = bestScores.Average();
+        double deviation = Math.Sqrt(bestScores.Sum(s => (s - mean) * (s - mean)) / bestScores.Count);
+        return new NoiseStats(Math.Round(mean, 4), Math.Round(deviation, 4), bestScores.Max());
+    }
+
+    /// <summary>Returns the configuration of <paramref name="index"/>.</summary>
+    public async Task<IndexConfig> GetConfigAsync(string index, CancellationToken ct) =>
+        await manifest.GetConfigAsync(index, ct) ?? throw new UsageException($"Index '{index}' does not exist. Run 'agency-index index --index {index} --root <dir>' first.");
+
+    /// <summary>
+    /// After an index run: measures the noise distribution (so scores can be normalized) and the words common to most files (a project
+    /// name the query need not carry). A failure here leaves the index usable, only without those two aids.
+    /// </summary>
+    private async Task RefreshStatisticsAsync(string index, IEnumerable<ScannedFile> files, CancellationToken ct)
+    {
+        try
         {
             IndexConfig config = (await manifest.GetConfigAsync(index, ct))!;
-            await manifest.SaveConfigAsync(index, config with { Calibration = new Calibration(ceiling, suggested) }, ct);
+            NoiseStats? noise = await this.MeasureNoiseAsync(index, ct);
+            IReadOnlyList<string> common = Lexical.CommonTerms(files.Select(f => ReadPlainText(f.Path)).Where(t => t is not null)!);
+            await manifest.SaveConfigAsync(index, config with { Noise = noise, CommonTerms = common }, ct);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Statistics are an aid; an embedding hiccup here must not fail an index run that otherwise succeeded.
+        }
+    }
 
-        return new CalibrationResult(index, bestScores.Count, ceiling, Math.Round(bestScores.Average(), 4), suggested, save);
+    private static string? ReadPlainText(string path)
+    {
+        try
+        {
+            string text = File.ReadAllText(path);
+            return Path.GetExtension(path).ToLowerInvariant() is ".html" or ".htm" ? HtmlTextExtractor.Extract(text) : text;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Returns the threshold stored by <see cref="CalibrateAsync"/> for <paramref name="index"/>, or <see langword="null"/>.</summary>
@@ -424,7 +550,7 @@ internal sealed class IndexService(
     /// Returns lines <paramref name="start"/> to <paramref name="end"/> (at most <see cref="MaxReadLines"/>) of
     /// <paramref name="path"/>, which must be a file of <paramref name="index"/>, absolute or relative to its root.
     /// </summary>
-    public async Task<ReadResult> ReadAsync(string index, string path, int start, int? end, CancellationToken ct)
+    public async Task<ReadResult> ReadAsync(string index, string path, int start, int? end, CancellationToken ct, bool all = false)
     {
         IndexConfig config = await manifest.GetConfigAsync(index, ct) ?? throw new UsageException($"Index '{index}' does not exist.");
         string full = Path.GetFullPath(path, config.Root);
@@ -432,7 +558,7 @@ internal sealed class IndexService(
             ?? throw new UsageException($"'{path}' is not a file of index '{index}'. Use a path from search or list.");
 
         string[] lines = (await File.ReadAllTextAsync(full, ct)).ReplaceLineEndings("\n").Split('\n');
-        int last = Math.Min(Math.Min(end ?? int.MaxValue, start + MaxReadLines - 1), lines.Length);
+        int last = Math.Min(Math.Min(end ?? int.MaxValue, all ? int.MaxValue : start + MaxReadLines - 1), lines.Length);
         if (start > lines.Length || last < start)
         {
             throw new UsageException($"Line range {start}-{end} is outside '{path}', which has {lines.Length} lines.");
@@ -522,23 +648,42 @@ internal sealed class IndexService(
             throw new UsageException($"Root directory '{root}' does not exist.");
         }
 
+        // An index keeps the format it was built in until it is rebuilt; passage size is part of the format.
+        int format = stored is null || request.Rebuild ? IndexFormat.Current : stored.FormatVersion;
+        PassageOptions passageShape = format >= IndexFormat.Passages ? this._passage : new PassageOptions(0, 0);
+        if (stored is { FormatVersion: >= IndexFormat.Passages } && !request.Rebuild && (stored.PassageLines != passageShape.Lines || stored.PassageOverlap != passageShape.Overlap))
+        {
+            throw new UsageException($"Index '{request.Index}' was built with passages of {stored.PassageLines} lines (overlap {stored.PassageOverlap}) but {passageShape.Lines} (overlap {passageShape.Overlap}) is configured. Run 'agency-index index --index {request.Index} --rebuild' to re-cut it, or configure the original size.");
+        }
+
+        bool sameModel = stored is not null && string.Equals(stored.EmbeddingModel, embeddingModel, StringComparison.Ordinal);
         return new IndexConfig(
             root,
             request.Extensions ?? stored?.Extensions ?? FileScanner.DefaultExtensions,
             request.Names ?? stored?.Names ?? FileScanner.DefaultNames,
             embeddingModel,
             request.Exclude ?? stored?.Excludes,
-            stored is not null && string.Equals(stored.EmbeddingModel, embeddingModel, StringComparison.Ordinal) ? stored.Calibration : null);
+            sameModel ? stored!.Calibration : null,
+            format,
+            passageShape.Lines,
+            passageShape.Overlap,
+            sameModel && !request.Rebuild ? stored!.Noise : null,
+            sameModel && !request.Rebuild ? stored!.CommonTerms : null);
     }
 
     /// <summary>Reads <paramref name="file"/> and splits it into the chunks that would be embedded.</summary>
-    private async Task<List<DocumentChunk<string>>> ChunkFileAsync(ScannedFile file, CancellationToken ct)
+    private async Task<List<DocumentChunk<string>>> ChunkFileAsync(ScannedFile file, IndexConfig config, CancellationToken ct)
     {
         string extension = Path.GetExtension(file.Path).ToLowerInvariant();
         string content = await File.ReadAllTextAsync(file.Path, ct);
         if (extension is ".html" or ".htm")
         {
             content = HtmlTextExtractor.Extract(content);
+        }
+
+        if (config.FormatVersion >= IndexFormat.Passages && extension is not ".html" and not ".htm")
+        {
+            return PassageChunks(file, content, extension, new PassageOptions(config.PassageLines, config.PassageOverlap));
         }
 
         var document = new Document(content, file.Path, new Dictionary<string, object>
@@ -578,6 +723,30 @@ internal sealed class IndexService(
             })
             .ToList();
     }
+
+    /// <summary>The passages of a file as vector-store chunks: each is embedded with its heading path and records its exact lines.</summary>
+    private static List<DocumentChunk<string>> PassageChunks(ScannedFile file, string content, string extension, PassageOptions shape) =>
+        PassageSplitter.Split(content, extension is ".md" or ".markdown" or ".mdx", shape)
+            .Select((p, i) =>
+            {
+                var metadata = new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["file_path"] = file.Path,
+                    ["file_name"] = Path.GetFileName(file.Path),
+                    ["file_extension"] = extension,
+                    ["chunk_index"] = i,
+                    ["start_line"] = (long)p.StartLine,
+                    ["end_line"] = (long)p.EndLine,
+                };
+                if (p.Heading is not null)
+                {
+                    metadata["heading"] = p.Heading;
+                }
+
+                string value = p.Embedded.Length > PassageSplitter.MaxEmbeddedChars ? p.Embedded[..PassageSplitter.MaxEmbeddedChars] : p.Embedded;
+                return new DocumentChunk<string>($"{file.Path}:chunk:{i}", value, metadata);
+            })
+            .ToList();
 
     /// <summary>E.g. <c>indexing 12/340 files, 410/1980 chunks, 1 failed, ~6 min left</c>; the estimate follows the chunks still to do.</summary>
     private static string ProgressLine(int done, int total, int chunksWritten, int chunksDone, int totalChunks, int failedFiles, TimeSpan elapsed)

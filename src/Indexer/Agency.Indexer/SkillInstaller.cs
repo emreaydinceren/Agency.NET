@@ -5,11 +5,14 @@ namespace Agency.Indexer;
 /// <param name="Replaced">Whether a <c>SKILL.md</c> already existed there and was overwritten.</param>
 internal sealed record InstalledSkill(string Path, bool Replaced);
 
-/// <summary>Writes the embedded <c>SKILL.md</c> into agent skill folders.</summary>
+/// <summary>Writes the embedded <c>SKILL.md</c> and <c>REFERENCE.md</c> into agent skill folders.</summary>
 internal static class SkillInstaller
 {
     /// <summary>The skill's folder name.</summary>
     public const string SkillName = "agency-index";
+
+    /// <summary>The files of the skill: the short entry point, then the reference loaded on demand.</summary>
+    private static readonly string[] Files = ["SKILL.md", "REFERENCE.md"];
 
     /// <summary>
     /// The default skill roots: Claude Code's user skills folder and the Agency harness's user skills folder.
@@ -34,27 +37,38 @@ internal static class SkillInstaller
                 _ => throw new UsageException($"Unknown scope '{scope}'. Expected 'repo' or 'user'."),
             };
 
-    /// <summary>Writes <c>&lt;root&gt;/agency-index/SKILL.md</c> under each of <paramref name="roots"/>.</summary>
-    /// <returns>The files written.</returns>
+    /// <summary>Writes <c>&lt;root&gt;/agency-index/SKILL.md</c> and <c>REFERENCE.md</c> under each of <paramref name="roots"/>.</summary>
+    /// <returns>The <c>SKILL.md</c> written under each root.</returns>
     public static async Task<IReadOnlyList<InstalledSkill>> InstallAsync(IReadOnlyList<string> roots, CancellationToken ct)
     {
-        string content = await ReadSkillAsync(ct);
+        var contents = new List<(string Name, string Content)>();
+        foreach (string file in Files)
+        {
+            contents.Add((file, await ReadResourceAsync(file, ct)));
+        }
+
         var written = new List<InstalledSkill>();
         foreach (string root in roots)
         {
             string directory = Path.Combine(Path.GetFullPath(root), SkillName);
             Directory.CreateDirectory(directory);
-            string path = Path.Combine(directory, "SKILL.md");
-            bool replaced = File.Exists(path);
-            await File.WriteAllTextAsync(path, content, ct);
-            written.Add(new InstalledSkill(path, replaced));
+            foreach (var (name, content) in contents)
+            {
+                string path = Path.Combine(directory, name);
+                bool replaced = File.Exists(path);
+                await File.WriteAllTextAsync(path, content, ct);
+                if (name == "SKILL.md")
+                {
+                    written.Add(new InstalledSkill(path, replaced));
+                }
+            }
         }
 
         return written;
     }
 
-    /// <summary>Deletes <c>&lt;root&gt;/agency-index/SKILL.md</c> under each of <paramref name="roots"/>, and its folder if that leaves it empty.</summary>
-    /// <returns>The files deleted.</returns>
+    /// <summary>Deletes <c>&lt;root&gt;/agency-index/SKILL.md</c> and <c>REFERENCE.md</c> under each of <paramref name="roots"/>, and the folder if that leaves it empty.</summary>
+    /// <returns>The <c>SKILL.md</c> files deleted.</returns>
     public static IReadOnlyList<string> Uninstall(IReadOnlyList<string> roots)
     {
         var removed = new List<string>();
@@ -67,7 +81,11 @@ internal static class SkillInstaller
                 continue;
             }
 
-            File.Delete(path);
+            foreach (string file in Files)
+            {
+                File.Delete(Path.Combine(directory, file));
+            }
+
             removed.Add(path);
             if (!Directory.EnumerateFileSystemEntries(directory).Any())
             {
@@ -79,10 +97,13 @@ internal static class SkillInstaller
     }
 
     /// <summary>Reads the <c>SKILL.md</c> embedded in this assembly.</summary>
-    public static async Task<string> ReadSkillAsync(CancellationToken ct)
+    public static Task<string> ReadSkillAsync(CancellationToken ct) => ReadResourceAsync("SKILL.md", ct);
+
+    /// <summary>Reads the embedded resource <paramref name="name"/> (<c>SKILL.md</c> or <c>REFERENCE.md</c>).</summary>
+    public static async Task<string> ReadResourceAsync(string name, CancellationToken ct)
     {
-        await using Stream stream = typeof(SkillInstaller).Assembly.GetManifestResourceStream("SKILL.md")
-            ?? throw new InvalidOperationException("SKILL.md is not embedded in the assembly.");
+        await using Stream stream = typeof(SkillInstaller).Assembly.GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException($"{name} is not embedded in the assembly.");
         using var reader = new StreamReader(stream);
         return await reader.ReadToEndAsync(ct);
     }

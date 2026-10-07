@@ -14,7 +14,7 @@ dotnet tool install -g AgencyDotNet.Indexer && agency-index install-skill
 For the full walk-through (skill scope, embeddings endpoint, `PATH`, first index, an agent runbook) see
 `docs/Install-Indexer-Skill.md` in the repository.
 
-`install-skill` writes the bundled `SKILL.md` to `~/.claude/skills/agency-index/` (Claude Code) and
+`install-skill` writes the bundled `SKILL.md` and `REFERENCE.md` to `~/.claude/skills/agency-index/` (Claude Code) and
 `~/Agents/skills/agency-index/` (Agency harness); pass `--dir <skills-root>` to choose another location.
 
 ## Use
@@ -27,7 +27,10 @@ agency-index search --index docs --query "how are releases published?"
 With a `.agency-index.json` at the repo root (`{ "Index": "docs", "Root": "docs" }`), `index` and `search`
 work from any folder of the repo without `--index`/`--root`; only those index settings are read from it.
 
-See `SKILL.md` for the full command reference, exit codes and configuration.
+`search` is compact (paths, headings and line spans, no text); fetch a span with
+`agency-index read --index docs --path <file> --start <start_line> --end <end_line>`.
+See `REFERENCE.md` for the full command reference, exit codes and configuration, and `SKILL.md` for the short
+agent entry point.
 
 ## How it works
 
